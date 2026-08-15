@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The window the activity opens in, before Compose has painted anything. It only has to agree
+      with the Compose theme for the fraction of a second it is visible: no title bar, and a
+      background that follows the system light/dark setting so a dark-mode launch does not flash
+      white. Everything else about the app's appearance is decided in IntervalometerTheme.
+    -->
+    <style name="Theme.Intervalometer" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowBackground">?android:attr/colorBackground</item>
+    </style>
+</resources>

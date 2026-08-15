@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only test harness surface. This manifest is merged into the debug variant only, so neither
+  the fake camera nor the debug session entry point exists in a release build.
+
+  See scripts/README.md for the exact adb invocations (they cannot be quoted here: a double hyphen
+  is illegal inside an XML comment).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+
+        <!--
+          Exported so the activity can be launched from adb for the harness user.
+          singleTop plus onNewIntent lets a test re-launch it to clear the tap log or swap render
+          mode without tearing the activity down.
+        -->
+        <activity
+            android:name=".debug.FakeCameraActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/debug_fake_camera_label"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.dazix.intervalometer.debug.fakecamera"
+            android:theme="@style/Theme.Intervalometer" />
+
+        <!--
+          Debug-only session entry point for scripts/e2e_pixel_camera.sh. Exported because adb
+          broadcasts arrive from the shell uid; debug variant only, never shipped.
+        -->
+        <receiver
+            android:name=".debug.DebugSessionReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.dazix.intervalometer.debug.START_SESSION" />
+                <action android:name="com.dazix.intervalometer.debug.STOP_SESSION" />
+                <action android:name="com.dazix.intervalometer.debug.CLEAR_TAP_LOG" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

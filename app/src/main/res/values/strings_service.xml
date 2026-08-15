@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings owned by the tapping engine (service / verify / monitor). -->
+<resources>
+    <string name="session_warning_wrong_app">Paused: %1$s is not the app in front. Open it again to carry on.</string>
+    <string name="session_warning_screen_off">Paused: the screen is off or locked, so nothing can be tapped. Unlock the phone and the session carries on.</string>
+    <string name="session_warning_no_shutter_found">No shutter button found and no tap point calibrated.</string>
+    <string name="session_warning_tap_failed">The shutter tap did not go through.</string>
+    <string name="session_warning_capture_unverified">No new photo appeared after the last shot.</string>
+    <!-- The photo library could not be read for this shot, so it was taken but not checked. Not the
+         same thing as session_warning_capture_unverified, which says a photo is actually missing. -->
+    <string name="session_warning_verification_unavailable">Your photo library could not be read, so this shot was not verified.</string>
+    <string name="session_warning_long_exposure_timeout">The camera is still busy; shooting anyway.</string>
+    <string name="session_warning_inexact_alarms">Exact alarms are not allowed, so long intervals may fire late.</string>
+    <string name="session_stopped_service_lost">The accessibility service was turned off, so the session stopped.</string>
+</resources>

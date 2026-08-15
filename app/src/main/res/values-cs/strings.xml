@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Intervalometr</string>
+    <string name="accessibility_service_label">Intervalometr – spoušť</string>
+    <string name="accessibility_service_summary">Mačká spoušť ve vaší fotoaplikaci podle časovače</string>
+    <string name="accessibility_service_description">Umožní Intervalometru mačkat spoušť ve zvolené fotoaplikaci, takže snímky timelapse zůstanou v plné kvalitě dané aplikace. Obsah obrazovky se nikam neukládá ani neodesílá.</string>
+
+    <!-- Shared -->
+    <string name="action_back">Zpět</string>
+    <string name="action_fix">Vyřešit</string>
+    <string name="action_grant">Povolit</string>
+    <string name="action_dismiss">Zavřít</string>
+    <string name="action_recheck">Zkontrolovat znovu</string>
+    <string name="common_unsupported">V této konfiguraci nedostupné</string>
+    <string name="unit_seconds">sekundy</string>
+    <string name="unit_minutes">minuty</string>
+    <string name="unit_percent">procent</string>
+    <string name="unit_megabytes">MB</string>
+    <string name="unit_shots">snímků</string>
+    <!-- Číslo přečtené i s jednotkou, pro hlasový popis stavu u posuvníků. -->
+    <string name="value_with_unit">%1$d %2$s</string>
+    <string name="duration_seconds">%1$s s</string>
+    <string name="duration_minutes">%1$s min</string>
+    <string name="duration_minutes_seconds">%1$d min %2$d s</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+
+    <!-- Navigation -->
+    <string name="nav_setup">Nastavení série</string>
+    <string name="nav_setup_summary">Režim, interval, počet snímků, podmínky ukončení</string>
+    <string name="nav_ramp">Změna intervalu</string>
+    <string name="nav_ramp_summary">Postupná změna intervalu během série</string>
+    <string name="nav_advanced">Pokročilé doplňky</string>
+    <string name="nav_advanced_summary">Nepovinná vylepšení pro konkrétní telefony a fotoaplikace</string>
+    <string name="nav_permissions">Oprávnění</string>
+    <string name="nav_permissions_summary">Vše, co aplikace potřebuje, aby mohla mačkat spoušť</string>
+    <string name="nav_app_picker">Fotoaplikace</string>
+    <!--
+      Krátké popisky pro navigační lištu a boční lištu, kde je na každý jen jeden řádek. Delší
+      podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
+    -->
+    <string name="nav_short_home">Série</string>
+    <string name="nav_short_setup">Nastavení</string>
+    <string name="nav_short_ramp">Interval</string>
+    <string name="nav_short_advanced">Pokročilé</string>
+    <string name="nav_short_permissions">Práva</string>
+
+    <!-- Home -->
+    <string name="home_title">Intervalometr</string>
+    <string name="home_start">Spustit</string>
+    <string name="home_stop">Zastavit</string>
+    <string name="home_pause">Pozastavit</string>
+    <string name="home_resume">Pokračovat</string>
+    <string name="home_state_idle">Nečinné</string>
+    <string name="home_state_waiting">Brzy začne</string>
+    <string name="home_state_running">Běží</string>
+    <string name="home_state_paused">Pozastaveno</string>
+    <string name="home_state_stopped">Zastaveno</string>
+    <string name="home_state_paused_hint">Dokud nebudete pokračovat, nic se nemačká.</string>
+    <!--
+      Čeština má u počtu snímků čtyři podoby: 1 snímek, 2-4 snímky, 5+ snímků a desetinné číslo
+      (1,5 snímku). Prosté řetězce pod nimi jsou původní podoba, na kterou se zatím odkazuje
+      HomeScreen.
+    -->
+    <plurals name="home_shots_taken">
+        <item quantity="one">Pořízen %1$d snímek</item>
+        <item quantity="few">Pořízeny %1$d snímky</item>
+        <item quantity="many">Pořízeno %1$d snímku</item>
+        <item quantity="other">Pořízeno %1$d snímků</item>
+    </plurals>
+    <!-- Skloňuje se podle plánovaného počtu: po předložce „z“ stojí druhý pád. -->
+    <plurals name="home_shots_taken_of">
+        <item quantity="one">Pořízeno %1$d z %2$d snímku</item>
+        <item quantity="few">Pořízeno %1$d z %2$d snímků</item>
+        <item quantity="many">Pořízeno %1$d z %2$d snímku</item>
+        <item quantity="other">Pořízeno %1$d z %2$d snímků</item>
+    </plurals>
+    <string name="home_next_shot_in">Další snímek za %1$s</string>
+    <string name="home_next_shot_now">Další snímek právě teď</string>
+    <string name="home_starts_in">Začne za %1$s</string>
+    <string name="home_current_interval">Aktuální interval %1$s</string>
+    <string name="home_planned_interval">Nastavený interval %1$s</string>
+    <string name="home_target_app_none">Fotoaplikace ještě není vybraná</string>
+    <string name="home_calibrate">Kalibrovat pozici spouště</string>
+    <string name="home_recalibrate">Znovu kalibrovat pozici spouště</string>
+    <string name="home_calibration_ok">Pozice spouště je zkalibrovaná</string>
+    <string name="home_calibration_missing">Pozice spouště není zkalibrovaná</string>
+    <string name="home_requirements_title">Během běhu série</string>
+    <string name="home_requirements_screen_on">Obrazovka musí zůstat zapnutá a odemčená. Aplikace mačká spoušť stejně jako váš prst, což na zhasnuté nebo zamčené obrazovce nejde.</string>
+    <string name="home_requirements_foreground">Aplikace %1$s musí zůstat v popředí. Když přepnete jinam, série se místo klikání do cizí aplikace pozastaví a po návratu zase naváže.</string>
+    <string name="home_requirements_foreground_generic">Aplikace, ve které se má klikat, musí zůstat v popředí: každý dotyk dopadne na zkalibrované místo, ať je v tu chvíli na obrazovce cokoli.</string>
+    <string name="home_blocked_title">Zatím nelze spustit</string>
+    <string name="home_block_service">Služba zpřístupnění pro spoušť je vypnutá, takže nelze nikam kliknout.</string>
+    <string name="home_block_overlay">Kreslení přes ostatní aplikace ještě není povolené. Je potřeba pro kalibraci i pro ovládání série přes obrazovku.</string>
+    <string name="home_block_no_target">Není vybraná žádná fotoaplikace, takže není kam klikat.</string>
+    <string name="home_block_no_calibration">Aplikace %1$s ještě nemá zkalibrovanou pozici spouště.</string>
+    <string name="home_block_interval_floor">Interval %1$s je kratší než %2$s, které tato fotoaplikace potřebuje mezi snímky.</string>
+    <string name="home_service_unavailable">Služba zpřístupnění pro spoušť neběží, proto sérii nelze spustit. Zapněte ji a zkuste to znovu.</string>
+    <string name="home_stop_reason_completed">Dokončeny všechny naplánované snímky</string>
+    <string name="home_stop_reason_user">Zastaveno vámi</string>
+    <string name="home_stop_reason_max_duration">Dosažena maximální délka</string>
+    <string name="home_stop_reason_low_battery">Baterie klesla pod nastavenou hranici</string>
+    <string name="home_stop_reason_low_storage">Volné místo kleslo pod nastavenou hranici</string>
+    <string name="home_stop_reason_service_lost">Služba zpřístupnění byla vypnuta</string>
+    <string name="home_stop_reason_error">Zastaveno kvůli chybě</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Nastavení série</string>
+    <string name="setup_mode">Režim</string>
+    <string name="setup_mode_timelapse">Timelapse</string>
+    <string name="setup_mode_timelapse_desc">Při spuštění série přepne dopředu vybranou fotoaplikaci a pak mačká její spoušť, takže každý snímek má plnou kvalitu dané aplikace. Nechte ji na obrazovce a displej zapnutý: když zmizí, série se pozastaví, dokud se nevrátí.</string>
+    <string name="setup_mode_periodic">Periodické klikání</string>
+    <string name="setup_mode_periodic_desc">Jen klikne na zkalibrované místo podle časovače, ať je na obrazovce cokoli. Vhodné i pro aplikace, které nejsou fotoaparát.</string>
+    <string name="setup_interval">Interval</string>
+    <string name="setup_interval_desc">Doba mezi dvěma snímky.</string>
+    <string name="setup_interval_floor">Tato fotoaplikace potřebuje mezi snímky alespoň %1$s.</string>
+    <string name="setup_shots">Počet snímků</string>
+    <string name="setup_shots_unlimited">Fotit, dokud sérii nezastavím</string>
+    <string name="setup_shots_count">Snímky</string>
+    <string name="setup_start_delay">Zpoždění startu</string>
+    <string name="setup_start_delay_desc">Čekání před prvním snímkem, abyste mohli telefon odložit.</string>
+    <string name="setup_stop_conditions">Podmínky ukončení</string>
+    <string name="setup_stop_conditions_desc">Série se sama ukončí, jakmile je splněná kterákoli z nich.</string>
+    <string name="setup_max_duration">Maximální délka</string>
+    <string name="setup_min_battery">Zastavit pod úrovní baterie</string>
+    <string name="setup_min_battery_value">%1$d %%</string>
+    <string name="setup_min_free_space">Zastavit pod volným místem</string>
+    <string name="setup_verify_captures">Kontrolovat uložené snímky</string>
+    <string name="setup_verify_captures_desc">Po každém snímku aplikace zkontroluje, že skutečně vznikla nová fotka, a upozorní vás, když fotoaplikace přestala ukládat. Kvůli tomu musí číst vaši galerii, a proto si Android při zapnutí této volby řekne o oprávnění k fotkám. Když volbu necháte vypnutou, o přístup k fotkám se vůbec nežádá.</string>
+    <string name="setup_verify_permission_needed">Kontrola potřebuje přístup ke všem fotkám a zatím ho nemá. Série normálně poběží a bude fotit – jen vám neřekne, když fotoaplikace přestane ukládat.</string>
+    <string name="setup_verify_permission_partial">Aplikace vidí jen fotky, které jste vybrali, takže na snímky z této série nedosáhne. Otevřete nastavení aplikace a u Fotky a videa zvolte Povolit vše.</string>
+    <string name="setup_verify_open_settings">Otevřít nastavení aplikace</string>
+    <string name="setup_verify_permission_granted">Oprávnění k fotkám je udělené.</string>
+    <string name="setup_tap_area">Místo dotyku</string>
+    <string name="setup_tap_area_none">Zatím není nic zkalibrované. Použijte Kalibrovat na hlavní obrazovce: jedno klepnutí uloží bod, tažením označíte oblast.</string>
+    <string name="setup_tap_area_point">Zkalibrováno jako jediný bod.</string>
+    <string name="setup_tap_area_rect">Zkalibrováno jako oblast.</string>
+    <string name="setup_tap_jitter">Rozptýlit dotyky po oblasti</string>
+    <string name="setup_tap_jitter_desc">Každý dotyk dopadne na náhodný pixel uvnitř zkalibrované oblasti místo vždy do jejího středu.</string>
+    <string name="setup_tap_jitter_needs_area">Aby šlo zapnout, zkalibrujte oblast tažením obdélníku.</string>
+
+    <!-- Ramp -->
+    <string name="ramp_title">Změna intervalu</string>
+    <string name="ramp_enable">Postupně měnit interval</string>
+    <string name="ramp_enable_desc">Během série přejde z počátečního intervalu na koncový, například při západu slunce, kdy se snímky se soumrakem zpomalují.</string>
+    <string name="ramp_start_interval">Počáteční interval (z nastavení série): %1$s</string>
+    <string name="ramp_end_interval">Koncový interval</string>
+    <string name="ramp_curve">Průběh</string>
+    <string name="ramp_curve_linear">Lineární</string>
+    <string name="ramp_curve_linear_desc">Stejně velké kroky od začátku do konce.</string>
+    <string name="ramp_curve_exponential">Exponenciální</string>
+    <string name="ramp_curve_exponential_desc">Stejné poměry mezi kroky, u velkých změn vypadá plynuleji.</string>
+    <string name="ramp_domain">Změnu rozložit</string>
+    <string name="ramp_domain_shots">Na počet snímků</string>
+    <string name="ramp_domain_duration">Na dobu</string>
+    <string name="ramp_over_shots">Snímky</string>
+    <string name="ramp_over_duration">Doba</string>
+    <string name="ramp_preview">Náhled</string>
+    <string name="ramp_preview_desc">Intervaly, které vaše nastavení skutečně vytvoří.</string>
+    <string name="ramp_preview_row">Snímek %1$d → %2$s</string>
+    <string name="ramp_preview_more">…</string>
+    <plurals name="ramp_preview_total">
+        <item quantity="one">%1$d snímek, celkem přibližně %2$s</item>
+        <item quantity="few">%1$d snímky, celkem přibližně %2$s</item>
+        <item quantity="many">%1$d snímku, celkem přibližně %2$s</item>
+        <item quantity="other">%1$d snímků, celkem přibližně %2$s</item>
+    </plurals>
+    <string name="ramp_preview_unavailable">Zadejte koncový interval a rozsah, aby se zobrazil náhled.</string>
+    <string name="ramp_disabled_note">Změna intervalu je vypnutá, celá série tedy poběží s intervalem z nastavení série.</string>
+
+    <!-- App picker -->
+    <string name="picker_title">Fotoaplikace</string>
+    <string name="picker_search">Hledat aplikace</string>
+    <string name="picker_search_clear">Vymazat hledání</string>
+    <string name="picker_section_camera">Fotoaplikace</string>
+    <string name="picker_section_all">Všechny aplikace</string>
+    <string name="picker_badge_camera">Fotoaparát</string>
+    <string name="picker_selected">Vybráno</string>
+    <string name="picker_clear">Zrušit výběr</string>
+    <string name="picker_empty">Hledání neodpovídá žádná aplikace.</string>
+    <string name="picker_loading">Načítám seznam aplikací…</string>
+    <string name="picker_hint">Aplikace, které reagují na systémové fotoaparátové intenty, jsou nahoře, ovládat ale můžete jakoukoli aplikaci.</string>
+
+    <!-- Advanced -->
+    <string name="advanced_title">Pokročilé doplňky</string>
+    <string name="advanced_intro">Všechno tady je nepovinné a aplikace funguje i bez toho – úpravy pro fotoaplikace jsou zkratky pro konkrétní telefony a zůstanou vypnuté, dokud je nezapnete. Nastavení obrazovky dole je společné s plovoucím panelem série, takže ukazuje, co panel právě dělá.</string>
+    <string name="advanced_profile">Použitý profil fotoaplikace: %1$s</string>
+    <string name="advanced_launch_mode">Spustit fotoaparát v režimu</string>
+    <string name="advanced_launch_mode_desc">Před prvním snímkem přepne fotoaplikaci do zvoleného režimu.</string>
+    <string name="advanced_launch_mode_none">Nechat aplikaci, jak je</string>
+    <string name="advanced_launch_mode_photo">Foto</string>
+    <string name="advanced_launch_mode_night">Noční režim</string>
+    <string name="advanced_launch_mode_astro">Astrofotografie</string>
+    <string name="advanced_launch_mode_unavailable">Profil pro aplikaci %1$s nezná její tlačítka režimů, takže není do čeho přepnout.</string>
+    <string name="advanced_launch_mode_unsupported">Režim %1$s profil pro aplikaci %2$s přepnout neumí, takže se nic nepřepne. Vyberte některý z režimů níže.</string>
+    <string name="advanced_adaptive_wait">Přizpůsobit čekání dlouhé expozici</string>
+    <string name="advanced_adaptive_wait_desc">Počká na dokončení dlouhé expozice místo kliknutí po pevně dané době.</string>
+    <string name="advanced_self_timer">Zkontrolovat vypnutou samospoušť</string>
+    <string name="advanced_self_timer_desc">Před spuštěním ověří nastavení samospouště ve fotoaplikaci, protože samospoušť by posunula každý snímek.</string>
+    <string name="advanced_dismiss_post_capture">Zavírat obrazovky po snímku</string>
+    <string name="advanced_dismiss_post_capture_desc">Zavře náhled nebo sdílení, které některé fotoaplikace zobrazí po snímku a které by spolklo další kliknutí.</string>
+    <string name="advanced_session_screen">Obrazovka během série</string>
+    <string name="advanced_keep_screen_on">Nechat obrazovku zapnutou při fotografování</string>
+    <string name="advanced_keep_screen_on_desc">Drží displej vzhůru po celou dobu, kdy série skutečně fotí, protože většina fotoaplikací se zhasnutou obrazovkou přestane zobrazovat náhled – a tím i fotit. Stojí to baterii a obrazovka svítí celou dobu.</string>
+    <string name="advanced_dim_overlay">Ztlumit ovládání na obrazovce</string>
+    <string name="advanced_dim_overlay_desc">Ztlumí plovoucí panel série, aby nesvítil do scény, kterou fotíte. Dotykem se zase rozsvítí.</string>
+    <string name="advanced_reason_needs_overlay">Vyžaduje oprávnění kreslit přes ostatní aplikace: dělá to plovoucí panel série. Povolte ho v Oprávněních.</string>
+    <string name="advanced_reason_needs_pixel">Vyžaduje jako vybranou aplikaci Pixel Camera (com.google.android.GoogleCamera). Nyní vybráno: %1$s</string>
+    <string name="advanced_reason_needs_app">Nejdřív vyberte fotoaplikaci.</string>
+
+    <!-- Onboarding / permissions -->
+    <string name="onboarding_title">Oprávnění</string>
+    <string name="onboarding_intro">Aplikace mačká spoušť za vás, takže si Android nejdřív řekne o několik věcí. Seznam se aktualizuje živě – po každém kroku se sem vraťte.</string>
+    <string name="onboarding_granted">Povoleno</string>
+    <string name="onboarding_missing">Ještě nepovoleno</string>
+    <string name="onboarding_optional">Nepovinné</string>
+    <string name="onboarding_restricted_title">Povolit omezená nastavení</string>
+    <string name="onboarding_restricted_desc">Protože tato instalace nepochází z obchodu, Android blokuje přepínač služby zpřístupnění, dokud ho neodblokujete: otevřete Informace o aplikaci, klepněte na nabídku v pravém horním rohu, zvolte Povolit omezená nastavení a potvrďte. Pak se vraťte a zapněte službu níže.</string>
+    <string name="onboarding_restricted_action">Otevřít informace o aplikaci</string>
+    <string name="onboarding_restricted_not_needed">Pro tuto instalaci není potřeba.</string>
+    <string name="onboarding_accessibility_title">Služba zpřístupnění pro spoušť</string>
+    <string name="onboarding_accessibility_desc">Jediný způsob, jak může aplikace zmáčknout spoušť v jiné aplikaci. Najděte Intervalometr – spoušť mezi nainstalovanými nebo staženými aplikacemi a zapněte ji.</string>
+    <string name="onboarding_accessibility_action">Otevřít nastavení zpřístupnění</string>
+    <string name="onboarding_overlay_title">Kreslení přes ostatní aplikace</string>
+    <string name="onboarding_overlay_desc">Potřebné pro zobrazení kalibračního zaměřovače a ovládání série nad fotoaplikací.</string>
+    <string name="onboarding_overlay_action">Otevřít nastavení překryvů</string>
+    <string name="onboarding_notifications_title">Oznámení</string>
+    <string name="onboarding_notifications_desc">Zobrazí běžící sérii, počítadlo snímků a případná upozornění, i když je na obrazovce fotoaplikace.</string>
+    <string name="onboarding_notifications_action">Povolit oznámení</string>
+    <string name="onboarding_battery_title">Ignorovat optimalizaci baterie</string>
+    <string name="onboarding_battery_desc">Bez této výjimky může Android aplikaci během dlouhé série uspat a snímky pak chybí.</string>
+    <string name="onboarding_battery_action">Požádat o výjimku</string>
+    <string name="onboarding_media_title">Přístup k fotkám pro kontrolu snímků</string>
+    <string name="onboarding_media_desc">Vyžádá se jen tehdy, když v nastavení série zapnete kontrolu uložených snímků.</string>
+    <string name="onboarding_all_set">Vše, co aplikace potřebuje, je povolené.</string>
+</resources>

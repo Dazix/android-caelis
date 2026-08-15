@@ -1,0 +1,29 @@
+# Build output
+/build
+/app/build
+.gradle
+.kotlin
+*.apk
+*.aab
+
+# Local machine configuration — SDK path, never shared
+local.properties
+
+# The adb path, the JDK and the Android user id the harness is allowed to touch. Those describe one
+# machine and one phone, not the project — scripts/env.example.sh is the template that is shared.
+scripts/env.local.sh
+
+# Written by the test scripts while the device state is modified, consumed by the teardown.
+# A snapshot left behind means a run did not finish restoring the phone; it belongs to that machine,
+# not to the repository.
+.device_snapshot
+
+# IDE
+.idea
+*.iml
+.DS_Store
+
+# Screenshots, MediaStore id lists and summaries the harness writes (scripts/*.sh). Covered by /build
+# above; listed so it is obvious they are throwaway evidence of one run, not project files.
+/build/qa
+/build/e2e

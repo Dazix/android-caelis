@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Strings owned by the tapping engine (service / verify / monitor). -->
+<resources>
+    <string name="session_warning_wrong_app">Pozastaveno: aplikace %1$s není v popředí. Znovu ji otevřete a série bude pokračovat.</string>
+    <string name="session_warning_screen_off">Pozastaveno: obrazovka je vypnutá nebo zamčená, takže není kam klepnout. Odemkněte telefon a série bude pokračovat.</string>
+    <string name="session_warning_no_shutter_found">Spoušť se nenašla a není nastavený žádný bod pro klepnutí.</string>
+    <string name="session_warning_tap_failed">Klepnutí na spoušť neprošlo.</string>
+    <string name="session_warning_capture_unverified">Po posledním snímku se neobjevila žádná nová fotka.</string>
+    <string name="session_warning_verification_unavailable">Fotky v telefonu se nepodařilo přečíst, snímek proto nebyl zkontrolovaný.</string>
+    <string name="session_warning_long_exposure_timeout">Fotoaparát stále pracuje; snímek se přesto pořídí.</string>
+    <string name="session_warning_inexact_alarms">Přesné časovače nejsou povolené, dlouhé intervaly se mohou zpozdit.</string>
+    <string name="session_stopped_service_lost">Služba přístupnosti byla vypnutá, série se zastavila.</string>
+</resources>

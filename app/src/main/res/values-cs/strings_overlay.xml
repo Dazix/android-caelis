@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="ovl_shots">
+        <item quantity="one">%1$d snímek</item>
+        <item quantity="few">%1$d snímky</item>
+        <item quantity="many">%1$d snímku</item>
+        <item quantity="other">%1$d snímků</item>
+    </plurals>
+    <plurals name="ovl_shots_of">
+        <item quantity="one">%1$d / %2$d snímek</item>
+        <item quantity="few">%1$d / %2$d snímky</item>
+        <item quantity="many">%1$d / %2$d snímku</item>
+        <item quantity="other">%1$d / %2$d snímků</item>
+    </plurals>
+    <string name="ovl_next_in">Další za %1$s</string>
+    <string name="ovl_starts_in">Start za %1$s</string>
+    <string name="ovl_shooting_now">Fotografuji…</string>
+    <string name="ovl_paused">Pozastaveno</string>
+    <string name="ovl_idle">Připraveno</string>
+    <string name="ovl_stopped">Zastaveno</string>
+
+    <string name="ovl_action_pause">Pozastavit</string>
+    <string name="ovl_action_resume">Pokračovat</string>
+    <string name="ovl_action_stop">Zastavit</string>
+    <string name="ovl_action_drag_handle">Tažením posunete panel</string>
+
+    <string name="ovl_option_screen_on">Displej: zapnutý</string>
+    <string name="ovl_option_screen_off">Displej: automaticky</string>
+    <string name="ovl_option_screen_description">Nechá displej svítit během focení. Většina fotoaplikací po zhasnutí displeje přestane zobrazovat náhled a přestane fotit.</string>
+    <string name="ovl_option_dim_on">Ztlumení: zapnuto</string>
+    <string name="ovl_option_dim_off">Ztlumení: vypnuto</string>
+    <string name="ovl_option_dim_description">Mezi snímky panel zprůhlední. Dotykem ho vrátíte.</string>
+
+    <string name="ovl_permission_missing">Oprávnění kreslit přes ostatní aplikace je vypnuté, plovoucí panel nelze zobrazit.</string>
+
+    <string name="ovl_calib_instruction">Klepněte níže na spoušť v aplikaci %1$s, nebo ji tažením označte rámečkem.</string>
+    <string name="ovl_calib_instruction_generic">Klepněte níže na spoušť, nebo ji tažením označte rámečkem.</string>
+    <string name="ovl_calib_instruction_not_launched">Aplikaci %1$s se nepodařilo otevřít. Přepněte se do ní sami a pak klepněte na spoušť, nebo ji tažením označte rámečkem.</string>
+    <string name="ovl_calib_hint">Klepnutí uloží jeden přesný bod, rámeček umožní snímky rozptýlit uvnitř něj.</string>
+    <string name="ovl_calib_cancel">Zrušit</string>
+    <string name="ovl_calib_saved_point">Pozice spouště uložena.</string>
+    <string name="ovl_calib_saved_area">Oblast spouště uložena.</string>
+    <string name="ovl_calib_timed_out">Kalibrace zrušena — nic jste neoznačili.</string>
+    <string name="ovl_calib_unavailable">Kalibraci se nepodařilo spustit. Zkuste to znovu z aplikace.</string>
+
+    <string name="ovl_notif_channel_name">Běžící série</string>
+    <string name="ovl_notif_channel_desc">Počet snímků a čas do dalšího snímku během běžící série.</string>
+    <string name="ovl_notif_title_running">Timelapse běží</string>
+    <string name="ovl_notif_title_paused">Timelapse pozastaveno</string>
+    <string name="ovl_notif_title_waiting">Timelapse startuje</string>
+    <string name="ovl_notif_title_stopped">Timelapse dokončeno</string>
+    <string name="ovl_notif_title_idle">Intervalometr připraven</string>
+    <string name="ovl_action_move_panel">Přesunout panel na druhou stranu</string>
+    <string name="ovl_panel_moved_left">Panel přesunut doleva</string>
+    <string name="ovl_panel_moved_right">Panel přesunut doprava</string>
+</resources>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Owned by the overlay/notification slice. All names are prefixed `ovl_` to stay collision-free. -->
+<resources>
+    <plurals name="ovl_shots">
+        <item quantity="one">%1$d shot</item>
+        <item quantity="other">%1$d shots</item>
+    </plurals>
+    <plurals name="ovl_shots_of">
+        <item quantity="one">%1$d / %2$d shot</item>
+        <item quantity="other">%1$d / %2$d shots</item>
+    </plurals>
+    <string name="ovl_next_in">Next in %1$s</string>
+    <string name="ovl_starts_in">Starts in %1$s</string>
+    <string name="ovl_shooting_now">Shooting…</string>
+    <string name="ovl_paused">Paused</string>
+    <string name="ovl_idle">Ready</string>
+    <string name="ovl_stopped">Stopped</string>
+
+    <string name="ovl_action_pause">Pause</string>
+    <string name="ovl_action_resume">Resume</string>
+    <string name="ovl_action_stop">Stop</string>
+    <string name="ovl_action_drag_handle">Drag to move the panel</string>
+
+    <string name="ovl_option_screen_on">Screen: on</string>
+    <string name="ovl_option_screen_off">Screen: auto</string>
+    <string name="ovl_option_screen_description">Keep the display awake while shooting. Most camera apps stop previewing — and stop taking pictures — once the screen goes off.</string>
+    <string name="ovl_option_dim_on">Dim: on</string>
+    <string name="ovl_option_dim_off">Dim: off</string>
+    <string name="ovl_option_dim_description">Fade this panel down between shots. Touch it to bring it back.</string>
+
+    <string name="ovl_permission_missing">Draw-over-other-apps permission is off, so the floating panel cannot be shown.</string>
+
+    <string name="ovl_calib_instruction">Tap the shutter button of %1$s below, or drag a box around it.</string>
+    <string name="ovl_calib_instruction_generic">Tap the shutter button below, or drag a box around it.</string>
+    <string name="ovl_calib_instruction_not_launched">%1$s could not be opened. Switch to it yourself, then tap its shutter button, or drag a box around it.</string>
+    <string name="ovl_calib_hint">A tap stores one exact point; a box lets shots be spread inside it.</string>
+    <string name="ovl_calib_cancel">Cancel</string>
+    <string name="ovl_calib_saved_point">Shutter position saved.</string>
+    <string name="ovl_calib_saved_area">Shutter area saved.</string>
+    <string name="ovl_calib_timed_out">Calibration cancelled — nothing was tapped.</string>
+    <string name="ovl_calib_unavailable">Calibration could not be started. Try again from the app.</string>
+
+    <string name="ovl_notif_channel_name">Running session</string>
+    <string name="ovl_notif_channel_desc">Shots taken and the countdown to the next shot while a session runs.</string>
+    <string name="ovl_notif_title_running">Time-lapse running</string>
+    <string name="ovl_notif_title_paused">Time-lapse paused</string>
+    <string name="ovl_notif_title_waiting">Time-lapse starting</string>
+    <string name="ovl_notif_title_stopped">Time-lapse finished</string>
+    <string name="ovl_notif_title_idle">Intervalometer ready</string>
+    <string name="ovl_action_move_panel">Move the panel to the other side</string>
+    <string name="ovl_panel_moved_left">Panel moved to the left</string>
+    <string name="ovl_panel_moved_right">Panel moved to the right</string>
+</resources>

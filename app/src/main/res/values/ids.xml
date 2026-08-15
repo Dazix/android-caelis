@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ids that exist only to be unique integers. Android requires a custom accessibility action to carry an
+  id that cannot collide with the platform's own, and a resource id is the way to get one.
+-->
+<resources>
+    <item name="ovl_action_move_panel" type="id" />
+</resources>

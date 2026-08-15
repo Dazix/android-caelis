@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Intervalometer</string>
+    <string name="accessibility_service_label">Intervalometer shutter</string>
+    <string name="accessibility_service_summary">Taps the shutter of your camera app on a timer</string>
+    <string name="accessibility_service_description">Lets Intervalometer press the shutter button in the camera app you choose, so time-lapse frames keep your camera app\'s full image quality. No screen content is stored or sent anywhere.</string>
+
+    <!-- Shared -->
+    <string name="action_back">Back</string>
+    <string name="action_fix">Fix</string>
+    <string name="action_grant">Allow</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="action_recheck">Re-check</string>
+    <string name="common_unsupported">Not available on this setup</string>
+    <string name="unit_seconds">seconds</string>
+    <string name="unit_minutes">minutes</string>
+    <string name="unit_percent">percent</string>
+    <string name="unit_megabytes">MB</string>
+    <string name="unit_shots">shots</string>
+    <!-- A number read out with its unit, for the sliders' spoken state. -->
+    <string name="value_with_unit">%1$d %2$s</string>
+    <string name="duration_seconds">%1$s s</string>
+    <string name="duration_minutes">%1$s min</string>
+    <string name="duration_minutes_seconds">%1$d min %2$d s</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+
+    <!-- Navigation -->
+    <string name="nav_setup">Session setup</string>
+    <string name="nav_setup_summary">Mode, interval, shots, stop conditions</string>
+    <string name="nav_ramp">Interval ramp</string>
+    <string name="nav_ramp_summary">Slowly change the interval during the session</string>
+    <string name="nav_advanced">Advanced extras</string>
+    <string name="nav_advanced_summary">Optional device and camera-app specific tweaks</string>
+    <string name="nav_permissions">Permissions</string>
+    <string name="nav_permissions_summary">Everything the app needs in order to tap for you</string>
+    <string name="nav_app_picker">Camera app</string>
+    <!--
+      Short labels for the navigation bar and rail, where each one has a single line to work with.
+      The nav_*_summary strings above stay the long form used on the session screen's list.
+    -->
+    <string name="nav_short_home">Session</string>
+    <string name="nav_short_setup">Setup</string>
+    <string name="nav_short_ramp">Ramp</string>
+    <string name="nav_short_advanced">Advanced</string>
+    <string name="nav_short_permissions">Permissions</string>
+
+    <!-- Home -->
+    <string name="home_title">Intervalometer</string>
+    <string name="home_start">Start</string>
+    <string name="home_stop">Stop</string>
+    <string name="home_pause">Pause</string>
+    <string name="home_resume">Resume</string>
+    <string name="home_state_idle">Idle</string>
+    <string name="home_state_waiting">Starting soon</string>
+    <string name="home_state_running">Running</string>
+    <string name="home_state_paused">Paused</string>
+    <string name="home_state_stopped">Stopped</string>
+    <string name="home_state_paused_hint">Nothing is being tapped until you resume.</string>
+    <!--
+      Shot counts are quantities, so they are plurals: English needs two forms and Czech four
+      (1 / 2-4 / 5+ / a decimal). The plain strings below them are the old form, still referenced by
+      HomeScreen until its call sites move to pluralStringResource.
+    -->
+    <plurals name="home_shots_taken">
+        <item quantity="one">%1$d shot taken</item>
+        <item quantity="other">%1$d shots taken</item>
+    </plurals>
+    <!-- Counted by the planned total: it is the total the noun agrees with. -->
+    <plurals name="home_shots_taken_of">
+        <item quantity="one">%1$d of %2$d shot taken</item>
+        <item quantity="other">%1$d of %2$d shots taken</item>
+    </plurals>
+    <string name="home_next_shot_in">Next shot in %1$s</string>
+    <string name="home_next_shot_now">Next shot now</string>
+    <string name="home_starts_in">Starts in %1$s</string>
+    <string name="home_current_interval">Current interval %1$s</string>
+    <string name="home_planned_interval">Planned interval %1$s</string>
+    <string name="home_target_app_none">No camera app chosen yet</string>
+    <string name="home_calibrate">Calibrate shutter position</string>
+    <string name="home_recalibrate">Recalibrate shutter position</string>
+    <string name="home_calibration_ok">Shutter position calibrated</string>
+    <string name="home_calibration_missing">Shutter position not calibrated</string>
+    <string name="home_requirements_title">While the session runs</string>
+    <string name="home_requirements_screen_on">The screen has to stay on and unlocked. The app presses the shutter the same way your finger would, which is impossible on a dark or locked screen.</string>
+    <string name="home_requirements_foreground">%1$s has to stay in front. Switch away and the session pauses instead of tapping into the wrong app, and picks up again once you come back.</string>
+    <string name="home_requirements_foreground_generic">The app you want tapped has to stay in front: every tap lands on the calibrated spot, whatever is on screen at that moment.</string>
+    <string name="home_blocked_title">Not ready to start</string>
+    <string name="home_block_service">The shutter accessibility service is off, so nothing can be tapped.</string>
+    <string name="home_block_overlay">Drawing over other apps is not allowed yet. It is needed for calibration and for the on-screen session controls.</string>
+    <string name="home_block_no_target">No camera app is chosen, so there is nothing to tap.</string>
+    <string name="home_block_no_calibration">%1$s has no calibrated shutter position yet.</string>
+    <string name="home_block_interval_floor">The interval %1$s is shorter than the %2$s this camera app needs between captures.</string>
+    <string name="home_service_unavailable">The shutter accessibility service is not running, so the session could not start. Enable it and try again.</string>
+    <string name="home_stop_reason_completed">Finished all planned shots</string>
+    <string name="home_stop_reason_user">Stopped by you</string>
+    <string name="home_stop_reason_max_duration">Reached the maximum duration</string>
+    <string name="home_stop_reason_low_battery">Battery dropped below the limit</string>
+    <string name="home_stop_reason_low_storage">Free space dropped below the limit</string>
+    <string name="home_stop_reason_service_lost">The accessibility service was turned off</string>
+    <string name="home_stop_reason_error">Stopped after an error</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Session setup</string>
+    <string name="setup_mode">Mode</string>
+    <string name="setup_mode_timelapse">Time-lapse</string>
+    <string name="setup_mode_timelapse_desc">Brings the chosen camera app to the front when the session starts and then taps its shutter, so every frame keeps that app\'s full quality. Leave the app on screen with the display on: if it goes away, the session pauses until it is back.</string>
+    <string name="setup_mode_periodic">Periodic tap</string>
+    <string name="setup_mode_periodic_desc">Just taps the calibrated spot on a timer, whatever is on screen. Useful for apps that are not cameras.</string>
+    <string name="setup_interval">Interval</string>
+    <string name="setup_interval_desc">Time between two captures.</string>
+    <string name="setup_interval_floor">This camera app needs at least %1$s between captures.</string>
+    <string name="setup_shots">Number of shots</string>
+    <string name="setup_shots_unlimited">Shoot until I stop</string>
+    <string name="setup_shots_count">Shots</string>
+    <string name="setup_start_delay">Start delay</string>
+    <string name="setup_start_delay_desc">Waiting time before the first shot, so you can put the phone down.</string>
+    <string name="setup_stop_conditions">Stop conditions</string>
+    <string name="setup_stop_conditions_desc">The session also stops on its own when any of these is reached.</string>
+    <string name="setup_max_duration">Maximum duration</string>
+    <string name="setup_min_battery">Stop below battery level</string>
+    <string name="setup_min_battery_value">%1$d %%</string>
+    <string name="setup_min_free_space">Stop below free space</string>
+    <string name="setup_verify_captures">Verify captures</string>
+    <string name="setup_verify_captures_desc">After each shot the app checks that a new photo really appeared, and warns you if the camera app stopped saving. To do that it has to read your photo library, which is why Android asks for the photos permission when you switch this on. Leave it off and no photo access is requested at all.</string>
+    <string name="setup_verify_permission_needed">Verification needs access to all photos and does not have it yet. The session still runs and still takes photos — it just cannot tell you when the camera app stops saving.</string>
+    <string name="setup_verify_permission_partial">Only the photos you picked are shared with the app, so it cannot see the frames this session is about to take. Open app settings and set Photos and videos to Allow all.</string>
+    <string name="setup_verify_open_settings">Open app settings</string>
+    <string name="setup_verify_permission_granted">Photos permission granted.</string>
+    <string name="setup_tap_area">Tap target</string>
+    <string name="setup_tap_area_none">Nothing calibrated yet. Use Calibrate on the home screen: tap once for a single point, or drag a rectangle for an area.</string>
+    <string name="setup_tap_area_point">Calibrated as a single point.</string>
+    <string name="setup_tap_area_rect">Calibrated as an area.</string>
+    <string name="setup_tap_jitter">Spread taps over the area</string>
+    <string name="setup_tap_jitter_desc">Each tap lands on a random pixel inside the calibrated area instead of always hitting its centre.</string>
+    <string name="setup_tap_jitter_needs_area">Calibrate by dragging a rectangle to use this.</string>
+
+    <!-- Ramp -->
+    <string name="ramp_title">Interval ramp</string>
+    <string name="ramp_enable">Ramp the interval</string>
+    <string name="ramp_enable_desc">Move from the starting interval to an end interval during the session, for example for a sunset that slows down as it gets dark.</string>
+    <string name="ramp_start_interval">Starting interval (from setup): %1$s</string>
+    <string name="ramp_end_interval">End interval</string>
+    <string name="ramp_curve">Curve</string>
+    <string name="ramp_curve_linear">Linear</string>
+    <string name="ramp_curve_linear_desc">Equal steps from start to end.</string>
+    <string name="ramp_curve_exponential">Exponential</string>
+    <string name="ramp_curve_exponential_desc">Equal ratios from start to end, which looks smoother for big changes.</string>
+    <string name="ramp_domain">Spread the change</string>
+    <string name="ramp_domain_shots">Over a number of shots</string>
+    <string name="ramp_domain_duration">Over a duration</string>
+    <string name="ramp_over_shots">Shots</string>
+    <string name="ramp_over_duration">Duration</string>
+    <string name="ramp_preview">Preview</string>
+    <string name="ramp_preview_desc">The intervals your settings actually produce.</string>
+    <string name="ramp_preview_row">Shot %1$d → %2$s</string>
+    <string name="ramp_preview_more">…</string>
+    <plurals name="ramp_preview_total">
+        <item quantity="one">%1$d shot, about %2$s in total</item>
+        <item quantity="other">%1$d shots, about %2$s in total</item>
+    </plurals>
+    <string name="ramp_preview_unavailable">Fill in an end interval and a range to see the preview.</string>
+    <string name="ramp_disabled_note">Ramp is off, so the whole session uses the interval from setup.</string>
+
+    <!-- App picker -->
+    <string name="picker_title">Camera app</string>
+    <string name="picker_search">Search apps</string>
+    <string name="picker_search_clear">Clear search</string>
+    <string name="picker_section_camera">Camera apps</string>
+    <string name="picker_section_all">All apps</string>
+    <string name="picker_badge_camera">Camera</string>
+    <string name="picker_selected">Selected</string>
+    <string name="picker_clear">Clear selection</string>
+    <string name="picker_empty">No app matches your search.</string>
+    <string name="picker_loading">Reading the app list…</string>
+    <string name="picker_hint">Apps that answer Android\'s camera intents are listed first, but you can drive any app.</string>
+
+    <!-- Advanced -->
+    <string name="advanced_title">Advanced extras</string>
+    <string name="advanced_intro">All of this is optional and the app works fine without it — the camera-app tweaks are shortcuts for specific devices and stay off until you switch them on. The screen settings at the bottom are shared with the floating session panel, so they show what it is doing right now.</string>
+    <string name="advanced_profile">Camera profile in use: %1$s</string>
+    <string name="advanced_launch_mode">Launch camera in a mode</string>
+    <string name="advanced_launch_mode_desc">Switches the camera app to a capture mode before the first shot.</string>
+    <string name="advanced_launch_mode_none">Leave the app as it is</string>
+    <string name="advanced_launch_mode_photo">Photo</string>
+    <string name="advanced_launch_mode_night">Night mode</string>
+    <string name="advanced_launch_mode_astro">Astrophotography</string>
+    <string name="advanced_launch_mode_unavailable">The profile for %1$s does not know that app\'s mode buttons, so there is no mode to switch into.</string>
+    <string name="advanced_launch_mode_unsupported">%1$s is not a mode the profile for %2$s can switch into, so nothing is switched. Pick one of the modes below.</string>
+    <string name="advanced_adaptive_wait">Adaptive long-exposure wait</string>
+    <string name="advanced_adaptive_wait_desc">Waits for a long exposure to finish instead of tapping again after a fixed time.</string>
+    <string name="advanced_self_timer">Make sure the self-timer is off</string>
+    <string name="advanced_self_timer_desc">Checks the camera app\'s timer setting before starting, because a self-timer would offset every frame.</string>
+    <string name="advanced_dismiss_post_capture">Dismiss post-capture screens</string>
+    <string name="advanced_dismiss_post_capture_desc">Closes review or share screens that some camera apps show after a shot and that would swallow the next tap.</string>
+    <string name="advanced_session_screen">Screen during a session</string>
+    <string name="advanced_keep_screen_on">Keep the screen on while shooting</string>
+    <string name="advanced_keep_screen_on_desc">Holds the display awake for as long as the session is actually shooting, because most camera apps stop previewing — and stop taking photos — once the screen goes off. It costs battery and leaves the screen lit for the whole run.</string>
+    <string name="advanced_dim_overlay">Dim the on-screen controls</string>
+    <string name="advanced_dim_overlay_desc">Fades the floating session panel down so it does not light up what you are shooting. A touch brings it back to full brightness.</string>
+    <string name="advanced_reason_needs_overlay">Needs permission to draw over other apps: the floating session panel is what does this. Allow it under Permissions.</string>
+    <string name="advanced_reason_needs_pixel">Needs Pixel Camera (com.google.android.GoogleCamera) as the chosen app. Chosen now: %1$s</string>
+    <string name="advanced_reason_needs_app">Choose a camera app first.</string>
+
+    <!-- Onboarding / permissions -->
+    <string name="onboarding_title">Permissions</string>
+    <string name="onboarding_intro">The app taps for you, so Android asks for a few things first. This list is live — come back after each step.</string>
+    <string name="onboarding_granted">Allowed</string>
+    <string name="onboarding_missing">Not allowed yet</string>
+    <string name="onboarding_optional">Optional</string>
+    <string name="onboarding_restricted_title">Allow restricted settings</string>
+    <string name="onboarding_restricted_desc">Because this build was installed outside a store, Android blocks its accessibility switch until you unblock it: open App info, tap the menu in the top right corner, choose Allow restricted settings, and confirm. Then come back and enable the service below.</string>
+    <string name="onboarding_restricted_action">Open App info</string>
+    <string name="onboarding_restricted_not_needed">Not needed for this install.</string>
+    <string name="onboarding_accessibility_title">Shutter accessibility service</string>
+    <string name="onboarding_accessibility_desc">The only way an app can press another app\'s shutter button. Find Intervalometer shutter under Installed apps or Downloaded apps and switch it on.</string>
+    <string name="onboarding_accessibility_action">Open accessibility settings</string>
+    <string name="onboarding_overlay_title">Draw over other apps</string>
+    <string name="onboarding_overlay_desc">Needed to show the calibration crosshair and the session controls on top of the camera app.</string>
+    <string name="onboarding_overlay_action">Open overlay settings</string>
+    <string name="onboarding_notifications_title">Notifications</string>
+    <string name="onboarding_notifications_desc">Shows the running session, the shot counter and any warning while the screen is on the camera app.</string>
+    <string name="onboarding_notifications_action">Allow notifications</string>
+    <string name="onboarding_battery_title">Ignore battery optimisation</string>
+    <string name="onboarding_battery_desc">Without this exemption Android can freeze the app during long sessions and frames go missing.</string>
+    <string name="onboarding_battery_action">Request exemption</string>
+    <string name="onboarding_media_title">Photo access for capture verification</string>
+    <string name="onboarding_media_desc">Only requested when you switch on Verify captures in session setup.</string>
+    <string name="onboarding_all_set">Everything the app needs is allowed.</string>
+</resources>
