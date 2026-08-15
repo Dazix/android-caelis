@@ -476,9 +476,9 @@ class OverlayController(context: Context) {
             visibility = View.GONE
             maxWidth = dp(themed, 200f)
         }
-        val buttons = LinearLayout(themed).apply {
+        val buttons = EqualCellRow(themed).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(themed, 6f), 0, 0)
+            setPadding(0, dp(themed, ROW_GAP_DP), 0, 0)
         }
         val pause = Button(themed).apply {
             text = themed.getString(R.string.ovl_action_pause)
@@ -498,17 +498,15 @@ class OverlayController(context: Context) {
             tonalPill(themed, palette.stopContainer, palette.onStopContainer)
             setOnClickListener { onStop?.invoke() }
         }
-        buttons.addView(pause)
-        buttons.addView(
-            stop,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = dp(themed, 8f) }
-        )
+        // Both buttons carry weight so the row fills the panel and its two halves are the same
+        // width: Pause and Stop used to be sized by their own labels, which left the row narrower
+        // than the toggles under it and the two rows visibly out of line at both edges.
+        buttons.addView(pause, rowCell(themed))
+        buttons.addView(stop, rowCell(themed, leadingGap = true))
 
-        val toggles = LinearLayout(themed).apply {
+        val toggles = EqualCellRow(themed).apply {
             orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(themed, ROW_GAP_DP), 0, 0)
         }
         val screen = optionButton(themed) {
             OverlaySettings.setKeepScreenOn(appContext, !options.keepScreenOn)
@@ -516,20 +514,16 @@ class OverlayController(context: Context) {
         val dim = optionButton(themed) {
             OverlaySettings.setDimPanel(appContext, !options.dimPanel)
         }
-        toggles.addView(screen)
-        toggles.addView(
-            dim,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = dp(themed, 8f) }
-        )
+        toggles.addView(screen, rowCell(themed))
+        toggles.addView(dim, rowCell(themed, leadingGap = true))
 
         panel.addView(shots)
         panel.addView(countdown)
         panel.addView(warning)
-        panel.addView(buttons)
-        panel.addView(toggles)
+        // The rows span the panel rather than their own content, which is what lets the cells inside
+        // them share that width equally and keeps the two rows flush with each other.
+        panel.addView(buttons, rowParams())
+        panel.addView(toggles, rowParams())
 
         statusView = shots
         controlsRow = buttons
@@ -580,6 +574,23 @@ class OverlayController(context: Context) {
         isAllCaps = false
         stateListAnimator = null
     }
+
+    /** A row of the panel: as wide as the panel, so its cells can divide that width. */
+    private fun rowParams(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
+
+    /**
+     * One button in a row: zero intrinsic width and equal weight, so the two buttons of a row always
+     * split it evenly and the rows line up with each other whatever their labels say — including in
+     * Czech, where "Pozastavit" and "Pokračovat" are far from the same length as "Stop".
+     */
+    private fun rowCell(themed: Context, leadingGap: Boolean = false): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            if (leadingGap) leftMargin = dp(themed, BUTTON_GAP_DP)
+        }
 
     private fun optionButton(themed: Context, onToggle: () -> Unit): Button =
         Button(themed).apply {
@@ -875,7 +886,7 @@ class OverlayController(context: Context) {
         val screenHeight = bounds?.height()?.takeIf { it > 0 }
             ?: appContext.resources.displayMetrics.heightPixels
         val width = if (view.width > 0) view.width else dp(appContext, 180f)
-        val height = if (view.height > 0) view.height else dp(appContext, 150f)
+        val height = if (view.height > 0) view.height else dp(appContext, 156f)
         return PanelPlacement.resolve(
             desiredX = wantX(),
             desiredY = wantY(),
@@ -965,6 +976,17 @@ class OverlayController(context: Context) {
         /** The accessibility minimum, applied to every control on the panel. */
         private const val TOUCH_TARGET_DP = 48f
 
+        /**
+         * Vertical air above each stacked row. Without it the toggles row sat flush against the
+         * Pause/Stop row and the two read as one block. Deliberately tighter than the gap between
+         * two buttons of a row: the four controls still have to read as one panel, not as two
+         * detached strips.
+         */
+        private const val ROW_GAP_DP = 6f
+
+        /** Horizontal gap between the two buttons of a row. */
+        private const val BUTTON_GAP_DP = 8f
+
         /** Opacity of a dimmed panel: readable at a glance, no longer the brightest thing on screen. */
         /**
          * How far a dimmed panel fades. Referenced by the settings copy, which is why it is public.
@@ -1011,6 +1033,45 @@ class OverlayController(context: Context) {
                 String.format(locale, "%d:%02d", minutes, seconds)
             }
         }
+    }
+}
+
+/**
+ * A row of equal-width cells that cannot clip one of them.
+ *
+ * The cells are `width = 0` + `weight = 1f`, so [LinearLayout] measures them twice: once at their
+ * natural width, then again at the width the weights hand out. A label that fitted on one line in
+ * the first pass can wrap in the second and make its cell taller than the height the row already
+ * recorded — the row does not go back and grow, so the extra line is drawn outside it and clipped.
+ * The Czech "Ztlumení: vypnuto" toggle did exactly that and lost the bottom of its pill.
+ *
+ * So after the normal measure the row checks its cells, adopts the tallest one's height and gives
+ * every cell that height, which also keeps two pills side by side the same size. See [RowMetrics].
+ */
+private class EqualCellRow(context: Context) : LinearLayout(context) {
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val padding = paddingTop + paddingBottom
+        val cells = (0 until childCount).map { getChildAt(it) }.filter { it.visibility != GONE }
+        val corrected = RowMetrics.correctedHeight(
+            measuredHeight = measuredHeight,
+            cellHeights = cells.map { child ->
+                val lp = child.layoutParams as? MarginLayoutParams
+                child.measuredHeight + (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
+            },
+            verticalPadding = padding,
+        ) ?: return
+        val cellHeight = RowMetrics.cellHeight(corrected, padding)
+        cells.forEach { child ->
+            val lp = child.layoutParams as? MarginLayoutParams
+            val margins = (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
+            child.measure(
+                MeasureSpec.makeMeasureSpec(child.measuredWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec((cellHeight - margins).coerceAtLeast(0), MeasureSpec.EXACTLY),
+            )
+        }
+        setMeasuredDimension(measuredWidth, corrected)
     }
 }
 

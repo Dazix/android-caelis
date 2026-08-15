@@ -24,11 +24,17 @@
     <string name="ovl_action_stop">Zastavit</string>
     <string name="ovl_action_drag_handle">Tažením posunete panel</string>
 
-    <string name="ovl_option_screen_on">Displej: zapnutý</string>
-    <string name="ovl_option_screen_off">Displej: automaticky</string>
+    <!--
+      Abbreviated on purpose: the toggle gets half of a panel that is only as wide as the Pause/Stop
+      row, and the full words ("Displej: automaticky", "Ztlumení: vypnuto") wrapped onto a second
+      line there. The unabbreviated wording lives on in the *_description strings, which are the
+      content descriptions, so nothing is lost to a screen reader.
+    -->
+    <string name="ovl_option_screen_on">Displej: zap.</string>
+    <string name="ovl_option_screen_off">Displej: auto</string>
     <string name="ovl_option_screen_description">Nechá displej svítit během focení. Většina fotoaplikací po zhasnutí displeje přestane zobrazovat náhled a přestane fotit.</string>
-    <string name="ovl_option_dim_on">Ztlumení: zapnuto</string>
-    <string name="ovl_option_dim_off">Ztlumení: vypnuto</string>
+    <string name="ovl_option_dim_on">Ztlumení: zap.</string>
+    <string name="ovl_option_dim_off">Ztlumení: vyp.</string>
     <string name="ovl_option_dim_description">Mezi snímky panel zprůhlední. Dotykem ho vrátíte.</string>
 
     <string name="ovl_permission_missing">Oprávnění kreslit přes ostatní aplikace je vypnuté, plovoucí panel nelze zobrazit.</string>
