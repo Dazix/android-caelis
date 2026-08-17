@@ -64,7 +64,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **225 JVM tests, 18 instrumented tests, 0 failures,
+`skipped`), not from the console. Current baseline: **290 JVM tests, 18 instrumented tests, 0 failures,
 0 skips, lint 0 errors.** Anything less is a regression.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
@@ -77,6 +77,9 @@ a session from the shell.
 | Package | Rule |
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
+| `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories). |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), and GPS location provider (`SolarLocationProvider`). |
+| `ui/solar/` | Sun AR Compose screen (`SunArScreen`), ViewModel (`SunArViewModel`), and zero-allocation 60 FPS 3D canvas renderer (`SkyDomeRenderer`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing notification. It re-arms its own tick; it must never post while unattached. |
@@ -91,6 +94,20 @@ the only calls into the notification and the panel.
 
 Each of these was found by review or on the device and is now covered by a test. Do not undo them.
 
+- **AR world-to-device mapping is $R^T$ (Transpose).** Android's `SensorManager` rotation matrix $R$
+  maps device vectors to world coordinates ($V_{\text{world}} = R \cdot V_{\text{dev}}$). Transforming
+  world points (sun, horizon, celestial grid) onto the camera viewport requires the orthogonal inverse
+  $V_{\text{dev}} = R^T \cdot V_{\text{world}}$. Direct row multiplication inverts camera motion and
+  breaks spatial locking.
+- **World frame rotation is pre-multiplied.** True-North magnetic declination and user calibration
+  rotate the ENU world frame around world $Z$ (Up): $R_{\text{true}} = R_z(\text{declination} + \text{offset}) \cdot R_{\text{sensor}}$.
+  The back camera optical axis in true world coordinates is $[-R_{\text{true}}[2], -R_{\text{true}}[6], -R_{\text{true}}[10]]^T$.
+- **AR FOV must account for viewfinder aspect crop.** CameraX `FILL_CENTER` crops the sensor frame to
+  fit tall screens (20:9, 19.5:9), altering the horizontal FOV:
+  $\text{cropRatio} = \text{viewportAspect} / \text{sensorAspect}$,
+  $\text{effectiveFovH} = 2 \arctan(\tan(\text{rawFovH} / 2) \cdot \text{cropRatio})$.
+- **Zero allocations on the AR render loop.** `SkyDomeRenderer` uses pre-allocated flat FloatArrays
+  and in-place `CameraProjection.projectFast` to ensure zero GC allocations per frame at 60 FPS.
 - **Timing is absolute.** Shot times come from `IntervalSchedule.targetElapsedFor`, never "now +
   interval". A late shot must not push the series.
 - **A tap is not a shot.** With verification armed, `shotsTaken` moves only when verification resolves

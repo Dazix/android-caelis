@@ -114,9 +114,9 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
     AppNavigationShell(
         current = screen,
         onNavigate = viewModel::navigate,
-        // The app picker is reached from the session screen and leaves by its own Back, so it is not
-        // a destination of its own and gets no navigation bar under it.
-        enabled = screen != Screen.APP_PICKER,
+        // The app picker and Sun AR are reached from the session screen and leave by their own Back, so they are not
+        // destinations of their own and get no navigation bar under them.
+        enabled = screen != Screen.APP_PICKER && screen != Screen.SUN_AR,
     ) {
         // Screens arrive on the expressive springs: a small scale-up under a cross-fade, which is the
         // expressive "container transform without a shared element" and reads as one surface being
@@ -259,6 +259,10 @@ private fun IntervalometerScreen(
             onQueryChange = viewModel::setAppQuery,
             onSelect = viewModel::selectApp,
             onClear = viewModel::clearApp,
+            onBack = viewModel::back,
+        )
+
+        Screen.SUN_AR -> com.dazix.intervalometer.ui.solar.SunArScreen(
             onBack = viewModel::back,
         )
     }

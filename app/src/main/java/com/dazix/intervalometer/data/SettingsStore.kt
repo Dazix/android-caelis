@@ -50,6 +50,24 @@ class SettingsStore(context: Context) {
 
     val advanced: Flow<AdvancedSettings> = preferences.map { SettingsMapping.readAdvanced(it) }
 
+    val sunArKeepScreenOn: Flow<Boolean> = preferences.map { SettingsMapping.readSunArKeepScreenOn(it) }
+
+    val sunArRedVisionMode: Flow<Boolean> = preferences.map { SettingsMapping.readSunArRedVisionMode(it) }
+
+    val sunArAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArAzimuthOffset(it) }
+
+    suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeSunArKeepScreenOn(it, enabled) }
+    }
+
+    suspend fun saveSunArRedVisionMode(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeSunArRedVisionMode(it, enabled) }
+    }
+
+    suspend fun saveSunArAzimuthOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeSunArAzimuthOffset(it, offsetDeg) }
+    }
+
     suspend fun saveConfig(config: SessionConfig) {
         dataStore.edit { SettingsMapping.writeConfig(it, config) }
     }
@@ -121,6 +139,9 @@ internal object SettingsMapping {
     private val ADV_DISMISS_POST_CAPTURE_UI = booleanPreferencesKey("advanced_dismiss_post_capture_ui")
     private val ADV_KEEP_SCREEN_ON = booleanPreferencesKey("advanced_keep_screen_on")
     private val ADV_DIM_OVERLAY = booleanPreferencesKey("advanced_dim_overlay")
+    private val SUN_AR_KEEP_SCREEN_ON = booleanPreferencesKey("sun_ar_keep_screen_on")
+    private val SUN_AR_RED_VISION_MODE = booleanPreferencesKey("sun_ar_red_vision_mode")
+    private val SUN_AR_AZIMUTH_OFFSET = floatPreferencesKey("sun_ar_azimuth_offset")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -301,6 +322,27 @@ internal object SettingsMapping {
      * often calibrated in.
      */
     private const val NATURAL_ROTATION = 0
+
+    fun readSunArKeepScreenOn(prefs: Preferences): Boolean =
+        prefs[SUN_AR_KEEP_SCREEN_ON] ?: false
+
+    fun writeSunArKeepScreenOn(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[SUN_AR_KEEP_SCREEN_ON] = enabled
+    }
+
+    fun readSunArRedVisionMode(prefs: Preferences): Boolean =
+        prefs[SUN_AR_RED_VISION_MODE] ?: false
+
+    fun writeSunArRedVisionMode(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[SUN_AR_RED_VISION_MODE] = enabled
+    }
+
+    fun readSunArAzimuthOffset(prefs: Preferences): Float =
+        prefs[SUN_AR_AZIMUTH_OFFSET] ?: 0.0f
+
+    fun writeSunArAzimuthOffset(prefs: MutablePreferences, offsetDeg: Float) {
+        prefs[SUN_AR_AZIMUTH_OFFSET] = offsetDeg
+    }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {
         if (value == null) remove(key) else set(key, value)

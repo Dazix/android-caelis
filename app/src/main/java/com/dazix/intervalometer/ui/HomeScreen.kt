@@ -59,6 +59,14 @@ fun HomeScreen(
         subtitle = setup.targetLabel
             ?: setup.targetPackage
             ?: stringResource(R.string.home_target_app_none),
+        trailing = {
+            androidx.compose.material3.IconButton(onClick = { onNavigate(Screen.SUN_AR) }) {
+                androidx.compose.material3.Icon(
+                    imageVector = AppIcons.Sun,
+                    contentDescription = stringResource(R.string.sun_ar_title),
+                )
+            }
+        },
         floating = {
             // Pause and resume also live in the notification and in the overlay, but a session that
             // paused itself with notifications blocked and no overlay permission would otherwise be

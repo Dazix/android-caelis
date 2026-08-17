@@ -43,7 +43,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 
 /** The app is a single activity; this is the whole navigation model. */
-enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER }
+enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER, SUN_AR }
 
 enum class ModeChoice { TIMELAPSE, PERIODIC_TAP }
 

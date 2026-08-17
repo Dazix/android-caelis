@@ -166,6 +166,17 @@ object AppIcons {
         }
     }
 
+    /** Forward: next day arrow. */
+    val Forward: ImageVector by lazy {
+        icon("Forward") {
+            strokePath {
+                moveTo(9.4f, 4.8f)
+                lineTo(16.6f, 12f)
+                lineTo(9.4f, 19.2f)
+            }
+        }
+    }
+
     /** Granted / verified. Always paired with words, never the only signal. */
     val Check: ImageVector by lazy {
         icon("Check") {
@@ -199,6 +210,160 @@ object AppIcons {
                 lineTo(17f, 17f)
                 moveTo(17f, 7f)
                 lineTo(7f, 17f)
+            }
+        }
+    }
+
+    /** Sun: central disk with 8 radial rays. Stands for Sun AR and solar trajectory. */
+    val Sun: ImageVector by lazy {
+        icon("Sun") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 4.2f)
+                // 4 cardinal rays
+                moveTo(12f, 2.4f); lineTo(12f, 5.2f)
+                moveTo(12f, 18.8f); lineTo(12f, 21.6f)
+                moveTo(2.4f, 12f); lineTo(5.2f, 12f)
+                moveTo(18.8f, 12f); lineTo(21.6f, 12f)
+                // 4 diagonal rays
+                moveTo(5.2f, 5.2f); lineTo(7.2f, 7.2f)
+                moveTo(16.8f, 16.8f); lineTo(18.8f, 18.8f)
+                moveTo(5.2f, 18.8f); lineTo(7.2f, 16.8f)
+                moveTo(16.8f, 7.2f); lineTo(18.8f, 5.2f)
+            }
+        }
+    }
+
+    /** Sunrise: rising sun over the horizon line with an upward arrow. */
+    val Sunrise: ImageVector by lazy {
+        icon("Sunrise") {
+            strokePath {
+                // Horizon
+                moveTo(2.4f, 17.5f)
+                lineTo(21.6f, 17.5f)
+                // Rising sun arc
+                moveTo(7.2f, 17.5f)
+                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 17.5f)
+                // Up arrow
+                moveTo(12f, 10.5f)
+                lineTo(12f, 3.2f)
+                moveTo(9f, 6.2f)
+                lineTo(12f, 3.2f)
+                lineTo(15f, 6.2f)
+            }
+        }
+    }
+
+    /** Sunset: setting sun over the horizon line with a downward arrow. */
+    val Sunset: ImageVector by lazy {
+        icon("Sunset") {
+            strokePath {
+                // Horizon
+                moveTo(2.4f, 17.5f)
+                lineTo(21.6f, 17.5f)
+                // Setting sun arc
+                moveTo(7.2f, 17.5f)
+                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 17.5f)
+                // Down arrow
+                moveTo(12f, 3.2f)
+                lineTo(12f, 10.5f)
+                moveTo(9f, 7.5f)
+                lineTo(12f, 10.5f)
+                lineTo(15f, 7.5f)
+            }
+        }
+    }
+
+    /** Compass: circular dial with orientation needle. */
+    val Compass: ImageVector by lazy {
+        icon("Compass") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 8.6f)
+                moveTo(12f, 6.2f)
+                lineTo(14.8f, 12f)
+                lineTo(12f, 17.8f)
+                lineTo(9.2f, 12f)
+                close()
+            }
+            fillPath {
+                moveTo(12f, 6.2f)
+                lineTo(14.8f, 12f)
+                lineTo(12f, 12f)
+                close()
+            }
+        }
+    }
+
+    /** Calendar: date selector icon. */
+    val Calendar: ImageVector by lazy {
+        icon("Calendar") {
+            strokePath {
+                moveTo(5.2f, 4.6f)
+                lineTo(18.8f, 4.6f)
+                arcTo(2f, 2f, 0f, false, true, 20.8f, 6.6f)
+                lineTo(20.8f, 19.4f)
+                arcTo(2f, 2f, 0f, false, true, 18.8f, 21.4f)
+                lineTo(5.2f, 21.4f)
+                arcTo(2f, 2f, 0f, false, true, 3.2f, 19.4f)
+                lineTo(3.2f, 6.6f)
+                arcTo(2f, 2f, 0f, false, true, 5.2f, 4.6f)
+                close()
+                moveTo(3.2f, 9.6f)
+                lineTo(20.8f, 9.6f)
+                moveTo(7.8f, 2.4f); lineTo(7.8f, 5.6f)
+                moveTo(16.2f, 2.4f); lineTo(16.2f, 5.6f)
+            }
+        }
+    }
+
+    /** ScreenAwake: display stay awake / keep screen on icon. */
+    val ScreenAwake: ImageVector by lazy {
+        icon("ScreenAwake") {
+            strokePath {
+                moveTo(6.5f, 3.2f)
+                lineTo(17.5f, 3.2f)
+                arcTo(2f, 2f, 0f, false, true, 19.5f, 5.2f)
+                lineTo(19.5f, 18.8f)
+                arcTo(2f, 2f, 0f, false, true, 17.5f, 20.8f)
+                lineTo(6.5f, 20.8f)
+                arcTo(2f, 2f, 0f, false, true, 4.5f, 18.8f)
+                lineTo(4.5f, 5.2f)
+                arcTo(2f, 2f, 0f, false, true, 6.5f, 3.2f)
+                close()
+                moveTo(10.5f, 18.2f)
+                lineTo(13.5f, 18.2f)
+                // Center glow / sun dot
+                moveTo(12f, 10f)
+                lineTo(12f, 14f)
+                moveTo(10f, 12f)
+                lineTo(14f, 12f)
+            }
+        }
+    }
+
+    /** RedVision: night vision / astrophotography eye mode icon. */
+    val RedVision: ImageVector by lazy {
+        icon("RedVision") {
+            strokePath {
+                moveTo(2.5f, 12f)
+                curveTo(4.5f, 7.5f, 8f, 5f, 12f, 5f)
+                curveTo(16f, 5f, 19.5f, 7.5f, 21.5f, 12f)
+                curveTo(19.5f, 16.5f, 16f, 19f, 12f, 19f)
+                curveTo(8f, 19f, 4.5f, 16.5f, 2.5f, 12f)
+                close()
+                circle(centerX = 12f, centerY = 12f, radius = 3.2f)
+            }
+        }
+    }
+
+    /** ResetCalibration: undo / refresh calibration rotation icon. */
+    val ResetCalibration: ImageVector by lazy {
+        icon("ResetCalibration") {
+            strokePath {
+                moveTo(3.5f, 12f)
+                arcTo(8.5f, 8.5f, 0f, true, true, 6f, 18f)
+                moveTo(3.5f, 7f)
+                lineTo(3.5f, 12f)
+                lineTo(8.5f, 12f)
             }
         }
     }

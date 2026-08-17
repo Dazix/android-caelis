@@ -25,18 +25,19 @@ class NavigationDestinationTest {
     }
 
     @Test
-    fun `every screen except the app picker is reachable from the navigation`() {
+    fun `every screen except standalone full-screen tools is reachable from the navigation`() {
         val covered = NavigationDestination.entries.map { it.screen }.toSet()
         val uncovered = Screen.entries.filterNot { it in covered }
 
-        // The picker is pushed on top of the session screen and leaves by its own Back, so it is
-        // deliberately not a destination. Anything else missing here is an oversight.
-        assertEquals(listOf(Screen.APP_PICKER), uncovered)
+        // The picker and Sun AR are pushed on top of screens and leave by their own Back, so they are
+        // deliberately not destinations. Anything else missing here is an oversight.
+        assertEquals(listOf(Screen.APP_PICKER, Screen.SUN_AR), uncovered)
     }
 
     @Test
-    fun `the app picker is not a destination`() {
+    fun `standalone full-screen tools are not navigation destinations`() {
         assertNull(NavigationDestination.forScreen(Screen.APP_PICKER))
+        assertNull(NavigationDestination.forScreen(Screen.SUN_AR))
     }
 
     @Test

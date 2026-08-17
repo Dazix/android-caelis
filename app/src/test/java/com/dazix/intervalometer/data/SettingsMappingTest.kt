@@ -264,6 +264,45 @@ class SettingsMappingTest {
         )
     }
 
+    @Test
+    fun `sun ar keep screen on defaults to false on empty preferences`() {
+        assertFalse(SettingsMapping.readSunArKeepScreenOn(emptyPreferences()))
+    }
+
+    @Test
+    fun `sun ar keep screen on survives round trip when true and false`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArKeepScreenOn(prefs, true)
+        assertEquals(true, SettingsMapping.readSunArKeepScreenOn(prefs))
+
+        SettingsMapping.writeSunArKeepScreenOn(prefs, false)
+        assertEquals(false, SettingsMapping.readSunArKeepScreenOn(prefs))
+    }
+
+    @Test
+    fun `sun ar red vision mode defaults to false and survives round trip`() {
+        assertFalse(SettingsMapping.readSunArRedVisionMode(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArRedVisionMode(prefs, true)
+        assertEquals(true, SettingsMapping.readSunArRedVisionMode(prefs))
+
+        SettingsMapping.writeSunArRedVisionMode(prefs, false)
+        assertEquals(false, SettingsMapping.readSunArRedVisionMode(prefs))
+    }
+
+    @Test
+    fun `sun ar azimuth offset defaults to 0 and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readSunArAzimuthOffset(emptyPreferences()), 0.001f)
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArAzimuthOffset(prefs, 15.5f)
+        assertEquals(15.5f, SettingsMapping.readSunArAzimuthOffset(prefs), 0.001f)
+
+        SettingsMapping.writeSunArAzimuthOffset(prefs, -8.25f)
+        assertEquals(-8.25f, SettingsMapping.readSunArAzimuthOffset(prefs), 0.001f)
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

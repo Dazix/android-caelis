@@ -39,6 +39,27 @@ Nothing leaves the device. The app has no network permission at all.
   camera app itself wrote, retries the shutter once if none appeared, and flags the session instead of
   silently shooting nothing. Off by default; the photo permission is only requested when you turn it on.
 
+**Sun AR (Augmented Reality Solar Planning)**
+
+Built-in augmented reality module for planning solar time-lapses (sunsets, sunrises, golden hour):
+
+- **Static 3D Celestial Dome**: Projects the solar trajectory curve, hourly time markers, and solstices
+  locked 1:1 to the real physical landscape using perspective matrix transpose projection ($R^T$).
+- **3D Celestial Wireframe Grid**: 12 vertical azimuth meridians from Nadir ($-90^\circ$) to Zenith
+  ($+90^\circ$) and 7 altitude parallels ($-30^\circ, -15^\circ, +15^\circ, +30^\circ, +45^\circ, +60^\circ, +75^\circ$)
+  with degree elevation tags.
+- **24/7 Directional Sun Pointer**: Real-time 8-ray vector sun glyph with a directional chevron arrow and
+  elevation badge (e.g. `☀️ -27°` at night) guiding the user towards the sun in any direction.
+- **Dynamic FOV & Aspect Crop Calculation**: Dynamically queries `CameraCharacteristics` (sensor physical size
+  and focal length) and calculates effective horizontal FOV compensating for `PreviewView.ScaleType.FILL_CENTER`
+  on modern tall displays (20:9, 19.5:9).
+- **Magnetic Declination & Swipe Calibration**: Real-time True-North correction plus 1:1 pixel-to-angle
+  horizontal swipe gesture to compensate for metallic tripod magnetic distortion, with 1-tap reset.
+- **Terrain Sunset Continuation**: Solid daytime trajectory continuing down to $-15^\circ$ below the visual
+  horizon for framing sunsets behind hills and buildings.
+- **Red Vision Mode**: Astrophotography dark red theme (`#FFFF1744`) preserving night adaptation.
+- **Two-Row Floating HUD**: Row 1 with GPS fix status & location, Row 2 with Compass Azimuth and Lens FOV.
+
 **Universal targeting.** The engine knows nothing about any particular camera. It needs "which package,
 which shutter matcher, which calibrated point". Camera-specific knowledge lives in data-only
 `CameraProfile` rows, so adding an app is a table entry, not code:
@@ -176,7 +197,7 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: 225 JVM tests, 18 instrumented tests, no
+what a dead accessibility service produces. Current baseline: 290 JVM tests, 18 instrumented tests, no
 failures, no skips, lint clean.
 
 ---
@@ -186,6 +207,8 @@ failures, no skips, lint clean.
 ```
 com.dazix.intervalometer
 ├── domain/      pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
+│   └── solar/   pure Kotlin solar ephemeris, day times, trajectory planner, PSA algorithms
+├── ar/          AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers
 ├── service/     ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
 │                CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
 ├── overlay/     the floating panel, its placement/cloak/dim policy, and the calibration overlay
@@ -193,7 +216,8 @@ com.dazix.intervalometer
 ├── data/        DataStore settings, calibrations, and the process-wide session snapshot
 ├── verify/      the optional MediaStore capture check
 ├── monitor/     battery and storage
-└── ui/          one activity, Compose screens, Material 3 Expressive theme
+└── ui/          activity, Compose screens (Home, Setup, Ramp, Sun AR), Material 3 Expressive theme
+    └── solar/   Sun AR screen, ViewModel, and 60 FPS zero-allocation 3D celestial canvas renderer
 ```
 
 **The accessibility service owns the session.** Only an accessibility service may call
