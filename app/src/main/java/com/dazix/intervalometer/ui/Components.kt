@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -108,6 +111,7 @@ fun ScreenScaffold(
     onBack: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
     floating: @Composable (BoxScope.() -> Unit)? = null,
+    scrollState: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scrollBehavior =
@@ -155,7 +159,7 @@ fun ScreenScaffold(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     // Capped and centred: one column of cards stretched across an unfolded fold or a
                     // tablet gives 36sp figures a metre of whitespace and lines too long to scan.
                     .widthIn(max = CONTENT_MAX_WIDTH)
@@ -571,11 +575,13 @@ fun SessionActionButton(
         animationSpec = ExpressiveMotion.effects(),
         label = "sessionActionContent",
     )
+    val shape = RoundedCornerShape(radius)
     if (!enabled) {
         Surface(
-            shape = RoundedCornerShape(radius),
+            shape = shape,
             color = container,
             contentColor = onContainer,
+            shadowElevation = 8.dp,
             modifier = Modifier
                 .size(SESSION_ACTION_SIZE)
                 .semantics {
@@ -584,19 +590,31 @@ fun SessionActionButton(
                 },
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(28.dp))
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(30.dp))
             }
         }
         return
     }
     FloatingToolbarDefaults.VibrantFloatingActionButton(
         onClick = onClick,
-        shape = RoundedCornerShape(radius),
+        shape = shape,
         containerColor = container,
         contentColor = onContainer,
-        modifier = Modifier.semantics { contentDescription = label },
+        modifier = Modifier
+            .shadow(
+                elevation = 10.dp,
+                shape = shape,
+                ambientColor = MaterialTheme.colorScheme.scrim,
+                spotColor = MaterialTheme.colorScheme.scrim,
+            )
+            .border(
+                width = 1.dp,
+                color = onContainer.copy(alpha = 0.25f),
+                shape = shape,
+            )
+            .semantics { contentDescription = label },
     ) {
-        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(28.dp))
+        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(30.dp))
     }
 }
 

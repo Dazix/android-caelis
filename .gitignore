@@ -27,3 +27,5 @@ scripts/env.local.sh
 # above; listed so it is obvious they are throwaway evidence of one run, not project files.
 /build/qa
 /build/e2e
+/screenshots
+scripts/capture_all_screens.py

@@ -25,19 +25,25 @@ class NavigationDestinationTest {
     }
 
     @Test
-    fun `every screen except standalone full-screen tools is reachable from the navigation`() {
+    fun `navigation covers top-level destinations and sub-screens are reachable from home`() {
         val covered = NavigationDestination.entries.map { it.screen }.toSet()
         val uncovered = Screen.entries.filterNot { it in covered }
 
-        // The picker and Sun AR are pushed on top of screens and leave by their own Back, so they are
-        // deliberately not destinations. Anything else missing here is an oversight.
-        assertEquals(listOf(Screen.APP_PICKER, Screen.SUN_AR), uncovered)
+        // Home and Sun AR are top-level destinations. All other screens (setup, ramp, advanced,
+        // onboarding, app picker) are sub-screens navigated to from Home and leave by Back.
+        assertEquals(
+            listOf(Screen.SETUP, Screen.RAMP, Screen.ADVANCED, Screen.ONBOARDING, Screen.APP_PICKER),
+            uncovered,
+        )
     }
 
     @Test
-    fun `standalone full-screen tools are not navigation destinations`() {
+    fun `sub-screens are not standalone navigation destinations`() {
+        assertNull(NavigationDestination.forScreen(Screen.SETUP))
+        assertNull(NavigationDestination.forScreen(Screen.RAMP))
+        assertNull(NavigationDestination.forScreen(Screen.ADVANCED))
+        assertNull(NavigationDestination.forScreen(Screen.ONBOARDING))
         assertNull(NavigationDestination.forScreen(Screen.APP_PICKER))
-        assertNull(NavigationDestination.forScreen(Screen.SUN_AR))
     }
 
     @Test

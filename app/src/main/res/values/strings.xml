@@ -38,7 +38,8 @@
       Short labels for the navigation bar and rail, where each one has a single line to work with.
       The nav_*_summary strings above stay the long form used on the session screen's list.
     -->
-    <string name="nav_short_home">Session</string>
+    <string name="nav_short_home">Intervalometer</string>
+    <string name="nav_short_sun_ar">Sun position</string>
     <string name="nav_short_setup">Setup</string>
     <string name="nav_short_ramp">Ramp</string>
     <string name="nav_short_advanced">Advanced</string>

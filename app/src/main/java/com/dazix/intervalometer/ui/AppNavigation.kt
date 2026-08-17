@@ -40,17 +40,13 @@ enum class NavigationDestination(
     val icon: ImageVector,
 ) {
     SESSION(Screen.HOME, R.string.nav_short_home, AppIcons.Session),
-    SETUP(Screen.SETUP, R.string.nav_short_setup, AppIcons.Setup),
-    RAMP(Screen.RAMP, R.string.nav_short_ramp, AppIcons.Ramp),
-    ADVANCED(Screen.ADVANCED, R.string.nav_short_advanced, AppIcons.Advanced),
-    PERMISSIONS(Screen.ONBOARDING, R.string.nav_short_permissions, AppIcons.Permissions),
+    SUN_AR(Screen.SUN_AR, R.string.nav_short_sun_ar, AppIcons.Sun),
     ;
 
     companion object {
         /**
          * The destination the given screen belongs to, or `null` for a screen that is pushed on top of
-         * one rather than being a place of its own — the app picker, which is reached from the session
-         * screen and returns to it.
+         * one rather than being a top-level place of its own — sub-screens reachable from home.
          */
         fun forScreen(screen: Screen): NavigationDestination? = entries.firstOrNull { it.screen == screen }
     }
@@ -91,22 +87,38 @@ fun AppNavigationShell(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val rail = wantsNavigationRail(maxWidth)
-        if (!enabled) {
-            CompositionLocalProvider(LocalNavigationBar provides null) { content() }
-            return@BoxWithConstraints
+        val bar: (@Composable () -> Unit)? = if (enabled && !rail) {
+            remember(current, onNavigate) {
+                @Composable {
+                    ShortNavigationBar {
+                        NavigationDestination.entries.forEach { destination ->
+                            val label = stringResource(destination.labelRes)
+                            ShortNavigationBarItem(
+                                selected = destination.screen == current,
+                                onClick = { onNavigate(destination.screen) },
+                                icon = {
+                                    Icon(imageVector = destination.icon, contentDescription = null)
+                                },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            null
         }
-        if (rail) {
-            // Read out here: inside the rail the composable lambdas have receivers of their own and
-            // this one is no longer reachable implicitly.
+
+        if (rail && enabled) {
             val windowHeight = maxHeight
             Row(modifier = Modifier.fillMaxSize()) {
                 WideNavigationRail(modifier = Modifier.fillMaxHeight()) {
-                    // The rail brings no scroll container of its own, and five items with Czech
-                    // labels at a large font scale are taller than a landscape phone — without this
-                    // the last destination is clipped off with no way to reach it.
-                    //
-                    // The explicit cap is the window's own height: the rail measures its content
-                    // itself, and a scroll container only scrolls once something bounds it.
                     Column(
                         modifier = Modifier
                             .heightIn(max = windowHeight)
@@ -120,8 +132,6 @@ fun AppNavigationShell(
                                 icon = {
                                     Icon(imageVector = destination.icon, contentDescription = null)
                                 },
-                                // One line, ellipsised: the item has a fixed height, so a label that
-                                // wrapped would be cut through the middle of its second line.
                                 label = {
                                     Text(
                                         text = label,
@@ -139,34 +149,6 @@ fun AppNavigationShell(
                 }
             }
         } else {
-            // Remembered, not rebuilt: LocalNavigationBar is a static local, so a new lambda identity
-            // would invalidate the whole screen under it on every recomposition of the shell.
-            val bar: @Composable () -> Unit = remember(current, onNavigate) {
-                @Composable {
-                    ShortNavigationBar {
-                        NavigationDestination.entries.forEach { destination ->
-                            val label = stringResource(destination.labelRes)
-                            ShortNavigationBarItem(
-                                selected = destination.screen == current,
-                                onClick = { onNavigate(destination.screen) },
-                                icon = {
-                                    Icon(imageVector = destination.icon, contentDescription = null)
-                                },
-                                // Five slots on a 412dp phone: the Czech labels are up to twice the
-                                // English length, so they have to ellipsise rather than wrap into a
-                                // second line the bar has no room for.
-                                label = {
-                                    Text(
-                                        text = label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-            }
             CompositionLocalProvider(LocalNavigationBar provides bar) { content() }
         }
     }

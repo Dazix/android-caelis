@@ -17,9 +17,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -111,12 +114,14 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
 
     BackHandler(enabled = screen != Screen.HOME) { viewModel.back() }
 
+    val homeScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val saveableStateHolder = rememberSaveableStateHolder()
+
     AppNavigationShell(
         current = screen,
         onNavigate = viewModel::navigate,
-        // The app picker and Sun AR are reached from the session screen and leave by their own Back, so they are not
-        // destinations of their own and get no navigation bar under them.
-        enabled = screen != Screen.APP_PICKER && screen != Screen.SUN_AR,
+        // Top-level navigation bar is shown on the home screen; sub-screens and standalone tools leave by Back.
+        enabled = screen == Screen.HOME,
     ) {
         // Screens arrive on the expressive springs: a small scale-up under a cross-fade, which is the
         // expressive "container transform without a shared element" and reads as one surface being
@@ -136,29 +141,32 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
             },
             label = "screen",
         ) { visible ->
-            IntervalometerScreen(
-                screen = visible,
-                viewModel = viewModel,
-                setup = setup,
-                advanced = advanced,
-                permissions = permissions,
-                snapshot = snapshot,
-                blockers = blockers,
-                calibration = calibration,
-                floorMs = floorMs,
-                serviceUnavailable = serviceUnavailable,
-                apps = apps,
-                appsLoading = appsLoading,
-                query = query,
-                profile = profile,
-                startCalibration = startCalibration,
-                onRequestNotifications = {
-                    notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                },
-                onRequestMediaPermission = {
-                    mediaLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
-                },
-            )
+            saveableStateHolder.SaveableStateProvider(key = visible) {
+                IntervalometerScreen(
+                    screen = visible,
+                    viewModel = viewModel,
+                    setup = setup,
+                    advanced = advanced,
+                    permissions = permissions,
+                    snapshot = snapshot,
+                    blockers = blockers,
+                    calibration = calibration,
+                    floorMs = floorMs,
+                    serviceUnavailable = serviceUnavailable,
+                    apps = apps,
+                    appsLoading = appsLoading,
+                    query = query,
+                    profile = profile,
+                    homeScrollState = homeScrollState,
+                    startCalibration = startCalibration,
+                    onRequestNotifications = {
+                        notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    },
+                    onRequestMediaPermission = {
+                        mediaLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                    },
+                )
+            }
         }
     }
 }
@@ -183,6 +191,7 @@ private fun IntervalometerScreen(
     appsLoading: Boolean,
     query: String,
     profile: CameraProfile,
+    homeScrollState: ScrollState,
     startCalibration: () -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestMediaPermission: () -> Unit,
@@ -195,6 +204,7 @@ private fun IntervalometerScreen(
             calibrated = calibration != null,
             blockers = blockers,
             serviceUnavailable = serviceUnavailable,
+            scrollState = homeScrollState,
             onStart = viewModel::start,
             onStop = viewModel::stop,
             onPause = viewModel::pause,

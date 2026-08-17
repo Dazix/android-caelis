@@ -1,7 +1,9 @@
 package com.dazix.intervalometer.ui
 
 import android.os.SystemClock
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,8 +19,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -37,6 +44,7 @@ fun HomeScreen(
     calibrated: Boolean,
     blockers: List<StartBlocker>,
     serviceUnavailable: Boolean,
+    scrollState: ScrollState = rememberScrollState(),
     onStart: () -> Unit,
     onStop: () -> Unit,
     onPause: () -> Unit,
@@ -52,21 +60,29 @@ fun HomeScreen(
         snapshot.state is SessionState.Paused
     val paused = snapshot.state is SessionState.Paused
 
+    var savedScrollOffset by rememberSaveable { mutableIntStateOf(0) }
+
+    LaunchedEffect(savedScrollOffset) {
+        if (savedScrollOffset > 0 && scrollState.value != savedScrollOffset) {
+            scrollState.scrollTo(savedScrollOffset)
+        }
+    }
+
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.value }
+            .collect { offset ->
+                if (scrollState.isScrollInProgress || offset > 0) {
+                    savedScrollOffset = offset
+                }
+            }
+    }
+
     ScreenScaffold(
         title = stringResource(R.string.home_title),
-        // The flexible app bar's second line answers "what is this pointed at" without spending a card
-        // on it: the app being driven, or the reminder that none is chosen yet.
         subtitle = setup.targetLabel
             ?: setup.targetPackage
             ?: stringResource(R.string.home_target_app_none),
-        trailing = {
-            androidx.compose.material3.IconButton(onClick = { onNavigate(Screen.SUN_AR) }) {
-                androidx.compose.material3.Icon(
-                    imageVector = AppIcons.Sun,
-                    contentDescription = stringResource(R.string.sun_ar_title),
-                )
-            }
-        },
+        scrollState = scrollState,
         floating = {
             // Pause and resume also live in the notification and in the overlay, but a session that
             // paused itself with notifications blocked and no overlay permission would otherwise be

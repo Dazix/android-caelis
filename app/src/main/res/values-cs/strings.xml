@@ -38,7 +38,8 @@
       Krátké popisky pro navigační lištu a boční lištu, kde je na každý jen jeden řádek. Delší
       podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
     -->
-    <string name="nav_short_home">Série</string>
+    <string name="nav_short_home">Intervalometr</string>
+    <string name="nav_short_sun_ar">Poloha slunce</string>
     <string name="nav_short_setup">Nastavení</string>
     <string name="nav_short_ramp">Interval</string>
     <string name="nav_short_advanced">Pokročilé</string>
