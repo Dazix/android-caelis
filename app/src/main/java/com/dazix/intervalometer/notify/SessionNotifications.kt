@@ -296,7 +296,7 @@ class SessionNotifications(context: Context) {
             state is SessionState.WaitingToStart
 
         val builder = Notification.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(appContext.getString(titleFor(state)))
             .setContentText(contentTextFor(snapshot))
             .setOngoing(live)
@@ -387,7 +387,7 @@ class SessionNotifications(context: Context) {
         return "$shots · $tail"
     }
 
-    /** Platform drawables only: this app ships no icon resources of its own yet. */
+    /** Platform drawables for notification actions (play, pause, cancel). */
     private fun platformIcon(resId: Int): Icon = Icon.createWithResource("android", resId)
 
     companion object {
