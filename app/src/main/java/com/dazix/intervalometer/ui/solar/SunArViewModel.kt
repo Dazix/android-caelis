@@ -73,7 +73,16 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
-    val redVisionMode: StateFlow<Boolean> = settingsStore.sunArRedVisionMode.stateIn(
+    private val isNightState = MutableStateFlow(
+        SolarPositionCalculator.isNight(Instant.now(), locationProvider.location.value)
+    )
+    val isNight: StateFlow<Boolean> = isNightState.asStateFlow()
+
+    private val manualRedVisionOverride = MutableStateFlow<Boolean?>(null)
+
+    val redVisionMode: StateFlow<Boolean> = combine(isNightState, manualRedVisionOverride) { night, override ->
+        override ?: night
+    }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
         false,
@@ -163,6 +172,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
                 val targetInstant = date.atTime(localTime).atZone(ZoneId.systemDefault()).toInstant()
                 currentSunPosState.value = SolarPositionCalculator.computePosition(targetInstant, loc)
+                isNightState.value = SolarPositionCalculator.isNight(now, loc)
                 delay(2000L)
             }
         }
@@ -192,13 +202,16 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleRedVisionMode() {
-        setRedVisionMode(!redVisionMode.value)
+        val currentActive = manualRedVisionOverride.value ?: isNightState.value
+        manualRedVisionOverride.value = !currentActive
     }
 
     fun setRedVisionMode(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsStore.saveSunArRedVisionMode(enabled)
-        }
+        manualRedVisionOverride.value = enabled
+    }
+
+    fun resetRedVisionToAuto() {
+        manualRedVisionOverride.value = null
     }
 
     fun startSensors() {

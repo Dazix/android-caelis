@@ -279,4 +279,12 @@
     <string name="sun_ar_calib_hint">Tažením prstu do stran srovnáte azimut</string>
     <string name="sun_ar_calib_reset">Resetovat kalibraci</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
+
+    <!-- Night Sky AR -->
+    <string name="nav_short_night_sky">Noční obloha (AR)</string>
+    <string name="night_sky_title">Noční obloha (AR)</string>
+    <string name="night_sky_desc">Rozšířená realita hvězdné mapy a nebeské sféry</string>
+    <string name="night_sky_stars_label">Hvězdy:</string>
+    <string name="night_sky_lst_label">LST</string>
+    <string name="night_sky_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení noční oblohy</string>
 </resources>

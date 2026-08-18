@@ -1,0 +1,32 @@
+namespace com.dazix.intervalometer.data.nightsky;
+
+// Structs are stored inline in memory (fixed size). 
+// This guarantees zero-allocation sequential reads for the rendering loop.
+struct Star {
+  ra: float;
+  dec: float;
+  mag: float;
+}
+
+// Tables are extensible. Used for metadata that isn't read every frame.
+table StarMetadata {
+  star_index: int; // Points to the index in the 'stars' vector
+  name: string;
+}
+
+table Constellation {
+  name: string;
+  // Sequence of star indices representing line segments (e.g., [A, B, B, C] for a connected line)
+  lines: [int];
+}
+
+table NightSkyCatalog {
+  // Fast loop data: Tightly packed contiguous memory block
+  stars: [Star];
+  
+  // Slower metadata: Accessed only when needed
+  metadata: [StarMetadata];
+  constellations: [Constellation];
+}
+
+root_type NightSkyCatalog;

@@ -78,8 +78,10 @@ a session from the shell.
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories). |
-| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), and GPS location provider (`SolarLocationProvider`). |
-| `ui/solar/` | Sun AR Compose screen (`SunArScreen`), ViewModel (`SunArViewModel`), and zero-allocation 60 FPS 3D canvas renderer (`SkyDomeRenderer`). |
+| `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, zero-alloc star catalog). |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview (`CameraPreview`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
+| `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
+| `ui/nightsky/` | Night Sky AR Compose screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), and zero-allocation 60 FPS batch star renderer (`NightSkyRenderer`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing notification. It re-arms its own tick; it must never post while unattached. |

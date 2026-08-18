@@ -104,6 +104,27 @@ object SolarPositionCalculator {
         )
     }
 
+    /**
+     * Standard astronomical threshold for sunset/sunrise where the upper limb of the Sun
+     * touches the horizon (-50 arcminutes = -0.8333° accounting for 34' refraction + 16' radius).
+     */
+    const val SUNSET_HORIZON_ELEVATION_DEGREES: Double = -0.8333
+
+    /**
+     * Returns true if the Sun is below the horizon (i.e. night / after sunset or before sunrise)
+     * for the given [instant] and [location].
+     */
+    fun isSunBelowHorizon(instant: Instant, location: GeoLocation): Boolean {
+        val coords = computePosition(instant, location)
+        return coords.elevationDegrees < SUNSET_HORIZON_ELEVATION_DEGREES
+    }
+
+    /**
+     * Alias for [isSunBelowHorizon].
+     */
+    fun isNight(instant: Instant, location: GeoLocation): Boolean =
+        isSunBelowHorizon(instant, location)
+
     /** Normalizes an angle in degrees into [0.0, 360.0). */
     fun normalizeDegrees(deg: Double): Double {
         val result = deg % 360.0

@@ -56,6 +56,12 @@ class SettingsStore(context: Context) {
 
     val sunArAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArAzimuthOffset(it) }
 
+    val nightSkyKeepScreenOn: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyKeepScreenOn(it) }
+
+    val nightSkyRedVisionMode: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyRedVisionMode(it) }
+
+    val nightSkyAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyAzimuthOffset(it) }
+
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeSunArKeepScreenOn(it, enabled) }
     }
@@ -66,6 +72,18 @@ class SettingsStore(context: Context) {
 
     suspend fun saveSunArAzimuthOffset(offsetDeg: Float) {
         dataStore.edit { SettingsMapping.writeSunArAzimuthOffset(it, offsetDeg) }
+    }
+
+    suspend fun saveNightSkyKeepScreenOn(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyKeepScreenOn(it, enabled) }
+    }
+
+    suspend fun saveNightSkyRedVisionMode(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyRedVisionMode(it, enabled) }
+    }
+
+    suspend fun saveNightSkyAzimuthOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeNightSkyAzimuthOffset(it, offsetDeg) }
     }
 
     suspend fun saveConfig(config: SessionConfig) {
@@ -142,6 +160,9 @@ internal object SettingsMapping {
     private val SUN_AR_KEEP_SCREEN_ON = booleanPreferencesKey("sun_ar_keep_screen_on")
     private val SUN_AR_RED_VISION_MODE = booleanPreferencesKey("sun_ar_red_vision_mode")
     private val SUN_AR_AZIMUTH_OFFSET = floatPreferencesKey("sun_ar_azimuth_offset")
+    private val NIGHT_SKY_KEEP_SCREEN_ON = booleanPreferencesKey("night_sky_keep_screen_on")
+    private val NIGHT_SKY_RED_VISION_MODE = booleanPreferencesKey("night_sky_red_vision_mode")
+    private val NIGHT_SKY_AZIMUTH_OFFSET = floatPreferencesKey("night_sky_azimuth_offset")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -342,6 +363,27 @@ internal object SettingsMapping {
 
     fun writeSunArAzimuthOffset(prefs: MutablePreferences, offsetDeg: Float) {
         prefs[SUN_AR_AZIMUTH_OFFSET] = offsetDeg
+    }
+
+    fun readNightSkyKeepScreenOn(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_KEEP_SCREEN_ON] ?: false
+
+    fun writeNightSkyKeepScreenOn(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_KEEP_SCREEN_ON] = enabled
+    }
+
+    fun readNightSkyRedVisionMode(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_RED_VISION_MODE] ?: true
+
+    fun writeNightSkyRedVisionMode(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_RED_VISION_MODE] = enabled
+    }
+
+    fun readNightSkyAzimuthOffset(prefs: Preferences): Float =
+        prefs[NIGHT_SKY_AZIMUTH_OFFSET] ?: 0.0f
+
+    fun writeNightSkyAzimuthOffset(prefs: MutablePreferences, offsetDeg: Float) {
+        prefs[NIGHT_SKY_AZIMUTH_OFFSET] = offsetDeg
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

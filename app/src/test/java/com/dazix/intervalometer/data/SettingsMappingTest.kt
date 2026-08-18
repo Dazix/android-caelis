@@ -303,6 +303,42 @@ class SettingsMappingTest {
         assertEquals(-8.25f, SettingsMapping.readSunArAzimuthOffset(prefs), 0.001f)
     }
 
+    @Test
+    fun `night sky keep screen on defaults to false and survives round trip`() {
+        assertFalse(SettingsMapping.readNightSkyKeepScreenOn(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyKeepScreenOn(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyKeepScreenOn(prefs))
+
+        SettingsMapping.writeNightSkyKeepScreenOn(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyKeepScreenOn(prefs))
+    }
+
+    @Test
+    fun `night sky red vision mode defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyRedVisionMode(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyRedVisionMode(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyRedVisionMode(prefs))
+
+        SettingsMapping.writeNightSkyRedVisionMode(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyRedVisionMode(prefs))
+    }
+
+    @Test
+    fun `night sky azimuth offset defaults to 0 and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readNightSkyAzimuthOffset(emptyPreferences()), 0.001f)
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyAzimuthOffset(prefs, 12.5f)
+        assertEquals(12.5f, SettingsMapping.readNightSkyAzimuthOffset(prefs), 0.001f)
+
+        SettingsMapping.writeNightSkyAzimuthOffset(prefs, -4.5f)
+        assertEquals(-4.5f, SettingsMapping.readNightSkyAzimuthOffset(prefs), 0.001f)
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

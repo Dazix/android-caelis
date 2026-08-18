@@ -273,4 +273,12 @@
     <string name="sun_ar_calib_hint">Drag horizontally across screen to calibrate azimuth</string>
     <string name="sun_ar_calib_reset">Reset calibration</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
+
+    <!-- Night Sky AR -->
+    <string name="nav_short_night_sky">Night Sky (AR)</string>
+    <string name="night_sky_title">Night Sky (AR)</string>
+    <string name="night_sky_desc">Augmented reality star map and celestial sphere</string>
+    <string name="night_sky_stars_label">Stars:</string>
+    <string name="night_sky_lst_label">LST</string>
+    <string name="night_sky_keep_screen_on_desc">Prevent screen timeout while using Night Sky AR</string>
 </resources>

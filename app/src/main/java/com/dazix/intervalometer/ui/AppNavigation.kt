@@ -41,6 +41,7 @@ enum class NavigationDestination(
 ) {
     SESSION(Screen.HOME, R.string.nav_short_home, AppIcons.Session),
     SUN_AR(Screen.SUN_AR, R.string.nav_short_sun_ar, AppIcons.Sun),
+    NIGHT_SKY_AR(Screen.NIGHT_SKY_AR, R.string.nav_short_night_sky, AppIcons.NightSky),
     ;
 
     companion object {

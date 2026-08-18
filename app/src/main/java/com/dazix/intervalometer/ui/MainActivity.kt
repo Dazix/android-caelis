@@ -275,6 +275,10 @@ private fun IntervalometerScreen(
         Screen.SUN_AR -> com.dazix.intervalometer.ui.solar.SunArScreen(
             onBack = viewModel::back,
         )
+
+        Screen.NIGHT_SKY_AR -> com.dazix.intervalometer.ui.nightsky.NightSkyArScreen(
+            onBack = viewModel::back,
+        )
     }
 }
 

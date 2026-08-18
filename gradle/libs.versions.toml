@@ -18,8 +18,10 @@ androidxJunit = "1.3.0"
 espresso = "3.7.0"
 uiautomator = "2.4.0"
 camerax = "1.4.1"
+flatbuffers = "24.3.25"
 
 [libraries]
+flatbuffers-java = { group = "com.google.flatbuffers", name = "flatbuffers-java", version.ref = "flatbuffers" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

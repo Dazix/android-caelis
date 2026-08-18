@@ -368,6 +368,27 @@ object AppIcons {
         }
     }
 
+    /** NightSky: starry night / constellation icon for Night Sky AR. */
+    val NightSky: ImageVector by lazy {
+        icon("NightSky") {
+            strokePath {
+                moveTo(12f, 3.2f)
+                lineTo(13.8f, 9.8f)
+                lineTo(20.4f, 11.6f)
+                lineTo(13.8f, 13.4f)
+                lineTo(12f, 20.0f)
+                lineTo(10.2f, 13.4f)
+                lineTo(3.6f, 11.6f)
+                lineTo(10.2f, 9.8f)
+                close()
+            }
+            fillPath {
+                circle(centerX = 18.5f, centerY = 5.5f, radius = 1.4f)
+                circle(centerX = 5.5f, centerY = 18.5f, radius = 1.2f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,
