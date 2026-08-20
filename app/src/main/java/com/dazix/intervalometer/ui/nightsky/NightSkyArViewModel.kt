@@ -105,9 +105,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         false,
     )
 
-    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
-    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
-        !OrientationTracker.isIdentityQuaternion(q)
+    private val userOffsetsState = MutableStateFlow(Pair(0.0f, 0.0f))
+    val isCalibrated: StateFlow<Boolean> = userOffsetsState.map { (az, pitch) ->
+        kotlin.math.abs(az) > 0.01f || kotlin.math.abs(pitch) > 0.01f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val isSkyBackgroundOpaque: StateFlow<Boolean> = settingsStore.nightSkyOpaqueBackground.stateIn(
@@ -226,20 +226,22 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             catalogState.value = cat
         }
 
-        // Initialize user rotation quaternion from settings store
+        // Initialize user spherical offsets from settings store
         viewModelScope.launch {
-            val initialQuat = settingsStore.nightSkyQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
-            userQuatState.value = initialQuat
-            orientationTracker.setUserQuaternion(initialQuat)
+            val initialAz = settingsStore.nightSkyAzimuthOffset.firstOrNull() ?: 0.0f
+            val initialPitch = settingsStore.nightSkyPitchOffset.firstOrNull() ?: 0.0f
+            userOffsetsState.value = Pair(initialAz, initialPitch)
+            orientationTracker.setUserOffsets(initialAz, initialPitch)
         }
 
-        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
+        // Debounce saving rotation offset changes to eliminate disk I/O lag during continuous drag gestures
         viewModelScope.launch {
-            userQuatState
+            userOffsetsState
                 .drop(1)
                 .debounce(300L)
-                .collect { quat ->
-                    settingsStore.saveNightSkyQuaternion(quat)
+                .collect { (az, pitch) ->
+                    settingsStore.saveNightSkyAzimuthOffset(az)
+                    settingsStore.saveNightSkyPitchOffset(pitch)
                 }
         }
 
@@ -278,23 +280,21 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun rotatePan(pitchRad: Float, yawRad: Float) {
-        orientationTracker.rotateUser(pitchRad, yawRad)
-        userQuatState.value = orientationTracker.getUserQuaternion()
+    fun rotatePan(deltaAzDeg: Float, deltaPitchDeg: Float) {
+        orientationTracker.rotateUser(deltaAzDeg, deltaPitchDeg)
+        userOffsetsState.value = orientationTracker.getUserOffsets()
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
-        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
-        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+        rotatePan(deltaAzDeg = deltaAzimuthDeg, deltaPitchDeg = deltaElevationDeg)
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
+        rotatePan(deltaAzDeg = deltaDeg, deltaPitchDeg = 0.0f)
     }
 
     fun adjustElevationOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
+        rotatePan(deltaAzDeg = 0.0f, deltaPitchDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
@@ -303,9 +303,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun resetCalibration() {
         orientationTracker.resetUserRotation()
-        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+        userOffsetsState.value = Pair(0.0f, 0.0f)
         viewModelScope.launch {
-            settingsStore.saveNightSkyQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+            settingsStore.saveNightSkyAzimuthOffset(0.0f)
+            settingsStore.saveNightSkyPitchOffset(0.0f)
         }
     }
 

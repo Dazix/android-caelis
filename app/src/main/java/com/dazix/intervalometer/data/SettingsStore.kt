@@ -56,7 +56,9 @@ class SettingsStore(context: Context) {
 
     val sunArAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArAzimuthOffset(it) }
 
-    val sunArElevationOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArElevationOffset(it) }
+    val sunArPitchOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArPitchOffset(it) }
+
+    val sunArElevationOffset: Flow<Float> = sunArPitchOffset
 
     val sunArQuaternion: Flow<FloatArray> = preferences.map { SettingsMapping.readSunArQuaternion(it) }
 
@@ -66,7 +68,9 @@ class SettingsStore(context: Context) {
 
     val nightSkyAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyAzimuthOffset(it) }
 
-    val nightSkyElevationOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyElevationOffset(it) }
+    val nightSkyPitchOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyPitchOffset(it) }
+
+    val nightSkyElevationOffset: Flow<Float> = nightSkyPitchOffset
 
     val nightSkyQuaternion: Flow<FloatArray> = preferences.map { SettingsMapping.readNightSkyQuaternion(it) }
 
@@ -94,8 +98,12 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeSunArAzimuthOffset(it, offsetDeg) }
     }
 
+    suspend fun saveSunArPitchOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeSunArPitchOffset(it, offsetDeg) }
+    }
+
     suspend fun saveSunArElevationOffset(offsetDeg: Float) {
-        dataStore.edit { SettingsMapping.writeSunArElevationOffset(it, offsetDeg) }
+        saveSunArPitchOffset(offsetDeg)
     }
 
     suspend fun saveSunArQuaternion(quat: FloatArray) {
@@ -114,8 +122,12 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyAzimuthOffset(it, offsetDeg) }
     }
 
+    suspend fun saveNightSkyPitchOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeNightSkyPitchOffset(it, offsetDeg) }
+    }
+
     suspend fun saveNightSkyElevationOffset(offsetDeg: Float) {
-        dataStore.edit { SettingsMapping.writeNightSkyElevationOffset(it, offsetDeg) }
+        saveNightSkyPitchOffset(offsetDeg)
     }
 
     suspend fun saveNightSkyQuaternion(quat: FloatArray) {
@@ -448,6 +460,10 @@ internal object SettingsMapping {
         prefs[SUN_AR_ELEVATION_OFFSET] = offsetDeg
     }
 
+    fun readSunArPitchOffset(prefs: Preferences): Float = readSunArElevationOffset(prefs)
+
+    fun writeSunArPitchOffset(prefs: MutablePreferences, offsetDeg: Float) = writeSunArElevationOffset(prefs, offsetDeg)
+
     fun readSunArQuaternion(prefs: Preferences): FloatArray {
         val x = prefs[SUN_AR_QUAT_X] ?: 0.0f
         val y = prefs[SUN_AR_QUAT_Y] ?: 0.0f
@@ -490,6 +506,10 @@ internal object SettingsMapping {
     fun writeNightSkyElevationOffset(prefs: MutablePreferences, offsetDeg: Float) {
         prefs[NIGHT_SKY_ELEVATION_OFFSET] = offsetDeg
     }
+
+    fun readNightSkyPitchOffset(prefs: Preferences): Float = readNightSkyElevationOffset(prefs)
+
+    fun writeNightSkyPitchOffset(prefs: MutablePreferences, offsetDeg: Float) = writeNightSkyElevationOffset(prefs, offsetDeg)
 
     fun readNightSkyQuaternion(prefs: Preferences): FloatArray {
         val x = prefs[NIGHT_SKY_QUAT_X] ?: 0.0f

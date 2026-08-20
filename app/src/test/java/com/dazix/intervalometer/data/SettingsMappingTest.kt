@@ -424,6 +424,30 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `sun ar pitch offset defaults to zero and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readSunArPitchOffset(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArPitchOffset(prefs, 120.0f)
+        assertEquals(120.0f, SettingsMapping.readSunArPitchOffset(prefs))
+
+        SettingsMapping.writeSunArPitchOffset(prefs, -45.5f)
+        assertEquals(-45.5f, SettingsMapping.readSunArPitchOffset(prefs))
+    }
+
+    @Test
+    fun `night sky pitch offset defaults to zero and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readNightSkyPitchOffset(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyPitchOffset(prefs, -135.0f)
+        assertEquals(-135.0f, SettingsMapping.readNightSkyPitchOffset(prefs))
+
+        SettingsMapping.writeNightSkyPitchOffset(prefs, 60.0f)
+        assertEquals(60.0f, SettingsMapping.readNightSkyPitchOffset(prefs))
+    }
+
+    @Test
     fun `sun ar quaternion defaults to identity and survives round trip`() {
         val defaultQuat = SettingsMapping.readSunArQuaternion(emptyPreferences())
         assertEquals(0.0f, defaultQuat[0], 0.0001f)

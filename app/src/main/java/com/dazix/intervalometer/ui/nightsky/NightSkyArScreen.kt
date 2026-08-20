@@ -135,10 +135,9 @@ fun NightSkyArScreen(
                     onGesture = { _, pan, zoom, _ ->
                         val viewWidth = size.width.toFloat().coerceAtLeast(1f)
                         if (pan.x != 0f || pan.y != 0f) {
-                            val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
-                            val pitchRad = (pan.y / viewWidth) * fovRad
-                            val yawRad = -(pan.x / viewWidth) * fovRad
-                            viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                            val deltaAzDeg = (pan.x / viewWidth) * uiState.cameraFovHorizontal
+                            val deltaPitchDeg = (pan.y / viewWidth) * uiState.cameraFovHorizontal
+                            viewModel.rotatePan(deltaAzDeg = -deltaAzDeg, deltaPitchDeg = deltaPitchDeg)
                         }
                         if (zoom != 1.0f) {
                             viewModel.adjustZoomBy(zoom)

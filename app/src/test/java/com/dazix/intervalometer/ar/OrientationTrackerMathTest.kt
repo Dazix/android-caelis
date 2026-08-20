@@ -92,7 +92,7 @@ class OrientationTrackerMathTest {
     }
 
     @Test
-    fun `verifies 3D calibration with quaternion preserves 100 percent orthonormality across zenith`() {
+    fun `verifies upright spherical calibration preserves 100 percent orthonormality across zenith`() {
         // Portrait phone facing North at the horizon:
         // Col 0 (+X_dev): [1, 0, 0]^T (East)
         // Col 1 (+Y_dev): [0, 0, 1]^T (Zenith / Up)
@@ -104,19 +104,17 @@ class OrientationTrackerMathTest {
             0f, 0f, 0f, 1f,
         )
         val tempDec = FloatArray(16)
-        val tempUser = FloatArray(16)
+        val tempRotX = FloatArray(16)
         val adjusted = FloatArray(16)
 
-        // Rotate past zenith (+120° pitch)
-        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
-        OrientationTracker.rotateQuaternion(userQuat, Math.toRadians(120.0).toFloat(), 0f, userQuat)
-
+        // Rotate past zenith (+120° continuous pitch)
         OrientationTracker.applyCalibration(
             sensorMatrix = sensorMatrix,
             declinationDeg = 15.0f,
-            userQuat = userQuat,
+            userAzimuthDeg = 0.0f,
+            userPitchDeg = 120.0f,
             tempDeclinationBuffer = tempDec,
-            tempUserMatrixBuffer = tempUser,
+            tempRotXBuffer = tempRotX,
             outMatrix = adjusted,
         )
 
@@ -140,25 +138,48 @@ class OrientationTrackerMathTest {
         // Forward vector in world coordinates (-Z_dev):
         val camFwdZ = -adjusted[10]
         // Sin(120°) = sin(60°) = 0.866
-        assertEquals(kotlin.math.sin(Math.toRadians(120.0)).toFloat(), camFwdZ, 0.01f)
+        assertEquals(kotlin.math.sin(Math.toRadians(60.0)).toFloat(), camFwdZ, 0.01f)
+
+        // Camera Up Z component (+Y_dev in World Z) must be non-negative (upright guarantee)
+        val camUpZ = adjusted[9]
+        assertTrue("Camera Up Z must be >= 0 (upright guarantee), was $camUpZ", camUpZ >= 0.0f)
     }
 
     @Test
-    fun `verifies continuous 360 degree rotation loops seamlessly without singularity`() {
-        val quat = floatArrayOf(0f, 0f, 0f, 1f)
-        val stepRad = Math.toRadians(10.0).toFloat()
+    fun `verifies continuous 360 degree spherical pitch rotation loops seamlessly with guaranteed upright horizon`() {
+        val sensorMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val tempDec = FloatArray(16)
+        val tempRotX = FloatArray(16)
+        val adjusted = FloatArray(16)
 
-        // Rotate 36 steps of 10° = 360° total
-        for (step in 1..36) {
-            OrientationTracker.rotateQuaternion(quat, stepRad, 0f, quat)
-            val norm = sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3])
-            assertEquals("Quaternion norm must stay 1.0 at step $step", 1.0f, norm, 0.001f)
+        // Test every 15 degrees across full 360 loop
+        for (pitchDeg in 0..360 step 15) {
+            OrientationTracker.applyCalibration(
+                sensorMatrix = sensorMatrix,
+                declinationDeg = 0.0f,
+                userAzimuthDeg = 0.0f,
+                userPitchDeg = pitchDeg.toFloat(),
+                tempDeclinationBuffer = tempDec,
+                tempRotXBuffer = tempRotX,
+                outMatrix = adjusted,
+            )
+
+            // 1. Check orthonormality
+            for (col in 0..2) {
+                val lenSq = adjusted[col] * adjusted[col] +
+                    adjusted[col + 4] * adjusted[col + 4] +
+                    adjusted[col + 8] * adjusted[col + 8]
+                assertEquals("Column $col norm at $pitchDeg°", 1.0f, sqrt(lenSq), 0.001f)
+            }
+
+            // 2. Camera Up vector (+Y_dev) must ALWAYS point upwards in world space (Up_Z >= -0.01f)
+            val camUpZ = adjusted[9]
+            assertTrue("Camera Up_Z at $pitchDeg° must be >= 0 (upright), was $camUpZ", camUpZ >= -0.001f)
         }
-
-        // After full 360° rotation, orientation returns to identity (w ~ ±1.0, xyz ~ 0.0)
-        assertEquals(0.0f, quat[0], 0.01f)
-        assertEquals(0.0f, quat[1], 0.01f)
-        assertEquals(0.0f, quat[2], 0.01f)
-        assertEquals(1.0f, kotlin.math.abs(quat[3]), 0.01f)
     }
 }
