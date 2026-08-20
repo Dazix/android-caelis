@@ -18,12 +18,17 @@ import com.dazix.intervalometer.domain.solar.SolarCoordinates
 import com.dazix.intervalometer.domain.solar.SolarPositionCalculator
 import com.dazix.intervalometer.domain.solar.SolarTrajectory
 import com.dazix.intervalometer.domain.solar.SolarTrajectoryPlanner
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -38,8 +43,9 @@ data class SunArUiState(
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
     val keepScreenOn: Boolean = false,
-    val azimuthOffsetDegrees: Float = 0.0f,
+    val isCalibrated: Boolean = false,
     val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    val zoomRatio: Float = 1.0f,
     val trajectory: SolarTrajectory = SolarTrajectoryPlanner.planTrajectory(
         LocalDate.now(),
         GeoLocation.DEFAULT,
@@ -60,6 +66,7 @@ data class SunArUiState(
     ),
 )
 
+@OptIn(FlowPreview::class)
 class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsStore = SettingsStore(application)
@@ -72,8 +79,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     private val bubbleIntervalState = MutableStateFlow(BubbleInterval.ONE_HOUR)
     val bubbleInterval: StateFlow<BubbleInterval> = bubbleIntervalState.asStateFlow()
 
-    private val cameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
-    val cameraFovHorizontal: StateFlow<Float> = cameraFovState.asStateFlow()
+    private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
+    private val zoomRatioState = MutableStateFlow(1.0f)
+    val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
+
+    // Dynamic effective FOV factoring in pinch-to-zoom
+    val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
+        (baseFov / zoom).coerceIn(8.0f, 120.0f)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
     val location: StateFlow<GeoLocation> = locationProvider.location
@@ -85,11 +98,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
-    val azimuthOffsetDegrees: StateFlow<Float> = settingsStore.sunArAzimuthOffset.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        0.0f,
-    )
+    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
+        !OrientationTracker.isIdentityQuaternion(q)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
         SolarPositionCalculator.computePosition(Instant.now(), locationProvider.location.value)
@@ -135,8 +147,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         currentSunPosState,
         currentMoonPosState,
         keepScreenOn,
-        azimuthOffsetDegrees,
-        cameraFovState,
+        isCalibrated,
+        cameraFovHorizontal,
+        zoomRatioState,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -147,8 +160,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val sunPos = args[6] as SolarCoordinates
         val moonPos = args[7] as LunarCoordinates
         val keepOn = args[8] as Boolean
-        val azOffset = args[9] as Float
+        val calib = args[9] as Boolean
         val fov = args[10] as Float
+        val zoom = args[11] as Float
         SunArUiState(
             selectedDate = date,
             isToday = date == LocalDate.now(),
@@ -156,8 +170,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             location = loc,
             hasGpsFix = gps,
             keepScreenOn = keepOn,
-            azimuthOffsetDegrees = azOffset,
+            isCalibrated = calib,
             cameraFovHorizontal = fov,
+            zoomRatio = zoom,
             trajectory = traj,
             lunarTrajectory = lTraj,
             currentSunPosition = sunPos,
@@ -166,17 +181,27 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
     init {
+        // Initialize user rotation quaternion from settings store
+        viewModelScope.launch {
+            val initialQuat = settingsStore.sunArQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+            userQuatState.value = initialQuat
+            orientationTracker.setUserQuaternion(initialQuat)
+        }
+
+        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
+        viewModelScope.launch {
+            userQuatState
+                .drop(1)
+                .debounce(300L)
+                .collect { quat ->
+                    settingsStore.saveSunArQuaternion(quat)
+                }
+        }
+
         // Update magnetic declination whenever location updates
         viewModelScope.launch {
             locationProvider.location.collect { loc ->
                 orientationTracker.updateLocation(loc)
-            }
-        }
-
-        // Apply azimuth calibration offset to orientation tracker
-        viewModelScope.launch {
-            azimuthOffsetDegrees.collect { offset ->
-                orientationTracker.updateAzimuthOffset(offset)
             }
         }
 
@@ -196,26 +221,56 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setCameraFov(fovDeg: Float) {
-        if (kotlin.math.abs(cameraFovState.value - fovDeg) > 0.1f) {
-            cameraFovState.value = fovDeg
+        if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
+            baseCameraFovState.value = fovDeg
         }
+    }
+
+    fun rotatePan(pitchRad: Float, yawRad: Float) {
+        orientationTracker.rotateUser(pitchRad, yawRad)
+        userQuatState.value = orientationTracker.getUserQuaternion()
+    }
+
+    fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
+        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
+        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        val current = azimuthOffsetDegrees.value
-        var updated = current + deltaDeg
-        // Keep within [-180°, 180°]
-        while (updated > 180f) updated -= 360f
-        while (updated < -180f) updated += 360f
-        viewModelScope.launch {
-            settingsStore.saveSunArAzimuthOffset(updated)
-        }
+        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
+    }
+
+    fun adjustElevationOffset(deltaDeg: Float) {
+        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
+        resetCalibration()
+    }
+
+    fun resetCalibration() {
+        orientationTracker.resetUserRotation()
+        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
         viewModelScope.launch {
-            settingsStore.saveSunArAzimuthOffset(0.0f)
+            settingsStore.saveSunArQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
         }
+    }
+
+    fun adjustZoomBy(factor: Float) {
+        val current = zoomRatioState.value
+        val updated = (current * factor).coerceIn(0.5f, 4.0f)
+        if (kotlin.math.abs(updated - current) > 0.001f) {
+            zoomRatioState.value = updated
+        }
+    }
+
+    fun setZoomRatio(ratio: Float) {
+        zoomRatioState.value = ratio.coerceIn(0.5f, 4.0f)
+    }
+
+    fun resetZoom() {
+        zoomRatioState.value = 1.0f
     }
 
     fun startSensors() {

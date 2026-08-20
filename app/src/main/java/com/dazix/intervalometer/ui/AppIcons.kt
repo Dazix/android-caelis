@@ -488,6 +488,45 @@ object AppIcons {
         }
     }
 
+    /** Landscape: photorealistic ground landscape and tree line horizon. */
+    val Landscape: ImageVector by lazy {
+        icon("Landscape") {
+            strokePath {
+                // Rolling hills / ground horizon line
+                moveTo(2.4f, 18.0f)
+                curveTo(6.5f, 14.5f, 10.5f, 17.5f, 15.0f, 14.5f)
+                lineTo(21.6f, 17.0f)
+                // Tree crown silhouette
+                moveTo(15.0f, 8.5f)
+                lineTo(12.5f, 14.5f)
+                lineTo(17.5f, 14.5f)
+                close()
+                // Distant smaller tree
+                moveTo(8.5f, 11.5f)
+                lineTo(6.5f, 15.5f)
+                lineTo(10.5f, 15.5f)
+                close()
+            }
+        }
+    }
+
+    /** Grid: 3D celestial coordinate grid and horizon. */
+    val Grid: ImageVector by lazy {
+        icon("Grid") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 8.5f)
+                moveTo(3.5f, 12f)
+                lineTo(20.5f, 12f)
+                moveTo(12f, 3.5f)
+                lineTo(12f, 20.5f)
+                moveTo(6.0f, 6.0f)
+                curveTo(9.5f, 8.5f, 14.5f, 8.5f, 18.0f, 6.0f)
+                moveTo(6.0f, 18.0f)
+                curveTo(9.5f, 15.5f, 14.5f, 15.5f, 18.0f, 18.0f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

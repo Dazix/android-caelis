@@ -281,7 +281,8 @@
     <string name="sun_ar_red_vision">Červený noční režim (Red Vision)</string>
     <string name="sun_ar_red_vision_desc">Monochromatické červené rozhraní chránící noční vidění pro astrofotografii</string>
     <string name="sun_ar_calib_offset">Korekce: %+.1f°</string>
-    <string name="sun_ar_calib_hint">Tažením prstu do stran srovnáte azimut</string>
+    <string name="sun_ar_calib_active">Manuální 3D pohled</string>
+    <string name="sun_ar_calib_hint">Tažením prstu libovolným směrem otáčíte 3D pohled</string>
     <string name="sun_ar_calib_reset">Resetovat kalibraci</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
 
@@ -296,8 +297,12 @@
     <string name="night_sky_milky_way_desc">Zobrazit/skrýt hardwarově akcelerované pozadí Mléčné dráhy</string>
     <string name="night_sky_atmosphere">Atmosféra</string>
     <string name="night_sky_atmosphere_desc">Zobrazit/skrýt atmosférickou záři na obzoru a zhasínání hvězd</string>
+    <string name="night_sky_landscape">Krajina</string>
+    <string name="night_sky_landscape_desc">Zobrazit/skrýt fotorealistickou krajinu na zemi</string>
     <string name="night_sky_opaque_bg">Režim planetária</string>
     <string name="night_sky_opaque_bg_desc">Přepnout mezi AR kamerou a plným neprůhledným planetáriem</string>
+    <string name="night_sky_grid">Souřadnicová mřížka</string>
+    <string name="night_sky_grid_desc">Zobrazit/skrýt 3D nebeskou mřížku a obzor</string>
     <string name="night_sky_constellations">Souhvězdí</string>
     <string name="night_sky_constellations_desc">Zobrazit/skrýt spojnice souhvězdí</string>
     <string name="state_on">Zapnuto</string>

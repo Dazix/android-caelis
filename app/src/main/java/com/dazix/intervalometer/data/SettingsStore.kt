@@ -56,17 +56,29 @@ class SettingsStore(context: Context) {
 
     val sunArAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArAzimuthOffset(it) }
 
+    val sunArElevationOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArElevationOffset(it) }
+
+    val sunArQuaternion: Flow<FloatArray> = preferences.map { SettingsMapping.readSunArQuaternion(it) }
+
     val nightSkyKeepScreenOn: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyKeepScreenOn(it) }
 
     val nightSkyRedVisionMode: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyRedVisionMode(it) }
 
     val nightSkyAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyAzimuthOffset(it) }
 
+    val nightSkyElevationOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyElevationOffset(it) }
+
+    val nightSkyQuaternion: Flow<FloatArray> = preferences.map { SettingsMapping.readNightSkyQuaternion(it) }
+
     val nightSkyOpaqueBackground: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyOpaqueBackground(it) }
 
     val nightSkyMilkyWayVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyMilkyWayVisible(it) }
 
     val nightSkyAtmosphereVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyAtmosphereVisible(it) }
+
+    val nightSkyLandscapeVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyLandscapeVisible(it) }
+
+    val nightSkyGridVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyGridVisible(it) }
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
 
@@ -82,6 +94,14 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeSunArAzimuthOffset(it, offsetDeg) }
     }
 
+    suspend fun saveSunArElevationOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeSunArElevationOffset(it, offsetDeg) }
+    }
+
+    suspend fun saveSunArQuaternion(quat: FloatArray) {
+        dataStore.edit { SettingsMapping.writeSunArQuaternion(it, quat) }
+    }
+
     suspend fun saveNightSkyKeepScreenOn(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyKeepScreenOn(it, enabled) }
     }
@@ -94,6 +114,14 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyAzimuthOffset(it, offsetDeg) }
     }
 
+    suspend fun saveNightSkyElevationOffset(offsetDeg: Float) {
+        dataStore.edit { SettingsMapping.writeNightSkyElevationOffset(it, offsetDeg) }
+    }
+
+    suspend fun saveNightSkyQuaternion(quat: FloatArray) {
+        dataStore.edit { SettingsMapping.writeNightSkyQuaternion(it, quat) }
+    }
+
     suspend fun saveNightSkyOpaqueBackground(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyOpaqueBackground(it, enabled) }
     }
@@ -104,6 +132,14 @@ class SettingsStore(context: Context) {
 
     suspend fun saveNightSkyAtmosphereVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyAtmosphereVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyLandscapeVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyLandscapeVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyGridVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyGridVisible(it, enabled) }
     }
 
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
@@ -184,12 +220,24 @@ internal object SettingsMapping {
     private val SUN_AR_KEEP_SCREEN_ON = booleanPreferencesKey("sun_ar_keep_screen_on")
     private val SUN_AR_RED_VISION_MODE = booleanPreferencesKey("sun_ar_red_vision_mode")
     private val SUN_AR_AZIMUTH_OFFSET = floatPreferencesKey("sun_ar_azimuth_offset")
+    private val SUN_AR_ELEVATION_OFFSET = floatPreferencesKey("sun_ar_elevation_offset")
+    private val SUN_AR_QUAT_X = floatPreferencesKey("sun_ar_quat_x")
+    private val SUN_AR_QUAT_Y = floatPreferencesKey("sun_ar_quat_y")
+    private val SUN_AR_QUAT_Z = floatPreferencesKey("sun_ar_quat_z")
+    private val SUN_AR_QUAT_W = floatPreferencesKey("sun_ar_quat_w")
     private val NIGHT_SKY_KEEP_SCREEN_ON = booleanPreferencesKey("night_sky_keep_screen_on")
     private val NIGHT_SKY_RED_VISION_MODE = booleanPreferencesKey("night_sky_red_vision_mode")
     private val NIGHT_SKY_AZIMUTH_OFFSET = floatPreferencesKey("night_sky_azimuth_offset")
+    private val NIGHT_SKY_ELEVATION_OFFSET = floatPreferencesKey("night_sky_elevation_offset")
+    private val NIGHT_SKY_QUAT_X = floatPreferencesKey("night_sky_quat_x")
+    private val NIGHT_SKY_QUAT_Y = floatPreferencesKey("night_sky_quat_y")
+    private val NIGHT_SKY_QUAT_Z = floatPreferencesKey("night_sky_quat_z")
+    private val NIGHT_SKY_QUAT_W = floatPreferencesKey("night_sky_quat_w")
     private val NIGHT_SKY_OPAQUE_BACKGROUND = booleanPreferencesKey("night_sky_opaque_background")
     private val NIGHT_SKY_MILKY_WAY_VISIBLE = booleanPreferencesKey("night_sky_milky_way_visible")
     private val NIGHT_SKY_ATMOSPHERE_VISIBLE = booleanPreferencesKey("night_sky_atmosphere_visible")
+    private val NIGHT_SKY_LANDSCAPE_VISIBLE = booleanPreferencesKey("night_sky_landscape_visible")
+    private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
@@ -393,6 +441,28 @@ internal object SettingsMapping {
         prefs[SUN_AR_AZIMUTH_OFFSET] = offsetDeg
     }
 
+    fun readSunArElevationOffset(prefs: Preferences): Float =
+        prefs[SUN_AR_ELEVATION_OFFSET] ?: 0.0f
+
+    fun writeSunArElevationOffset(prefs: MutablePreferences, offsetDeg: Float) {
+        prefs[SUN_AR_ELEVATION_OFFSET] = offsetDeg
+    }
+
+    fun readSunArQuaternion(prefs: Preferences): FloatArray {
+        val x = prefs[SUN_AR_QUAT_X] ?: 0.0f
+        val y = prefs[SUN_AR_QUAT_Y] ?: 0.0f
+        val z = prefs[SUN_AR_QUAT_Z] ?: 0.0f
+        val w = prefs[SUN_AR_QUAT_W] ?: 1.0f
+        return floatArrayOf(x, y, z, w)
+    }
+
+    fun writeSunArQuaternion(prefs: MutablePreferences, quat: FloatArray) {
+        prefs[SUN_AR_QUAT_X] = if (quat.size > 0) quat[0] else 0.0f
+        prefs[SUN_AR_QUAT_Y] = if (quat.size > 1) quat[1] else 0.0f
+        prefs[SUN_AR_QUAT_Z] = if (quat.size > 2) quat[2] else 0.0f
+        prefs[SUN_AR_QUAT_W] = if (quat.size > 3) quat[3] else 1.0f
+    }
+
     fun readNightSkyKeepScreenOn(prefs: Preferences): Boolean =
         prefs[NIGHT_SKY_KEEP_SCREEN_ON] ?: false
 
@@ -414,6 +484,28 @@ internal object SettingsMapping {
         prefs[NIGHT_SKY_AZIMUTH_OFFSET] = offsetDeg
     }
 
+    fun readNightSkyElevationOffset(prefs: Preferences): Float =
+        prefs[NIGHT_SKY_ELEVATION_OFFSET] ?: 0.0f
+
+    fun writeNightSkyElevationOffset(prefs: MutablePreferences, offsetDeg: Float) {
+        prefs[NIGHT_SKY_ELEVATION_OFFSET] = offsetDeg
+    }
+
+    fun readNightSkyQuaternion(prefs: Preferences): FloatArray {
+        val x = prefs[NIGHT_SKY_QUAT_X] ?: 0.0f
+        val y = prefs[NIGHT_SKY_QUAT_Y] ?: 0.0f
+        val z = prefs[NIGHT_SKY_QUAT_Z] ?: 0.0f
+        val w = prefs[NIGHT_SKY_QUAT_W] ?: 1.0f
+        return floatArrayOf(x, y, z, w)
+    }
+
+    fun writeNightSkyQuaternion(prefs: MutablePreferences, quat: FloatArray) {
+        prefs[NIGHT_SKY_QUAT_X] = if (quat.size > 0) quat[0] else 0.0f
+        prefs[NIGHT_SKY_QUAT_Y] = if (quat.size > 1) quat[1] else 0.0f
+        prefs[NIGHT_SKY_QUAT_Z] = if (quat.size > 2) quat[2] else 0.0f
+        prefs[NIGHT_SKY_QUAT_W] = if (quat.size > 3) quat[3] else 1.0f
+    }
+
     fun readNightSkyOpaqueBackground(prefs: Preferences): Boolean =
         prefs[NIGHT_SKY_OPAQUE_BACKGROUND] ?: false
 
@@ -433,6 +525,20 @@ internal object SettingsMapping {
 
     fun writeNightSkyAtmosphereVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_ATMOSPHERE_VISIBLE] = enabled
+    }
+
+    fun readNightSkyLandscapeVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_LANDSCAPE_VISIBLE] ?: true
+
+    fun writeNightSkyLandscapeVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_LANDSCAPE_VISIBLE] = enabled
+    }
+
+    fun readNightSkyGridVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_GRID_VISIBLE] ?: true
+
+    fun writeNightSkyGridVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_GRID_VISIBLE] = enabled
     }
 
     fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =

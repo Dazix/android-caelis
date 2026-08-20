@@ -28,6 +28,8 @@ import com.dazix.intervalometer.ui.AppIcons
  * - Planetarium Opaque Sky Dome (blocks camera stream)
  * - Hardware-Accelerated AGSL Milky Way Layer
  * - Hardware-Accelerated AGSL Atmosphere Horizon Glow Layer
+ * - Hardware-Accelerated AGSL Photorealistic Landscape Ground Layer
+ * - 3D Celestial Dome Coordinate Grid
  * - Constellation Stick Figures
  * - Azimuth Calibration Reset
  */
@@ -36,12 +38,16 @@ fun NightSkyActionDock(
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
     isAtmosphereVisible: Boolean,
+    isLandscapeVisible: Boolean,
+    isGridVisible: Boolean,
     isConstellationsVisible: Boolean,
     redVisionMode: Boolean,
-    azimuthOffset: Float,
+    isCalibrated: Boolean = false,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
     onToggleAtmosphereVisible: () -> Unit,
+    onToggleLandscapeVisible: () -> Unit,
+    onToggleGridVisible: () -> Unit,
     onToggleConstellationsVisible: () -> Unit,
     onResetCalibration: () -> Unit,
     modifier: Modifier = Modifier,
@@ -53,11 +59,11 @@ fun NightSkyActionDock(
 
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 1. Reset Calibration Button (only if offset is non-zero)
-        if (kotlin.math.abs(azimuthOffset) > 0.05f) {
+        // 1. Reset Calibration Button (only if rotated/calibrated)
+        if (isCalibrated) {
             DockActionButton(
                 icon = AppIcons.ResetCalibration,
                 contentDescription = stringResource(R.string.sun_ar_calib_reset),
@@ -110,7 +116,33 @@ fun NightSkyActionDock(
             onClick = onToggleAtmosphereVisible,
         )
 
-        // 5. Constellations Toggle
+        // 5. Landscape AGSL Ground Layer Toggle
+        DockActionButton(
+            icon = AppIcons.Landscape,
+            contentDescription = stringResource(R.string.night_sky_landscape_desc),
+            isActive = isLandscapeVisible,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            borderColor = borderColor,
+            activeColor = activeTint,
+            redVisionMode = redVisionMode,
+            onClick = onToggleLandscapeVisible,
+        )
+
+        // 6. 3D Celestial Coordinate Grid Toggle
+        DockActionButton(
+            icon = AppIcons.Grid,
+            contentDescription = stringResource(R.string.night_sky_grid_desc),
+            isActive = isGridVisible,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            borderColor = borderColor,
+            activeColor = activeTint,
+            redVisionMode = redVisionMode,
+            onClick = onToggleGridVisible,
+        )
+
+        // 7. Constellations Toggle
         DockActionButton(
             icon = AppIcons.Constellation,
             contentDescription = stringResource(R.string.night_sky_constellations_desc),

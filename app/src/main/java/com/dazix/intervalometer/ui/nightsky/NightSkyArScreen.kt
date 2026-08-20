@@ -9,7 +9,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,12 +129,29 @@ fun NightSkyArScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
-            .pointerInput(uiState.cameraFovHorizontal, isPortrait) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                    val deltaDeg = (dragAmount / viewWidth) * uiState.cameraFovHorizontal
-                    viewModel.adjustAzimuthOffset(-deltaDeg)
-                }
+            .pointerInput(Unit) {
+                detectTransformGestures(
+                    panZoomLock = false,
+                    onGesture = { _, pan, zoom, _ ->
+                        val viewWidth = size.width.toFloat().coerceAtLeast(1f)
+                        if (pan.x != 0f || pan.y != 0f) {
+                            val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
+                            val pitchRad = (pan.y / viewWidth) * fovRad
+                            val yawRad = -(pan.x / viewWidth) * fovRad
+                            viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                        }
+                        if (zoom != 1.0f) {
+                            viewModel.adjustZoomBy(zoom)
+                        }
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        viewModel.resetZoom()
+                    }
+                )
             }
     ) {
         if (hasCameraPermission) {
@@ -145,7 +163,7 @@ fun NightSkyArScreen(
                 onFovCalculated = viewModel::setCameraFov,
             )
 
-            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, and Opaque Sky Dome layers
+            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, Landscape, and Opaque Sky Dome layers
             NightSkyOverlayCanvas(
                 orientation = orientation,
                 displayRotation = displayRotation,
@@ -157,6 +175,8 @@ fun NightSkyArScreen(
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
+                isLandscapeVisible = uiState.isLandscapeVisible,
+                isGridVisible = uiState.isGridVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                 modifier = Modifier.fillMaxSize(),
@@ -178,7 +198,8 @@ fun NightSkyArScreen(
             visibleStarCount = uiState.visibleStarCount,
             totalStarCount = uiState.totalStarCount,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
-            azimuthOffset = uiState.azimuthOffsetDegrees,
+            zoomRatio = uiState.zoomRatio,
+            isCalibrated = uiState.isCalibrated,
             hasGpsFix = uiState.hasGpsFix,
             locationText = uiState.location.formatShort(),
             keepScreenOn = uiState.keepScreenOn,
@@ -186,17 +207,20 @@ fun NightSkyArScreen(
             onBack = onBack,
             onToggleKeepScreenOn = {
                 val nextState = !uiState.keepScreenOn
-                showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
                 viewModel.toggleKeepScreenOn()
             },
             onToggleRedVision = {
                 val nextState = !uiState.redVisionMode
-                showToggleToast(context, context.getString(R.string.sun_ar_red_vision), nextState)
+                showToggleToast(context, R.string.sun_ar_red_vision, nextState)
                 viewModel.toggleRedVisionMode()
             },
             onResetCalibration = {
                 showResetToast(context)
-                viewModel.resetAzimuthOffset()
+                viewModel.resetCalibration()
+            },
+            onResetZoom = {
+                viewModel.resetZoom()
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -212,37 +236,49 @@ fun NightSkyArScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Constellations, Reset)
+            // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Landscape, Grid, Constellations, Reset)
             NightSkyActionDock(
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
+                isLandscapeVisible = uiState.isLandscapeVisible,
+                isGridVisible = uiState.isGridVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 redVisionMode = uiState.redVisionMode,
-                azimuthOffset = uiState.azimuthOffsetDegrees,
+                isCalibrated = uiState.isCalibrated,
                 onToggleSkyBackgroundOpaque = {
                     val nextState = !uiState.isSkyBackgroundOpaque
-                    showToggleToast(context, context.getString(R.string.night_sky_opaque_bg), nextState)
+                    showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
                     viewModel.toggleSkyBackgroundOpaque()
                 },
                 onToggleMilkyWayVisible = {
                     val nextState = !uiState.isMilkyWayVisible
-                    showToggleToast(context, context.getString(R.string.night_sky_milky_way), nextState)
+                    showToggleToast(context, R.string.night_sky_milky_way, nextState)
                     viewModel.toggleMilkyWayVisible()
                 },
                 onToggleAtmosphereVisible = {
                     val nextState = !uiState.isAtmosphereVisible
-                    showToggleToast(context, context.getString(R.string.night_sky_atmosphere), nextState)
+                    showToggleToast(context, R.string.night_sky_atmosphere, nextState)
                     viewModel.toggleAtmosphereVisible()
+                },
+                onToggleLandscapeVisible = {
+                    val nextState = !uiState.isLandscapeVisible
+                    showToggleToast(context, R.string.night_sky_landscape, nextState)
+                    viewModel.toggleLandscapeVisible()
+                },
+                onToggleGridVisible = {
+                    val nextState = !uiState.isGridVisible
+                    showToggleToast(context, R.string.night_sky_grid, nextState)
+                    viewModel.toggleGridVisible()
                 },
                 onToggleConstellationsVisible = {
                     val nextState = !uiState.isConstellationsVisible
-                    showToggleToast(context, context.getString(R.string.night_sky_constellations), nextState)
+                    showToggleToast(context, R.string.night_sky_constellations, nextState)
                     viewModel.toggleConstellationsVisible()
                 },
                 onResetCalibration = {
                     showResetToast(context)
-                    viewModel.resetAzimuthOffset()
+                    viewModel.resetCalibration()
                 },
             )
 
@@ -251,7 +287,6 @@ fun NightSkyArScreen(
                 lstFormatted = uiState.lstFormatted,
                 visibleStarCount = uiState.visibleStarCount,
                 totalStarCount = uiState.totalStarCount,
-                azimuthOffset = uiState.azimuthOffsetDegrees,
                 redVisionMode = uiState.redVisionMode,
             )
         }
@@ -270,6 +305,8 @@ private fun NightSkyOverlayCanvas(
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
     isAtmosphereVisible: Boolean,
+    isLandscapeVisible: Boolean,
+    isGridVisible: Boolean,
     isConstellationsVisible: Boolean,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -296,12 +333,21 @@ private fun NightSkyOverlayCanvas(
         }
     }
 
+    val landscapeBitmap = remember(context) {
+        try {
+            BitmapFactory.decodeResource(context.resources, R.drawable.landscape_photorealistic)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     val renderer = remember { NightSkyRenderer() }
     renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(redVisionMode)
 
-    LaunchedEffect(milkyWayBitmap) {
+    LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
         milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
+        landscapeBitmap?.let { renderer.setLandscapeBitmap(it) }
     }
 
     Canvas(modifier = modifier) {
@@ -335,18 +381,7 @@ private fun NightSkyOverlayCanvas(
             isRedVision = redVisionMode,
         )
 
-        // Layer 2: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
-        renderer.skyDomeRenderer.drawSkyDomeGrid(
-            drawScope = this,
-            matrix = matrix,
-            displayRotation = displayRotation,
-            fovH = fovHorizontalDegrees,
-            redVisionMode = redVisionMode,
-            w = w,
-            h = h,
-        )
-
-        // Layer 3: Batch render all visible stars and constellation lines using FlatBuffers zero-allocation pipeline
+        // Layer 2: Batch render all visible stars and constellation lines using FlatBuffers zero-allocation pipeline
         val visibleCount = renderer.drawNightSky(
             drawScope = this,
             catalog = catalog,
@@ -361,6 +396,31 @@ private fun NightSkyOverlayCanvas(
             isAtmosphereVisible = isAtmosphereVisible,
         )
 
+        // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)
+        renderer.drawLandscape(
+            drawScope = this,
+            matrix = matrix,
+            displayRotation = displayRotation,
+            fovHorizontalDegrees = fovHorizontalDegrees,
+            w = w,
+            h = h,
+            isLandscapeVisible = isLandscapeVisible,
+            isRedVision = redVisionMode,
+        )
+
+        // Layer 4: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
+        if (isGridVisible) {
+            renderer.skyDomeRenderer.drawSkyDomeGrid(
+                drawScope = this,
+                matrix = matrix,
+                displayRotation = displayRotation,
+                fovH = fovHorizontalDegrees,
+                redVisionMode = redVisionMode,
+                w = w,
+                h = h,
+            )
+        }
+
         onVisibleStarsUpdated(visibleCount)
     }
 }
@@ -372,7 +432,8 @@ private fun NightSkyTopBar(
     visibleStarCount: Int,
     totalStarCount: Int,
     cameraFovHorizontal: Float,
-    azimuthOffset: Float,
+    zoomRatio: Float,
+    isCalibrated: Boolean,
     hasGpsFix: Boolean,
     locationText: String,
     keepScreenOn: Boolean,
@@ -381,6 +442,7 @@ private fun NightSkyTopBar(
     onToggleKeepScreenOn: () -> Unit,
     onToggleRedVision: () -> Unit,
     onResetCalibration: () -> Unit,
+    onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val containerColor = if (redVisionMode) Color(0xF0180000) else Color(0xF0151820)
@@ -442,20 +504,32 @@ private fun NightSkyTopBar(
                     )
                 }
 
-                // FOV indicator
+                // FOV & Zoom indicator
+                val isZoomed = kotlin.math.abs(zoomRatio - 1.0f) > 0.05f
+                val fovText = if (isZoomed) {
+                    String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
+                } else {
+                    String.format(java.util.Locale.US, "FOV %.0f°", cameraFovHorizontal)
+                }
                 Text(
-                    text = String.format(java.util.Locale.US, "FOV %.0f°", cameraFovHorizontal),
-                    color = contentColor.copy(alpha = 0.8f),
+                    text = fovText,
+                    color = if (isZoomed) {
+                        if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+                    } else {
+                        contentColor.copy(alpha = 0.8f)
+                    },
                     fontSize = 11.sp,
+                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Normal,
                     fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
                 )
 
-                // Calibration Offset Badge (if calibrated)
-                if (kotlin.math.abs(azimuthOffset) > 0.05f) {
+                // Calibration Offset Badge (if user has rotated manually)
+                if (isCalibrated) {
                     Text(
-                        text = String.format(java.util.Locale.US, "%+.1f°", azimuthOffset),
-                        color = contentColor,
-                        fontSize = 11.sp,
+                        text = "MANUAL",
+                        color = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1),
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -465,8 +539,8 @@ private fun NightSkyTopBar(
 
         // Action Buttons Row (Material 3 Expressive Round)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Reset Calibration Button (if offset exists)
-            if (kotlin.math.abs(azimuthOffset) > 0.05f) {
+            // Reset Calibration Button (if rotated)
+            if (isCalibrated) {
                 Surface(
                     shape = CircleShape,
                     color = containerColor,
@@ -535,7 +609,6 @@ private fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
     totalStarCount: Int,
-    azimuthOffset: Float,
     redVisionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -650,8 +723,9 @@ private fun NightSkyPermissionPrompt(
     }
 }
 
-private fun showToggleToast(context: Context, actionLabel: String, nextState: Boolean) {
-    val stateText = if (nextState) context.getString(R.string.state_on) else context.getString(R.string.state_off)
+private fun showToggleToast(context: Context, @androidx.annotation.StringRes actionLabelRes: Int, nextState: Boolean) {
+    val actionLabel = context.getString(actionLabelRes)
+    val stateText = context.getString(if (nextState) R.string.state_on else R.string.state_off)
     Toast.makeText(context, "$actionLabel: $stateText", Toast.LENGTH_SHORT).show()
 }
 

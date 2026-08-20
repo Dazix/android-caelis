@@ -275,7 +275,8 @@
     <string name="sun_ar_red_vision">Red Vision (Night Mode)</string>
     <string name="sun_ar_red_vision_desc">Monochromatic dark red UI to protect night vision for astrophotography</string>
     <string name="sun_ar_calib_offset">Offset: %+.1f°</string>
-    <string name="sun_ar_calib_hint">Drag horizontally across screen to calibrate azimuth</string>
+    <string name="sun_ar_calib_active">Manual 3D view</string>
+    <string name="sun_ar_calib_hint">Drag with finger in any direction to rotate 3D view</string>
     <string name="sun_ar_calib_reset">Reset calibration</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
 
@@ -290,8 +291,12 @@
     <string name="night_sky_milky_way_desc">Toggle hardware-accelerated Milky Way background</string>
     <string name="night_sky_atmosphere">Atmosphere</string>
     <string name="night_sky_atmosphere_desc">Toggle hardware-accelerated atmospheric horizon glow and star extinction</string>
+    <string name="night_sky_landscape">Landscape</string>
+    <string name="night_sky_landscape_desc">Toggle photorealistic ground landscape</string>
     <string name="night_sky_opaque_bg">Planetarium mode</string>
     <string name="night_sky_opaque_bg_desc">Toggle between live camera AR and opaque planetarium sky</string>
+    <string name="night_sky_grid">Coordinate grid</string>
+    <string name="night_sky_grid_desc">Toggle 3D celestial coordinate grid and horizon</string>
     <string name="night_sky_constellations">Constellations</string>
     <string name="night_sky_constellations_desc">Toggle constellation stick figure lines</string>
     <string name="state_on">On</string>

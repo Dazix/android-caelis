@@ -55,6 +55,17 @@ class NightSkyRenderer {
 
     private val atmosphereMatrixBuffer = FloatArray(9)
 
+    val landscapeShader: RuntimeShader? = runCatching {
+        RuntimeShader(LandscapeShader.SRC)
+    }.getOrNull()
+
+    val landscapeBrush: ShaderBrush? = landscapeShader?.let { ShaderBrush(it) }
+
+    private val landscapeMatrixBuffer = FloatArray(9)
+    private var landscapeTextureWidth = 2048f
+    private var landscapeTextureHeight = 1024f
+    private var hasLandscapeTexture = false
+
     private val maxStars = 4096
     private val tier1Points = FloatArray(maxStars * 2)
     private val tier2Points = FloatArray(maxStars * 2)
@@ -152,9 +163,23 @@ class NightSkyRenderer {
     }
 
     /**
+     * Binds the Photorealistic Landscape equirectangular WebP texture to the AGSL RuntimeShader.
+     */
+    fun setLandscapeBitmap(bitmap: Bitmap) {
+        if (landscapeShader != null) {
+            val bitmapShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.CLAMP)
+            landscapeShader.setInputShader("landscapeTexture", bitmapShader)
+            landscapeTextureWidth = bitmap.width.toFloat()
+            landscapeTextureHeight = bitmap.height.toFloat()
+            hasLandscapeTexture = true
+        }
+    }
+
+    /**
      * Renders background layers:
      * - Layer 0: Opaque Sky Background (Planetarium Mode #050810 / #080000)
      * - Layer 1: Hardware-Accelerated AGSL Milky Way Ray-Casting Shader
+     * - Layer 1b: Hardware-Accelerated AGSL Atmosphere Glow Shader
      *
      * 100% Zero heap allocations per frame.
      */
@@ -216,6 +241,43 @@ class NightSkyRenderer {
             atmosphereShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
 
             drawScope.drawRect(brush = atmosphereBrush)
+        }
+    }
+
+    /**
+     * Renders the hardware-accelerated AGSL Photorealistic Landscape (Ground & Tree line) Layer.
+     * Fixed to Earth ENU coordinates without celestial LST rotation.
+     * Renders on top of stars below the horizon.
+     *
+     * 100% Zero heap allocations per frame.
+     */
+    fun drawLandscape(
+        drawScope: DrawScope,
+        matrix: FloatArray,
+        displayRotation: Int,
+        fovHorizontalDegrees: Float,
+        w: Float,
+        h: Float,
+        isLandscapeVisible: Boolean,
+        isRedVision: Boolean,
+    ) {
+        if (isLandscapeVisible && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
+            val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
+            val fovFactor = 1.0f / tan(halfFovHRad)
+
+            CelestialMatrixCalculator.computeAtmosphereViewMatrix(
+                sensorMatrix16 = matrix,
+                displayRotation = displayRotation,
+                outMatrix9 = landscapeMatrixBuffer,
+            )
+
+            landscapeShader.setFloatUniform("resolution", w, h)
+            landscapeShader.setFloatUniform("textureSize", landscapeTextureWidth, landscapeTextureHeight)
+            landscapeShader.setFloatUniform("viewMatrix", landscapeMatrixBuffer)
+            landscapeShader.setFloatUniform("fovFactor", fovFactor)
+            landscapeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+
+            drawScope.drawRect(brush = landscapeBrush)
         }
     }
 

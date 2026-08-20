@@ -22,6 +22,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -188,13 +190,29 @@ fun SunArScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(uiState.cameraFovHorizontal, isPortrait) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    // Horizontal drag gesture adjusts azimuth calibration offset
-                    val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                    val deltaDeg = (dragAmount / viewWidth) * uiState.cameraFovHorizontal
-                    viewModel.adjustAzimuthOffset(-deltaDeg)
-                }
+            .pointerInput(Unit) {
+                detectTransformGestures(
+                    panZoomLock = false,
+                    onGesture = { _, pan, zoom, _ ->
+                        val viewWidth = size.width.toFloat().coerceAtLeast(1f)
+                        if (pan.x != 0f || pan.y != 0f) {
+                            val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
+                            val pitchRad = (pan.y / viewWidth) * fovRad
+                            val yawRad = -(pan.x / viewWidth) * fovRad
+                            viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                        }
+                        if (zoom != 1.0f) {
+                            viewModel.adjustZoomBy(zoom)
+                        }
+                    }
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        viewModel.resetZoom()
+                    }
+                )
             }
     ) {
         if (hasCameraPermission) {
@@ -232,18 +250,22 @@ fun SunArScreen(
             locationText = uiState.location.formatShort(),
             orientation = orientation,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
-            azimuthOffset = uiState.azimuthOffsetDegrees,
+            zoomRatio = uiState.zoomRatio,
+            isCalibrated = uiState.isCalibrated,
             keepScreenOn = uiState.keepScreenOn,
             onBack = onBack,
             onToggleInfo = { showInfoSheet = !showInfoSheet },
             onToggleKeepScreenOn = {
                 val nextState = !uiState.keepScreenOn
-                showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
                 viewModel.toggleKeepScreenOn()
             },
             onResetCalibration = {
                 showResetToast(context)
-                viewModel.resetAzimuthOffset()
+                viewModel.resetCalibration()
+            },
+            onResetZoom = {
+                viewModel.resetZoom()
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -269,15 +291,15 @@ fun SunArScreen(
                     solarTrajectory = uiState.trajectory,
                     lunarTrajectory = uiState.lunarTrajectory,
                     keepScreenOn = uiState.keepScreenOn,
-                    azimuthOffset = uiState.azimuthOffsetDegrees,
+                    isCalibrated = uiState.isCalibrated,
                     onToggleKeepScreenOn = {
                         val nextState = !uiState.keepScreenOn
-                        showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                        showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
                         viewModel.toggleKeepScreenOn()
                     },
                     onResetCalibration = {
                         showResetToast(context)
-                        viewModel.resetAzimuthOffset()
+                        viewModel.resetCalibration()
                     },
                     onClose = { showInfoSheet = false },
                 )
@@ -1181,12 +1203,14 @@ private fun SunArTopBar(
     locationText: String,
     orientation: DeviceOrientation?,
     cameraFovHorizontal: Float,
-    azimuthOffset: Float,
+    zoomRatio: Float,
+    isCalibrated: Boolean,
     keepScreenOn: Boolean,
     onBack: () -> Unit,
     onToggleInfo: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
     onResetCalibration: () -> Unit,
+    onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val containerBg = Color(0xDD1A1A1A)
@@ -1268,16 +1292,23 @@ private fun SunArTopBar(
                     style = MaterialTheme.typography.labelSmall,
                     color = subTextColor,
                 )
+                val isZoomed = abs(zoomRatio - 1.0f) > 0.05f
+                val fovLabel = if (isZoomed) {
+                    String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
+                } else {
+                    stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
+                }
                 Text(
-                    text = "📐 ${stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)}",
+                    text = "📐 $fovLabel",
                     style = MaterialTheme.typography.labelSmall,
-                    color = subTextColor,
-                    fontWeight = FontWeight.Medium,
+                    color = if (isZoomed) accentColor else subTextColor,
+                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
+                    modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
                 )
             }
         }
 
-        if (abs(azimuthOffset) > 0.2f) {
+        if (isCalibrated) {
             IconButton(
                 onClick = onResetCalibration,
                 modifier = Modifier.size(36.dp)
@@ -1398,7 +1429,7 @@ private fun SunMoonTimesInfoCard(
     solarTrajectory: SolarTrajectory,
     lunarTrajectory: LunarTrajectory,
     keepScreenOn: Boolean,
-    azimuthOffset: Float,
+    isCalibrated: Boolean,
     onToggleKeepScreenOn: () -> Unit,
     onResetCalibration: () -> Unit,
     onClose: () -> Unit,
@@ -1522,9 +1553,9 @@ private fun SunMoonTimesInfoCard(
                 )
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
-            // Keep screen on switch row
+            // 3. SETTINGS & CONTROLS
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1554,7 +1585,7 @@ private fun SunMoonTimesInfoCard(
                 )
             }
 
-            // Azimuth calibration row
+            // Manual 3D rotation calibration row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1562,7 +1593,7 @@ private fun SunMoonTimesInfoCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.sun_ar_calib_offset, azimuthOffset),
+                        text = if (isCalibrated) stringResource(R.string.sun_ar_calib_active) else stringResource(R.string.sun_ar_title),
                         style = MaterialTheme.typography.bodyMedium,
                         color = titleColor,
                         fontWeight = FontWeight.Medium,
@@ -1573,7 +1604,7 @@ private fun SunMoonTimesInfoCard(
                         color = subColor,
                     )
                 }
-                if (abs(azimuthOffset) > 0.2f) {
+                if (isCalibrated) {
                     TextButton(onClick = onResetCalibration) {
                         Text(
                             text = stringResource(R.string.sun_ar_calib_reset),
@@ -1654,7 +1685,8 @@ private fun CameraPermissionPrompt(
     }
 }
 
-private fun showToggleToast(context: Context, label: String, enabled: Boolean) {
+private fun showToggleToast(context: Context, @androidx.annotation.StringRes labelRes: Int, enabled: Boolean) {
+    val label = context.getString(labelRes)
     val state = context.getString(if (enabled) R.string.state_on else R.string.state_off)
     Toast.makeText(context, "$label: $state", Toast.LENGTH_SHORT).show()
 }

@@ -15,12 +15,17 @@ import com.dazix.intervalometer.domain.nightsky.SiderealTime
 import com.dazix.intervalometer.domain.solar.GeoLocation
 import com.dazix.intervalometer.domain.solar.SolarPositionCalculator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -34,8 +39,9 @@ data class NightSkyArUiState(
     val redVisionMode: Boolean = true,
     val isNight: Boolean = true,
     val isRedVisionOverridden: Boolean = false,
-    val azimuthOffsetDegrees: Float = 0.0f,
+    val isCalibrated: Boolean = false,
     val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    val zoomRatio: Float = 1.0f,
     val lstDegrees: Double = 0.0,
     val lstFormatted: String = "00h 00m 00s",
     val visibleStarCount: Int = 0,
@@ -44,9 +50,12 @@ data class NightSkyArUiState(
     val isSkyBackgroundOpaque: Boolean = false,
     val isMilkyWayVisible: Boolean = true,
     val isAtmosphereVisible: Boolean = true,
+    val isLandscapeVisible: Boolean = true,
+    val isGridVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
 )
 
+@OptIn(FlowPreview::class)
 class NightSkyArViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsStore = SettingsStore(application)
@@ -56,8 +65,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val catalogState = MutableStateFlow<NightSkyCatalog?>(null)
     val catalog: StateFlow<NightSkyCatalog?> = catalogState.asStateFlow()
 
-    private val cameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
-    val cameraFovHorizontal: StateFlow<Float> = cameraFovState.asStateFlow()
+    private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
+    private val zoomRatioState = MutableStateFlow(1.0f)
+    val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
+
+    // Dynamic effective FOV factoring in pinch-to-zoom
+    val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
+        (baseFov / zoom).coerceIn(8.0f, 120.0f)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
     val lstDegrees: StateFlow<Double> = lstDegreesState.asStateFlow()
@@ -90,11 +105,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         false,
     )
 
-    val azimuthOffsetDegrees: StateFlow<Float> = settingsStore.nightSkyAzimuthOffset.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        0.0f,
-    )
+    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
+        !OrientationTracker.isIdentityQuaternion(q)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val isSkyBackgroundOpaque: StateFlow<Boolean> = settingsStore.nightSkyOpaqueBackground.stateIn(
         viewModelScope,
@@ -114,6 +128,18 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    val isLandscapeVisible: StateFlow<Boolean> = settingsStore.nightSkyLandscapeVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
+    val isGridVisible: StateFlow<Boolean> = settingsStore.nightSkyGridVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     val isConstellationsVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationsVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -127,8 +153,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         redVisionMode,
         isNightState,
         manualRedVisionOverride,
-        azimuthOffsetDegrees,
-        cameraFovState,
+        isCalibrated,
+        cameraFovHorizontal,
+        zoomRatioState,
         lstDegreesState,
         lstFormattedState,
         visibleStarCountState,
@@ -136,6 +163,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isSkyBackgroundOpaque,
         isMilkyWayVisible,
         isAtmosphereVisible,
+        isLandscapeVisible,
+        isGridVisible,
         isConstellationsVisible,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -144,16 +173,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val redMode = args[3] as Boolean
         val night = args[4] as Boolean
         val redOverride = args[5] as Boolean?
-        val azOffset = args[6] as Float
+        val calib = args[6] as Boolean
         val fov = args[7] as Float
-        val lstDeg = args[8] as Double
-        val lstFmt = args[9] as String
-        val visibleStars = args[10] as Int
-        val cat = args[11] as NightSkyCatalog?
-        val opaque = args[12] as Boolean
-        val milkyWay = args[13] as Boolean
-        val atmosphere = args[14] as Boolean
-        val constellations = args[15] as Boolean
+        val zoom = args[8] as Float
+        val lstDeg = args[9] as Double
+        val lstFmt = args[10] as String
+        val visibleStars = args[11] as Int
+        val cat = args[12] as NightSkyCatalog?
+        val opaque = args[13] as Boolean
+        val milkyWay = args[14] as Boolean
+        val atmosphere = args[15] as Boolean
+        val landscape = args[16] as Boolean
+        val grid = args[17] as Boolean
+        val constellations = args[18] as Boolean
 
         NightSkyArUiState(
             location = loc,
@@ -162,8 +194,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             redVisionMode = redMode,
             isNight = night,
             isRedVisionOverridden = redOverride != null,
-            azimuthOffsetDegrees = azOffset,
+            isCalibrated = calib,
             cameraFovHorizontal = fov,
+            zoomRatio = zoom,
             lstDegrees = lstDeg,
             lstFormatted = lstFmt,
             visibleStarCount = visibleStars,
@@ -172,6 +205,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isSkyBackgroundOpaque = opaque,
             isMilkyWayVisible = milkyWay,
             isAtmosphereVisible = atmosphere,
+            isLandscapeVisible = landscape,
+            isGridVisible = grid,
             isConstellationsVisible = constellations,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
@@ -191,18 +226,28 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             catalogState.value = cat
         }
 
+        // Initialize user rotation quaternion from settings store
+        viewModelScope.launch {
+            val initialQuat = settingsStore.nightSkyQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+            userQuatState.value = initialQuat
+            orientationTracker.setUserQuaternion(initialQuat)
+        }
+
+        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
+        viewModelScope.launch {
+            userQuatState
+                .drop(1)
+                .debounce(300L)
+                .collect { quat ->
+                    settingsStore.saveNightSkyQuaternion(quat)
+                }
+        }
+
         // Update magnetic declination on location updates
         viewModelScope.launch {
             locationProvider.location.collect { loc ->
                 orientationTracker.updateLocation(loc)
                 isNightState.value = SolarPositionCalculator.isNight(Instant.now(), loc)
-            }
-        }
-
-        // Apply azimuth calibration offset to orientation tracker
-        viewModelScope.launch {
-            azimuthOffsetDegrees.collect { offset ->
-                orientationTracker.updateAzimuthOffset(offset)
             }
         }
 
@@ -222,8 +267,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun setCameraFov(fovDeg: Float) {
-        if (kotlin.math.abs(cameraFovState.value - fovDeg) > 0.1f) {
-            cameraFovState.value = fovDeg
+        if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
+            baseCameraFovState.value = fovDeg
         }
     }
 
@@ -233,20 +278,51 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun rotatePan(pitchRad: Float, yawRad: Float) {
+        orientationTracker.rotateUser(pitchRad, yawRad)
+        userQuatState.value = orientationTracker.getUserQuaternion()
+    }
+
+    fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
+        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
+        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+    }
+
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        val current = azimuthOffsetDegrees.value
-        var updated = current + deltaDeg
-        while (updated > 180f) updated -= 360f
-        while (updated < -180f) updated += 360f
-        viewModelScope.launch {
-            settingsStore.saveNightSkyAzimuthOffset(updated)
-        }
+        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
+    }
+
+    fun adjustElevationOffset(deltaDeg: Float) {
+        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
+        resetCalibration()
+    }
+
+    fun resetCalibration() {
+        orientationTracker.resetUserRotation()
+        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
         viewModelScope.launch {
-            settingsStore.saveNightSkyAzimuthOffset(0.0f)
+            settingsStore.saveNightSkyQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
         }
+    }
+
+    fun adjustZoomBy(factor: Float) {
+        val current = zoomRatioState.value
+        val updated = (current * factor).coerceIn(0.5f, 4.0f)
+        if (kotlin.math.abs(updated - current) > 0.001f) {
+            zoomRatioState.value = updated
+        }
+    }
+
+    fun setZoomRatio(ratio: Float) {
+        zoomRatioState.value = ratio.coerceIn(0.5f, 4.0f)
+    }
+
+    fun resetZoom() {
+        zoomRatioState.value = 1.0f
     }
 
     fun toggleRedVisionMode() {
@@ -299,6 +375,26 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setAtmosphereVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyAtmosphereVisible(enabled)
+        }
+    }
+
+    fun toggleLandscapeVisible() {
+        setLandscapeVisible(!isLandscapeVisible.value)
+    }
+
+    fun setLandscapeVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyLandscapeVisible(enabled)
+        }
+    }
+
+    fun toggleGridVisible() {
+        setGridVisible(!isGridVisible.value)
+    }
+
+    fun setGridVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyGridVisible(enabled)
         }
     }
 

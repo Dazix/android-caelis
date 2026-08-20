@@ -376,6 +376,90 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky landscape visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyLandscapeVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyLandscapeVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyLandscapeVisible(prefs))
+
+        SettingsMapping.writeNightSkyLandscapeVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyLandscapeVisible(prefs))
+    }
+
+    @Test
+    fun `night sky grid visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyGridVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyGridVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyGridVisible(prefs))
+
+        SettingsMapping.writeNightSkyGridVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyGridVisible(prefs))
+    }
+
+    @Test
+    fun `sun ar elevation offset defaults to zero and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readSunArElevationOffset(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArElevationOffset(prefs, 15.5f)
+        assertEquals(15.5f, SettingsMapping.readSunArElevationOffset(prefs))
+
+        SettingsMapping.writeSunArElevationOffset(prefs, -8.2f)
+        assertEquals(-8.2f, SettingsMapping.readSunArElevationOffset(prefs))
+    }
+
+    @Test
+    fun `night sky elevation offset defaults to zero and survives round trip`() {
+        assertEquals(0.0f, SettingsMapping.readNightSkyElevationOffset(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyElevationOffset(prefs, -12.4f)
+        assertEquals(-12.4f, SettingsMapping.readNightSkyElevationOffset(prefs))
+
+        SettingsMapping.writeNightSkyElevationOffset(prefs, 25.0f)
+        assertEquals(25.0f, SettingsMapping.readNightSkyElevationOffset(prefs))
+    }
+
+    @Test
+    fun `sun ar quaternion defaults to identity and survives round trip`() {
+        val defaultQuat = SettingsMapping.readSunArQuaternion(emptyPreferences())
+        assertEquals(0.0f, defaultQuat[0], 0.0001f)
+        assertEquals(0.0f, defaultQuat[1], 0.0001f)
+        assertEquals(0.0f, defaultQuat[2], 0.0001f)
+        assertEquals(1.0f, defaultQuat[3], 0.0001f)
+
+        val prefs = mutablePreferencesOf()
+        val custom = floatArrayOf(0.1f, 0.2f, 0.3f, 0.9f)
+        SettingsMapping.writeSunArQuaternion(prefs, custom)
+        val read = SettingsMapping.readSunArQuaternion(prefs)
+        assertEquals(0.1f, read[0], 0.0001f)
+        assertEquals(0.2f, read[1], 0.0001f)
+        assertEquals(0.3f, read[2], 0.0001f)
+        assertEquals(0.9f, read[3], 0.0001f)
+    }
+
+    @Test
+    fun `night sky quaternion defaults to identity and survives round trip`() {
+        val defaultQuat = SettingsMapping.readNightSkyQuaternion(emptyPreferences())
+        assertEquals(0.0f, defaultQuat[0], 0.0001f)
+        assertEquals(0.0f, defaultQuat[1], 0.0001f)
+        assertEquals(0.0f, defaultQuat[2], 0.0001f)
+        assertEquals(1.0f, defaultQuat[3], 0.0001f)
+
+        val prefs = mutablePreferencesOf()
+        val custom = floatArrayOf(-0.5f, 0.0f, 0.5f, 0.707f)
+        SettingsMapping.writeNightSkyQuaternion(prefs, custom)
+        val read = SettingsMapping.readNightSkyQuaternion(prefs)
+        assertEquals(-0.5f, read[0], 0.0001f)
+        assertEquals(0.0f, read[1], 0.0001f)
+        assertEquals(0.5f, read[2], 0.0001f)
+        assertEquals(0.707f, read[3], 0.0001f)
+    }
+
+    @Test
     fun `night sky constellations visible defaults to true and survives round trip`() {
         assertEquals(true, SettingsMapping.readNightSkyConstellationsVisible(emptyPreferences()))
 

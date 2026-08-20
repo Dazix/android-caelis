@@ -90,4 +90,75 @@ class OrientationTrackerMathTest {
         assertEquals(0.0f, dot02, 0.001f)
         assertEquals(0.0f, dot12, 0.001f)
     }
+
+    @Test
+    fun `verifies 3D calibration with quaternion preserves 100 percent orthonormality across zenith`() {
+        // Portrait phone facing North at the horizon:
+        // Col 0 (+X_dev): [1, 0, 0]^T (East)
+        // Col 1 (+Y_dev): [0, 0, 1]^T (Zenith / Up)
+        // Col 2 (+Z_dev): [0, -1, 0]^T (South / Backwards) -> camera forward (-Z_dev) is North
+        val sensorMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val tempDec = FloatArray(16)
+        val tempUser = FloatArray(16)
+        val adjusted = FloatArray(16)
+
+        // Rotate past zenith (+120° pitch)
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        OrientationTracker.rotateQuaternion(userQuat, Math.toRadians(120.0).toFloat(), 0f, userQuat)
+
+        OrientationTracker.applyCalibration(
+            sensorMatrix = sensorMatrix,
+            declinationDeg = 15.0f,
+            userQuat = userQuat,
+            tempDeclinationBuffer = tempDec,
+            tempUserMatrixBuffer = tempUser,
+            outMatrix = adjusted,
+        )
+
+        // Check each column is a unit vector
+        for (col in 0..2) {
+            val lenSq = adjusted[col] * adjusted[col] +
+                adjusted[col + 4] * adjusted[col + 4] +
+                adjusted[col + 8] * adjusted[col + 8]
+            assertEquals("Column $col norm should be 1.0", 1.0f, sqrt(lenSq), 0.001f)
+        }
+
+        // Check columns are mutually orthogonal
+        val dot01 = adjusted[0] * adjusted[1] + adjusted[4] * adjusted[5] + adjusted[8] * adjusted[9]
+        val dot02 = adjusted[0] * adjusted[2] + adjusted[4] * adjusted[6] + adjusted[8] * adjusted[10]
+        val dot12 = adjusted[1] * adjusted[2] + adjusted[5] * adjusted[6] + adjusted[9] * adjusted[10]
+
+        assertEquals(0.0f, dot01, 0.001f)
+        assertEquals(0.0f, dot02, 0.001f)
+        assertEquals(0.0f, dot12, 0.001f)
+
+        // Forward vector in world coordinates (-Z_dev):
+        val camFwdZ = -adjusted[10]
+        // Sin(120°) = sin(60°) = 0.866
+        assertEquals(kotlin.math.sin(Math.toRadians(120.0)).toFloat(), camFwdZ, 0.01f)
+    }
+
+    @Test
+    fun `verifies continuous 360 degree rotation loops seamlessly without singularity`() {
+        val quat = floatArrayOf(0f, 0f, 0f, 1f)
+        val stepRad = Math.toRadians(10.0).toFloat()
+
+        // Rotate 36 steps of 10° = 360° total
+        for (step in 1..36) {
+            OrientationTracker.rotateQuaternion(quat, stepRad, 0f, quat)
+            val norm = sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3])
+            assertEquals("Quaternion norm must stay 1.0 at step $step", 1.0f, norm, 0.001f)
+        }
+
+        // After full 360° rotation, orientation returns to identity (w ~ ±1.0, xyz ~ 0.0)
+        assertEquals(0.0f, quat[0], 0.01f)
+        assertEquals(0.0f, quat[1], 0.01f)
+        assertEquals(0.0f, quat[2], 0.01f)
+        assertEquals(1.0f, kotlin.math.abs(quat[3]), 0.01f)
+    }
 }

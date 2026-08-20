@@ -59,9 +59,17 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private val rawMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
+    private val tempDeclinationMatrix = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
+    private val tempUserMatrix = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
     private val adjustedMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
+
+    private val userQuat = FloatArray(4).apply { this[3] = 1f }
 
     private val stateFlow = MutableStateFlow<DeviceOrientation?>(null)
     val orientation: StateFlow<DeviceOrientation?> = stateFlow.asStateFlow()
@@ -71,7 +79,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private val alpha = 0.22f // Smooth low-pass factor for stable AR overlay
 
     private var magneticDeclinationDeg = 0.0f
-    private var userAzimuthOffsetDeg = 0.0f
 
     fun updateLocation(location: GeoLocation) {
         try {
@@ -86,9 +93,34 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
     }
 
-    fun updateAzimuthOffset(offsetDeg: Float) {
-        userAzimuthOffsetDeg = offsetDeg
+    fun setUserQuaternion(quat: FloatArray) {
+        if (quat.size >= 4) {
+            val norm = kotlin.math.sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3])
+            if (norm > 1e-6f) {
+                userQuat[0] = quat[0] / norm
+                userQuat[1] = quat[1] / norm
+                userQuat[2] = quat[2] / norm
+                userQuat[3] = quat[3] / norm
+            } else {
+                resetUserRotation()
+            }
+        }
     }
+
+    fun getUserQuaternion(): FloatArray = userQuat.clone()
+
+    fun rotateUser(pitchRad: Float, yawRad: Float) {
+        rotateQuaternion(userQuat, pitchRad, yawRad, userQuat)
+    }
+
+    fun resetUserRotation() {
+        userQuat[0] = 0.0f
+        userQuat[1] = 0.0f
+        userQuat[2] = 0.0f
+        userQuat[3] = 1.0f
+    }
+
+    fun isUserRotated(): Boolean = !isIdentityQuaternion(userQuat)
 
     fun start() {
         if (isListening || sensorManager == null || rotationSensor == null) return
@@ -151,8 +183,15 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // Convert unit quaternion to a guaranteed 100% orthonormal rotation matrix (sensor ENU)
         SensorManager.getRotationMatrixFromVector(rawMatrix, smoothedQuat)
 
-        // Apply true-north magnetic declination + user calibration offset: R_true = R_sensor * R_z(declination + offset)
-        applyMagneticDeclination(rawMatrix, magneticDeclinationDeg + userAzimuthOffsetDeg, adjustedMatrix)
+        // Apply true-north magnetic declination + continuous 3D user rotation quaternion
+        applyCalibration(
+            sensorMatrix = rawMatrix,
+            declinationDeg = magneticDeclinationDeg,
+            userQuat = userQuat,
+            tempDeclinationBuffer = tempDeclinationMatrix,
+            tempUserMatrixBuffer = tempUserMatrix,
+            outMatrix = adjustedMatrix,
+        )
 
         // Compute where the back camera (-Z_dev) is pointing in World ENU coordinates
         // Since v_world = R * v_dev: v_world = R * [0, 0, -1]^T = [-R[2], -R[6], -R[10]]
@@ -232,6 +271,148 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             outMatrix[13] = sensorMatrix[13]
             outMatrix[14] = sensorMatrix[14]
             outMatrix[15] = sensorMatrix[15]
+        }
+
+        /**
+         * Converts a unit quaternion [q] = (qx, qy, qz, qw) into a 100% orthonormal 4x4 rotation matrix [out].
+         */
+        fun quaternionToMatrix(q: FloatArray, out: FloatArray) {
+            val q1 = q[0] // x
+            val q2 = q[1] // y
+            val q3 = q[2] // z
+            val q0 = q[3] // w
+
+            out[0] = 1f - 2f * (q2 * q2 + q3 * q3)
+            out[1] = 2f * (q1 * q2 - q0 * q3)
+            out[2] = 2f * (q1 * q3 + q0 * q2)
+            out[3] = 0f
+
+            out[4] = 2f * (q1 * q2 + q0 * q3)
+            out[5] = 1f - 2f * (q1 * q1 + q3 * q3)
+            out[6] = 2f * (q2 * q3 - q0 * q1)
+            out[7] = 0f
+
+            out[8] = 2f * (q1 * q3 - q0 * q2)
+            out[9] = 2f * (q2 * q3 + q0 * q1)
+            out[10] = 1f - 2f * (q1 * q1 + q2 * q2)
+            out[11] = 0f
+
+            out[12] = 0f
+            out[13] = 0f
+            out[14] = 0f
+            out[15] = 1f
+        }
+
+        /**
+         * Multiplies two 4x4 matrices [a] and [b] and stores the result in [out] with zero allocations.
+         * $out = a \cdot b$
+         */
+        fun multiplyMatrices(a: FloatArray, b: FloatArray, out: FloatArray) {
+            for (i in 0..3) {
+                val i4 = i * 4
+                val a0 = a[i4 + 0]
+                val a1 = a[i4 + 1]
+                val a2 = a[i4 + 2]
+                val a3 = a[i4 + 3]
+                for (j in 0..3) {
+                    out[i4 + j] = a0 * b[0 * 4 + j] +
+                                  a1 * b[1 * 4 + j] +
+                                  a2 * b[2 * 4 + j] +
+                                  a3 * b[3 * 4 + j]
+                }
+            }
+        }
+
+        /**
+         * Increments a rotation quaternion [currentQuat] by pitch ([pitchRad] around device X)
+         * and yaw ([yawRad] around device Y) without any gimbal lock, singularity, or pole lock.
+         *
+         * Allows continuous, seamless 360-degree rotation across Zenith and Nadir in any direction.
+         */
+        fun rotateQuaternion(
+            currentQuat: FloatArray,
+            pitchRad: Float,
+            yawRad: Float,
+            outQuat: FloatArray,
+        ) {
+            if (kotlin.math.abs(pitchRad) < 1e-7f && kotlin.math.abs(yawRad) < 1e-7f) {
+                System.arraycopy(currentQuat, 0, outQuat, 0, minOf(currentQuat.size, outQuat.size))
+                return
+            }
+
+            val halfP = pitchRad * 0.5f
+            val sinP = kotlin.math.sin(halfP)
+            val cosP = kotlin.math.cos(halfP)
+
+            val halfY = yawRad * 0.5f
+            val sinY = kotlin.math.sin(halfY)
+            val cosY = kotlin.math.cos(halfY)
+
+            // dq = dq_pitch * dq_yaw
+            val dqX = sinP * cosY
+            val dqY = cosP * sinY
+            val dqZ = -sinP * sinY
+            val dqW = cosP * cosY
+
+            // out = currentQuat * dq
+            val x1 = currentQuat[0]
+            val y1 = currentQuat[1]
+            val z1 = currentQuat[2]
+            val w1 = currentQuat[3]
+
+            val ox = w1 * dqX + x1 * dqW + y1 * dqZ - z1 * dqY
+            val oy = w1 * dqY - x1 * dqZ + y1 * dqW + z1 * dqX
+            val oz = w1 * dqZ + x1 * dqY - y1 * dqX + z1 * dqW
+            val ow = w1 * dqW - x1 * dqX - y1 * dqY - z1 * dqZ
+
+            val norm = kotlin.math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
+            if (norm > 1e-6f) {
+                outQuat[0] = ox / norm
+                outQuat[1] = oy / norm
+                outQuat[2] = oz / norm
+                outQuat[3] = ow / norm
+            } else {
+                outQuat[0] = 0f
+                outQuat[1] = 0f
+                outQuat[2] = 0f
+                outQuat[3] = 1f
+            }
+        }
+
+        fun isIdentityQuaternion(q: FloatArray): Boolean {
+            if (q.size < 4) return true
+            return kotlin.math.abs(q[0]) < 1e-4f &&
+                   kotlin.math.abs(q[1]) < 1e-4f &&
+                   kotlin.math.abs(q[2]) < 1e-4f &&
+                   kotlin.math.abs(q[3] - 1.0f) < 1e-4f
+        }
+
+        /**
+         * Applies True-North declination and continuous 3D user rotation quaternion
+         * to produce a 100% orthonormal adjusted rotation matrix with zero allocations.
+         *
+         * $R_{\text{adjusted}} = R_{\text{true}} \cdot R_{\text{user}}$
+         */
+        fun applyCalibration(
+            sensorMatrix: FloatArray,
+            declinationDeg: Float,
+            userQuat: FloatArray,
+            tempDeclinationBuffer: FloatArray,
+            tempUserMatrixBuffer: FloatArray,
+            outMatrix: FloatArray,
+        ) {
+            // 1. Apply magnetic declination to sensor matrix
+            applyMagneticDeclination(sensorMatrix, declinationDeg, tempDeclinationBuffer)
+
+            // 2. If user quaternion is identity, no further adjustment needed
+            if (isIdentityQuaternion(userQuat)) {
+                System.arraycopy(tempDeclinationBuffer, 0, outMatrix, 0, minOf(tempDeclinationBuffer.size, outMatrix.size))
+                return
+            }
+
+            // 3. Convert user quaternion to matrix and multiply
+            quaternionToMatrix(userQuat, tempUserMatrixBuffer)
+            multiplyMatrices(tempDeclinationBuffer, tempUserMatrixBuffer, outMatrix)
         }
     }
 

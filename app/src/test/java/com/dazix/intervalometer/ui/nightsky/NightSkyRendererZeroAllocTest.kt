@@ -68,4 +68,20 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertEquals(1.0f, computeExtinction(15.0f), 0.001f)
         org.junit.Assert.assertEquals(1.0f, computeExtinction(30.0f), 0.001f)
     }
+
+    @Test
+    fun `verifies landscape agsl shader defines all required uniforms and earth-fixed raycasting`() {
+        val src = LandscapeShader.SRC
+
+        org.junit.Assert.assertTrue("Shader must declare landscapeTexture uniform", src.contains("uniform shader landscapeTexture;"))
+        org.junit.Assert.assertTrue("Shader must declare resolution uniform", src.contains("uniform float2 resolution;"))
+        org.junit.Assert.assertTrue("Shader must declare textureSize uniform", src.contains("uniform float2 textureSize;"))
+        org.junit.Assert.assertTrue("Shader must declare viewMatrix uniform", src.contains("uniform mat3 viewMatrix;"))
+        org.junit.Assert.assertTrue("Shader must declare fovFactor uniform", src.contains("uniform float fovFactor;"))
+        org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
+        org.junit.Assert.assertTrue("Shader must contain spherical azimuth conversion", src.contains("atan(worldDir.x, worldDir.y)"))
+        org.junit.Assert.assertTrue("Shader must contain spherical elevation conversion", src.contains("asin(clamp(worldDir.z, -1.0, 1.0))"))
+        org.junit.Assert.assertTrue("Shader must contain equirectangular UV mapping", src.contains("texU = (theta / 6.283185307179586) + 0.5;"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.4"))
+    }
 }
