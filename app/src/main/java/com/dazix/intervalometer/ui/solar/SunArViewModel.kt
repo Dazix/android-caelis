@@ -10,6 +10,10 @@ import com.dazix.intervalometer.ar.SolarLocationProvider
 import com.dazix.intervalometer.data.SettingsStore
 import com.dazix.intervalometer.domain.solar.BubbleInterval
 import com.dazix.intervalometer.domain.solar.GeoLocation
+import com.dazix.intervalometer.domain.solar.LunarCoordinates
+import com.dazix.intervalometer.domain.solar.LunarPositionCalculator
+import com.dazix.intervalometer.domain.solar.LunarTrajectory
+import com.dazix.intervalometer.domain.solar.LunarTrajectoryPlanner
 import com.dazix.intervalometer.domain.solar.SolarCoordinates
 import com.dazix.intervalometer.domain.solar.SolarPositionCalculator
 import com.dazix.intervalometer.domain.solar.SolarTrajectory
@@ -41,7 +45,16 @@ data class SunArUiState(
         GeoLocation.DEFAULT,
         BubbleInterval.ONE_HOUR,
     ),
+    val lunarTrajectory: LunarTrajectory = LunarTrajectoryPlanner.planTrajectory(
+        LocalDate.now(),
+        GeoLocation.DEFAULT,
+        BubbleInterval.ONE_HOUR,
+    ),
     val currentSunPosition: SolarCoordinates = SolarPositionCalculator.computePosition(
+        Instant.now(),
+        GeoLocation.DEFAULT,
+    ),
+    val currentMoonPosition: LunarCoordinates = LunarPositionCalculator.computePosition(
         Instant.now(),
         GeoLocation.DEFAULT,
     ),
@@ -83,6 +96,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     )
     val currentSunPosition: StateFlow<SolarCoordinates> = currentSunPosState.asStateFlow()
 
+    private val currentMoonPosState = MutableStateFlow(
+        LunarPositionCalculator.computePosition(Instant.now(), locationProvider.location.value)
+    )
+    val currentMoonPosition: StateFlow<LunarCoordinates> = currentMoonPosState.asStateFlow()
+
     val trajectory: StateFlow<SolarTrajectory> = combine(
         selectedDateState,
         locationProvider.location,
@@ -95,13 +113,27 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         SolarTrajectoryPlanner.planTrajectory(LocalDate.now(), GeoLocation.DEFAULT, BubbleInterval.ONE_HOUR)
     )
 
+    val lunarTrajectory: StateFlow<LunarTrajectory> = combine(
+        selectedDateState,
+        locationProvider.location,
+        bubbleIntervalState,
+    ) { date, loc, interval ->
+        LunarTrajectoryPlanner.planTrajectory(date, loc, interval, ZoneId.systemDefault())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LunarTrajectoryPlanner.planTrajectory(LocalDate.now(), GeoLocation.DEFAULT, BubbleInterval.ONE_HOUR)
+    )
+
     val uiState: StateFlow<SunArUiState> = combine(
         selectedDateState,
         bubbleIntervalState,
         locationProvider.location,
         locationProvider.hasGpsFix,
         trajectory,
+        lunarTrajectory,
         currentSunPosState,
+        currentMoonPosState,
         keepScreenOn,
         azimuthOffsetDegrees,
         cameraFovState,
@@ -111,10 +143,12 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val loc = args[2] as GeoLocation
         val gps = args[3] as Boolean
         val traj = args[4] as SolarTrajectory
-        val sunPos = args[5] as SolarCoordinates
-        val keepOn = args[6] as Boolean
-        val azOffset = args[7] as Float
-        val fov = args[8] as Float
+        val lTraj = args[5] as LunarTrajectory
+        val sunPos = args[6] as SolarCoordinates
+        val moonPos = args[7] as LunarCoordinates
+        val keepOn = args[8] as Boolean
+        val azOffset = args[9] as Float
+        val fov = args[10] as Float
         SunArUiState(
             selectedDate = date,
             isToday = date == LocalDate.now(),
@@ -125,7 +159,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             azimuthOffsetDegrees = azOffset,
             cameraFovHorizontal = fov,
             trajectory = traj,
+            lunarTrajectory = lTraj,
             currentSunPosition = sunPos,
+            currentMoonPosition = moonPos,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
@@ -144,7 +180,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Ticker to update sun position every 2 seconds for selected date at current time-of-day
+        // Ticker to update sun and moon positions every 2 seconds for selected date at current time-of-day
         viewModelScope.launch {
             while (isActive) {
                 val date = selectedDateState.value
@@ -153,6 +189,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
                 val targetInstant = date.atTime(localTime).atZone(ZoneId.systemDefault()).toInstant()
                 currentSunPosState.value = SolarPositionCalculator.computePosition(targetInstant, loc)
+                currentMoonPosState.value = LunarPositionCalculator.computePosition(targetInstant, loc)
                 delay(2000L)
             }
         }

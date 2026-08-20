@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import subprocess
 
-commit_msg = """fix(solar): refine optical FOV tracking and remove Red Vision from Sun AR
+commit_msg = """feat(ephemeris): add Moon position, lunar trajectory, and rename menu to Position
 
-- Add OnLayoutChangeListener to PreviewView for dynamic optical FOV calculation matching actual viewport dimensions
-- Filter multi-camera focal lengths to select primary standard wide lens (3.5mm - 8.0mm)
-- Remove Red Vision mode from Sun AR in favor of high-contrast daytime solar palette
-- Add instant Toast feedback for Keep Screen Awake and Reset Calibration in Sun AR
-- Verified with 100% test pass (37 test suites)
+- Rename navigation destination to 'Poloha' (CS) / 'Position' (EN) with SunAndMoon vector icon
+- Implement high-precision Lunar ephemeris (Jean Meeus Ch. 47) with topocentric parallax and Saemundsson atmospheric refraction
+- Add 24-hour lunar trajectory planner with configurable time bubbles and Moonrise/Moonset/Transit markers
+- Render Moon in cool ice-blue/silver-cyan palette alongside warm golden Sun in AR overlay
+- Add Moonrise, Moon transit, Moonset, and phase/illumination % to Day Summary card
+- Add comprehensive LunarPositionCalculatorTest and LunarTrajectoryPlannerTest (39 suites passing)
 
 Co-authored-by: Antigravity <antigravity@google.com>
 """

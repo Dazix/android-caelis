@@ -39,7 +39,7 @@
       podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
     -->
     <string name="nav_short_home">Intervalometr</string>
-    <string name="nav_short_sun_ar">Poloha slunce</string>
+    <string name="nav_short_sun_ar">Poloha</string>
     <string name="nav_short_setup">Nastavení</string>
     <string name="nav_short_ramp">Interval</string>
     <string name="nav_short_advanced">Pokročilé</string>
@@ -235,8 +235,13 @@
     <string name="onboarding_all_set">Vše, co aplikace potřebuje, je povolené.</string>
 
     <!-- Sun AR -->
-    <string name="sun_ar_title">Sluneční dráha (AR)</string>
-    <string name="sun_ar_desc">Rozšířená realita sluneční dráhy, východu a západu slunce</string>
+    <string name="sun_ar_title">Poloha slunce a měsíce</string>
+    <string name="sun_ar_desc">Rozšířená realita sluneční a měsíční dráhy, východů a západů</string>
+    <string name="moon_ar_moonrise">Východ měsíce</string>
+    <string name="moon_ar_moonset">Západ měsíce</string>
+    <string name="moon_ar_transit">Kulminace měsíce</string>
+    <string name="moon_ar_phase">Fáze měsíce</string>
+    <string name="moon_ar_illumination">Osvětlení</string>
     <string name="sun_ar_bubble_interval">Krok bublin</string>
     <string name="sun_ar_date">Datum</string>
     <string name="sun_ar_today">Dnes</string>

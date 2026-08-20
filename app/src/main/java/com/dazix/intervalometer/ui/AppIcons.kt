@@ -233,6 +233,29 @@ object AppIcons {
         }
     }
 
+    /** Sun and Moon: radiant sun combined with a crescent moon. Stands for Sun & Moon AR ephemeris. */
+    val SunAndMoon: ImageVector by lazy {
+        icon("SunAndMoon") {
+            strokePath {
+                // Sun disk arc on left
+                moveTo(11.5f, 7.8f)
+                arcTo(4.2f, 4.2f, 0f, false, false, 11.5f, 16.2f)
+
+                // Sun rays (left, top-left, bottom-left, top, bottom)
+                moveTo(2.4f, 12f); lineTo(5.2f, 12f)
+                moveTo(4.8f, 5.5f); lineTo(7.0f, 7.5f)
+                moveTo(4.8f, 18.5f); lineTo(7.0f, 16.5f)
+                moveTo(10.5f, 2.4f); lineTo(10.5f, 5.0f)
+                moveTo(10.5f, 19.0f); lineTo(10.5f, 21.6f)
+
+                // Crescent Moon on right
+                moveTo(13.5f, 4.8f)
+                arcTo(7.4f, 7.4f, 0f, false, true, 13.5f, 19.2f)
+                arcTo(5.2f, 5.2f, 0f, false, false, 13.5f, 4.8f)
+            }
+        }
+    }
+
     /** Sunrise: rising sun over the horizon line with an upward arrow. */
     val Sunrise: ImageVector by lazy {
         icon("Sunrise") {

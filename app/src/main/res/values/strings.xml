@@ -39,7 +39,7 @@
       The nav_*_summary strings above stay the long form used on the session screen's list.
     -->
     <string name="nav_short_home">Intervalometer</string>
-    <string name="nav_short_sun_ar">Sun position</string>
+    <string name="nav_short_sun_ar">Position</string>
     <string name="nav_short_setup">Setup</string>
     <string name="nav_short_ramp">Ramp</string>
     <string name="nav_short_advanced">Advanced</string>
@@ -229,8 +229,13 @@
     <string name="onboarding_all_set">Everything the app needs is allowed.</string>
 
     <!-- Sun AR -->
-    <string name="sun_ar_title">Sun path (AR)</string>
-    <string name="sun_ar_desc">Augmented reality solar trajectory and sunrise/sunset</string>
+    <string name="sun_ar_title">Sun &amp; Moon Position</string>
+    <string name="sun_ar_desc">Augmented reality solar and lunar trajectory and rise/set ephemeris</string>
+    <string name="moon_ar_moonrise">Moonrise</string>
+    <string name="moon_ar_moonset">Moonset</string>
+    <string name="moon_ar_transit">Moon transit</string>
+    <string name="moon_ar_phase">Moon phase</string>
+    <string name="moon_ar_illumination">Illumination</string>
     <string name="sun_ar_bubble_interval">Bubble interval</string>
     <string name="sun_ar_date">Date</string>
     <string name="sun_ar_today">Today</string>
