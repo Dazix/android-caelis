@@ -66,6 +66,8 @@ class SettingsStore(context: Context) {
 
     val nightSkyMilkyWayVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyMilkyWayVisible(it) }
 
+    val nightSkyAtmosphereVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyAtmosphereVisible(it) }
+
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
 
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
@@ -98,6 +100,10 @@ class SettingsStore(context: Context) {
 
     suspend fun saveNightSkyMilkyWayVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyMilkyWayVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyAtmosphereVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyAtmosphereVisible(it, enabled) }
     }
 
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
@@ -183,6 +189,7 @@ internal object SettingsMapping {
     private val NIGHT_SKY_AZIMUTH_OFFSET = floatPreferencesKey("night_sky_azimuth_offset")
     private val NIGHT_SKY_OPAQUE_BACKGROUND = booleanPreferencesKey("night_sky_opaque_background")
     private val NIGHT_SKY_MILKY_WAY_VISIBLE = booleanPreferencesKey("night_sky_milky_way_visible")
+    private val NIGHT_SKY_ATMOSPHERE_VISIBLE = booleanPreferencesKey("night_sky_atmosphere_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
@@ -419,6 +426,13 @@ internal object SettingsMapping {
 
     fun writeNightSkyMilkyWayVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_MILKY_WAY_VISIBLE] = enabled
+    }
+
+    fun readNightSkyAtmosphereVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_ATMOSPHERE_VISIBLE] ?: true
+
+    fun writeNightSkyAtmosphereVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_ATMOSPHERE_VISIBLE] = enabled
     }
 
     fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =

@@ -364,6 +364,18 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky atmosphere visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyAtmosphereVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyAtmosphereVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyAtmosphereVisible(prefs))
+
+        SettingsMapping.writeNightSkyAtmosphereVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyAtmosphereVisible(prefs))
+    }
+
+    @Test
     fun `night sky constellations visible defaults to true and survives round trip`() {
         assertEquals(true, SettingsMapping.readNightSkyConstellationsVisible(emptyPreferences()))
 

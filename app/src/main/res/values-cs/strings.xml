@@ -294,6 +294,8 @@
     <string name="night_sky_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení noční oblohy</string>
     <string name="night_sky_milky_way">Mléčná dráha</string>
     <string name="night_sky_milky_way_desc">Zobrazit/skrýt hardwarově akcelerované pozadí Mléčné dráhy</string>
+    <string name="night_sky_atmosphere">Atmosféra</string>
+    <string name="night_sky_atmosphere_desc">Zobrazit/skrýt atmosférickou záři na obzoru a zhasínání hvězd</string>
     <string name="night_sky_opaque_bg">Režim planetária</string>
     <string name="night_sky_opaque_bg_desc">Přepnout mezi AR kamerou a plným neprůhledným planetáriem</string>
     <string name="night_sky_constellations">Souhvězdí</string>

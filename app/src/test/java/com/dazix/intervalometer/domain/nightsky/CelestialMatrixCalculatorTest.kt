@@ -98,4 +98,68 @@ class CelestialMatrixCalculatorTest {
         val ra = (Math.toDegrees(atan2(rz.toDouble(), rx.toDouble())) + 360.0) % 360.0
         assertTrue("RA should be valid angle [0, 360)", ra in 0.0..360.0)
     }
+
+    @Test
+    fun `atmosphere view matrix is strictly orthonormal under all display rotations`() {
+        val outMatrix = FloatArray(9)
+        val rotations = intArrayOf(0, 1, 2, 3)
+
+        for (rot in rotations) {
+            CelestialMatrixCalculator.computeAtmosphereViewMatrix(
+                sensorMatrix16 = identity16,
+                displayRotation = rot,
+                outMatrix9 = outMatrix,
+            )
+
+            // Column 0
+            val c0x = outMatrix[0]; val c0y = outMatrix[1]; val c0z = outMatrix[2]
+            // Column 1
+            val c1x = outMatrix[3]; val c1y = outMatrix[4]; val c1z = outMatrix[5]
+            // Column 2
+            val c2x = outMatrix[6]; val c2y = outMatrix[7]; val c2z = outMatrix[8]
+
+            val mag0 = sqrt(c0x * c0x + c0y * c0y + c0z * c0z)
+            val mag1 = sqrt(c1x * c1x + c1y * c1y + c1z * c1z)
+            val mag2 = sqrt(c2x * c2x + c2y * c2y + c2z * c2z)
+
+            assertEquals("Col 0 magnitude at rotation $rot", 1.0f, mag0, 0.001f)
+            assertEquals("Col 1 magnitude at rotation $rot", 1.0f, mag1, 0.001f)
+            assertEquals("Col 2 magnitude at rotation $rot", 1.0f, mag2, 0.001f)
+
+            val dot01 = c0x * c1x + c0y * c1y + c0z * c1z
+            val dot02 = c0x * c2x + c0y * c2y + c0z * c2z
+            val dot12 = c1x * c2x + c1y * c2y + c1z * c2z
+
+            assertEquals("Dot 0-1 at rotation $rot", 0.0f, dot01, 0.001f)
+            assertEquals("Dot 0-2 at rotation $rot", 0.0f, dot02, 0.001f)
+            assertEquals("Dot 1-2 at rotation $rot", 0.0f, dot12, 0.001f)
+        }
+    }
+
+    @Test
+    fun `atmosphere view matrix accurately maps camera pitch to ENU elevation without celestial rotation`() {
+        val outMatrix = FloatArray(9)
+        // Upright phone looking horizontally at North horizon (Device Y = World Up, Device Z = World South)
+        val uprightLookingNorth = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        CelestialMatrixCalculator.computeAtmosphereViewMatrix(
+            sensorMatrix16 = uprightLookingNorth,
+            displayRotation = 0,
+            outMatrix9 = outMatrix,
+        )
+
+        // rayDir [0, 0, -1] (center of screen):
+        // worldDir.z = -outMatrix[8]
+        val centerZ = -outMatrix[8]
+        assertEquals("Horizontal camera center elevation is 0", 0.0f, centerZ, 0.001f)
+
+        // Screen top ray [0, 1, 0] (top of screen points up):
+        val topZ = outMatrix[5]
+        assertEquals("Screen top points straight up towards zenith", 1.0f, topZ, 0.001f)
+    }
 }

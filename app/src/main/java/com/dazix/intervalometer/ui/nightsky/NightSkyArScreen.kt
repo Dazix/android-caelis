@@ -145,7 +145,7 @@ fun NightSkyArScreen(
                 onFovCalculated = viewModel::setCameraFov,
             )
 
-            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way and Opaque Sky Dome layers
+            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, and Opaque Sky Dome layers
             NightSkyOverlayCanvas(
                 orientation = orientation,
                 displayRotation = displayRotation,
@@ -156,6 +156,7 @@ fun NightSkyArScreen(
                 redVisionMode = uiState.redVisionMode,
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                 modifier = Modifier.fillMaxSize(),
@@ -211,10 +212,11 @@ fun NightSkyArScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Expressive Action Dock (Planetarium, Milky Way, Constellations, Reset)
+            // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Constellations, Reset)
             NightSkyActionDock(
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 redVisionMode = uiState.redVisionMode,
                 azimuthOffset = uiState.azimuthOffsetDegrees,
@@ -227,6 +229,11 @@ fun NightSkyArScreen(
                     val nextState = !uiState.isMilkyWayVisible
                     showToggleToast(context, context.getString(R.string.night_sky_milky_way), nextState)
                     viewModel.toggleMilkyWayVisible()
+                },
+                onToggleAtmosphereVisible = {
+                    val nextState = !uiState.isAtmosphereVisible
+                    showToggleToast(context, context.getString(R.string.night_sky_atmosphere), nextState)
+                    viewModel.toggleAtmosphereVisible()
                 },
                 onToggleConstellationsVisible = {
                     val nextState = !uiState.isConstellationsVisible
@@ -262,6 +269,7 @@ private fun NightSkyOverlayCanvas(
     redVisionMode: Boolean,
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
+    isAtmosphereVisible: Boolean,
     isConstellationsVisible: Boolean,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -311,7 +319,7 @@ private fun NightSkyOverlayCanvas(
             constellationPx = 1.8.dp.toPx(),
         )
 
-        // Layer 0 & Layer 1: Opaque Sky Dome background and hardware-accelerated AGSL Milky Way
+        // Layer 0 & Layer 1: Opaque Sky Dome background and hardware-accelerated AGSL Milky Way & Atmosphere
         renderer.drawSkyBackground(
             drawScope = this,
             matrix = matrix,
@@ -323,6 +331,7 @@ private fun NightSkyOverlayCanvas(
             h = h,
             isSkyBackgroundOpaque = isSkyBackgroundOpaque,
             isMilkyWayVisible = isMilkyWayVisible,
+            isAtmosphereVisible = isAtmosphereVisible,
             isRedVision = redVisionMode,
         )
 
@@ -349,6 +358,7 @@ private fun NightSkyOverlayCanvas(
             w = w,
             h = h,
             showConstellations = isConstellationsVisible,
+            isAtmosphereVisible = isAtmosphereVisible,
         )
 
         onVisibleStarsUpdated(visibleCount)

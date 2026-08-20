@@ -288,6 +288,8 @@
     <string name="night_sky_keep_screen_on_desc">Prevent screen timeout while using Night Sky AR</string>
     <string name="night_sky_milky_way">Milky Way</string>
     <string name="night_sky_milky_way_desc">Toggle hardware-accelerated Milky Way background</string>
+    <string name="night_sky_atmosphere">Atmosphere</string>
+    <string name="night_sky_atmosphere_desc">Toggle hardware-accelerated atmospheric horizon glow and star extinction</string>
     <string name="night_sky_opaque_bg">Planetarium mode</string>
     <string name="night_sky_opaque_bg_desc">Toggle between live camera AR and opaque planetarium sky</string>
     <string name="night_sky_constellations">Constellations</string>

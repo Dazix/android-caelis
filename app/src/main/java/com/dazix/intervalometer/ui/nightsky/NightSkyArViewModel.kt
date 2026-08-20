@@ -43,6 +43,7 @@ data class NightSkyArUiState(
     val constellationsCount: Int = 0,
     val isSkyBackgroundOpaque: Boolean = false,
     val isMilkyWayVisible: Boolean = true,
+    val isAtmosphereVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
 )
 
@@ -107,6 +108,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    val isAtmosphereVisible: StateFlow<Boolean> = settingsStore.nightSkyAtmosphereVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     val isConstellationsVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationsVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -128,6 +135,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         catalogState,
         isSkyBackgroundOpaque,
         isMilkyWayVisible,
+        isAtmosphereVisible,
         isConstellationsVisible,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -144,7 +152,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val cat = args[11] as NightSkyCatalog?
         val opaque = args[12] as Boolean
         val milkyWay = args[13] as Boolean
-        val constellations = args[14] as Boolean
+        val atmosphere = args[14] as Boolean
+        val constellations = args[15] as Boolean
 
         NightSkyArUiState(
             location = loc,
@@ -162,6 +171,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             constellationsCount = cat?.constellationsLength() ?: 0,
             isSkyBackgroundOpaque = opaque,
             isMilkyWayVisible = milkyWay,
+            isAtmosphereVisible = atmosphere,
             isConstellationsVisible = constellations,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
@@ -279,6 +289,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setMilkyWayVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyMilkyWayVisible(enabled)
+        }
+    }
+
+    fun toggleAtmosphereVisible() {
+        setAtmosphereVisible(!isAtmosphereVisible.value)
+    }
+
+    fun setAtmosphereVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyAtmosphereVisible(enabled)
         }
     }
 

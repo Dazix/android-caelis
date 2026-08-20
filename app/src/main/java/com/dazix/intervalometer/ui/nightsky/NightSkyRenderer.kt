@@ -47,6 +47,14 @@ class NightSkyRenderer {
 
     val shaderBrush: ShaderBrush? = runtimeShader?.let { ShaderBrush(it) }
 
+    val atmosphereShader: RuntimeShader? = runCatching {
+        RuntimeShader(AtmosphereShader.SRC)
+    }.getOrNull()
+
+    val atmosphereBrush: ShaderBrush? = atmosphereShader?.let { ShaderBrush(it) }
+
+    private val atmosphereMatrixBuffer = FloatArray(9)
+
     private val maxStars = 4096
     private val tier1Points = FloatArray(maxStars * 2)
     private val tier2Points = FloatArray(maxStars * 2)
@@ -85,6 +93,12 @@ class NightSkyRenderer {
         isAntiAlias = true
         style = Paint.Style.STROKE
         strokeWidth = 2.0f
+    }
+
+    val extinctionPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
     }
 
     val constellationLabelPaint = Paint().apply {
@@ -155,6 +169,7 @@ class NightSkyRenderer {
         h: Float,
         isSkyBackgroundOpaque: Boolean,
         isMilkyWayVisible: Boolean,
+        isAtmosphereVisible: Boolean,
         isRedVision: Boolean,
     ) {
         // Layer 0: Opaque Sky Background
@@ -183,6 +198,25 @@ class NightSkyRenderer {
 
             drawScope.drawRect(brush = shaderBrush)
         }
+
+        // Layer 1b: Hardware-Accelerated AGSL Atmosphere Glow Shader
+        if (isAtmosphereVisible && atmosphereShader != null && atmosphereBrush != null && matrix.size >= 16) {
+            val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
+            val fovFactor = 1.0f / tan(halfFovHRad)
+
+            CelestialMatrixCalculator.computeAtmosphereViewMatrix(
+                sensorMatrix16 = matrix,
+                displayRotation = displayRotation,
+                outMatrix9 = atmosphereMatrixBuffer,
+            )
+
+            atmosphereShader.setFloatUniform("resolution", w, h)
+            atmosphereShader.setFloatUniform("viewMatrix", atmosphereMatrixBuffer)
+            atmosphereShader.setFloatUniform("fovFactor", fovFactor)
+            atmosphereShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+
+            drawScope.drawRect(brush = atmosphereBrush)
+        }
     }
 
     /**
@@ -202,6 +236,7 @@ class NightSkyRenderer {
         w: Float,
         h: Float,
         showConstellations: Boolean = true,
+        isAtmosphereVisible: Boolean = true,
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
         val totalStars = minOf(catalog.starsLength(), maxStars)
@@ -213,6 +248,9 @@ class NightSkyRenderer {
         var tier1Count = 0
         var tier2Count = 0
         var tier3Count = 0
+        var extinctCount = 0
+
+        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
 
         // 1. Camera optical axis in world ENU: v_cam = [-R[2], -R[6], -R[10]]
         val camFwdX = -matrix[2]
@@ -281,6 +319,27 @@ class NightSkyRenderer {
                 continue
             }
 
+            // Physical Atmospheric Star Extinction (dim stars near horizon < 15°)
+            if (isAtmosphereVisible) {
+                val starElevationDeg = (Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))).toFloat()
+                if (starElevationDeg < 15.0f) {
+                    if (starElevationDeg <= 0.0f) {
+                        continue
+                    }
+                    val extinction = starElevationDeg / 15.0f
+                    val baseColor = if (mag < 1.5f) tier1Paint.color else if (mag < 3.0f) tier2Paint.color else tier3Paint.color
+                    val baseAlpha = (baseColor ushr 24) and 0xFF
+                    val alpha = (baseAlpha * extinction).toInt().coerceIn(0, 255)
+                    if (alpha > 0) {
+                        extinctionPaint.color = (alpha shl 24) or (baseColor and 0x00FFFFFF)
+                        extinctionPaint.strokeWidth = if (mag < 1.5f) tier1Paint.strokeWidth else if (mag < 3.0f) tier2Paint.strokeWidth else tier3Paint.strokeWidth
+                        nativeCanvas.drawPoint(screenX, screenY, extinctionPaint)
+                        extinctCount++
+                    }
+                    continue
+                }
+            }
+
             // Bucket by apparent magnitude for batch drawing
             if (mag < 1.5f) {
                 val idx = tier1Count * 2
@@ -299,8 +358,6 @@ class NightSkyRenderer {
                 tier3Count++
             }
         }
-
-        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
 
         // 5. Batch Render Constellation Lines
         if (showConstellations) {
@@ -353,6 +410,6 @@ class NightSkyRenderer {
             nativeCanvas.drawPoints(tier1Points, 0, tier1Count * 2, tier1Paint)
         }
 
-        return tier1Count + tier2Count + tier3Count
+        return tier1Count + tier2Count + tier3Count + extinctCount
     }
 }

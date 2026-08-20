@@ -27,6 +27,7 @@ import com.dazix.intervalometer.ui.AppIcons
  * Provides quick 1-tap toggles for:
  * - Planetarium Opaque Sky Dome (blocks camera stream)
  * - Hardware-Accelerated AGSL Milky Way Layer
+ * - Hardware-Accelerated AGSL Atmosphere Horizon Glow Layer
  * - Constellation Stick Figures
  * - Azimuth Calibration Reset
  */
@@ -34,11 +35,13 @@ import com.dazix.intervalometer.ui.AppIcons
 fun NightSkyActionDock(
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
+    isAtmosphereVisible: Boolean,
     isConstellationsVisible: Boolean,
     redVisionMode: Boolean,
     azimuthOffset: Float,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
+    onToggleAtmosphereVisible: () -> Unit,
     onToggleConstellationsVisible: () -> Unit,
     onResetCalibration: () -> Unit,
     modifier: Modifier = Modifier,
@@ -94,7 +97,20 @@ fun NightSkyActionDock(
             onClick = onToggleMilkyWayVisible,
         )
 
-        // 4. Constellations Toggle
+        // 4. Atmosphere AGSL Layer & Star Extinction Toggle
+        DockActionButton(
+            icon = AppIcons.Atmosphere,
+            contentDescription = stringResource(R.string.night_sky_atmosphere_desc),
+            isActive = isAtmosphereVisible,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            borderColor = borderColor,
+            activeColor = activeTint,
+            redVisionMode = redVisionMode,
+            onClick = onToggleAtmosphereVisible,
+        )
+
+        // 5. Constellations Toggle
         DockActionButton(
             icon = AppIcons.Constellation,
             contentDescription = stringResource(R.string.night_sky_constellations_desc),

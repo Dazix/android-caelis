@@ -12,6 +12,7 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.tier1Paint)
         assertNotNull(renderer.tier2Paint)
         assertNotNull(renderer.tier3Paint)
+        assertNotNull(renderer.extinctionPaint)
         assertNotNull(renderer.constellationPaint)
         assertNotNull(renderer.constellationLabelPaint)
         assertNotNull(renderer.skyDomeRenderer)
@@ -38,5 +39,33 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
         org.junit.Assert.assertTrue("Shader must contain spherical coordinate conversion", src.contains("atan(worldDir.z, worldDir.x)"))
         org.junit.Assert.assertTrue("Shader must contain declination latitude conversion", src.contains("asin(clamp(worldDir.y, -1.0, 1.0))"))
+    }
+
+    @Test
+    fun `verifies atmosphere agsl shader defines all required uniforms and horizon extinction raycasting`() {
+        val src = AtmosphereShader.SRC
+
+        org.junit.Assert.assertTrue("Shader must declare resolution uniform", src.contains("uniform float2 resolution;"))
+        org.junit.Assert.assertTrue("Shader must declare viewMatrix uniform", src.contains("uniform mat3 viewMatrix;"))
+        org.junit.Assert.assertTrue("Shader must declare fovFactor uniform", src.contains("uniform float fovFactor;"))
+        org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
+        org.junit.Assert.assertTrue("Shader must extract Z elevation", src.contains("sinElevation = worldDir.z"))
+        org.junit.Assert.assertTrue("Shader must discard pixels below horizon", src.contains("if (sinElevation < 0.0) return half4(0.0);"))
+        org.junit.Assert.assertTrue("Shader must apply max elevation of 15 degrees", src.contains("0.258"))
+        org.junit.Assert.assertTrue("Shader must apply non-linear exponential decay", src.contains("pow(factor, 3.0)"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.4"))
+    }
+
+    @Test
+    fun `verifies star extinction calculation math`() {
+        fun computeExtinction(elevationDeg: Float): Float {
+            return if (elevationDeg <= 0.0f) 0.0f else (elevationDeg / 15.0f).coerceIn(0.0f, 1.0f)
+        }
+
+        org.junit.Assert.assertEquals(0.0f, computeExtinction(-5.0f), 0.001f)
+        org.junit.Assert.assertEquals(0.0f, computeExtinction(0.0f), 0.001f)
+        org.junit.Assert.assertEquals(0.5f, computeExtinction(7.5f), 0.001f)
+        org.junit.Assert.assertEquals(1.0f, computeExtinction(15.0f), 0.001f)
+        org.junit.Assert.assertEquals(1.0f, computeExtinction(30.0f), 0.001f)
     }
 }

@@ -453,6 +453,23 @@ object AppIcons {
         }
     }
 
+    /** Atmosphere: atmospheric horizon glow layer. */
+    val Atmosphere: ImageVector by lazy {
+        icon("Atmosphere") {
+            strokePath {
+                // Horizon baseline
+                moveTo(2.4f, 18.5f)
+                lineTo(21.6f, 18.5f)
+                // Outer atmospheric scattering glow dome
+                moveTo(3.8f, 18.5f)
+                arcTo(8.2f, 8.2f, 0f, false, true, 20.2f, 18.5f)
+                // Inner dense atmospheric glow layer
+                moveTo(7.2f, 18.5f)
+                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 18.5f)
+            }
+        }
+    }
+
     /** Constellation: connected stellar nodes / stick figures. */
     val Constellation: ImageVector by lazy {
         icon("Constellation") {

@@ -162,4 +162,102 @@ object CelestialMatrixCalculator {
             }
         }
     }
+
+    /**
+     * Computes the 3x3 column-major view matrix for the Earth-fixed AGSL Atmosphere shader.
+     *
+     * Constructs the transformation:
+     * ViewMatrix = R_sensor * M_disp
+     *
+     * Transforms camera ray direction vectors directly into Earth ENU world coordinates (East, North, Up)
+     * without applying celestial LST rotation.
+     *
+     * @param sensorMatrix16 4x4 or 3x3 sensor rotation matrix (from OrientationTracker).
+     * @param displayRotation Android Surface rotation (Surface.ROTATION_0, ROTATION_90, etc.).
+     * @param outMatrix9 Pre-allocated FloatArray(9) to store the 3x3 column-major matrix.
+     */
+    fun computeAtmosphereViewMatrix(
+        sensorMatrix16: FloatArray,
+        displayRotation: Int,
+        outMatrix9: FloatArray,
+    ) {
+        val b00: Float
+        val b01: Float
+        val b02: Float
+        val b10: Float
+        val b11: Float
+        val b12: Float
+        val b20: Float
+        val b21: Float
+        val b22: Float
+
+        if (sensorMatrix16.size >= 16) {
+            b00 = sensorMatrix16[0]; b01 = sensorMatrix16[1]; b02 = sensorMatrix16[2]
+            b10 = sensorMatrix16[4]; b11 = sensorMatrix16[5]; b12 = sensorMatrix16[6]
+            b20 = sensorMatrix16[8]; b21 = sensorMatrix16[9]; b22 = sensorMatrix16[10]
+        } else if (sensorMatrix16.size >= 9) {
+            b00 = sensorMatrix16[0]; b01 = sensorMatrix16[1]; b02 = sensorMatrix16[2]
+            b10 = sensorMatrix16[3]; b11 = sensorMatrix16[4]; b12 = sensorMatrix16[5]
+            b20 = sensorMatrix16[6]; b21 = sensorMatrix16[7]; b22 = sensorMatrix16[8]
+        } else {
+            b00 = 1f; b01 = 0f; b02 = 0f
+            b10 = 0f; b11 = 1f; b12 = 0f
+            b20 = 0f; b21 = 0f; b22 = 1f
+        }
+
+        when (displayRotation) {
+            1 -> { // ROTATION_90
+                outMatrix9[0] = b01
+                outMatrix9[1] = b11
+                outMatrix9[2] = b21
+
+                outMatrix9[3] = -b00
+                outMatrix9[4] = -b10
+                outMatrix9[5] = -b20
+
+                outMatrix9[6] = b02
+                outMatrix9[7] = b12
+                outMatrix9[8] = b22
+            }
+            2 -> { // ROTATION_180
+                outMatrix9[0] = -b00
+                outMatrix9[1] = -b10
+                outMatrix9[2] = -b20
+
+                outMatrix9[3] = -b01
+                outMatrix9[4] = -b11
+                outMatrix9[5] = -b21
+
+                outMatrix9[6] = b02
+                outMatrix9[7] = b12
+                outMatrix9[8] = b22
+            }
+            3 -> { // ROTATION_270
+                outMatrix9[0] = -b01
+                outMatrix9[1] = -b11
+                outMatrix9[2] = -b21
+
+                outMatrix9[3] = b00
+                outMatrix9[4] = b10
+                outMatrix9[5] = b20
+
+                outMatrix9[6] = b02
+                outMatrix9[7] = b12
+                outMatrix9[8] = b22
+            }
+            else -> { // ROTATION_0
+                outMatrix9[0] = b00
+                outMatrix9[1] = b10
+                outMatrix9[2] = b20
+
+                outMatrix9[3] = b01
+                outMatrix9[4] = b11
+                outMatrix9[5] = b21
+
+                outMatrix9[6] = b02
+                outMatrix9[7] = b12
+                outMatrix9[8] = b22
+            }
+        }
+    }
 }
