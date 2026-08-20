@@ -42,24 +42,47 @@ fun CameraPreview(
                 cameraProvider.unbindAll()
                 val camera = cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
 
-                // Dynamically extract physical sensor dimensions and focal length
+                // Dynamically extract physical sensor dimensions and primary focal length
                 val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
                 val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
                 val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                val focalLength = focalLengths?.firstOrNull()
+                val primaryFocalLength = focalLengths?.let { list ->
+                    if (list.size == 1) {
+                        list[0]
+                    } else {
+                        // On multi-camera setups (e.g. [1.95, 6.81, 19.0]), select primary standard wide lens (3.5mm - 8.0mm)
+                        list.firstOrNull { it in 3.5f..8.0f } ?: list.firstOrNull()
+                    }
+                }
 
-                val viewW = previewView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
-                val viewH = previewView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
+                fun calculateAndDispatchFov(w: Float, h: Float) {
+                    if (w > 10f && h > 10f) {
+                        val dynamicFov = CameraFovCalculator.computeEffectiveHorizontalFov(
+                            sensorWidthMm = sensorSize?.width,
+                            sensorHeightMm = sensorSize?.height,
+                            focalLengthMm = primaryFocalLength,
+                            viewportWidth = w,
+                            viewportHeight = h,
+                            isPortrait = isPortrait,
+                        )
+                        onFovCalculated(dynamicFov)
+                    }
+                }
 
-                val dynamicFov = CameraFovCalculator.computeEffectiveHorizontalFov(
-                    sensorWidthMm = sensorSize?.width,
-                    sensorHeightMm = sensorSize?.height,
-                    focalLengthMm = focalLength,
-                    viewportWidth = viewW,
-                    viewportHeight = viewH,
-                    isPortrait = isPortrait,
-                )
-                onFovCalculated(dynamicFov)
+                val initialW = previewView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
+                val initialH = previewView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
+                calculateAndDispatchFov(initialW, initialH)
+
+                // Listen for real layout dimensions to guarantee exact optical crop ratio matching screen geometry
+                previewView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                    val newW = (right - left).toFloat()
+                    val newH = (bottom - top).toFloat()
+                    val oldW = (oldRight - oldLeft).toFloat()
+                    val oldH = (oldBottom - oldTop).toFloat()
+                    if (newW > 10f && newH > 10f && (newW != oldW || newH != oldH)) {
+                        calculateAndDispatchFov(newW, newH)
+                    }
+                }
             } catch (_: Exception) {
             }
         }, ContextCompat.getMainExecutor(context))

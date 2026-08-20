@@ -3,6 +3,7 @@ package com.dazix.intervalometer.ui.solar
 import android.Manifest
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -105,19 +106,13 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
-// Normal Color Palette
+// High-Contrast Solar Color Palette
 private val NormalGoldSolar = Color(0xFFFFB300)
 private val NormalSunrise = Color(0xFFFF7043)
 private val NormalSunset = Color(0xFFE64A19)
 private val NormalHorizon = Color(0xDD4DD0E1)
 private val NormalGrid = Color(0x664DD0E1)
 private val NormalNightArc = Color(0x44FFB300)
-
-// Red Vision (Astrophotography Night Mode) Palette
-private val RedPrimary = Color(0xFFFF1744)
-private val RedSecondary = Color(0xFFB71C1C)
-private val RedGrid = Color(0x66B71C1C)
-private val RedNightArc = Color(0x33FF1744)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -207,7 +202,6 @@ fun SunArScreen(
                 fovHorizontalDegrees = uiState.cameraFovHorizontal,
                 trajectory = uiState.trajectory,
                 currentSunPos = uiState.currentSunPosition,
-                redVisionMode = uiState.redVisionMode,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -215,7 +209,6 @@ fun SunArScreen(
             CameraPermissionPrompt(
                 onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                 onBack = onBack,
-                redVisionMode = uiState.redVisionMode,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -228,12 +221,17 @@ fun SunArScreen(
             cameraFovHorizontal = uiState.cameraFovHorizontal,
             azimuthOffset = uiState.azimuthOffsetDegrees,
             keepScreenOn = uiState.keepScreenOn,
-            redVisionMode = uiState.redVisionMode,
             onBack = onBack,
             onToggleInfo = { showInfoSheet = !showInfoSheet },
-            onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
-            onToggleRedVision = viewModel::toggleRedVisionMode,
-            onResetCalibration = viewModel::resetAzimuthOffset,
+            onToggleKeepScreenOn = {
+                val nextState = !uiState.keepScreenOn
+                showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                viewModel.toggleKeepScreenOn()
+            },
+            onResetCalibration = {
+                showResetToast(context)
+                viewModel.resetAzimuthOffset()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
@@ -257,11 +255,16 @@ fun SunArScreen(
                 SunTimesInfoCard(
                     trajectory = uiState.trajectory,
                     keepScreenOn = uiState.keepScreenOn,
-                    redVisionMode = uiState.redVisionMode,
                     azimuthOffset = uiState.azimuthOffsetDegrees,
-                    onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
-                    onToggleRedVision = viewModel::toggleRedVisionMode,
-                    onResetCalibration = viewModel::resetAzimuthOffset,
+                    onToggleKeepScreenOn = {
+                        val nextState = !uiState.keepScreenOn
+                        showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                        viewModel.toggleKeepScreenOn()
+                    },
+                    onResetCalibration = {
+                        showResetToast(context)
+                        viewModel.resetAzimuthOffset()
+                    },
                     onClose = { showInfoSheet = false },
                 )
             }
@@ -270,7 +273,6 @@ fun SunArScreen(
             DateNavigatorBar(
                 selectedDate = uiState.selectedDate,
                 isToday = uiState.isToday,
-                redVisionMode = uiState.redVisionMode,
                 onPrevDay = viewModel::prevDay,
                 onNextDay = viewModel::nextDay,
                 onToday = viewModel::setToday,
@@ -330,7 +332,6 @@ private fun SkyDomeOverlayCanvas(
     fovHorizontalDegrees: Float,
     trajectory: SolarTrajectory,
     currentSunPos: com.dazix.intervalometer.domain.solar.SolarCoordinates?,
-    redVisionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val zenithLabel = stringResource(R.string.sun_ar_zenith)
@@ -348,7 +349,7 @@ private fun SkyDomeOverlayCanvas(
 
     val renderer = remember { SkyDomeRenderer() }
     renderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
-    renderer.applyTheme(redVisionMode)
+    renderer.applyTheme(redVisionMode = false)
 
     Canvas(modifier = modifier) {
         if (orientation == null) return@Canvas
@@ -367,19 +368,17 @@ private fun SkyDomeOverlayCanvas(
         renderer.pointerBorderPaint.strokeWidth = 1.2.dp.toPx()
 
         // 1. Draw Horizon Ring (0° elevation), Cardinal Points, Altitude Grid (+30°, +60°), Zenith and Nadir
-        renderer.drawSkyDomeGrid(this, matrix, displayRotation, fovHorizontalDegrees, redVisionMode, w, h)
+        renderer.drawSkyDomeGrid(this, matrix, displayRotation, fovHorizontalDegrees, redVisionMode = false, w, h)
 
         // 2. Draw Solar Trajectory Path across the Dome (Solid down to -15° for real terrain visibility)
-        drawSolarTrajectoryArc(renderer, matrix, displayRotation, fovHorizontalDegrees, trajectory, redVisionMode, w, h)
+        drawSolarTrajectoryArc(renderer, matrix, displayRotation, fovHorizontalDegrees, trajectory, w, h)
 
         // 3. Draw Time Bubbles along the Trajectory (Down to -15° for sunset behind mountains)
         drawTimeBubbles(renderer, trajectory.timeBubbles, matrix, displayRotation, fovHorizontalDegrees, w, h)
 
         // 4. Draw Sunrise and Sunset Horizon Badges
-        val sunriseColor = if (redVisionMode) RedPrimary else NormalSunrise
-        val sunsetColor = if (redVisionMode) RedPrimary else NormalSunset
-        trajectory.sunriseMarker?.let { drawMarker(renderer, it, sunriseColor, matrix, displayRotation, fovHorizontalDegrees, w, h, "🌅") }
-        trajectory.sunsetMarker?.let { drawMarker(renderer, it, sunsetColor, matrix, displayRotation, fovHorizontalDegrees, w, h, "🌇") }
+        trajectory.sunriseMarker?.let { drawMarker(renderer, it, NormalSunrise, matrix, displayRotation, fovHorizontalDegrees, w, h, "🌅") }
+        trajectory.sunsetMarker?.let { drawMarker(renderer, it, NormalSunset, matrix, displayRotation, fovHorizontalDegrees, w, h, "🌇") }
 
         // 5. Draw Live Sun or Off-Screen Sun Icon with Pointer Arrow
         if (currentSunPos != null) {
@@ -398,7 +397,7 @@ private fun SkyDomeOverlayCanvas(
             val isVisible = sunInFront && (sx in 0f..w) && (sy in 0f..h)
 
             if (isVisible) {
-                drawMinimalistLiveSun(sx, sy, redVisionMode)
+                drawMinimalistLiveSun(sx, sy)
             } else {
                 // Sun is not in view: draw small Sun Icon with directional Pointer Arrow to its position
                 drawOffscreenSunPointer(
@@ -408,7 +407,6 @@ private fun SkyDomeOverlayCanvas(
                     rawElevation = currentSunPos.elevationDegrees,
                     matrix = matrix,
                     displayRotation = displayRotation,
-                    redVisionMode = redVisionMode,
                     w = w,
                     h = h,
                 )
@@ -423,12 +421,11 @@ private fun DrawScope.drawSolarTrajectoryArc(
     displayRotation: Int,
     fovH: Float,
     trajectory: SolarTrajectory,
-    redVisionMode: Boolean,
     w: Float,
     h: Float,
 ) {
-    val solarColor = if (redVisionMode) RedPrimary else NormalGoldSolar
-    val nightArcColor = if (redVisionMode) RedNightArc else NormalNightArc
+    val solarColor = NormalGoldSolar
+    val nightArcColor = NormalNightArc
     val pts = trajectory.pathPoints
     val count = minOf(pts.size, renderer.pathBuffer.size / 3)
 
@@ -615,9 +612,9 @@ private fun DrawScope.drawMarker(
     }
 }
 
-private fun DrawScope.drawMinimalistLiveSun(x: Float, y: Float, redVisionMode: Boolean) {
-    val sunColor = if (redVisionMode) RedPrimary else NormalGoldSolar
-    val coreColor = if (redVisionMode) Color(0xFFFF8A80) else Color.White
+private fun DrawScope.drawMinimalistLiveSun(x: Float, y: Float) {
+    val sunColor = NormalGoldSolar
+    val coreColor = Color.White
 
     // Strict minimalist disk: clean circle with border, no glowing corona
     drawCircle(
@@ -645,7 +642,6 @@ private fun DrawScope.drawOffscreenSunPointer(
     rawElevation: Double,
     matrix: FloatArray,
     displayRotation: Int,
-    redVisionMode: Boolean,
     w: Float,
     h: Float,
 ) {
@@ -716,8 +712,8 @@ private fun DrawScope.drawOffscreenSunPointer(
     val edgeX = (cx + dirX * t).coerceIn(marginX, w - marginX)
     val edgeY = (cy + dirY * t).coerceIn(marginTop, h - marginBottom)
 
-    val sunColor = if (redVisionMode) RedPrimary else NormalGoldSolar
-    val coreColor = if (redVisionMode) Color(0xFFFF8A80) else Color.White
+    val sunColor = NormalGoldSolar
+    val coreColor = Color.White
 
     // 3. Draw Small Sun Icon (Central circle + 8 radiating vector rays)
     val sunRadius = 6.5.dp.toPx()
@@ -828,19 +824,17 @@ private fun SunArTopBar(
     cameraFovHorizontal: Float,
     azimuthOffset: Float,
     keepScreenOn: Boolean,
-    redVisionMode: Boolean,
     onBack: () -> Unit,
     onToggleInfo: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
-    onToggleRedVision: () -> Unit,
     onResetCalibration: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerBg = if (redVisionMode) Color(0xF0120000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) Color(0x66FF1744) else Color(0x33FFFFFF)
-    val accentColor = if (redVisionMode) RedPrimary else NormalGoldSolar
-    val textColor = if (redVisionMode) RedPrimary else Color.White
-    val subTextColor = if (redVisionMode) Color(0xCCFF5252) else Color(0xCCFFFFFF)
+    val containerBg = Color(0xDD1A1A1A)
+    val containerBorder = Color(0x33FFFFFF)
+    val accentColor = NormalGoldSolar
+    val textColor = Color.White
+    val subTextColor = Color(0xCCFFFFFF)
 
     Row(
         modifier = modifier
@@ -876,9 +870,7 @@ private fun SunArTopBar(
                     modifier = Modifier
                         .size(6.dp)
                         .background(
-                            if (redVisionMode) RedPrimary
-                            else if (hasGpsFix) Color(0xFF66BB6A)
-                            else Color(0xFFFFCA28),
+                            if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28),
                             CircleShape
                         )
                 )
@@ -942,18 +934,6 @@ private fun SunArTopBar(
             }
         }
 
-        // Red Vision Mode Toggle
-        IconButton(
-            onClick = onToggleRedVision,
-            modifier = Modifier.size(38.dp)
-        ) {
-            Icon(
-                imageVector = AppIcons.RedVision,
-                contentDescription = stringResource(R.string.sun_ar_red_vision),
-                tint = if (redVisionMode) RedPrimary else Color.White.copy(alpha = 0.4f),
-            )
-        }
-
         // Keep Screen On Toggle
         IconButton(
             onClick = onToggleKeepScreenOn,
@@ -984,7 +964,6 @@ private fun SunArTopBar(
 private fun DateNavigatorBar(
     selectedDate: LocalDate,
     isToday: Boolean,
-    redVisionMode: Boolean,
     onPrevDay: () -> Unit,
     onNextDay: () -> Unit,
     onToday: () -> Unit,
@@ -994,10 +973,10 @@ private fun DateNavigatorBar(
         DateTimeFormatter.ofPattern("EEE d. MMM", Locale.getDefault())
     }
 
-    val containerBg = if (redVisionMode) Color(0xF0120000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) Color(0x66FF1744) else Color(0x33FFFFFF)
-    val accentColor = if (redVisionMode) RedPrimary else NormalGoldSolar
-    val textColor = if (redVisionMode) RedPrimary else Color.White
+    val containerBg = Color(0xDD1A1A1A)
+    val containerBorder = Color(0x33FFFFFF)
+    val accentColor = NormalGoldSolar
+    val textColor = Color.White
 
     Row(
         modifier = Modifier
@@ -1040,11 +1019,7 @@ private fun DateNavigatorBar(
             FilledTonalButton(
                 onClick = onToday,
                 shape = CircleShape,
-                colors = if (redVisionMode) {
-                    ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFF330000), contentColor = RedPrimary)
-                } else {
-                    ButtonDefaults.filledTonalButtonColors()
-                },
+                colors = ButtonDefaults.filledTonalButtonColors(),
                 modifier = Modifier.height(32.dp),
             ) {
                 Text(stringResource(R.string.sun_ar_today), style = MaterialTheme.typography.labelSmall)
@@ -1068,21 +1043,19 @@ private fun DateNavigatorBar(
 private fun SunTimesInfoCard(
     trajectory: SolarTrajectory,
     keepScreenOn: Boolean,
-    redVisionMode: Boolean,
     azimuthOffset: Float,
     onToggleKeepScreenOn: () -> Unit,
-    onToggleRedVision: () -> Unit,
     onResetCalibration: () -> Unit,
     onClose: () -> Unit,
 ) {
     val dayTimes = trajectory.dayTimes
-    val containerBg = if (redVisionMode) Color(0xF8150000) else Color(0xF2181818)
-    val cardBorder = if (redVisionMode) Color(0x66FF1744) else Color(0x33FFFFFF)
-    val titleColor = if (redVisionMode) RedPrimary else Color.White
-    val subColor = if (redVisionMode) Color(0xCCFF5252) else Color.White.copy(alpha = 0.6f)
-    val sunriseColor = if (redVisionMode) RedPrimary else NormalSunrise
-    val sunsetColor = if (redVisionMode) RedPrimary else NormalSunset
-    val noonColor = if (redVisionMode) RedPrimary else NormalGoldSolar
+    val containerBg = Color(0xF2181818)
+    val cardBorder = Color(0x33FFFFFF)
+    val titleColor = Color.White
+    val subColor = Color.White.copy(alpha = 0.6f)
+    val sunriseColor = NormalSunrise
+    val sunsetColor = NormalSunset
+    val noonColor = NormalGoldSolar
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1159,43 +1132,6 @@ private fun SunTimesInfoCard(
                 textAlign = TextAlign.Center,
             )
 
-            // Red Vision Mode switch row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onToggleRedVision() }
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.sun_ar_red_vision),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = stringResource(R.string.sun_ar_red_vision_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                    )
-                }
-                Switch(
-                    checked = redVisionMode,
-                    onCheckedChange = { onToggleRedVision() },
-                    colors = if (redVisionMode) {
-                        SwitchDefaults.colors(
-                            checkedThumbColor = RedPrimary,
-                            checkedTrackColor = Color(0xFF550000),
-                        )
-                    } else {
-                        SwitchDefaults.colors()
-                    }
-                )
-            }
-
             // Keep screen on switch row
             Row(
                 modifier = Modifier
@@ -1222,14 +1158,7 @@ private fun SunTimesInfoCard(
                 Switch(
                     checked = keepScreenOn,
                     onCheckedChange = { onToggleKeepScreenOn() },
-                    colors = if (redVisionMode) {
-                        SwitchDefaults.colors(
-                            checkedThumbColor = RedPrimary,
-                            checkedTrackColor = Color(0xFF550000),
-                        )
-                    } else {
-                        SwitchDefaults.colors()
-                    }
+                    colors = SwitchDefaults.colors(),
                 )
             }
 
@@ -1256,7 +1185,7 @@ private fun SunTimesInfoCard(
                     TextButton(onClick = onResetCalibration) {
                         Text(
                             text = stringResource(R.string.sun_ar_calib_reset),
-                            color = if (redVisionMode) RedPrimary else NormalGoldSolar,
+                            color = NormalGoldSolar,
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
@@ -1281,12 +1210,11 @@ private fun InfoItem(label: String, value: String, sub: String, color: Color, su
 private fun CameraPermissionPrompt(
     onRequestPermission: () -> Unit,
     onBack: () -> Unit,
-    redVisionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
-        color = if (redVisionMode) Color(0xFF100000) else MaterialTheme.colorScheme.background,
+        color = MaterialTheme.colorScheme.background,
     ) {
         Column(
             modifier = Modifier
@@ -1298,28 +1226,28 @@ private fun CameraPermissionPrompt(
             Icon(
                 imageVector = AppIcons.Sun,
                 contentDescription = null,
-                tint = if (redVisionMode) RedPrimary else MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(64.dp),
             )
             Spacer(Modifier.height(16.dp))
             Text(
                 text = stringResource(R.string.sun_ar_camera_permission_title),
                 style = MaterialTheme.typography.headlineSmall,
-                color = if (redVisionMode) RedPrimary else Color.Unspecified,
+                color = Color.Unspecified,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.sun_ar_camera_permission_desc),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (redVisionMode) Color(0xCCFF5252) else LocalContentColor.current.copy(alpha = 0.75f),
+                color = LocalContentColor.current.copy(alpha = 0.75f),
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = onRequestPermission,
                 shape = CircleShape,
-                colors = if (redVisionMode) ButtonDefaults.buttonColors(containerColor = RedPrimary) else ButtonDefaults.buttonColors()
+                colors = ButtonDefaults.buttonColors()
             ) {
                 Text(stringResource(R.string.sun_ar_camera_grant))
             }
@@ -1332,4 +1260,13 @@ private fun CameraPermissionPrompt(
             }
         }
     }
+}
+
+private fun showToggleToast(context: Context, label: String, enabled: Boolean) {
+    val state = context.getString(if (enabled) R.string.state_on else R.string.state_off)
+    Toast.makeText(context, "$label: $state", Toast.LENGTH_SHORT).show()
+}
+
+private fun showResetToast(context: Context) {
+    Toast.makeText(context, context.getString(R.string.calib_reset_toast), Toast.LENGTH_SHORT).show()
 }

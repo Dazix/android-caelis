@@ -34,7 +34,6 @@ data class SunArUiState(
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
     val keepScreenOn: Boolean = false,
-    val redVisionMode: Boolean = false,
     val azimuthOffsetDegrees: Float = 0.0f,
     val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
     val trajectory: SolarTrajectory = SolarTrajectoryPlanner.planTrajectory(
@@ -73,21 +72,6 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
-    private val isNightState = MutableStateFlow(
-        SolarPositionCalculator.isNight(Instant.now(), locationProvider.location.value)
-    )
-    val isNight: StateFlow<Boolean> = isNightState.asStateFlow()
-
-    private val manualRedVisionOverride = MutableStateFlow<Boolean?>(null)
-
-    val redVisionMode: StateFlow<Boolean> = combine(isNightState, manualRedVisionOverride) { night, override ->
-        override ?: night
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        false,
-    )
-
     val azimuthOffsetDegrees: StateFlow<Float> = settingsStore.sunArAzimuthOffset.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -119,7 +103,6 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         trajectory,
         currentSunPosState,
         keepScreenOn,
-        redVisionMode,
         azimuthOffsetDegrees,
         cameraFovState,
     ) { args: Array<Any?> ->
@@ -130,9 +113,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val traj = args[4] as SolarTrajectory
         val sunPos = args[5] as SolarCoordinates
         val keepOn = args[6] as Boolean
-        val redMode = args[7] as Boolean
-        val azOffset = args[8] as Float
-        val fov = args[9] as Float
+        val azOffset = args[7] as Float
+        val fov = args[8] as Float
         SunArUiState(
             selectedDate = date,
             isToday = date == LocalDate.now(),
@@ -140,7 +122,6 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             location = loc,
             hasGpsFix = gps,
             keepScreenOn = keepOn,
-            redVisionMode = redMode,
             azimuthOffsetDegrees = azOffset,
             cameraFovHorizontal = fov,
             trajectory = traj,
@@ -172,7 +153,6 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
                 val targetInstant = date.atTime(localTime).atZone(ZoneId.systemDefault()).toInstant()
                 currentSunPosState.value = SolarPositionCalculator.computePosition(targetInstant, loc)
-                isNightState.value = SolarPositionCalculator.isNight(now, loc)
                 delay(2000L)
             }
         }
@@ -199,19 +179,6 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             settingsStore.saveSunArAzimuthOffset(0.0f)
         }
-    }
-
-    fun toggleRedVisionMode() {
-        val currentActive = manualRedVisionOverride.value ?: isNightState.value
-        manualRedVisionOverride.value = !currentActive
-    }
-
-    fun setRedVisionMode(enabled: Boolean) {
-        manualRedVisionOverride.value = enabled
-    }
-
-    fun resetRedVisionToAuto() {
-        manualRedVisionOverride.value = null
     }
 
     fun startSensors() {
