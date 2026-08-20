@@ -1,15 +1,22 @@
 package com.dazix.intervalometer.ui.nightsky
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.graphics.RuntimeShader
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.view.Surface
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import com.dazix.intervalometer.ar.SkyDomeRenderer
 import com.dazix.intervalometer.data.nightsky.Constellation
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
+import com.dazix.intervalometer.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.intervalometer.domain.nightsky.EquatorialCoordinates
 import com.dazix.intervalometer.domain.nightsky.StarFrustumCulling
 import kotlin.math.tan
@@ -19,10 +26,26 @@ import kotlin.math.tan
  *
  * Directly indexes Google FlatBuffers contiguous binary memory pools without object instantiations.
  * Renders stars in batch via [android.graphics.Canvas.drawPoints] and constellation line networks via [android.graphics.Canvas.drawLines].
+ * Renders background layers (Opaque Sky & Milky Way) using hardware-accelerated AGSL [android.graphics.RuntimeShader].
  */
 class NightSkyRenderer {
 
     val skyDomeRenderer = SkyDomeRenderer()
+
+    // Pre-allocated AGSL ViewMatrix uniform buffer (3x3 column-major)
+    private val matrixBuffer = FloatArray(9)
+    private var textureWidth = 2048f
+    private var textureHeight = 1024f
+    private var hasTexture = false
+
+    private val opaqueColorNormal = Color(0xFF050810)
+    private val opaqueColorRed = Color(0xFF080000)
+
+    val runtimeShader: RuntimeShader? = runCatching {
+        RuntimeShader(MilkyWayShader.SRC)
+    }.getOrNull()
+
+    val shaderBrush: ShaderBrush? = runtimeShader?.let { ShaderBrush(it) }
 
     private val maxStars = 4096
     private val tier1Points = FloatArray(maxStars * 2)
@@ -99,6 +122,67 @@ class NightSkyRenderer {
         tier2Paint.strokeWidth = tier2Px
         tier3Paint.strokeWidth = tier3Px
         constellationPaint.strokeWidth = constellationPx
+    }
+
+    /**
+     * Binds the Milky Way equirectangular WebP texture to the AGSL RuntimeShader.
+     */
+    fun setMilkyWayBitmap(bitmap: Bitmap) {
+        if (runtimeShader != null) {
+            val bitmapShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+            runtimeShader.setInputShader("milkyWayTexture", bitmapShader)
+            textureWidth = bitmap.width.toFloat()
+            textureHeight = bitmap.height.toFloat()
+            hasTexture = true
+        }
+    }
+
+    /**
+     * Renders background layers:
+     * - Layer 0: Opaque Sky Background (Planetarium Mode #050810 / #080000)
+     * - Layer 1: Hardware-Accelerated AGSL Milky Way Ray-Casting Shader
+     *
+     * 100% Zero heap allocations per frame.
+     */
+    fun drawSkyBackground(
+        drawScope: DrawScope,
+        matrix: FloatArray,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        displayRotation: Int,
+        fovHorizontalDegrees: Float,
+        w: Float,
+        h: Float,
+        isSkyBackgroundOpaque: Boolean,
+        isMilkyWayVisible: Boolean,
+        isRedVision: Boolean,
+    ) {
+        // Layer 0: Opaque Sky Background
+        if (isSkyBackgroundOpaque) {
+            drawScope.drawRect(color = if (isRedVision) opaqueColorRed else opaqueColorNormal)
+        }
+
+        // Layer 1: Hardware-Accelerated AGSL Milky Way Shader
+        if (isMilkyWayVisible && hasTexture && runtimeShader != null && shaderBrush != null && matrix.size >= 16) {
+            val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
+            val fovFactor = 1.0f / tan(halfFovHRad)
+
+            CelestialMatrixCalculator.computeViewMatrix(
+                sensorMatrix16 = matrix,
+                lstDegrees = lstDegrees,
+                latitudeDegrees = latitudeDegrees,
+                displayRotation = displayRotation,
+                outMatrix9 = matrixBuffer,
+            )
+
+            runtimeShader.setFloatUniform("resolution", w, h)
+            runtimeShader.setFloatUniform("textureSize", textureWidth, textureHeight)
+            runtimeShader.setFloatUniform("viewMatrix", matrixBuffer)
+            runtimeShader.setFloatUniform("fovFactor", fovFactor)
+            runtimeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+
+            drawScope.drawRect(brush = shaderBrush)
+        }
     }
 
     /**

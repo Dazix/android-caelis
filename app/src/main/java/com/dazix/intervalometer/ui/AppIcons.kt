@@ -389,6 +389,65 @@ object AppIcons {
         }
     }
 
+    /** MilkyWay: galactic core and spiral nebular arms. */
+    val MilkyWay: ImageVector by lazy {
+        icon("MilkyWay") {
+            strokePath {
+                // Outer elliptical spiral orbit
+                moveTo(3.6f, 15.6f)
+                curveTo(2.4f, 10.8f, 6.2f, 5.2f, 12f, 4.4f)
+                curveTo(17.8f, 3.6f, 21.6f, 8.4f, 20.4f, 13.2f)
+                curveTo(19.2f, 17.6f, 14.8f, 20.4f, 9.8f, 19.6f)
+                // Inner galactic swirl
+                moveTo(8.5f, 14.2f)
+                curveTo(7.8f, 11.4f, 9.6f, 8.4f, 13.2f, 8.0f)
+                curveTo(16.4f, 7.6f, 17.8f, 10.4f, 16.6f, 13.4f)
+            }
+            fillPath {
+                // Radiant galactic nucleus
+                circle(centerX = 12.6f, centerY = 11.8f, radius = 2.0f)
+            }
+        }
+    }
+
+    /** Planetarium: opaque celestial dome / sky vault. */
+    val Planetarium: ImageVector by lazy {
+        icon("Planetarium") {
+            strokePath {
+                // Horizon baseline
+                moveTo(3.0f, 18.5f)
+                lineTo(21.0f, 18.5f)
+                // Half-dome arc
+                moveTo(4.2f, 18.5f)
+                arcTo(7.8f, 7.8f, 0f, false, true, 19.8f, 18.5f)
+                // Dome zenith finial / compass needle
+                moveTo(12.0f, 6.0f)
+                lineTo(12.0f, 10.5f)
+            }
+            fillPath {
+                circle(centerX = 12.0f, centerY = 4.8f, radius = 1.2f)
+            }
+        }
+    }
+
+    /** Constellation: connected stellar nodes / stick figures. */
+    val Constellation: ImageVector by lazy {
+        icon("Constellation") {
+            strokePath {
+                moveTo(5.2f, 16.8f)
+                lineTo(9.6f, 9.2f)
+                lineTo(16.4f, 12.4f)
+                lineTo(19.2f, 5.6f)
+            }
+            fillPath {
+                circle(centerX = 5.2f, centerY = 16.8f, radius = 2.0f)
+                circle(centerX = 9.6f, centerY = 9.2f, radius = 2.0f)
+                circle(centerX = 16.4f, centerY = 12.4f, radius = 2.0f)
+                circle(centerX = 19.2f, centerY = 5.6f, radius = 2.0f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

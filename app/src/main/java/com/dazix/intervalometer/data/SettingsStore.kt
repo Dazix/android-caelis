@@ -62,6 +62,12 @@ class SettingsStore(context: Context) {
 
     val nightSkyAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readNightSkyAzimuthOffset(it) }
 
+    val nightSkyOpaqueBackground: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyOpaqueBackground(it) }
+
+    val nightSkyMilkyWayVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyMilkyWayVisible(it) }
+
+    val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
+
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeSunArKeepScreenOn(it, enabled) }
     }
@@ -84,6 +90,18 @@ class SettingsStore(context: Context) {
 
     suspend fun saveNightSkyAzimuthOffset(offsetDeg: Float) {
         dataStore.edit { SettingsMapping.writeNightSkyAzimuthOffset(it, offsetDeg) }
+    }
+
+    suspend fun saveNightSkyOpaqueBackground(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyOpaqueBackground(it, enabled) }
+    }
+
+    suspend fun saveNightSkyMilkyWayVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyMilkyWayVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyConstellationsVisible(it, enabled) }
     }
 
     suspend fun saveConfig(config: SessionConfig) {
@@ -163,6 +181,9 @@ internal object SettingsMapping {
     private val NIGHT_SKY_KEEP_SCREEN_ON = booleanPreferencesKey("night_sky_keep_screen_on")
     private val NIGHT_SKY_RED_VISION_MODE = booleanPreferencesKey("night_sky_red_vision_mode")
     private val NIGHT_SKY_AZIMUTH_OFFSET = floatPreferencesKey("night_sky_azimuth_offset")
+    private val NIGHT_SKY_OPAQUE_BACKGROUND = booleanPreferencesKey("night_sky_opaque_background")
+    private val NIGHT_SKY_MILKY_WAY_VISIBLE = booleanPreferencesKey("night_sky_milky_way_visible")
+    private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -384,6 +405,27 @@ internal object SettingsMapping {
 
     fun writeNightSkyAzimuthOffset(prefs: MutablePreferences, offsetDeg: Float) {
         prefs[NIGHT_SKY_AZIMUTH_OFFSET] = offsetDeg
+    }
+
+    fun readNightSkyOpaqueBackground(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_OPAQUE_BACKGROUND] ?: false
+
+    fun writeNightSkyOpaqueBackground(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_OPAQUE_BACKGROUND] = enabled
+    }
+
+    fun readNightSkyMilkyWayVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_MILKY_WAY_VISIBLE] ?: true
+
+    fun writeNightSkyMilkyWayVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_MILKY_WAY_VISIBLE] = enabled
+    }
+
+    fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_CONSTELLATIONS_VISIBLE] ?: true
+
+    fun writeNightSkyConstellationsVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_CONSTELLATIONS_VISIBLE] = enabled
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

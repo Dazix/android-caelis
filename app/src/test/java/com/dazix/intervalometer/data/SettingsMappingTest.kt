@@ -339,6 +339,42 @@ class SettingsMappingTest {
         assertEquals(-4.5f, SettingsMapping.readNightSkyAzimuthOffset(prefs), 0.001f)
     }
 
+    @Test
+    fun `night sky opaque background defaults to false and survives round trip`() {
+        assertFalse(SettingsMapping.readNightSkyOpaqueBackground(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyOpaqueBackground(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyOpaqueBackground(prefs))
+
+        SettingsMapping.writeNightSkyOpaqueBackground(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyOpaqueBackground(prefs))
+    }
+
+    @Test
+    fun `night sky milky way visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyMilkyWayVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyMilkyWayVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyMilkyWayVisible(prefs))
+
+        SettingsMapping.writeNightSkyMilkyWayVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyMilkyWayVisible(prefs))
+    }
+
+    @Test
+    fun `night sky constellations visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyConstellationsVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyConstellationsVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyConstellationsVisible(prefs))
+
+        SettingsMapping.writeNightSkyConstellationsVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyConstellationsVisible(prefs))
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

@@ -1,6 +1,8 @@
 package com.dazix.intervalometer.ui.nightsky
 
 import android.Manifest
+import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -59,6 +61,8 @@ import com.dazix.intervalometer.domain.nightsky.StarCatalog
 import com.dazix.intervalometer.service.DisplayGeometry
 import com.dazix.intervalometer.ui.AppIcons
 import com.dazix.intervalometer.ui.Permissions
+
+import android.graphics.BitmapFactory
 
 @Composable
 fun NightSkyArScreen(
@@ -119,8 +123,6 @@ fun NightSkyArScreen(
         displayRotation == android.view.Surface.ROTATION_180
 
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
-    val primaryColor = if (uiState.redVisionMode) RedPrimary else Color(0xFFE0E0E0)
-    val accentColor = if (uiState.redVisionMode) RedSecondary else Color(0xFF4DD0E1)
 
     Box(
         modifier = Modifier
@@ -135,7 +137,7 @@ fun NightSkyArScreen(
             }
     ) {
         if (hasCameraPermission) {
-            // Live Camera Viewport
+            // Live Camera Viewport (rendered underneath AR overlay)
             CameraPreview(
                 modifier = Modifier.fillMaxSize(),
                 lifecycleOwner = lifecycleOwner,
@@ -143,7 +145,7 @@ fun NightSkyArScreen(
                 onFovCalculated = viewModel::setCameraFov,
             )
 
-            // 3D Night Sky AR Overlay Canvas
+            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way and Opaque Sky Dome layers
             NightSkyOverlayCanvas(
                 orientation = orientation,
                 displayRotation = displayRotation,
@@ -152,6 +154,9 @@ fun NightSkyArScreen(
                 lstDegrees = uiState.lstDegrees,
                 latitudeDegrees = uiState.location.latitude,
                 redVisionMode = uiState.redVisionMode,
+                isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isConstellationsVisible = uiState.isConstellationsVisible,
                 onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -178,26 +183,71 @@ fun NightSkyArScreen(
             keepScreenOn = uiState.keepScreenOn,
             redVisionMode = uiState.redVisionMode,
             onBack = onBack,
-            onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
-            onToggleRedVision = viewModel::toggleRedVisionMode,
-            onResetCalibration = viewModel::resetAzimuthOffset,
+            onToggleKeepScreenOn = {
+                val nextState = !uiState.keepScreenOn
+                showToggleToast(context, context.getString(R.string.sun_ar_keep_screen_on), nextState)
+                viewModel.toggleKeepScreenOn()
+            },
+            onToggleRedVision = {
+                val nextState = !uiState.redVisionMode
+                showToggleToast(context, context.getString(R.string.sun_ar_red_vision), nextState)
+                viewModel.toggleRedVisionMode()
+            },
+            onResetCalibration = {
+                showResetToast(context)
+                viewModel.resetAzimuthOffset()
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .padding(top = 36.dp, start = 12.dp, end = 12.dp),
         )
 
-        // Bottom HUD Indicator Chips (Utilitarian & Perfectly Round)
-        NightSkyBottomHud(
-            lstFormatted = uiState.lstFormatted,
-            visibleStarCount = uiState.visibleStarCount,
-            totalStarCount = uiState.totalStarCount,
-            azimuthOffset = uiState.azimuthOffsetDegrees,
-            redVisionMode = uiState.redVisionMode,
+        // Bottom Controls: Action Dock & HUD Indicator Chips
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 28.dp, start = 16.dp, end = 16.dp),
-        )
+                .padding(bottom = 24.dp, start = 12.dp, end = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Expressive Action Dock (Planetarium, Milky Way, Constellations, Reset)
+            NightSkyActionDock(
+                isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isConstellationsVisible = uiState.isConstellationsVisible,
+                redVisionMode = uiState.redVisionMode,
+                azimuthOffset = uiState.azimuthOffsetDegrees,
+                onToggleSkyBackgroundOpaque = {
+                    val nextState = !uiState.isSkyBackgroundOpaque
+                    showToggleToast(context, context.getString(R.string.night_sky_opaque_bg), nextState)
+                    viewModel.toggleSkyBackgroundOpaque()
+                },
+                onToggleMilkyWayVisible = {
+                    val nextState = !uiState.isMilkyWayVisible
+                    showToggleToast(context, context.getString(R.string.night_sky_milky_way), nextState)
+                    viewModel.toggleMilkyWayVisible()
+                },
+                onToggleConstellationsVisible = {
+                    val nextState = !uiState.isConstellationsVisible
+                    showToggleToast(context, context.getString(R.string.night_sky_constellations), nextState)
+                    viewModel.toggleConstellationsVisible()
+                },
+                onResetCalibration = {
+                    showResetToast(context)
+                    viewModel.resetAzimuthOffset()
+                },
+            )
+
+            // Bottom HUD (LST & Visible Stars)
+            NightSkyBottomHud(
+                lstFormatted = uiState.lstFormatted,
+                visibleStarCount = uiState.visibleStarCount,
+                totalStarCount = uiState.totalStarCount,
+                azimuthOffset = uiState.azimuthOffsetDegrees,
+                redVisionMode = uiState.redVisionMode,
+            )
+        }
     }
 }
 
@@ -210,9 +260,13 @@ private fun NightSkyOverlayCanvas(
     lstDegrees: Double,
     latitudeDegrees: Double,
     redVisionMode: Boolean,
+    isSkyBackgroundOpaque: Boolean,
+    isMilkyWayVisible: Boolean,
+    isConstellationsVisible: Boolean,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val zenithLabel = stringResource(R.string.sun_ar_zenith)
     val nadirLabel = stringResource(R.string.sun_ar_nadir)
     val cardinalLabels = arrayOf(
@@ -226,9 +280,21 @@ private fun NightSkyOverlayCanvas(
         stringResource(R.string.sun_ar_cardinal_nw),
     )
 
+    val milkyWayBitmap = remember(context) {
+        try {
+            BitmapFactory.decodeResource(context.resources, R.drawable.milky_way_starless)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     val renderer = remember { NightSkyRenderer() }
     renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(redVisionMode)
+
+    LaunchedEffect(milkyWayBitmap) {
+        milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
+    }
 
     Canvas(modifier = modifier) {
         if (orientation == null) return@Canvas
@@ -245,7 +311,22 @@ private fun NightSkyOverlayCanvas(
             constellationPx = 1.8.dp.toPx(),
         )
 
-        // 1. Draw 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
+        // Layer 0 & Layer 1: Opaque Sky Dome background and hardware-accelerated AGSL Milky Way
+        renderer.drawSkyBackground(
+            drawScope = this,
+            matrix = matrix,
+            lstDegrees = lstDegrees,
+            latitudeDegrees = latitudeDegrees,
+            displayRotation = displayRotation,
+            fovHorizontalDegrees = fovHorizontalDegrees,
+            w = w,
+            h = h,
+            isSkyBackgroundOpaque = isSkyBackgroundOpaque,
+            isMilkyWayVisible = isMilkyWayVisible,
+            isRedVision = redVisionMode,
+        )
+
+        // Layer 2: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
         renderer.skyDomeRenderer.drawSkyDomeGrid(
             drawScope = this,
             matrix = matrix,
@@ -256,7 +337,7 @@ private fun NightSkyOverlayCanvas(
             h = h,
         )
 
-        // 2. Batch render all visible stars and constellation lines using FlatBuffers zero-allocation pipeline
+        // Layer 3: Batch render all visible stars and constellation lines using FlatBuffers zero-allocation pipeline
         val visibleCount = renderer.drawNightSky(
             drawScope = this,
             catalog = catalog,
@@ -267,7 +348,7 @@ private fun NightSkyOverlayCanvas(
             fovHorizontalDegrees = fovHorizontalDegrees,
             w = w,
             h = h,
-            showConstellations = true,
+            showConstellations = isConstellationsVisible,
         )
 
         onVisibleStarsUpdated(visibleCount)
@@ -558,3 +639,13 @@ private fun NightSkyPermissionPrompt(
         }
     }
 }
+
+private fun showToggleToast(context: Context, actionLabel: String, nextState: Boolean) {
+    val stateText = if (nextState) context.getString(R.string.state_on) else context.getString(R.string.state_off)
+    Toast.makeText(context, "$actionLabel: $stateText", Toast.LENGTH_SHORT).show()
+}
+
+private fun showResetToast(context: Context) {
+    Toast.makeText(context, context.getString(R.string.calib_reset_toast), Toast.LENGTH_SHORT).show()
+}
+

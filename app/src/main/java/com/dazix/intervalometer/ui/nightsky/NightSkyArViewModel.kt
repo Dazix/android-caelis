@@ -41,6 +41,9 @@ data class NightSkyArUiState(
     val visibleStarCount: Int = 0,
     val totalStarCount: Int = 0,
     val constellationsCount: Int = 0,
+    val isSkyBackgroundOpaque: Boolean = false,
+    val isMilkyWayVisible: Boolean = true,
+    val isConstellationsVisible: Boolean = true,
 )
 
 class NightSkyArViewModel(application: Application) : AndroidViewModel(application) {
@@ -92,6 +95,24 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         0.0f,
     )
 
+    val isSkyBackgroundOpaque: StateFlow<Boolean> = settingsStore.nightSkyOpaqueBackground.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false,
+    )
+
+    val isMilkyWayVisible: StateFlow<Boolean> = settingsStore.nightSkyMilkyWayVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
+    val isConstellationsVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationsVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     val uiState: StateFlow<NightSkyArUiState> = combine(
         locationProvider.location,
         locationProvider.hasGpsFix,
@@ -105,6 +126,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         lstFormattedState,
         visibleStarCountState,
         catalogState,
+        isSkyBackgroundOpaque,
+        isMilkyWayVisible,
+        isConstellationsVisible,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
         val gps = args[1] as Boolean
@@ -118,6 +142,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val lstFmt = args[9] as String
         val visibleStars = args[10] as Int
         val cat = args[11] as NightSkyCatalog?
+        val opaque = args[12] as Boolean
+        val milkyWay = args[13] as Boolean
+        val constellations = args[14] as Boolean
 
         NightSkyArUiState(
             location = loc,
@@ -133,6 +160,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             visibleStarCount = visibleStars,
             totalStarCount = cat?.starsLength() ?: 0,
             constellationsCount = cat?.constellationsLength() ?: 0,
+            isSkyBackgroundOpaque = opaque,
+            isMilkyWayVisible = milkyWay,
+            isConstellationsVisible = constellations,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -229,6 +259,36 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setKeepScreenOn(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyKeepScreenOn(enabled)
+        }
+    }
+
+    fun toggleSkyBackgroundOpaque() {
+        setSkyBackgroundOpaque(!isSkyBackgroundOpaque.value)
+    }
+
+    fun setSkyBackgroundOpaque(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyOpaqueBackground(enabled)
+        }
+    }
+
+    fun toggleMilkyWayVisible() {
+        setMilkyWayVisible(!isMilkyWayVisible.value)
+    }
+
+    fun setMilkyWayVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyMilkyWayVisible(enabled)
+        }
+    }
+
+    fun toggleConstellationsVisible() {
+        setConstellationsVisible(!isConstellationsVisible.value)
+    }
+
+    fun setConstellationsVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyConstellationsVisible(enabled)
         }
     }
 

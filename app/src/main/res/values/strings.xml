@@ -281,4 +281,13 @@
     <string name="night_sky_stars_label">Stars:</string>
     <string name="night_sky_lst_label">LST</string>
     <string name="night_sky_keep_screen_on_desc">Prevent screen timeout while using Night Sky AR</string>
+    <string name="night_sky_milky_way">Milky Way</string>
+    <string name="night_sky_milky_way_desc">Toggle hardware-accelerated Milky Way background</string>
+    <string name="night_sky_opaque_bg">Planetarium mode</string>
+    <string name="night_sky_opaque_bg_desc">Toggle between live camera AR and opaque planetarium sky</string>
+    <string name="night_sky_constellations">Constellations</string>
+    <string name="night_sky_constellations_desc">Toggle constellation stick figure lines</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="calib_reset_toast">Azimuth calibration reset</string>
 </resources>

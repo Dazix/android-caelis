@@ -287,4 +287,13 @@
     <string name="night_sky_stars_label">Hvězdy:</string>
     <string name="night_sky_lst_label">LST</string>
     <string name="night_sky_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení noční oblohy</string>
+    <string name="night_sky_milky_way">Mléčná dráha</string>
+    <string name="night_sky_milky_way_desc">Zobrazit/skrýt hardwarově akcelerované pozadí Mléčné dráhy</string>
+    <string name="night_sky_opaque_bg">Režim planetária</string>
+    <string name="night_sky_opaque_bg_desc">Přepnout mezi AR kamerou a plným neprůhledným planetáriem</string>
+    <string name="night_sky_constellations">Souhvězdí</string>
+    <string name="night_sky_constellations_desc">Zobrazit/skrýt spojnice souhvězdí</string>
+    <string name="state_on">Zapnuto</string>
+    <string name="state_off">Vypnuto</string>
+    <string name="calib_reset_toast">Kalibrace azimutu resetována</string>
 </resources>
