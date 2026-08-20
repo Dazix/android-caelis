@@ -92,7 +92,7 @@ class OrientationTrackerMathTest {
     }
 
     @Test
-    fun `verifies upright spherical calibration preserves 100 percent orthonormality across zenith`() {
+    fun `verifies 3D calibration with quaternion preserves 100 percent orthonormality across zenith`() {
         // Portrait phone facing North at the horizon:
         // Col 0 (+X_dev): [1, 0, 0]^T (East)
         // Col 1 (+Y_dev): [0, 0, 1]^T (Zenith / Up)
@@ -104,17 +104,19 @@ class OrientationTrackerMathTest {
             0f, 0f, 0f, 1f,
         )
         val tempDec = FloatArray(16)
-        val tempRotX = FloatArray(16)
+        val tempUser = FloatArray(16)
         val adjusted = FloatArray(16)
 
-        // Rotate past zenith (+120° continuous pitch)
+        // Rotate past zenith (+120° pitch)
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        OrientationTracker.rotateQuaternion(userQuat, Math.toRadians(120.0).toFloat(), 0f, userQuat)
+
         OrientationTracker.applyCalibration(
             sensorMatrix = sensorMatrix,
             declinationDeg = 15.0f,
-            userAzimuthDeg = 0.0f,
-            userPitchDeg = 120.0f,
+            userQuat = userQuat,
             tempDeclinationBuffer = tempDec,
-            tempRotXBuffer = tempRotX,
+            tempUserMatrixBuffer = tempUser,
             outMatrix = adjusted,
         )
 
@@ -138,15 +140,11 @@ class OrientationTrackerMathTest {
         // Forward vector in world coordinates (-Z_dev):
         val camFwdZ = -adjusted[10]
         // Sin(120°) = sin(60°) = 0.866
-        assertEquals(kotlin.math.sin(Math.toRadians(60.0)).toFloat(), camFwdZ, 0.01f)
-
-        // Camera Up Z component (+Y_dev in World Z) must be non-negative (upright guarantee)
-        val camUpZ = adjusted[9]
-        assertTrue("Camera Up Z must be >= 0 (upright guarantee), was $camUpZ", camUpZ >= 0.0f)
+        assertEquals(kotlin.math.sin(Math.toRadians(120.0)).toFloat(), camFwdZ, 0.01f)
     }
 
     @Test
-    fun `verifies continuous 360 degree spherical pitch rotation loops seamlessly with guaranteed upright horizon`() {
+    fun `verifies right drag consistently moves stars to the right everywhere across 360 degree sphere`() {
         val sensorMatrix = floatArrayOf(
             1f, 0f, 0f, 0f,
             0f, 0f, -1f, 0f,
@@ -154,32 +152,49 @@ class OrientationTrackerMathTest {
             0f, 0f, 0f, 1f,
         )
         val tempDec = FloatArray(16)
-        val tempRotX = FloatArray(16)
+        val tempUser = FloatArray(16)
         val adjusted = FloatArray(16)
+        val adjustedDrag = FloatArray(16)
+
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        val stepPitchRad = Math.toRadians(15.0).toFloat()
+        val rightDragYawRad = Math.toRadians(5.0).toFloat()
 
         // Test every 15 degrees across full 360 loop
-        for (pitchDeg in 0..360 step 15) {
+        for (step in 1..24) {
+            OrientationTracker.rotateQuaternion(userQuat, stepPitchRad, 0f, userQuat)
+
+            // 1. Current matrix before horizontal drag
             OrientationTracker.applyCalibration(
                 sensorMatrix = sensorMatrix,
                 declinationDeg = 0.0f,
-                userAzimuthDeg = 0.0f,
-                userPitchDeg = pitchDeg.toFloat(),
+                userQuat = userQuat,
                 tempDeclinationBuffer = tempDec,
-                tempRotXBuffer = tempRotX,
+                tempUserMatrixBuffer = tempUser,
                 outMatrix = adjusted,
             )
 
-            // 1. Check orthonormality
-            for (col in 0..2) {
-                val lenSq = adjusted[col] * adjusted[col] +
-                    adjusted[col + 4] * adjusted[col + 4] +
-                    adjusted[col + 8] * adjusted[col + 8]
-                assertEquals("Column $col norm at $pitchDeg°", 1.0f, sqrt(lenSq), 0.001f)
-            }
+            // Current center star in world coordinates:
+            val starWorldX = -adjusted[2]
+            val starWorldY = -adjusted[6]
+            val starWorldZ = -adjusted[10]
 
-            // 2. Camera Up vector (+Y_dev) must ALWAYS point upwards in world space (Up_Z >= -0.01f)
-            val camUpZ = adjusted[9]
-            assertTrue("Camera Up_Z at $pitchDeg° must be >= 0 (upright), was $camUpZ", camUpZ >= -0.001f)
+            // 2. Perform right drag on screen
+            val quatAfterDrag = userQuat.clone()
+            OrientationTracker.rotateQuaternion(quatAfterDrag, 0f, rightDragYawRad, quatAfterDrag)
+
+            OrientationTracker.applyCalibration(
+                sensorMatrix = sensorMatrix,
+                declinationDeg = 0.0f,
+                userQuat = quatAfterDrag,
+                tempDeclinationBuffer = tempDec,
+                tempUserMatrixBuffer = tempUser,
+                outMatrix = adjustedDrag,
+            )
+
+            // 3. Project star into new camera frame: V_dev = R^T * V_world
+            val starCamX = adjustedDrag[0] * starWorldX + adjustedDrag[4] * starWorldY + adjustedDrag[8] * starWorldZ
+            assertTrue("Star X on screen after right drag must be strictly positive at pitch step $step (was $starCamX)", starCamX > 0f)
         }
     }
 }

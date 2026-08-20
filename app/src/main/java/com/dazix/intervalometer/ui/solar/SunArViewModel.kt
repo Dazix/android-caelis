@@ -98,9 +98,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
-    private val userOffsetsState = MutableStateFlow(Pair(0.0f, 0.0f))
-    val isCalibrated: StateFlow<Boolean> = userOffsetsState.map { (az, pitch) ->
-        kotlin.math.abs(az) > 0.01f || kotlin.math.abs(pitch) > 0.01f
+    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
+        !OrientationTracker.isIdentityQuaternion(q)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
@@ -181,22 +181,20 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
     init {
-        // Initialize user spherical offsets from settings store
+        // Initialize user rotation quaternion from settings store
         viewModelScope.launch {
-            val initialAz = settingsStore.sunArAzimuthOffset.firstOrNull() ?: 0.0f
-            val initialPitch = settingsStore.sunArPitchOffset.firstOrNull() ?: 0.0f
-            userOffsetsState.value = Pair(initialAz, initialPitch)
-            orientationTracker.setUserOffsets(initialAz, initialPitch)
+            val initialQuat = settingsStore.sunArQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+            userQuatState.value = initialQuat
+            orientationTracker.setUserQuaternion(initialQuat)
         }
 
-        // Debounce saving rotation offset changes to eliminate disk I/O lag during continuous drag gestures
+        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
         viewModelScope.launch {
-            userOffsetsState
+            userQuatState
                 .drop(1)
                 .debounce(300L)
-                .collect { (az, pitch) ->
-                    settingsStore.saveSunArAzimuthOffset(az)
-                    settingsStore.saveSunArPitchOffset(pitch)
+                .collect { quat ->
+                    settingsStore.saveSunArQuaternion(quat)
                 }
         }
 
@@ -228,21 +226,23 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun rotatePan(deltaAzDeg: Float, deltaPitchDeg: Float) {
-        orientationTracker.rotateUser(deltaAzDeg, deltaPitchDeg)
-        userOffsetsState.value = orientationTracker.getUserOffsets()
+    fun rotatePan(pitchRad: Float, yawRad: Float) {
+        orientationTracker.rotateUser(pitchRad, yawRad)
+        userQuatState.value = orientationTracker.getUserQuaternion()
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        rotatePan(deltaAzDeg = deltaAzimuthDeg, deltaPitchDeg = deltaElevationDeg)
+        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
+        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
+        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        rotatePan(deltaAzDeg = deltaDeg, deltaPitchDeg = 0.0f)
+        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
     }
 
     fun adjustElevationOffset(deltaDeg: Float) {
-        rotatePan(deltaAzDeg = 0.0f, deltaPitchDeg = deltaDeg)
+        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
@@ -251,10 +251,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetCalibration() {
         orientationTracker.resetUserRotation()
-        userOffsetsState.value = Pair(0.0f, 0.0f)
+        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
         viewModelScope.launch {
-            settingsStore.saveSunArAzimuthOffset(0.0f)
-            settingsStore.saveSunArPitchOffset(0.0f)
+            settingsStore.saveSunArQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
         }
     }
 
