@@ -9,10 +9,18 @@ class NightSkyRendererZeroAllocTest {
     fun `verifies renderer pre-allocated paints and red vision theme`() {
         val renderer = NightSkyRenderer()
 
-        assertNotNull(renderer.tier1Paint)
-        assertNotNull(renderer.tier2Paint)
-        assertNotNull(renderer.tier3Paint)
-        assertNotNull(renderer.extinctionPaint)
+        org.junit.Assert.assertEquals(6, renderer.numBuckets)
+        org.junit.Assert.assertEquals(6, renderer.corePaints.size)
+        org.junit.Assert.assertEquals(6, renderer.bucketPoints.size)
+        org.junit.Assert.assertEquals(6, renderer.bucketCounts.size)
+
+        for (b in 0 until 6) {
+            assertNotNull(renderer.corePaints[b])
+            org.junit.Assert.assertEquals(4096 * 2, renderer.bucketPoints[b].size)
+        }
+
+        assertNotNull(renderer.spriteMatrix)
+        assertNotNull(renderer.spritePaint)
         assertNotNull(renderer.constellationPaint)
         assertNotNull(renderer.constellationLabelPaint)
         assertNotNull(renderer.skyDomeRenderer)
@@ -23,8 +31,13 @@ class NightSkyRendererZeroAllocTest {
         // Apply Normal mode
         renderer.applyTheme(redVisionMode = false)
 
-        // Update stroke widths
-        renderer.updateStrokeWidths(tier1Px = 7.5f, tier2Px = 5.0f, tier3Px = 3.0f, constellationPx = 1.8f)
+        // Update optical paints at 1.0x, 2.0x, 4.0x zoom
+        renderer.updateOpticalPaints(zoomFactor = 1.0f, density = 2.5f, redVisionMode = false)
+        renderer.updateOpticalPaints(zoomFactor = 4.0f, density = 2.5f, redVisionMode = false)
+
+        // Verify hit-testing method returns -1 for empty stars
+        val hitIndex = renderer.findClosestStarAt(100f, 100f, 48f, 0)
+        org.junit.Assert.assertEquals(-1, hitIndex)
     }
 
     @Test

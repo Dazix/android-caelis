@@ -25,9 +25,11 @@ class FlatBuffersCatalogTest {
         val constOff = Constellation.createConstellation(fbb, constNameOff, linesVec)
         val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
 
-        // 2. StarMetadata
+        // 2. StarMetadata with rich fields
         val metaNameOff = fbb.createString("Sirius")
-        val metaOff = StarMetadata.createStarMetadata(fbb, 0, metaNameOff)
+        val metaTypeOff = fbb.createString("Binary Star")
+        val metaConstOff = fbb.createString("Canis Major")
+        val metaOff = StarMetadata.createStarMetadata(fbb, 0, metaNameOff, metaTypeOff, metaConstOff, 8.6f)
         val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf(metaOff))
 
         // 3. Stars (Structs vector)
@@ -64,6 +66,9 @@ class FlatBuffersCatalogTest {
         assertNotNull(meta)
         assertEquals(0, meta.starIndex())
         assertEquals("Sirius", meta.name())
+        assertEquals("Binary Star", meta.bodyType())
+        assertEquals("Canis Major", meta.constellation())
+        assertEquals(8.6f, meta.distanceLy(), 0.01f)
 
         // Verify constellation
         val constObj = catalog.constellations(0)
@@ -93,6 +98,12 @@ class FlatBuffersCatalogTest {
         assertEquals(101.28f, star0.ra(), 0.5f)
         assertEquals(-16.71f, star0.dec(), 0.5f)
         assertTrue("Sirius magnitude should be negative, got ${star0.mag()}", star0.mag() < 0.0f)
+
+        // Check Sirius metadata
+        val meta0 = (0 until catalog.metadataLength()).map { catalog.metadata(it) }.first { it.name() == "Sirius" }
+        assertEquals("Binary Star", meta0.bodyType())
+        assertEquals("Canis Major", meta0.constellation())
+        assertEquals(8.6f, meta0.distanceLy(), 0.1f)
 
         // Check constellations
         val constNames = (0 until catalog.constellationsLength()).map { catalog.constellations(it).name() }

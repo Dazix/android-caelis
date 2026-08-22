@@ -165,4 +165,17 @@ class CameraFovCalculatorTest {
         )
         assertEquals(56f * 1.333f, fovLandscape, 0.01f)
     }
+
+    @Test
+    fun `calculates zoomed FOV correctly and clamps within valid bounds`() {
+        val baseFov = 56.0f
+
+        assertEquals(56.0f, CameraFovCalculator.computeZoomedFov(baseFov, 1.0f), 0.001f)
+        assertEquals(28.0f, CameraFovCalculator.computeZoomedFov(baseFov, 2.0f), 0.001f)
+        assertEquals(14.0f, CameraFovCalculator.computeZoomedFov(baseFov, 4.0f), 0.001f)
+        assertEquals(5.6f, CameraFovCalculator.computeZoomedFov(baseFov, 10.0f), 0.001f)
+
+        // Extreme zoom clamping
+        assertEquals(2.0f, CameraFovCalculator.computeZoomedFov(baseFov, 50.0f), 0.001f)
+    }
 }

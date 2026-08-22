@@ -91,4 +91,19 @@ object CameraFovCalculator {
             rawFovH
         }
     }
+
+    /**
+     * Calculates the zoomed horizontal Field of View visible in the viewport given an optical/digital zoom factor.
+     *
+     * @param baseEffectiveFovDegrees Base effective horizontal FOV at 1.0x zoom.
+     * @param zoomFactor Magnification factor (>= 1.0x).
+     * @return Narrowed horizontal FOV in degrees.
+     */
+    fun computeZoomedFov(
+        baseEffectiveFovDegrees: Float,
+        zoomFactor: Float,
+    ): Float {
+        val safeZoom = zoomFactor.coerceAtLeast(0.1f)
+        return (baseEffectiveFovDegrees / safeZoom).coerceIn(2.0f, 150.0f)
+    }
 }

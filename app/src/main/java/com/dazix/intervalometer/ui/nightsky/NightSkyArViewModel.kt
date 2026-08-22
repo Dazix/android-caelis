@@ -10,6 +10,8 @@ import com.dazix.intervalometer.ar.OrientationTracker
 import com.dazix.intervalometer.ar.SolarLocationProvider
 import com.dazix.intervalometer.data.SettingsStore
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
+import com.dazix.intervalometer.data.nightsky.Star
+import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.NightSkyCatalogLoader
 import com.dazix.intervalometer.domain.nightsky.SiderealTime
 import com.dazix.intervalometer.domain.solar.GeoLocation
@@ -53,6 +55,7 @@ data class NightSkyArUiState(
     val isLandscapeVisible: Boolean = true,
     val isGridVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
+    val selectedBody: CelestialBodyDetails? = null,
 )
 
 @OptIn(FlowPreview::class)
@@ -71,7 +74,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     // Dynamic effective FOV factoring in pinch-to-zoom
     val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        (baseFov / zoom).coerceIn(8.0f, 120.0f)
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 120.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
@@ -146,6 +149,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
+    val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
+
     val uiState: StateFlow<NightSkyArUiState> = combine(
         locationProvider.location,
         locationProvider.hasGpsFix,
@@ -166,6 +172,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isLandscapeVisible,
         isGridVisible,
         isConstellationsVisible,
+        selectedBodyState,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
         val gps = args[1] as Boolean
@@ -186,6 +193,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val landscape = args[16] as Boolean
         val grid = args[17] as Boolean
         val constellations = args[18] as Boolean
+        val selected = args[19] as CelestialBodyDetails?
 
         NightSkyArUiState(
             location = loc,
@@ -208,6 +216,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isLandscapeVisible = landscape,
             isGridVisible = grid,
             isConstellationsVisible = constellations,
+            selectedBody = selected,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -278,6 +287,65 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * Resolves metadata for the tapped star from FlatBuffers catalog and updates [selectedBody].
+     */
+    fun selectStarByIndex(starIndex: Int) {
+        val cat = catalogState.value ?: return
+        val totalStars = cat.starsLength()
+        if (starIndex !in 0 until totalStars) {
+            selectedBodyState.value = null
+            return
+        }
+
+        val star = Star()
+        cat.stars(star, starIndex)
+
+        // Query metadata vector for named star entry matching this index
+        val metaLen = cat.metadataLength()
+        val reusableMeta = com.dazix.intervalometer.data.nightsky.StarMetadata()
+        var matchedName: String? = null
+        var matchedType: String? = null
+        var matchedConstellation: String? = null
+        var matchedDistanceLy: Float = 0f
+
+        for (m in 0 until metaLen) {
+            cat.metadata(reusableMeta, m)
+            if (reusableMeta.starIndex() == starIndex) {
+                matchedName = reusableMeta.name()
+                matchedType = reusableMeta.bodyType()
+                matchedConstellation = reusableMeta.constellation()
+                matchedDistanceLy = reusableMeta.distanceLy()
+                break
+            }
+        }
+
+        val name = matchedName ?: "HIP ${starIndex + 1}"
+        val type = matchedType ?: "Star"
+        val distanceFormatted = if (matchedDistanceLy > 0f) {
+            String.format(java.util.Locale.US, "%.1f ly", matchedDistanceLy)
+        } else {
+            "—"
+        }
+
+        selectedBodyState.value = CelestialBodyDetails(
+            name = name,
+            type = type,
+            constellation = matchedConstellation,
+            distance = distanceFormatted,
+            magnitude = star.mag(),
+            raDegrees = star.ra().toDouble(),
+            decDegrees = star.dec().toDouble(),
+        )
+    }
+
+    /**
+     * Dismisses the celestial object selection.
+     */
+    fun clearSelectedBody() {
+        selectedBodyState.value = null
+    }
+
     fun rotatePan(pitchRad: Float, yawRad: Float) {
         orientationTracker.rotateUser(pitchRad, yawRad)
         userQuatState.value = orientationTracker.getUserQuaternion()
@@ -311,14 +379,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun adjustZoomBy(factor: Float) {
         val current = zoomRatioState.value
-        val updated = (current * factor).coerceIn(0.5f, 4.0f)
+        val updated = (current * factor).coerceIn(1.0f, 10.0f)
         if (kotlin.math.abs(updated - current) > 0.001f) {
             zoomRatioState.value = updated
         }
     }
 
     fun setZoomRatio(ratio: Float) {
-        zoomRatioState.value = ratio.coerceIn(0.5f, 4.0f)
+        zoomRatioState.value = ratio.coerceIn(1.0f, 10.0f)
     }
 
     fun resetZoom() {

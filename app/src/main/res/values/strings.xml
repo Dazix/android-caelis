@@ -302,4 +302,12 @@
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="calib_reset_toast">Azimuth calibration reset</string>
+
+    <!-- Celestial Object Details -->
+    <string name="celestial_type">Type</string>
+    <string name="celestial_constellation">Constellation</string>
+    <string name="celestial_distance">Distance</string>
+    <string name="celestial_magnitude">Magnitude</string>
+    <string name="celestial_coordinates">Coordinates (RA / Dec)</string>
+    <string name="celestial_close">Close details</string>
 </resources>

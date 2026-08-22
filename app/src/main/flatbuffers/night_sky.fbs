@@ -12,6 +12,9 @@ struct Star {
 table StarMetadata {
   star_index: int; // Points to the index in the 'stars' vector
   name: string;
+  body_type: string;
+  constellation: string;
+  distance_ly: float;
 }
 
 table Constellation {

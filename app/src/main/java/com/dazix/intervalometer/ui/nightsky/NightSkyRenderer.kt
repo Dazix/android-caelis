@@ -3,7 +3,11 @@ package com.dazix.intervalometer.ui.nightsky
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Color as AndroidColor
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.RadialGradient
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -19,6 +23,8 @@ import com.dazix.intervalometer.data.nightsky.Star
 import com.dazix.intervalometer.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.intervalometer.domain.nightsky.EquatorialCoordinates
 import com.dazix.intervalometer.domain.nightsky.StarFrustumCulling
+import com.dazix.intervalometer.domain.nightsky.StarHitTester
+import com.dazix.intervalometer.domain.nightsky.StarOptics
 import kotlin.math.tan
 
 /**
@@ -67,9 +73,9 @@ class NightSkyRenderer {
     private var hasLandscapeTexture = false
 
     private val maxStars = 4096
-    private val tier1Points = FloatArray(maxStars * 2)
-    private val tier2Points = FloatArray(maxStars * 2)
-    private val tier3Points = FloatArray(maxStars * 2)
+    val numBuckets = StarOptics.NUM_BUCKETS
+    val bucketPoints = Array(numBuckets) { FloatArray(maxStars * 2) }
+    val bucketCounts = IntArray(numBuckets)
 
     // Cached screen projection coordinates for constellation line resolution
     private val starScreenX = FloatArray(maxStars)
@@ -82,34 +88,73 @@ class NightSkyRenderer {
     private val tempWorldVec = FloatArray(3)
     private val reusableConstellation = Constellation()
 
-    val tier1Paint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
+    companion object {
+        /**
+         * Creates a hardware-accelerated continuous Gaussian radial gradient star sprite bitmap once.
+         * Pure white nucleus fading smoothly to zero opacity edge without concentric ring artifacts.
+         */
+        fun createStarSpriteBitmap(sizePx: Int = StarOptics.STAR_SPRITE_SIZE): Bitmap {
+            val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            val center = sizePx / 2.0f
+            val radius = sizePx / 2.0f
+
+            val gradient = RadialGradient(
+                center, center, radius,
+                intArrayOf(
+                    0xFFFFFFFF.toInt(), // 100% Solid white core (0% to 15%)
+                    0xD8FFFFFF.toInt(), // ~85% Bright inner core (15% to 38%)
+                    0x60FFFFFF,         // ~38% Soft optical glow (38% to 70%)
+                    0x15FFFFFF,         // ~8% Faint outer corona (70% to 88%)
+                    0x00FFFFFF,         // 0% Transparent boundary (100%)
+                ),
+                floatArrayOf(0.0f, 0.15f, 0.38f, 0.70f, 1.0f),
+                Shader.TileMode.CLAMP
+            )
+
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = gradient
+                isDither = true
+            }
+            canvas.drawCircle(center, center, radius, paint)
+            return bitmap
+        }
     }
 
-    val tier2Paint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
+    // Pre-Rendered Radial Gradient Star Sprite (64x64 px ARGB_8888)
+    val starSpriteBitmap: Bitmap? = runCatching { createStarSpriteBitmap(StarOptics.STAR_SPRITE_SIZE) }.getOrNull()
+    val starSpriteSize = StarOptics.STAR_SPRITE_SIZE.toFloat()
+    val starSpriteHalfSize = starSpriteSize / 2.0f
+
+    // Zero-allocation matrix and paint for blitting the star sprite
+    val spriteMatrix = Matrix()
+    val spritePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
+        isDither = true
     }
 
-    val tier3Paint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
+    private val redVisionFilter = PorterDuffColorFilter(AndroidColor.rgb(255, 23, 68), PorterDuff.Mode.SRC_IN)
+
+    // Base optical sprite glow diameters in DP for bright & medium star buckets (Bucket 0: mag < 1.0, Bucket 1: 1.0..2.0, Bucket 2: 2.0..3.0)
+    private val baseSpriteDiameterDp = floatArrayOf(30.0f, 20.0f, 13.0f)
+    private val spriteDiameterPx = FloatArray(3)
+
+    // Pinpoint core stroke width in DP for all 6 buckets (0..5)
+    private val baseCoreDp = floatArrayOf(3.2f, 2.5f, 2.0f, 1.6f, 1.2f, 1.0f)
+
+    // Pinpoint core paints for central nucleus across all 6 buckets
+    val corePaints = Array(numBuckets) {
+        Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+        }
     }
 
     val constellationPaint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.STROKE
         strokeWidth = 2.0f
-    }
-
-    val extinctionPaint = Paint().apply {
-        isAntiAlias = true
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
     }
 
     val constellationLabelPaint = Paint().apply {
@@ -119,19 +164,33 @@ class NightSkyRenderer {
     }
 
     init {
-        setupStarPaints()
+        setupStarPaints(redVisionMode = false)
     }
 
-    private fun setupStarPaints() {
-        // Stars must be prominent, brilliant white or celestial warm yellow under all circumstances
-        tier1Paint.color = AndroidColor.argb(255, 255, 255, 255) // Brilliant celestial white (V < 1.5)
-        tier2Paint.color = AndroidColor.argb(245, 255, 245, 175) // Celestial warm yellow (1.5 <= V < 3.0)
-        tier3Paint.color = AndroidColor.argb(215, 255, 255, 255) // Crisp clear white (3.0 <= V <= 4.8)
+    private fun setupStarPaints(redVisionMode: Boolean) {
+        if (redVisionMode) {
+            spritePaint.colorFilter = redVisionFilter
+            for (b in 0 until numBuckets) {
+                corePaints[b].color = AndroidColor.argb(255, 255, 82, 82) // Bright red pinpoint core
+            }
+        } else {
+            spritePaint.colorFilter = null
+            for (b in 0 until numBuckets) {
+                val coreColor = if (b == 0) {
+                    AndroidColor.argb(255, 255, 255, 255) // Brilliant white core
+                } else if (b == 1) {
+                    AndroidColor.argb(255, 255, 250, 240) // Warm celestial core
+                } else {
+                    AndroidColor.argb(255, 255, 255, 255) // Pure pinpoint white
+                }
+                corePaints[b].color = coreColor
+            }
+        }
     }
 
     fun applyTheme(redVisionMode: Boolean) {
         skyDomeRenderer.applyTheme(redVisionMode)
-        setupStarPaints()
+        setupStarPaints(redVisionMode)
 
         if (redVisionMode) {
             constellationPaint.color = AndroidColor.argb(160, 255, 23, 68)
@@ -142,11 +201,36 @@ class NightSkyRenderer {
         }
     }
 
-    fun updateStrokeWidths(tier1Px: Float, tier2Px: Float, tier3Px: Float, constellationPx: Float = 2.0f) {
-        tier1Paint.strokeWidth = tier1Px
-        tier2Paint.strokeWidth = tier2Px
-        tier3Paint.strokeWidth = tier3Px
+    /**
+     * Updates optical stroke widths scaling by display density and zoom point-spread function.
+     * Zero allocations.
+     */
+    fun updateOpticalPaints(
+        zoomFactor: Float = 1.0f,
+        density: Float = 1.0f,
+        redVisionMode: Boolean = false,
+        constellationPx: Float = 2.0f,
+    ) {
+        val opticScale = StarOptics.computeOpticScale(zoomFactor)
+        val densityScale = density.coerceAtLeast(0.5f)
+
+        // Compute scaled sprite diameters for bright buckets 0, 1, 2
+        for (b in 0..2) {
+            spriteDiameterPx[b] = baseSpriteDiameterDp[b] * densityScale * opticScale
+        }
+
+        // Compute pinpoint core stroke widths for all 6 buckets
+        for (b in 0 until numBuckets) {
+            corePaints[b].strokeWidth = baseCoreDp[b] * densityScale * opticScale
+        }
         constellationPaint.strokeWidth = constellationPx
+    }
+
+    /**
+     * Backward compatibility helper for legacy stroke width updates.
+     */
+    fun updateStrokeWidths(tier1Px: Float, tier2Px: Float, tier3Px: Float, constellationPx: Float = 2.0f) {
+        updateOpticalPaints(zoomFactor = 1.0f, density = tier1Px / 7.5f, constellationPx = constellationPx)
     }
 
     /**
@@ -282,7 +366,35 @@ class NightSkyRenderer {
     }
 
     /**
+     * Performs ultra-fast 2D screen-space hit testing to identify the star closest to the user's tap coordinates.
+     * Zero heap allocations.
+     *
+     * @param tapX Touch X coordinate in screen pixels.
+     * @param tapY Touch Y coordinate in screen pixels.
+     * @param maxRadiusPx Maximum search radius in pixels.
+     * @param totalStars Number of stars in the catalog.
+     * @return Catalog star index [0, totalStars - 1], or -1 if no star was hit.
+     */
+    fun findClosestStarAt(
+        tapX: Float,
+        tapY: Float,
+        maxRadiusPx: Float,
+        totalStars: Int,
+    ): Int {
+        return StarHitTester.findClosestVisibleStar(
+            tapX = tapX,
+            tapY = tapY,
+            starScreenX = starScreenX,
+            starScreenY = starScreenY,
+            starInFront = starInFront,
+            totalStars = totalStars,
+            maxRadiusPx = maxRadiusPx,
+        )
+    }
+
+    /**
      * Projects and renders visible stars and constellation lines in batch using FlatBuffers memory mapping.
+     * Dual-pass optical rendering: Pass 1 renders soft optical halos, Pass 2 renders pinpoint cores.
      * Zero heap allocations per frame.
      *
      * @return Total count of visible stars on screen.
@@ -297,6 +409,7 @@ class NightSkyRenderer {
         fovHorizontalDegrees: Float,
         w: Float,
         h: Float,
+        zoomFactor: Float = 1.0f,
         showConstellations: Boolean = true,
         isAtmosphereVisible: Boolean = true,
     ): Int {
@@ -307,10 +420,10 @@ class NightSkyRenderer {
         val bb = catalog.byteBuffer
         val starsVectorOffset = catalog.starsVectorOffset()
 
-        var tier1Count = 0
-        var tier2Count = 0
-        var tier3Count = 0
-        var extinctCount = 0
+        // Reset bucket visible counts
+        for (b in 0 until numBuckets) {
+            bucketCounts[b] = 0
+        }
 
         val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
 
@@ -329,12 +442,22 @@ class NightSkyRenderer {
         val halfH = h * 0.5f
         val margin = 40.0f
 
+        // Dynamic limiting magnitude computed from zoom factor
+        val faintestVisibleMag = StarOptics.computeFaintestVisibleMagnitude(zoomFactor)
+        var totalVisibleStars = 0
+
         // 4. Batch process stars with ZERO heap allocations
         for (i in 0 until totalStars) {
             val offset = starsVectorOffset + i * 12
             val ra = bb.getFloat(offset).toDouble()
             val dec = bb.getFloat(offset + 4).toDouble()
-            val mag = bb.getFloat(offset + 8)
+            val rawMag = bb.getFloat(offset + 8)
+
+            // Dynamic telescope ocular reveal: cull stars fainter than current zoom limit
+            if (rawMag > faintestVisibleMag) {
+                starInFront[i] = false
+                continue
+            }
 
             // Compute ENU world unit vector
             EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
@@ -381,43 +504,28 @@ class NightSkyRenderer {
                 continue
             }
 
-            // Physical Atmospheric Star Extinction (dim stars near horizon < 15°)
+            // Physical Atmospheric Star Extinction (dim stars near horizon 0° <= h < 15°)
+            // Stars below horizon (h <= 0°) remain unextinguished (occluded naturally by landscape layer)
+            var effectiveMag = rawMag
             if (isAtmosphereVisible) {
                 val starElevationDeg = (Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))).toFloat()
-                if (starElevationDeg < 15.0f) {
-                    if (starElevationDeg <= 0.0f) {
+                if (starElevationDeg in 0.0f..StarOptics.EXTINCTION_ANGLE_DEG) {
+                    effectiveMag = StarOptics.computeAirmassExtinction(rawMag, starElevationDeg)
+                    if (effectiveMag > faintestVisibleMag) {
                         continue
                     }
-                    val extinction = starElevationDeg / 15.0f
-                    val baseColor = if (mag < 1.5f) tier1Paint.color else if (mag < 3.0f) tier2Paint.color else tier3Paint.color
-                    val baseAlpha = (baseColor ushr 24) and 0xFF
-                    val alpha = (baseAlpha * extinction).toInt().coerceIn(0, 255)
-                    if (alpha > 0) {
-                        extinctionPaint.color = (alpha shl 24) or (baseColor and 0x00FFFFFF)
-                        extinctionPaint.strokeWidth = if (mag < 1.5f) tier1Paint.strokeWidth else if (mag < 3.0f) tier2Paint.strokeWidth else tier3Paint.strokeWidth
-                        nativeCanvas.drawPoint(screenX, screenY, extinctionPaint)
-                        extinctCount++
-                    }
-                    continue
                 }
             }
 
-            // Bucket by apparent magnitude for batch drawing
-            if (mag < 1.5f) {
-                val idx = tier1Count * 2
-                tier1Points[idx] = screenX
-                tier1Points[idx + 1] = screenY
-                tier1Count++
-            } else if (mag < 3.0f) {
-                val idx = tier2Count * 2
-                tier2Points[idx] = screenX
-                tier2Points[idx + 1] = screenY
-                tier2Count++
-            } else {
-                val idx = tier3Count * 2
-                tier3Points[idx] = screenX
-                tier3Points[idx + 1] = screenY
-                tier3Count++
+            // Map apparent magnitude into one of the 6 fixed pre-allocated rendering buckets
+            val bucketIndex = StarOptics.computeBucketIndex(effectiveMag)
+            val count = bucketCounts[bucketIndex]
+            if (count < maxStars) {
+                val idx = count * 2
+                bucketPoints[bucketIndex][idx] = screenX
+                bucketPoints[bucketIndex][idx + 1] = screenY
+                bucketCounts[bucketIndex] = count + 1
+                totalVisibleStars++
             }
         }
 
@@ -461,17 +569,39 @@ class NightSkyRenderer {
             }
         }
 
-        // 6. Batch render all visible stars using native Canvas.drawPoints
-        if (tier3Count > 0) {
-            nativeCanvas.drawPoints(tier3Points, 0, tier3Count * 2, tier3Paint)
-        }
-        if (tier2Count > 0) {
-            nativeCanvas.drawPoints(tier2Points, 0, tier2Count * 2, tier2Paint)
-        }
-        if (tier1Count > 0) {
-            nativeCanvas.drawPoints(tier1Points, 0, tier1Count * 2, tier1Paint)
+        // 6. Hybrid Optical Star Rendering:
+        // Pass 1: Continuous Radial Gradient Sprite Glow for Bright Stars (Buckets 0, 1, 2: mag < 3.0)
+        val sprite = starSpriteBitmap
+        if (sprite != null) {
+            for (b in 2 downTo 0) {
+                val count = bucketCounts[b]
+                if (count > 0) {
+                    val diameter = spriteDiameterPx[b]
+                    val scale = diameter / starSpriteSize
+                    val halfScaled = starSpriteHalfSize * scale
+                    val points = bucketPoints[b]
+
+                    for (k in 0 until count) {
+                        val sx = points[k * 2]
+                        val sy = points[k * 2 + 1]
+
+                        spriteMatrix.reset()
+                        spriteMatrix.postScale(scale, scale)
+                        spriteMatrix.postTranslate(sx - halfScaled, sy - halfScaled)
+                        nativeCanvas.drawBitmap(sprite, spriteMatrix, spritePaint)
+                    }
+                }
+            }
         }
 
-        return tier1Count + tier2Count + tier3Count + extinctCount
+        // Pass 2: Hot Pinpoint Cores (Batched drawPoints for all populated buckets 0..5)
+        for (b in numBuckets - 1 downTo 0) {
+            val count = bucketCounts[b]
+            if (count > 0) {
+                nativeCanvas.drawPoints(bucketPoints[b], 0, count * 2, corePaints[b])
+            }
+        }
+
+        return totalVisibleStars
     }
 }

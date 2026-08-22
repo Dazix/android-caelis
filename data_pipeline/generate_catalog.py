@@ -54,11 +54,18 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
 
     # 2. Serialize StarMetadata
     meta_offsets = []
-    for star_idx, name in star_names:
+    for star_idx, name, body_type, constel, dist_ly in star_names:
         name_off = builder.CreateString(name)
-        builder.StartObject(2)
+        type_off = builder.CreateString(body_type) if body_type else 0
+        const_off = builder.CreateString(constel) if constel else 0
+        builder.StartObject(5)
         builder.PrependInt32Slot(0, star_idx, 0)
         builder.PrependUOffsetTRelativeSlot(1, name_off, 0)
+        if type_off:
+            builder.PrependUOffsetTRelativeSlot(2, type_off, 0)
+        if const_off:
+            builder.PrependUOffsetTRelativeSlot(3, const_off, 0)
+        builder.PrependFloat32Slot(4, float(dist_ly), 0.0)
         m_off = builder.EndObject()
         meta_offsets.append(m_off)
 
@@ -147,34 +154,57 @@ def find_closest_star_index(stars, target_ra, target_dec):
     return best_idx
 
 def build_constellations_and_names(stars):
-    # Prominent Named Stars
+    # Prominent Named Stars with Rich Metadata
     major_stars = [
-        ("Sirius", 101.287, -16.716),
-        ("Canopus", 95.988, -52.696),
-        ("Arcturus", 213.915, 19.182),
-        ("Vega", 279.235, 38.784),
-        ("Capella", 78.634, 45.998),
-        ("Rigel", 75.873, -8.202),
-        ("Procyon", 114.825, 5.225),
-        ("Betelgeuse", 88.793, 7.407),
-        ("Achernar", 24.429, -57.237),
-        ("Hadar", 210.956, -60.373),
-        ("Altair", 297.696, 8.868),
-        ("Acrux", 186.650, -63.099),
-        ("Aldebaran", 68.980, 16.509),
-        ("Antares", 247.352, -26.432),
-        ("Spica", 201.298, -11.161),
-        ("Pollux", 116.140, 28.026),
-        ("Fomalhaut", 344.413, -29.622),
-        ("Deneb", 310.358, 45.280),
-        ("Regulus", 152.093, 11.967),
-        ("Polaris", 37.955, 89.264),
+        ("Sirius", 101.287, -16.716, "Binary Star", "Canis Major", 8.6),
+        ("Canopus", 95.988, -52.696, "Supergiant", "Carina", 310.0),
+        ("Arcturus", 213.915, 19.182, "Red Giant", "Boötes", 36.7),
+        ("Vega", 279.235, 38.784, "Main Sequence", "Lyra", 25.0),
+        ("Capella", 78.634, 45.998, "Quadruple Star", "Auriga", 42.9),
+        ("Rigel", 75.873, -8.202, "Blue Supergiant", "Orion", 860.0),
+        ("Procyon", 114.825, 5.225, "Binary Star", "Canis Minor", 11.5),
+        ("Betelgeuse", 88.793, 7.407, "Red Supergiant", "Orion", 642.5),
+        ("Achernar", 24.429, -57.237, "Main Sequence", "Eridanus", 139.0),
+        ("Hadar", 210.956, -60.373, "Triple Star", "Centaurus", 390.0),
+        ("Altair", 297.696, 8.868, "Main Sequence", "Aquila", 16.7),
+        ("Acrux", 186.650, -63.099, "Multiple Star", "Crux", 320.0),
+        ("Aldebaran", 68.980, 16.509, "Red Giant", "Taurus", 65.3),
+        ("Antares", 247.352, -26.432, "Red Supergiant", "Scorpius", 550.0),
+        ("Spica", 201.298, -11.161, "Binary Star", "Virgo", 250.0),
+        ("Pollux", 116.140, 28.026, "Giant Star", "Gemini", 33.8),
+        ("Fomalhaut", 344.413, -29.622, "Main Sequence", "Piscis Austrinus", 25.1),
+        ("Deneb", 310.358, 45.280, "Blue-White Supergiant", "Cygnus", 2615.0),
+        ("Regulus", 152.093, 11.967, "Quadruple Star", "Leo", 79.3),
+        ("Polaris", 37.955, 89.264, "Multiple Variable", "Ursa Minor", 433.0),
+        # Ursa Major stars
+        ("Dubhe", 165.93, 61.75, "Binary Star", "Ursa Major", 123.0),
+        ("Merak", 165.46, 56.38, "Main Sequence", "Ursa Major", 79.7),
+        ("Phecda", 178.46, 53.69, "Main Sequence", "Ursa Major", 83.2),
+        ("Megrez", 183.86, 57.03, "Main Sequence", "Ursa Major", 80.5),
+        ("Alioth", 193.51, 55.96, "Variable Star", "Ursa Major", 82.6),
+        ("Mizar", 200.98, 54.92, "Multiple Star", "Ursa Major", 82.9),
+        ("Alkaid", 206.89, 49.31, "Main Sequence", "Ursa Major", 103.9),
+        # Orion stars
+        ("Bellatrix", 81.28, 6.35, "Blue Giant", "Orion", 250.0),
+        ("Mintaka", 84.05, -1.20, "Multiple Star", "Orion", 1200.0),
+        ("Alnilam", 84.41, -1.94, "Blue Supergiant", "Orion", 2000.0),
+        ("Alnitak", 85.19, -1.94, "Triple Star", "Orion", 1260.0),
+        ("Saiph", 86.94, -9.67, "Supergiant", "Orion", 650.0),
+        # Cassiopeia stars
+        ("Caph", 9.83, 59.15, "Subgiant", "Cassiopeia", 54.7),
+        ("Schedar", 10.13, 56.54, "Orange Giant", "Cassiopeia", 228.0),
+        ("Gamma Cas", 14.18, 60.72, "Eruptive Variable", "Cassiopeia", 550.0),
+        ("Ruchbah", 20.40, 60.23, "Eclipsing Binary", "Cassiopeia", 99.4),
+        ("Segin", 26.65, 63.67, "Blue Giant", "Cassiopeia", 460.0),
+        # Cygnus stars
+        ("Sadr", 305.56, 40.26, "Supergiant", "Cygnus", 1800.0),
+        ("Albireo", 292.68, 27.96, "Double Star", "Cygnus", 430.0),
     ]
 
     star_metadata = []
-    for name, ra, dec in major_stars:
+    for name, ra, dec, body_type, constel, dist_ly in major_stars:
         idx = find_closest_star_index(stars, ra, dec)
-        star_metadata.append((idx, name))
+        star_metadata.append((idx, name, body_type, constel, dist_ly))
 
     # Constellations with stick figure lines (Pairs of indices: [A, B, B, C...])
     constellations = []

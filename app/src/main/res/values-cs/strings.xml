@@ -308,4 +308,12 @@
     <string name="state_on">Zapnuto</string>
     <string name="state_off">Vypnuto</string>
     <string name="calib_reset_toast">Kalibrace azimutu resetována</string>
+
+    <!-- Celestial Object Details -->
+    <string name="celestial_type">Typ</string>
+    <string name="celestial_constellation">Souhvězdí</string>
+    <string name="celestial_distance">Vzdálenost</string>
+    <string name="celestial_magnitude">Magnituda</string>
+    <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>
+    <string name="celestial_close">Zavřít podrobnosti</string>
 </resources>
