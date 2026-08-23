@@ -11,11 +11,17 @@ import math
 import urllib.request
 import gzip
 import io
+import csv
 import flatbuffers
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUTPUT_RAW_BIN = os.path.join(PROJECT_ROOT, "app", "src", "main", "res", "raw", "catalog.bin")
 OUTPUT_PIPELINE_BIN = os.path.join(os.path.dirname(__file__), "catalog.bin")
+CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
+
+HYG_V41_URL = "https://astronexus.com/downloads/catalogs/hygdata_v41.csv.gz"
+STELLARIUM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellationship.fab"
+STELLARIUM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellation_names.eng.fab"
 
 # FlatBuffers Python Schema Serialization
 
@@ -24,15 +30,18 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
     Serializes star list, metadata, and constellations using FlatBuffers.
     
     stars_data: list of (ra_deg, dec_deg, mag)
-    star_names: list of (star_index, name_str)
-    constellations_data: list of (constellation_name, [line_index_pairs])
+    star_names: list of (star_index, name_str, body_type, constel, dist_ly)
+    constellations_data: list of (constellation_name, centroid_ra, centroid_dec, [line_index_pairs], localized_name, brightest_star, family)
     """
     builder = flatbuffers.Builder(1024 * 1024)
 
     # 1. Serialize Constellations
     constellation_offsets = []
-    for name, line_indices in constellations_data:
+    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam in constellations_data:
         name_off = builder.CreateString(name)
+        loc_name_off = builder.CreateString(loc_name) if loc_name else 0
+        bright_off = builder.CreateString(bright_star) if bright_star else 0
+        fam_off = builder.CreateString(fam) if fam else 0
         
         # Create lines vector: [int]
         builder.StartVector(4, len(line_indices), 4)
@@ -40,10 +49,18 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
             builder.PrependInt32(idx)
         lines_vec = builder.EndVector()
         
-        # Start Constellation table
-        builder.StartObject(2)
+        # Start Constellation table (7 fields)
+        builder.StartObject(7)
         builder.PrependUOffsetTRelativeSlot(0, name_off, 0)
-        builder.PrependUOffsetTRelativeSlot(1, lines_vec, 0)
+        builder.PrependFloat32Slot(1, float(c_ra), 0.0)
+        builder.PrependFloat32Slot(2, float(c_dec), 0.0)
+        builder.PrependUOffsetTRelativeSlot(3, lines_vec, 0)
+        if loc_name_off:
+            builder.PrependUOffsetTRelativeSlot(4, loc_name_off, 0)
+        if bright_off:
+            builder.PrependUOffsetTRelativeSlot(5, bright_off, 0)
+        if fam_off:
+            builder.PrependUOffsetTRelativeSlot(6, fam_off, 0)
         const_off = builder.EndObject()
         constellation_offsets.append(const_off)
 
@@ -104,218 +121,468 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
     print(f"  Constellations: {len(constellations_data):,}")
     return buf
 
-# Astronomical Data Fetching & Processing
+# 88 IAU Constellations: Czech Localized Names
+CZECH_CONSTELLATION_NAMES = {
+    "And": "Andromeda",
+    "Ant": "Vývěva",
+    "Aps": "Rajka",
+    "Aqr": "Vodnář",
+    "Aql": "Orel",
+    "Ara": "Oltář",
+    "Ari": "Beran",
+    "Aur": "Vozka",
+    "Boo": "Pastýř",
+    "Cae": "Rycí rytidlo",
+    "Cam": "Žirafa",
+    "Cnc": "Rak",
+    "CVn": "Honicí psi",
+    "CMa": "Velký pes",
+    "CMi": "Malý pes",
+    "Cap": "Kozoroh",
+    "Car": "Lodní kýl",
+    "Cas": "Kasiopeja",
+    "Cen": "Kentaur",
+    "Cep": "Cefeus",
+    "Cet": "Velryba",
+    "Cha": "Chameleon",
+    "Cir": "Kružítko",
+    "Col": "Holubice",
+    "Com": "Vlasy Bereniky",
+    "CrA": "Jižní koruna",
+    "CrB": "Severní koruna",
+    "Crv": "Havran",
+    "Crt": "Pohár",
+    "Cru": "Jižní kříž",
+    "Cyg": "Labuť",
+    "Del": "Delfín",
+    "Dor": "Mečoun",
+    "Dra": "Drak",
+    "Equ": "Koníček",
+    "Eri": "Eridanus",
+    "For": "Pec",
+    "Gem": "Blíženci",
+    "Gru": "Jeřáb",
+    "Her": "Herkules",
+    "Hor": "Hodiny",
+    "Hya": "Hydra",
+    "Hyi": "Malý vodní had",
+    "Ind": "Indián",
+    "Lac": "Ještěrka",
+    "Leo": "Lev",
+    "LMi": "Malý lev",
+    "Lep": "Zajíc",
+    "Lib": "Váhy",
+    "Lup": "Vlk",
+    "Lyn": "Rys",
+    "Lyr": "Lyra",
+    "Men": "Tabulová hora",
+    "Mic": "Mikroskop",
+    "Mon": "Jednorožec",
+    "Mus": "Moucha",
+    "Nor": "Pravítko",
+    "Oct": "Oktant",
+    "Oph": "Hadonoš",
+    "Ori": "Orion",
+    "Pav": "Páv",
+    "Peg": "Pegas",
+    "Per": "Perseus",
+    "Phe": "Fénix",
+    "Pic": "Malíř",
+    "Psc": "Ryby",
+    "PsA": "Jižní ryba",
+    "Pup": "Kormidlo",
+    "Pyx": "Kompas",
+    "Ret": "Síť",
+    "Sge": "Šíp",
+    "Sgr": "Střelec",
+    "Sco": "Štír",
+    "Scl": "Sochař",
+    "Sct": "Štít",
+    "Ser": "Had",
+    "Sex": "Sextant",
+    "Tau": "Býk",
+    "Tel": "Dalekohled",
+    "Tri": "Trojúhelník",
+    "TrA": "Jižní trojúhelník",
+    "Tuc": "Tukan",
+    "UMa": "Velká medvědice",
+    "UMi": "Malý medvěd",
+    "Vel": "Plachty",
+    "Vir": "Panna",
+    "Vol": "Létající ryba",
+    "Vul": "Lištička",
+}
 
-def fetch_yale_bright_stars():
-    """
-    Downloads or provides the standard astronomical bright star catalog dataset (J2000.0).
-    """
-    raw_catalog_bin = os.path.join(PROJECT_ROOT, "app", "src", "main", "res", "raw", "stars_catalog.bin")
-    stars = []
+# 88 IAU Constellations: Constellation Families
+CONSTELLATION_FAMILIES = {
+    "UMa": "Ursa Major Family",
+    "UMi": "Ursa Major Family",
+    "Dra": "Ursa Major Family",
+    "CVn": "Ursa Major Family",
+    "Boo": "Ursa Major Family",
+    "Com": "Ursa Major Family",
+    "CrB": "Ursa Major Family",
+    "Cam": "Ursa Major Family",
+    "Lyn": "Ursa Major Family",
+    "LMi": "Ursa Major Family",
+    # Zodiac
+    "Ari": "Zodiac",
+    "Tau": "Zodiac",
+    "Gem": "Zodiac",
+    "Cnc": "Zodiac",
+    "Leo": "Zodiac",
+    "Vir": "Zodiac",
+    "Lib": "Zodiac",
+    "Sco": "Zodiac",
+    "Sgr": "Zodiac",
+    "Cap": "Zodiac",
+    "Aqr": "Zodiac",
+    "Psc": "Zodiac",
+    # Perseus Family
+    "Cas": "Perseus Family",
+    "Cep": "Perseus Family",
+    "And": "Perseus Family",
+    "Per": "Perseus Family",
+    "Peg": "Perseus Family",
+    "Tri": "Perseus Family",
+    "Aur": "Perseus Family",
+    "Lac": "Perseus Family",
+    "Cet": "Heavenly Waters",
+    # Hercules Family
+    "Her": "Hercules Family",
+    "Sge": "Hercules Family",
+    "Aql": "Hercules Family",
+    "Vul": "Hercules Family",
+    "Lyr": "Hercules Family",
+    "Oph": "Hercules Family",
+    "Ser": "Hercules Family",
+    "Sct": "Hercules Family",
+    "CrA": "Hercules Family",
+    "Ara": "Hercules Family",
+    "Tel": "La Caille Family",
+    "Cen": "Hercules Family",
+    "Lup": "Hercules Family",
+    "Crv": "Hercules Family",
+    "Crt": "Hercules Family",
+    "Hya": "Hercules Family",
+    "Sex": "Hercules Family",
+    "Cru": "Heavenly Waters",
+    "Cyg": "Hercules Family",
+    # Orion Family
+    "Ori": "Orion Family",
+    "CMa": "Orion Family",
+    "CMi": "Orion Family",
+    "Mon": "Orion Family",
+    "Lep": "Orion Family",
+    # Heavenly Waters
+    "Del": "Heavenly Waters",
+    "Equ": "Heavenly Waters",
+    "Eri": "Heavenly Waters",
+    "PsA": "Heavenly Waters",
+    "Car": "Heavenly Waters",
+    "Pup": "Heavenly Waters",
+    "Vel": "Heavenly Waters",
+    "Pyx": "Heavenly Waters",
+    "Col": "Heavenly Waters",
+    # Bayer Group
+    "Cha": "Bayer Group",
+    "Aps": "Bayer Group",
+    "Dor": "Bayer Group",
+    "Gru": "Bayer Group",
+    "Hyi": "Bayer Group",
+    "Ind": "Bayer Group",
+    "Mus": "Bayer Group",
+    "Pav": "Bayer Group",
+    "Phe": "Bayer Group",
+    "TrA": "Bayer Group",
+    "Tuc": "Bayer Group",
+    "Vol": "Bayer Group",
+    # La Caille Family
+    "Ant": "La Caille Family",
+    "Cae": "La Caille Family",
+    "Cir": "La Caille Family",
+    "For": "La Caille Family",
+    "Hor": "La Caille Family",
+    "Men": "La Caille Family",
+    "Mic": "La Caille Family",
+    "Nor": "La Caille Family",
+    "Oct": "La Caille Family",
+    "Pic": "La Caille Family",
+    "Ret": "La Caille Family",
+    "Scl": "La Caille Family",
+}
+
+def classify_spectral_type(spect, mag, dist_ly):
+    """Provides a human-readable astrophysics body type from spectral class and luminosity."""
+    if not spect:
+        return "Star"
+    s = spect.upper()
+    if "IA" in s or "IB" in s or "I" in s and ("O" in s or "B" in s or "A" in s):
+        if "M" in s or "K" in s:
+            return "Red Supergiant"
+        elif "B" in s or "O" in s:
+            return "Blue Supergiant"
+        else:
+            return "Supergiant"
+    if "III" in s:
+        if "M" in s or "K" in s:
+            return "Red Giant"
+        elif "B" in s or "A" in s:
+            return "Blue Giant"
+        else:
+            return "Giant Star"
+    if "IV" in s:
+        return "Subgiant"
+    if "V" in s or "D" in s:
+        if "M" in s:
+            return "Red Dwarf"
+        elif "A" in s or "F" in s or "G" in s:
+            return "Main Sequence"
+    if s.startswith("O") or s.startswith("B"):
+        return "Blue Giant"
+    if s.startswith("M") or s.startswith("K"):
+        return "Orange/Red Star"
+    return "Main Sequence"
+
+def download_or_read_cache(url, filename):
+    """Downloads a file or returns the cached version from disk."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_path = os.path.join(CACHE_DIR, filename)
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
+        print(f"Reading from cache: {cache_path}")
+        with open(cache_path, "rb") as f:
+            return f.read()
     
-    if os.path.exists(raw_catalog_bin):
-        import struct
-        with open(raw_catalog_bin, "rb") as f:
-            data = f.read()
-        count = len(data) // 12
-        for i in range(count):
-            ra, dec, mag = struct.unpack_from("<fff", data, i * 12)
-            stars.append((ra, dec, mag))
-    else:
-        # Fallback benchmark bright stars
-        stars = [
-            (101.287, -16.716, -1.44), # Sirius
-            (95.988, -52.696, -0.62),  # Canopus
-            (213.915, 19.182, -0.05),  # Arcturus
-            (219.902, -60.834, -0.01), # Alpha Centauri
-            (279.235, 38.784, 0.03),   # Vega
-            (78.634, 45.998, 0.08),    # Capella
-            (75.873, -8.202, 0.18),    # Rigel
-            (114.825, 5.225, 0.40),    # Procyon
-            (88.793, 7.407, 0.45),     # Betelgeuse
-            (247.352, -26.432, 0.96),  # Antares
-            (68.980, 16.509, 0.85),    # Aldebaran
-            (310.358, 45.280, 1.25),   # Deneb
-            (37.955, 89.264, 1.98),    # Polaris
-        ]
-    return stars
+    print(f"Downloading from {url}...")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Intervalometer/1.0)"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        data = resp.read()
+    
+    with open(cache_path, "wb") as f:
+        f.write(data)
+    print(f"Cached {len(data):,} bytes to {cache_path}")
+    return data
 
-def find_closest_star_index(stars, target_ra, target_dec):
-    """Finds index of star closest to target RA/Dec coordinates."""
-    best_idx = 0
-    best_dist = float("inf")
-    for idx, (ra, dec, mag) in enumerate(stars):
-        dra = (ra - target_ra) * math.cos(math.radians(dec))
-        ddec = dec - target_dec
-        dist = dra * dra + ddec * ddec
-        if dist < best_dist:
-            best_dist = dist
-            best_idx = idx
-    return best_idx
+def parse_stellarium_data():
+    """Parses Stellarium constellation lines and official English names."""
+    lines_bytes = download_or_read_cache(STELLARIUM_LINES_URL, "constellationship.fab")
+    names_bytes = download_or_read_cache(STELLARIUM_NAMES_URL, "constellation_names.eng.fab")
+    
+    lines_text = lines_bytes.decode("utf-8")
+    names_text = names_bytes.decode("utf-8")
+    
+    # 1. Parse official names
+    english_names = {}
+    for line in names_text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            abbr = parts[0].strip()
+            name = parts[1].strip().strip('"')
+            english_names[abbr] = name
+    
+    # 2. Parse stick figures (lines)
+    constellation_lines = {}
+    for line in lines_text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 3:
+            abbr = parts[0]
+            num_pairs = int(parts[1])
+            hip_ids = [int(x) for x in parts[2:]]
+            constellation_lines[abbr] = hip_ids
+            
+    print(f"Parsed {len(constellation_lines)} IAU constellation shapes and {len(english_names)} names.")
+    return constellation_lines, english_names
 
-def build_constellations_and_names(stars):
-    # Prominent Named Stars with Rich Metadata
-    major_stars = [
-        ("Sirius", 101.287, -16.716, "Binary Star", "Canis Major", 8.6),
-        ("Canopus", 95.988, -52.696, "Supergiant", "Carina", 310.0),
-        ("Arcturus", 213.915, 19.182, "Red Giant", "Boötes", 36.7),
-        ("Vega", 279.235, 38.784, "Main Sequence", "Lyra", 25.0),
-        ("Capella", 78.634, 45.998, "Quadruple Star", "Auriga", 42.9),
-        ("Rigel", 75.873, -8.202, "Blue Supergiant", "Orion", 860.0),
-        ("Procyon", 114.825, 5.225, "Binary Star", "Canis Minor", 11.5),
-        ("Betelgeuse", 88.793, 7.407, "Red Supergiant", "Orion", 642.5),
-        ("Achernar", 24.429, -57.237, "Main Sequence", "Eridanus", 139.0),
-        ("Hadar", 210.956, -60.373, "Triple Star", "Centaurus", 390.0),
-        ("Altair", 297.696, 8.868, "Main Sequence", "Aquila", 16.7),
-        ("Acrux", 186.650, -63.099, "Multiple Star", "Crux", 320.0),
-        ("Aldebaran", 68.980, 16.509, "Red Giant", "Taurus", 65.3),
-        ("Antares", 247.352, -26.432, "Red Supergiant", "Scorpius", 550.0),
-        ("Spica", 201.298, -11.161, "Binary Star", "Virgo", 250.0),
-        ("Pollux", 116.140, 28.026, "Giant Star", "Gemini", 33.8),
-        ("Fomalhaut", 344.413, -29.622, "Main Sequence", "Piscis Austrinus", 25.1),
-        ("Deneb", 310.358, 45.280, "Blue-White Supergiant", "Cygnus", 2615.0),
-        ("Regulus", 152.093, 11.967, "Quadruple Star", "Leo", 79.3),
-        ("Polaris", 37.955, 89.264, "Multiple Variable", "Ursa Minor", 433.0),
-        # Ursa Major stars
-        ("Dubhe", 165.93, 61.75, "Binary Star", "Ursa Major", 123.0),
-        ("Merak", 165.46, 56.38, "Main Sequence", "Ursa Major", 79.7),
-        ("Phecda", 178.46, 53.69, "Main Sequence", "Ursa Major", 83.2),
-        ("Megrez", 183.86, 57.03, "Main Sequence", "Ursa Major", 80.5),
-        ("Alioth", 193.51, 55.96, "Variable Star", "Ursa Major", 82.6),
-        ("Mizar", 200.98, 54.92, "Multiple Star", "Ursa Major", 82.9),
-        ("Alkaid", 206.89, 49.31, "Main Sequence", "Ursa Major", 103.9),
-        # Orion stars
-        ("Bellatrix", 81.28, 6.35, "Blue Giant", "Orion", 250.0),
-        ("Mintaka", 84.05, -1.20, "Multiple Star", "Orion", 1200.0),
-        ("Alnilam", 84.41, -1.94, "Blue Supergiant", "Orion", 2000.0),
-        ("Alnitak", 85.19, -1.94, "Triple Star", "Orion", 1260.0),
-        ("Saiph", 86.94, -9.67, "Supergiant", "Orion", 650.0),
-        # Cassiopeia stars
-        ("Caph", 9.83, 59.15, "Subgiant", "Cassiopeia", 54.7),
-        ("Schedar", 10.13, 56.54, "Orange Giant", "Cassiopeia", 228.0),
-        ("Gamma Cas", 14.18, 60.72, "Eruptive Variable", "Cassiopeia", 550.0),
-        ("Ruchbah", 20.40, 60.23, "Eclipsing Binary", "Cassiopeia", 99.4),
-        ("Segin", 26.65, 63.67, "Blue Giant", "Cassiopeia", 460.0),
-        # Cygnus stars
-        ("Sadr", 305.56, 40.26, "Supergiant", "Cygnus", 1800.0),
-        ("Albireo", 292.68, 27.96, "Double Star", "Cygnus", 430.0),
-    ]
+def load_hyg_database():
+    """Downloads and parses the HYG v4.1 database."""
+    hyg_gz_bytes = download_or_read_cache(HYG_V41_URL, "hygdata_v41.csv.gz")
+    
+    stars_by_hip = {}
+    all_hyg_stars = []
+    
+    with gzip.GzipFile(fileobj=io.BytesIO(hyg_gz_bytes)) as gz:
+        reader = csv.DictReader(io.TextIOWrapper(gz, encoding="utf-8"))
+        for row in reader:
+            if row.get("id") == "0":  # Sol
+                continue
+            try:
+                hip_str = row.get("hip", "").strip()
+                hip_id = int(hip_str) if hip_str else None
+                ra_hours = float(row.get("ra", 0.0))
+                dec_deg = float(row.get("dec", 0.0))
+                mag = float(row.get("mag", 99.0))
+                dist_pc = float(row.get("dist", 0.0)) if row.get("dist") else 0.0
+                proper = row.get("proper", "").strip()
+                bayer = row.get("bayer", "").strip()
+                flam = row.get("flam", "").strip()
+                con = row.get("con", "").strip()
+                spect = row.get("spect", "").strip()
+                
+                ra_deg = (ra_hours * 15.0) % 360.0
+                dist_ly = dist_pc * 3.262
+                
+                # Determine standard display name
+                if proper:
+                    display_name = proper
+                elif bayer and con:
+                    display_name = f"{bayer} {con}"
+                elif flam and con:
+                    display_name = f"{flam} {con}"
+                elif hip_id:
+                    display_name = f"HIP {hip_id}"
+                else:
+                    display_name = "Star"
+                    
+                body_type = classify_spectral_type(spect, mag, dist_ly)
+                constel_full = CZECH_CONSTELLATION_NAMES.get(con, con) if con else ""
+                
+                star_entry = {
+                    "hip": hip_id,
+                    "ra": ra_deg,
+                    "dec": dec_deg,
+                    "mag": mag,
+                    "dist_ly": dist_ly,
+                    "proper": proper,
+                    "display_name": display_name,
+                    "con": con,
+                    "body_type": body_type,
+                    "spect": spect,
+                }
+                
+                if hip_id:
+                    stars_by_hip[hip_id] = star_entry
+                all_hyg_stars.append(star_entry)
+            except Exception:
+                continue
+                
+    print(f"Loaded {len(all_hyg_stars):,} stars from HYG database ({len(stars_by_hip):,} with HIP ID).")
+    return all_hyg_stars, stars_by_hip
 
+def build_astronomical_catalog():
+    print("=== Step 1: Parsing Stellarium IAU stick figures & names ===")
+    constellation_lines, english_names = parse_stellarium_data()
+
+    print("=== Step 2: Loading authentic HYG Database v4.1 ===")
+    all_hyg_stars, stars_by_hip = load_hyg_database()
+
+    print("=== Step 3: Filtering & Cross-Referencing Dataset ===")
+    # Collect all HIP IDs referenced by constellation lines (mandatory inclusion)
+    mandatory_hip_ids = set()
+    for abbr, hip_list in constellation_lines.items():
+        for hip_id in hip_list:
+            mandatory_hip_ids.add(hip_id)
+            
+    print(f"Found {len(mandatory_hip_ids)} unique stars referenced across all 88 IAU constellations.")
+
+    # Select stars: mag <= 6.5 OR mandatory constellation star
+    selected_stars = []
+    selected_hips = set()
+    
+    for star in all_hyg_stars:
+        hip_id = star["hip"]
+        if (star["mag"] <= 6.5) or (hip_id is not None and hip_id in mandatory_hip_ids):
+            selected_stars.append(star)
+            if hip_id is not None:
+                selected_hips.add(hip_id)
+                
+    # Sort selected stars by brightness (mag ascending: Sirius first)
+    selected_stars.sort(key=lambda s: s["mag"])
+    
+    # Map HIP ID to array index in sorted stars
+    hip_to_catalog_index = {}
+    stars_data = []
     star_metadata = []
-    for name, ra, dec, body_type, constel, dist_ly in major_stars:
-        idx = find_closest_star_index(stars, ra, dec)
-        star_metadata.append((idx, name, body_type, constel, dist_ly))
+    
+    for idx, star in enumerate(selected_stars):
+        hip_id = star["hip"]
+        if hip_id is not None:
+            hip_to_catalog_index[hip_id] = idx
+            
+        stars_data.append((star["ra"], star["dec"], star["mag"]))
+        
+        # If star has proper name or is prominent (mag <= 3.5), store rich metadata
+        if star["proper"] or star["mag"] <= 3.5:
+            name = star["display_name"]
+            body_type = star["body_type"]
+            constel_name = CZECH_CONSTELLATION_NAMES.get(star["con"], star["con"]) if star["con"] else ""
+            dist_ly = star["dist_ly"]
+            star_metadata.append((idx, name, body_type, constel_name, dist_ly))
 
-    # Constellations with stick figure lines (Pairs of indices: [A, B, B, C...])
-    constellations = []
+    print(f"Selected {len(stars_data):,} catalog stars and {len(star_metadata):,} rich metadata records.")
 
-    # 1. Ursa Major (Big Dipper)
-    um_coords = [
-        (165.93, 61.75), # Dubhe (0)
-        (165.46, 56.38), # Merak (1)
-        (178.46, 53.69), # Phecda (2)
-        (183.86, 57.03), # Megrez (3)
-        (193.51, 55.96), # Alioth (4)
-        (200.98, 54.92), # Mizar (5)
-        (206.89, 49.31), # Alkaid (6)
-    ]
-    um_idx = [find_closest_star_index(stars, r, d) for r, d in um_coords]
-    # Bowl: 0-1, 1-2, 2-3, 3-0; Handle: 3-4, 4-5, 5-6
-    um_lines = [
-        um_idx[0], um_idx[1],
-        um_idx[1], um_idx[2],
-        um_idx[2], um_idx[3],
-        um_idx[3], um_idx[0],
-        um_idx[3], um_idx[4],
-        um_idx[4], um_idx[5],
-        um_idx[5], um_idx[6],
-    ]
-    constellations.append(("Ursa Major", um_lines))
+    print("=== Step 4: Constructing 88 IAU Constellations with Authentic Geometry ===")
+    constellations_data = []
+    
+    for abbr in sorted(constellation_lines.keys()):
+        hip_list = constellation_lines[abbr]
+        eng_name = english_names.get(abbr, abbr)
+        czech_name = CZECH_CONSTELLATION_NAMES.get(abbr, eng_name)
+        family = CONSTELLATION_FAMILIES.get(abbr, "General")
+        
+        # Build line indices pairs
+        line_indices = []
+        member_ras = []
+        member_decs = []
+        member_stars = []
+        
+        for i in range(0, len(hip_list), 2):
+            if i + 1 < len(hip_list):
+                hip1 = hip_list[i]
+                hip2 = hip_list[i + 1]
+                idx1 = hip_to_catalog_index.get(hip1)
+                idx2 = hip_to_catalog_index.get(hip2)
+                if idx1 is not None and idx2 is not None:
+                    line_indices.extend([idx1, idx2])
+                    star1 = selected_stars[idx1]
+                    star2 = selected_stars[idx2]
+                    member_ras.extend([star1["ra"], star2["ra"]])
+                    member_decs.extend([star1["dec"], star2["dec"]])
+                    member_stars.extend([star1, star2])
+        
+        # Calculate spherical centroid
+        if member_ras and member_decs:
+            vx = sum(math.cos(math.radians(d)) * math.cos(math.radians(r)) for r, d in zip(member_ras, member_decs)) / len(member_ras)
+            vy = sum(math.cos(math.radians(d)) * math.sin(math.radians(r)) for r, d in zip(member_ras, member_decs)) / len(member_ras)
+            vz = sum(math.sin(math.radians(d)) for d in member_decs) / len(member_decs)
+            
+            centroid_ra = (math.degrees(math.atan2(vy, vx))) % 360.0
+            centroid_dec = math.degrees(math.asin(max(-1.0, min(1.0, vz / max(1e-6, math.sqrt(vx*vx + vy*vy + vz*vz))))))
+            
+            # Find brightest star in constellation
+            brightest = min(member_stars, key=lambda s: s["mag"])
+            brightest_star_name = brightest["proper"] if brightest["proper"] else brightest["display_name"]
+        else:
+            centroid_ra = 0.0
+            centroid_dec = 0.0
+            brightest_star_name = ""
 
-    # 2. Orion
-    ori_coords = [
-        (88.79, 7.41),   # Betelgeuse (0)
-        (81.28, 6.35),   # Bellatrix (1)
-        (84.05, -1.20),  # Mintaka (2)
-        (84.41, -1.94),  # Alnilam (3)
-        (85.19, -1.94),  # Alnitak (4)
-        (86.94, -9.67),  # Saiph (5)
-        (78.63, -8.20),  # Rigel (6)
-    ]
-    ori_idx = [find_closest_star_index(stars, r, d) for r, d in ori_coords]
-    ori_lines = [
-        ori_idx[0], ori_idx[4], # Betelgeuse to Belt
-        ori_idx[1], ori_idx[2], # Bellatrix to Belt
-        ori_idx[2], ori_idx[3], # Belt
-        ori_idx[3], ori_idx[4], # Belt
-        ori_idx[4], ori_idx[5], # Belt to Saiph
-        ori_idx[2], ori_idx[6], # Belt to Rigel
-        ori_idx[0], ori_idx[1], # Betelgeuse to Bellatrix
-        ori_idx[5], ori_idx[6], # Saiph to Rigel
-    ]
-    constellations.append(("Orion", ori_lines))
+        constellations_data.append((
+            eng_name,
+            centroid_ra,
+            centroid_dec,
+            line_indices,
+            czech_name,
+            brightest_star_name,
+            family
+        ))
 
-    # 3. Cassiopeia (W shape)
-    cas_coords = [
-        (9.83, 59.15),   # Caph (0)
-        (10.13, 56.54),  # Schedar (1)
-        (14.18, 60.72),  # Gamma Cas (2)
-        (20.40, 60.23),  # Ruchbah (3)
-        (26.65, 63.67),  # Segin (4)
-    ]
-    cas_idx = [find_closest_star_index(stars, r, d) for r, d in cas_coords]
-    cas_lines = [
-        cas_idx[0], cas_idx[1],
-        cas_idx[1], cas_idx[2],
-        cas_idx[2], cas_idx[3],
-        cas_idx[3], cas_idx[4],
-    ]
-    constellations.append(("Cassiopeia", cas_lines))
-
-    # 4. Crux (Southern Cross)
-    crux_coords = [
-        (187.56, -57.11), # Gacrux (0)
-        (186.65, -63.10), # Acrux (1)
-        (191.93, -59.69), # Mimosa (2)
-        (183.99, -58.75), # Delta Cru (3)
-    ]
-    crux_idx = [find_closest_star_index(stars, r, d) for r, d in crux_coords]
-    crux_lines = [
-        crux_idx[0], crux_idx[1], # Long axis
-        crux_idx[2], crux_idx[3], # Cross axis
-    ]
-    constellations.append(("Crux", crux_lines))
-
-    # 5. Cygnus (Northern Cross)
-    cyg_coords = [
-        (310.36, 45.28), # Deneb (0)
-        (305.56, 40.26), # Sadr (1)
-        (292.68, 27.96), # Albireo (2)
-        (311.24, 33.97), # Gienah (3)
-        (296.24, 45.13), # Delta Cyg (4)
-    ]
-    cyg_idx = [find_closest_star_index(stars, r, d) for r, d in cyg_coords]
-    cyg_lines = [
-        cyg_idx[0], cyg_idx[1],
-        cyg_idx[1], cyg_idx[2], # Spine
-        cyg_idx[4], cyg_idx[1],
-        cyg_idx[1], cyg_idx[3], # Wings
-    ]
-    constellations.append(("Cygnus", cyg_lines))
-
-    return star_metadata, constellations
+    print(f"Successfully processed all {len(constellations_data)} IAU constellations.")
+    return stars_data, star_metadata, constellations_data
 
 def main():
-    print("Loading astronomical star catalog dataset...")
-    stars = fetch_yale_bright_stars()
-    print(f"Loaded {len(stars)} stars.")
-
-    metadata, constellations = build_constellations_and_names(stars)
-
-    print("Packing into FlatBuffers format...")
-    pack_catalog(stars, metadata, constellations, OUTPUT_RAW_BIN)
-    pack_catalog(stars, metadata, constellations, OUTPUT_PIPELINE_BIN)
-    print("FlatBuffers catalog generated successfully!")
+    stars_data, star_metadata, constellations_data = build_astronomical_catalog()
+    
+    print("=== Step 5: Packaging into FlatBuffers binary ===")
+    pack_catalog(stars_data, star_metadata, constellations_data, OUTPUT_RAW_BIN)
+    pack_catalog(stars_data, star_metadata, constellations_data, OUTPUT_PIPELINE_BIN)
+    print("Catalog generation completed successfully!")
 
 if __name__ == "__main__":
     main()
+

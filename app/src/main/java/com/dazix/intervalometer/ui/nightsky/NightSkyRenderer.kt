@@ -73,7 +73,7 @@ class NightSkyRenderer {
     private var landscapeTextureHeight = 1024f
     private var hasLandscapeTexture = false
 
-    private val maxStars = 4096
+    private val maxStars = 10240
     val numBuckets = StarOptics.NUM_BUCKETS
     val bucketPoints = Array(numBuckets) { FloatArray(maxStars * 2) }
     val bucketCounts = IntArray(numBuckets)
@@ -83,8 +83,23 @@ class NightSkyRenderer {
     private val starScreenY = FloatArray(maxStars)
     private val starInFront = BooleanArray(maxStars)
 
-    private val maxConstellationSegments = 1024
-    private val constellationLinesBuffer = FloatArray(maxConstellationSegments * 4)
+    // Fast O(1) zero-allocation lookup table to force render constituent stars of visible constellations
+    val forceRenderStar = BooleanArray(maxStars)
+
+    private val maxConstellations = 88
+    val constellationProgress = FloatArray(maxConstellations) { 0f }
+    val constellationCentroidScreenX = FloatArray(maxConstellations)
+    val constellationCentroidScreenY = FloatArray(maxConstellations)
+    val constellationCentroidInFront = BooleanArray(maxConstellations)
+    private val tempCentroidWorldVec = FloatArray(3)
+    private var lastFrameTimeMs: Long = 0L
+
+    var selectedConstellationIndex: Int = -1
+    var selectedStarIndex: Int = -1
+
+    private val maxConstellationSegments = 2048
+    // 2 line segments per pair (A to midpoint, B to midpoint) = 8 floats per segment
+    private val constellationLinesBuffer = FloatArray(maxConstellationSegments * 8)
 
     private val tempWorldVec = FloatArray(3)
     private val reusableConstellation = Constellation()
@@ -155,13 +170,37 @@ class NightSkyRenderer {
     val constellationPaint = Paint().apply {
         isAntiAlias = true
         style = Paint.Style.STROKE
-        strokeWidth = 2.0f
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 1.2f
+    }
+
+    val constellationHaloPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 5.4f
+    }
+
+    val constellationCorePaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 2.16f
     }
 
     val constellationLabelPaint = Paint().apply {
         isAntiAlias = true
         textSize = 28f
+        textAlign = Paint.Align.CENTER
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    val constellationHighlightLabelPaint = Paint().apply {
+        isAntiAlias = true
+        textSize = 32f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
     }
 
     // Zero-allocation broken-crosshair selection reticle & target text paints and buffers
@@ -215,12 +254,18 @@ class NightSkyRenderer {
 
         if (redVisionMode) {
             constellationPaint.color = AndroidColor.argb(160, 255, 23, 68)
+            constellationHaloPaint.color = AndroidColor.argb(50, 255, 23, 68)
+            constellationCorePaint.color = AndroidColor.argb(255, 255, 82, 82)
             constellationLabelPaint.color = AndroidColor.argb(210, 255, 23, 68)
+            constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 23, 68)
             reticlePaint.color = AndroidColor.rgb(255, 23, 68)
             reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
         } else {
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
+            constellationHaloPaint.color = AndroidColor.argb(45, 128, 222, 234)
+            constellationCorePaint.color = AndroidColor.argb(255, 255, 255, 255)
             constellationLabelPaint.color = AndroidColor.argb(220, 77, 208, 225)
+            constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
             reticlePaint.color = AndroidColor.WHITE
             reticleTextPaint.color = AndroidColor.WHITE
         }
@@ -248,7 +293,11 @@ class NightSkyRenderer {
         for (b in 0 until numBuckets) {
             corePaints[b].strokeWidth = baseCoreDp[b] * densityScale * opticScale
         }
-        constellationPaint.strokeWidth = constellationPx
+        constellationPaint.strokeWidth = 1.45f * densityScale
+        constellationHaloPaint.strokeWidth = 5.4f * densityScale
+        constellationCorePaint.strokeWidth = 2.16f * densityScale
+        constellationLabelPaint.textSize = 13f * densityScale
+        constellationHighlightLabelPaint.textSize = 15f * densityScale
         reticlePaint.strokeWidth = 2.2f * densityScale
         reticleTextPaint.textSize = 15f * densityScale
     }
@@ -392,15 +441,67 @@ class NightSkyRenderer {
         }
     }
 
+    sealed interface HitTarget {
+        data class ConstellationHit(val index: Int) : HitTarget
+        data class StarHit(val index: Int) : HitTarget
+        data object Miss : HitTarget
+    }
+
+    /**
+     * Performs prioritized 2D screen-space hit testing:
+     * 1. In-focus constellation name text (progress > 0.3f)
+     * 2. Visible stars within maxRadiusPx touch radius
+     * 3. Miss
+     * Zero heap allocations on the hit sweep.
+     */
+    fun findHitAt(
+        tapX: Float,
+        tapY: Float,
+        maxStarRadiusPx: Float,
+        density: Float,
+        catalog: NightSkyCatalog?,
+    ): HitTarget {
+        if (catalog == null) return HitTarget.Miss
+
+        // Priority 1: Constellations
+        val constCount = minOf(catalog.constellationsLength(), maxConstellations)
+        val constHit = StarHitTester.findConstellationTextHit(
+            tapX = tapX,
+            tapY = tapY,
+            centroidScreenX = constellationCentroidScreenX,
+            centroidScreenY = constellationCentroidScreenY,
+            centroidInFront = constellationCentroidInFront,
+            constellationProgress = constellationProgress,
+            totalConstellations = constCount,
+            textOffsetYPx = 40f * density,
+            halfWidthPx = 75f * density,
+            halfHeightPx = 30f * density,
+            minProgress = 0.3f,
+        )
+        if (constHit >= 0) {
+            return HitTarget.ConstellationHit(constHit)
+        }
+
+        // Priority 2: Stars
+        val starHit = StarHitTester.findClosestVisibleStar(
+            tapX = tapX,
+            tapY = tapY,
+            starScreenX = starScreenX,
+            starScreenY = starScreenY,
+            starInFront = starInFront,
+            totalStars = catalog.starsLength(),
+            maxRadiusPx = maxStarRadiusPx,
+        )
+        if (starHit >= 0) {
+            return HitTarget.StarHit(starHit)
+        }
+
+        return HitTarget.Miss
+    }
+
     /**
      * Performs ultra-fast 2D screen-space hit testing to identify the star closest to the user's tap coordinates.
      * Zero heap allocations.
-     *
-     * @param tapX Touch X coordinate in screen pixels.
-     * @param tapY Touch Y coordinate in screen pixels.
-     * @param maxRadiusPx Maximum search radius in pixels.
-     * @param totalStars Number of stars in the catalog.
-     * @return Catalog star index [0, totalStars - 1], or -1 if no star was hit.
      */
     fun findClosestStarAt(
         tapX: Float,
@@ -444,6 +545,11 @@ class NightSkyRenderer {
         val totalStars = minOf(catalog.starsLength(), maxStars)
         if (totalStars == 0) return 0
 
+        // Delta-time calculation for smooth 60 FPS animation progress
+        val now = android.os.SystemClock.elapsedRealtime()
+        val dt = if (lastFrameTimeMs == 0L) 0.016f else ((now - lastFrameTimeMs) / 1000f).coerceIn(0.001f, 0.1f)
+        lastFrameTimeMs = now
+
         val bb = catalog.byteBuffer
         val starsVectorOffset = catalog.starsVectorOffset()
 
@@ -473,15 +579,87 @@ class NightSkyRenderer {
         val faintestVisibleMag = StarOptics.computeFaintestVisibleMagnitude(zoomFactor)
         var totalVisibleStars = 0
 
-        // 4. Batch process stars with ZERO heap allocations
+        // 4. Constellation Centroid Focus & Animation Progress Update
+        val constCount = minOf(catalog.constellationsLength(), maxConstellations)
+        val focusRadius = w * 0.60f
+        val focusRadiusSq = focusRadius * focusRadius
+
+        for (c in 0 until constCount) {
+            catalog.constellations(reusableConstellation, c)
+            val cRa = reusableConstellation.centroidRa().toDouble()
+            val cDec = reusableConstellation.centroidDec().toDouble()
+
+            EquatorialCoordinates.computeWorldVector(cRa, cDec, lstDegrees, latitudeDegrees, tempCentroidWorldVec, 0)
+            val cVx = tempCentroidWorldVec[0]
+            val cVy = tempCentroidWorldVec[1]
+            val cVz = tempCentroidWorldVec[2]
+
+            val cxDev = matrix[0] * cVx + matrix[4] * cVy + matrix[8] * cVz
+            val cyDev = matrix[1] * cVx + matrix[5] * cVy + matrix[9] * cVz
+            val czDev = matrix[2] * cVx + matrix[6] * cVy + matrix[10] * cVz
+
+            val cxs: Float
+            val cys: Float
+            when (displayRotation) {
+                Surface.ROTATION_0 -> { cxs = cxDev; cys = cyDev }
+                Surface.ROTATION_90 -> { cxs = cyDev; cys = -cxDev }
+                Surface.ROTATION_180 -> { cxs = -cxDev; cys = -cyDev }
+                Surface.ROTATION_270 -> { cxs = -cyDev; cys = cxDev }
+                else -> { cxs = cxDev; cys = cyDev }
+            }
+            val czs = -czDev
+
+            if (czs > 0.001f) {
+                val cxScreen = halfW + focalLengthPixels * (cxs / czs)
+                val cyScreen = halfH - focalLengthPixels * (cys / czs)
+                constellationCentroidScreenX[c] = cxScreen
+                constellationCentroidScreenY[c] = cyScreen
+                constellationCentroidInFront[c] = true
+
+                val cdx = cxScreen - halfW
+                val cdy = cyScreen - halfH
+                val inFocus = showConstellations && ((cdx * cdx + cdy * cdy) <= focusRadiusSq)
+                if (inFocus) {
+                    constellationProgress[c] = minOf(1.0f, constellationProgress[c] + dt * 2.0f)
+                } else {
+                    constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
+                }
+            } else {
+                constellationCentroidInFront[c] = false
+                constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
+            }
+        }
+
+        // 5. Fast Dynamic Override Table: force render stars of visible constellations
+        forceRenderStar.fill(false)
+        if (showConstellations) {
+            for (c in 0 until constCount) {
+                val progress = constellationProgress[c]
+                if (progress > 0.001f) {
+                    catalog.constellations(reusableConstellation, c)
+                    val linesLen = reusableConstellation.linesLength()
+                    for (j in 0 until linesLen) {
+                        val starIndex = reusableConstellation.lines(j)
+                        if (starIndex in 0 until totalStars) {
+                            forceRenderStar[starIndex] = true
+                        }
+                    }
+                }
+            }
+        }
+
+        // 6. Batch process stars with ZERO heap allocations
         for (i in 0 until totalStars) {
             val offset = starsVectorOffset + i * 12
             val ra = bb.getFloat(offset).toDouble()
             val dec = bb.getFloat(offset + 4).toDouble()
             val rawMag = bb.getFloat(offset + 8)
 
-            // Dynamic telescope ocular reveal: cull stars fainter than current zoom limit
-            if (rawMag > faintestVisibleMag) {
+            val isForced = forceRenderStar[i]
+            val isBrightEnough = rawMag <= faintestVisibleMag
+
+            // Dynamic telescope ocular reveal: cull stars fainter than current zoom limit unless forced by visible constellation
+            if (!isBrightEnough && !isForced) {
                 starInFront[i] = false
                 continue
             }
@@ -532,13 +710,12 @@ class NightSkyRenderer {
             }
 
             // Physical Atmospheric Star Extinction (dim stars near horizon 0° <= h < 15°)
-            // Stars below horizon (h <= 0°) remain unextinguished (occluded naturally by landscape layer)
             var effectiveMag = rawMag
             if (isAtmosphereVisible) {
                 val starElevationDeg = (Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))).toFloat()
                 if (starElevationDeg in 0.0f..StarOptics.EXTINCTION_ANGLE_DEG) {
                     effectiveMag = StarOptics.computeAirmassExtinction(rawMag, starElevationDeg)
-                    if (effectiveMag > faintestVisibleMag) {
+                    if (effectiveMag > faintestVisibleMag && !isForced) {
                         continue
                     }
                 }
@@ -556,14 +733,20 @@ class NightSkyRenderer {
             }
         }
 
-        // 5. Batch Render Constellation Lines
+        // 7. Batch Render Context-Aware Constellations ("Meet-in-the-Middle" & Single Line at 100%)
         if (showConstellations) {
-            val constCount = catalog.constellationsLength()
-            var lineSegmentCount = 0
+            val density = drawScope.density
+            val gapPx = 7f * density
 
             for (c in 0 until constCount) {
+                val p = constellationProgress[c]
+                if (p <= 0.001f) continue
+
                 catalog.constellations(reusableConstellation, c)
                 val linesLen = reusableConstellation.linesLength()
+                var lineCoordsCount = 0
+                val isSelected = (c == selectedConstellationIndex)
+
                 for (k in 0 until linesLen - 1 step 2) {
                     val i1 = reusableConstellation.lines(k)
                     val i2 = reusableConstellation.lines(k + 1)
@@ -577,26 +760,88 @@ class NightSkyRenderer {
 
                             if ((x1 in -margin..(w + margin) && y1 in -margin..(h + margin)) ||
                                 (x2 in -margin..(w + margin) && y2 in -margin..(h + margin))) {
-                                if (lineSegmentCount < maxConstellationSegments) {
-                                    val idx = lineSegmentCount * 4
-                                    constellationLinesBuffer[idx] = x1
-                                    constellationLinesBuffer[idx + 1] = y1
-                                    constellationLinesBuffer[idx + 2] = x2
-                                    constellationLinesBuffer[idx + 3] = y2
-                                    lineSegmentCount++
+                                
+                                val dx = x2 - x1
+                                val dy = y2 - y1
+                                val length = kotlin.math.sqrt(dx * dx + dy * dy)
+
+                                if (length > gapPx * 2.1f) {
+                                    val ux = dx / length
+                                    val uy = dy / length
+                                    val startX = x1 + ux * gapPx
+                                    val startY = y1 + uy * gapPx
+                                    val endX = x2 - ux * gapPx
+                                    val endY = y2 - uy * gapPx
+
+                                    if (p >= 0.99f) {
+                                        // ANIMATION FINISHED: Draw exactly ONE continuous segment
+                                        // Completely eliminates center overlapping dot artifact!
+                                        if (lineCoordsCount + 4 <= constellationLinesBuffer.size) {
+                                            constellationLinesBuffer[lineCoordsCount] = startX
+                                            constellationLinesBuffer[lineCoordsCount + 1] = startY
+                                            constellationLinesBuffer[lineCoordsCount + 2] = endX
+                                            constellationLinesBuffer[lineCoordsCount + 3] = endY
+                                            lineCoordsCount += 4
+                                        }
+                                    } else {
+                                        // ANIMATING: Draw two segments meeting in the middle
+                                        if (lineCoordsCount + 8 <= constellationLinesBuffer.size) {
+                                            val adjDx = endX - startX
+                                            val adjDy = endY - startY
+                                            val pHalf = p * 0.5f
+
+                                            constellationLinesBuffer[lineCoordsCount] = startX
+                                            constellationLinesBuffer[lineCoordsCount + 1] = startY
+                                            constellationLinesBuffer[lineCoordsCount + 2] = startX + (adjDx * pHalf)
+                                            constellationLinesBuffer[lineCoordsCount + 3] = startY + (adjDy * pHalf)
+
+                                            constellationLinesBuffer[lineCoordsCount + 4] = endX
+                                            constellationLinesBuffer[lineCoordsCount + 5] = endY
+                                            constellationLinesBuffer[lineCoordsCount + 6] = endX - (adjDx * pHalf)
+                                            constellationLinesBuffer[lineCoordsCount + 7] = endY - (adjDy * pHalf)
+                                            lineCoordsCount += 8
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            if (lineSegmentCount > 0) {
-                nativeCanvas.drawLines(constellationLinesBuffer, 0, lineSegmentCount * 4, constellationPaint)
+                if (lineCoordsCount > 0) {
+                    if (isSelected) {
+                        // Pass 1: Outer Optical Halo
+                        constellationHaloPaint.alpha = (42f * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationHaloPaint)
+                        // Pass 2: Sharp Inner Core
+                        constellationCorePaint.alpha = (240f * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationCorePaint)
+                    } else {
+                        constellationPaint.alpha = (48f * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationPaint)
+                    }
+                }
+
+                // Render Animated Constellation Name Label with vertical slide
+                if (constellationCentroidInFront[c] && p > 0.05f) {
+                    val cx = constellationCentroidScreenX[c]
+                    val cy = constellationCentroidScreenY[c]
+                    val textY = cy - (40f * (1f - p))
+                    val label = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: ""
+                    if (label.isNotEmpty() && cx in -margin..(w + margin) && textY in -margin..(h + margin)) {
+                        if (isSelected) {
+                            constellationHighlightLabelPaint.alpha = (255f * p).toInt().coerceIn(0, 255)
+                            nativeCanvas.drawText(label, cx, textY, constellationHighlightLabelPaint)
+                        } else {
+                            constellationLabelPaint.alpha = (200f * p).toInt().coerceIn(0, 255)
+                            nativeCanvas.drawText(label, cx, textY, constellationLabelPaint)
+                        }
+                    }
+                }
             }
         }
 
-        // 6. Hybrid Optical Star Rendering:
+        // 8. Hybrid Optical Star Rendering:
         // Pass 1: Continuous Radial Gradient Sprite Glow for Bright Stars (Buckets 0, 1, 2: mag < 3.0)
         val sprite = starSpriteBitmap
         if (sprite != null) {
@@ -689,32 +934,37 @@ class NightSkyRenderer {
             return
         }
 
-        val r1 = 13f * density
-        val r2 = 24f * density
+        // Only draw broken crosshair if a Star is selected (not a Constellation)
+        if (selectedStarIndex >= 0) {
+            // Scaled to 75% of original radii (r1: 13dp -> 9.75dp, r2: 24dp -> 18dp):
+            val r1 = 9.75f * density
+            val r2 = 18.0f * density
 
-        // Left arm
-        reticleLinesBuffer[0] = screenX - r2
-        reticleLinesBuffer[1] = screenY
-        reticleLinesBuffer[2] = screenX - r1
-        reticleLinesBuffer[3] = screenY
+            // Left arm
+            reticleLinesBuffer[0] = screenX - r2
+            reticleLinesBuffer[1] = screenY
+            reticleLinesBuffer[2] = screenX - r1
+            reticleLinesBuffer[3] = screenY
 
-        // Right arm
-        reticleLinesBuffer[4] = screenX + r1
-        reticleLinesBuffer[5] = screenY
-        reticleLinesBuffer[6] = screenX + r2
-        reticleLinesBuffer[7] = screenY
+            // Right arm
+            reticleLinesBuffer[4] = screenX + r1
+            reticleLinesBuffer[5] = screenY
+            reticleLinesBuffer[6] = screenX + r2
+            reticleLinesBuffer[7] = screenY
 
-        // Bottom arm
-        reticleLinesBuffer[8] = screenX
-        reticleLinesBuffer[9] = screenY + r1
-        reticleLinesBuffer[10] = screenX
-        reticleLinesBuffer[11] = screenY + r2
+            // Bottom arm
+            reticleLinesBuffer[8] = screenX
+            reticleLinesBuffer[9] = screenY + r1
+            reticleLinesBuffer[10] = screenX
+            reticleLinesBuffer[11] = screenY + r2
 
-        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
-        nativeCanvas.drawLines(reticleLinesBuffer, 0, 12, reticlePaint)
+            val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
+            nativeCanvas.drawLines(reticleLinesBuffer, 0, 12, reticlePaint)
 
-        // Position text 30% closer to the star (16dp above center)
-        val textY = screenY - (16f * density)
-        nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
+            // Position star name text centered in the upper opening (approx. 1/3 of the removed top arm):
+            // Removed top arm was at r1..r2; 1/3 position is r1 + (r2 - r1)/3 = 9.75dp + 2.75dp = 12.5dp
+            val textY = screenY - (12.5f * density)
+            nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
+        }
     }
 }

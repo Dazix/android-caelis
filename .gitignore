@@ -29,3 +29,8 @@ scripts/env.local.sh
 /build/e2e
 /screenshots
 scripts/capture_all_screens.py
+
+# Python
+__pycache__/
+*.py[cod]
+data_pipeline/cache/

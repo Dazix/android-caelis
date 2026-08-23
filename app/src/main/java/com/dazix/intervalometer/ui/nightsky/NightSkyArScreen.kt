@@ -97,11 +97,17 @@ fun NightSkyArScreen(
     )
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
+    val density = LocalDensity.current
+    val renderer = remember { NightSkyRenderer() }
+    val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
+
     // Synchronize ViewModel State with UI State
     LaunchedEffect(uiState.selectedBody) {
         if (uiState.selectedBody != null) {
             sheetState.partialExpand()
         } else {
+            renderer.selectedConstellationIndex = -1
+            renderer.selectedStarIndex = -1
             sheetState.hide()
         }
     }
@@ -114,6 +120,8 @@ fun NightSkyArScreen(
                 if (value != SheetValue.Hidden) {
                     wasVisible = true
                 } else if (wasVisible) {
+                    renderer.selectedConstellationIndex = -1
+                    renderer.selectedStarIndex = -1
                     viewModel.clearSelectedBody()
                     wasVisible = false
                 }
@@ -166,10 +174,6 @@ fun NightSkyArScreen(
     val displayRotation = DisplayGeometry.currentRotation(context)
     val isPortrait = displayRotation == android.view.Surface.ROTATION_0 ||
         displayRotation == android.view.Surface.ROTATION_180
-
-    val density = LocalDensity.current
-    val renderer = remember { NightSkyRenderer() }
-    val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
 
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
     val sheetContainerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0121622)
@@ -225,20 +229,32 @@ fun NightSkyArScreen(
                         }
                     )
                 }
-                .pointerInput(catalog, maxTouchRadiusPx) {
+                .pointerInput(catalog, maxTouchRadiusPx, density) {
                     detectTapGestures(
                         onTap = { offset ->
-                            val totalStars = catalog?.starsLength() ?: 0
-                            val hitIndex = renderer.findClosestStarAt(
+                            val hitTarget = renderer.findHitAt(
                                 tapX = offset.x,
                                 tapY = offset.y,
-                                maxRadiusPx = maxTouchRadiusPx,
-                                totalStars = totalStars,
+                                maxStarRadiusPx = maxTouchRadiusPx,
+                                density = density.density,
+                                catalog = catalog,
                             )
-                            if (hitIndex >= 0) {
-                                viewModel.selectStarByIndex(hitIndex)
-                            } else {
-                                viewModel.clearSelectedBody()
+                            when (hitTarget) {
+                                is NightSkyRenderer.HitTarget.ConstellationHit -> {
+                                    renderer.selectedConstellationIndex = hitTarget.index
+                                    renderer.selectedStarIndex = -1
+                                    viewModel.selectConstellationByIndex(hitTarget.index)
+                                }
+                                is NightSkyRenderer.HitTarget.StarHit -> {
+                                    renderer.selectedStarIndex = hitTarget.index
+                                    renderer.selectedConstellationIndex = -1
+                                    viewModel.selectStarByIndex(hitTarget.index)
+                                }
+                                is NightSkyRenderer.HitTarget.Miss -> {
+                                    renderer.selectedConstellationIndex = -1
+                                    renderer.selectedStarIndex = -1
+                                    viewModel.clearSelectedBody()
+                                }
                             }
                         },
                         onDoubleTap = {

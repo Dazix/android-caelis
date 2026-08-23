@@ -306,6 +306,10 @@
     <!-- Celestial Object Details -->
     <string name="celestial_type">Type</string>
     <string name="celestial_constellation">Constellation</string>
+    <string name="celestial_brightest_star">Brightest star</string>
+    <string name="celestial_family">Family</string>
+    <string name="celestial_constellation_subtitle">Constellation</string>
+    <string name="celestial_star_subtitle">Star</string>
     <string name="celestial_distance">Distance</string>
     <string name="celestial_magnitude">Magnitude</string>
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>

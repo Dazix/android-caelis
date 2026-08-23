@@ -87,7 +87,7 @@ fun CelestialDetailSheetContent(
             )
 
             Text(
-                text = selectedBody.type,
+                text = selectedBody.subtitle,
                 color = labelColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Normal,
@@ -111,54 +111,113 @@ fun CelestialDetailSheetContent(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Data Grid Row 1: Magnitude & Constellation
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                CelestialDataField(
-                    label = stringResource(R.string.celestial_magnitude),
-                    value = String.format(Locale.US, "V %+.2f", selectedBody.magnitude),
-                    labelColor = labelColor,
-                    valueColor = accentColor,
-                    isMonospace = true,
-                    modifier = Modifier.weight(1f),
-                )
-
-                CelestialDataField(
-                    label = stringResource(R.string.celestial_constellation),
-                    value = selectedBody.constellation ?: "—",
-                    labelColor = labelColor,
-                    valueColor = valueColor,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            // Data Grid Row 2: Distance & Equatorial Coordinates (RA / Dec)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                CelestialDataField(
-                    label = stringResource(R.string.celestial_distance),
-                    value = selectedBody.distance,
-                    labelColor = labelColor,
-                    valueColor = valueColor,
-                    modifier = Modifier.weight(1f),
-                )
-
-                if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
-                    val raFormatted = formatRa(selectedBody.raDegrees)
-                    val decFormatted = formatDec(selectedBody.decDegrees)
-
+            if (selectedBody.magnitude != null) {
+                // STAR LAYOUT:
+                // Row 1: Magnitude & Constellation (property1)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     CelestialDataField(
-                        label = stringResource(R.string.celestial_coordinates),
-                        value = "$raFormatted  ·  $decFormatted",
+                        label = stringResource(R.string.celestial_magnitude),
+                        value = String.format(Locale.US, "V %+.2f", selectedBody.magnitude),
                         labelColor = labelColor,
                         valueColor = accentColor,
                         isMonospace = true,
                         modifier = Modifier.weight(1f),
                     )
+
+                    if (selectedBody.property1 != null) {
+                        CelestialDataField(
+                            label = selectedBody.property1.first,
+                            value = selectedBody.property1.second,
+                            labelColor = labelColor,
+                            valueColor = valueColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+
+                // Row 2: Distance (property2) & Equatorial Coordinates
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    if (selectedBody.property2 != null) {
+                        CelestialDataField(
+                            label = selectedBody.property2.first,
+                            value = selectedBody.property2.second,
+                            labelColor = labelColor,
+                            valueColor = valueColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
+                        val raFormatted = formatRa(selectedBody.raDegrees)
+                        val decFormatted = formatDec(selectedBody.decDegrees)
+
+                        CelestialDataField(
+                            label = stringResource(R.string.celestial_coordinates),
+                            value = "$raFormatted  ·  $decFormatted",
+                            labelColor = labelColor,
+                            valueColor = accentColor,
+                            isMonospace = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    } else if (selectedBody.property2 == null) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            } else {
+                // CONSTELLATION LAYOUT:
+                // Row 1: Brightest Star (property1) & Family (property2)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    if (selectedBody.property1 != null) {
+                        CelestialDataField(
+                            label = selectedBody.property1.first,
+                            value = selectedBody.property1.second,
+                            labelColor = labelColor,
+                            valueColor = valueColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+
+                    if (selectedBody.property2 != null) {
+                        CelestialDataField(
+                            label = selectedBody.property2.first,
+                            value = selectedBody.property2.second,
+                            labelColor = labelColor,
+                            valueColor = valueColor,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
+                // Row 2: Centroid Coordinates
+                if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
+                    val raFormatted = formatRa(selectedBody.raDegrees)
+                    val decFormatted = formatDec(selectedBody.decDegrees)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        CelestialDataField(
+                            label = stringResource(R.string.celestial_coordinates),
+                            value = "$raFormatted  ·  $decFormatted",
+                            labelColor = labelColor,
+                            valueColor = accentColor,
+                            isMonospace = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }

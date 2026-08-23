@@ -312,6 +312,10 @@
     <!-- Celestial Object Details -->
     <string name="celestial_type">Typ</string>
     <string name="celestial_constellation">Souhvězdí</string>
+    <string name="celestial_brightest_star">Nejjasnější hvězda</string>
+    <string name="celestial_family">Rodina</string>
+    <string name="celestial_constellation_subtitle">Souhvězdí</string>
+    <string name="celestial_star_subtitle">Hvězda</string>
     <string name="celestial_distance">Vzdálenost</string>
     <string name="celestial_magnitude">Magnituda</string>
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>

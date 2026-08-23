@@ -320,22 +320,62 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        val app = getApplication<Application>()
         val name = matchedName ?: "HIP ${starIndex + 1}"
-        val type = matchedType ?: "Star"
+        val subtitle = matchedType ?: app.getString(R.string.celestial_star_subtitle)
         val distanceFormatted = if (matchedDistanceLy > 0f) {
             String.format(java.util.Locale.US, "%.1f ly", matchedDistanceLy)
         } else {
             "—"
         }
 
+        val prop1 = matchedConstellation?.let {
+            Pair(app.getString(R.string.celestial_constellation), it)
+        }
+        val prop2 = Pair(app.getString(R.string.celestial_distance), distanceFormatted)
+
         selectedBodyState.value = CelestialBodyDetails(
             name = name,
-            type = type,
-            constellation = matchedConstellation,
-            distance = distanceFormatted,
+            subtitle = subtitle,
+            property1 = prop1,
+            property2 = prop2,
             magnitude = star.mag(),
             raDegrees = star.ra().toDouble(),
             decDegrees = star.dec().toDouble(),
+        )
+    }
+
+    /**
+     * Resolves astronomical metadata for the tapped constellation from FlatBuffers catalog and updates [selectedBody].
+     */
+    fun selectConstellationByIndex(constellationIndex: Int) {
+        val cat = catalogState.value ?: return
+        val totalConstellations = cat.constellationsLength()
+        if (constellationIndex !in 0 until totalConstellations) {
+            selectedBodyState.value = null
+            return
+        }
+
+        val reusableConst = com.dazix.intervalometer.data.nightsky.Constellation()
+        cat.constellations(reusableConst, constellationIndex)
+
+        val app = getApplication<Application>()
+        val name = reusableConst.localizedName() ?: reusableConst.name() ?: ""
+        val subtitle = app.getString(R.string.celestial_constellation_subtitle)
+        val brightestStar = reusableConst.brightestStar() ?: "—"
+        val family = reusableConst.family() ?: "—"
+
+        val prop1 = Pair(app.getString(R.string.celestial_brightest_star), brightestStar)
+        val prop2 = Pair(app.getString(R.string.celestial_family), family)
+
+        selectedBodyState.value = CelestialBodyDetails(
+            name = name,
+            subtitle = subtitle,
+            property1 = prop1,
+            property2 = prop2,
+            magnitude = null,
+            raDegrees = reusableConst.centroidRa().toDouble(),
+            decDegrees = reusableConst.centroidDec().toDouble(),
         )
     }
 

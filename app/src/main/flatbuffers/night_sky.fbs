@@ -19,8 +19,13 @@ table StarMetadata {
 
 table Constellation {
   name: string;
+  centroid_ra: float; // For center-screen focus detection
+  centroid_dec: float;
   // Sequence of star indices representing line segments (e.g., [A, B, B, C] for a connected line)
   lines: [int];
+  localized_name: string;
+  brightest_star: string;
+  family: string;
 }
 
 table NightSkyCatalog {
