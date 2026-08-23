@@ -923,78 +923,67 @@ class NightSkyRenderer {
                 val artWidthDeg = reusableConstellation.artWidthDeg()
                 val artRotDeg = reusableConstellation.artRotationDeg()
 
-                // Project Center
+                // 1. Project Artwork Center Point (cX, cY)
                 EquatorialCoordinates.computeWorldVector(artCenterRa, artCenterDec, lstDegrees, latitudeDegrees, tempArtCenterWorldVec, 0)
-                val acVx = tempArtCenterWorldVec[0]
-                val acVy = tempArtCenterWorldVec[1]
-                val acVz = tempArtCenterWorldVec[2]
+                val cVx = tempArtCenterWorldVec[0]
+                val cVy = tempArtCenterWorldVec[1]
+                val cVz = tempArtCenterWorldVec[2]
 
-                val acxDev = matrix[0] * acVx + matrix[4] * acVy + matrix[8] * acVz
-                val acyDev = matrix[1] * acVx + matrix[5] * acVy + matrix[9] * acVz
-                val aczDev = matrix[2] * acVx + matrix[6] * acVy + matrix[10] * acVz
+                val cxDev = matrix[0] * cVx + matrix[4] * cVy + matrix[8] * cVz
+                val cyDev = matrix[1] * cVx + matrix[5] * cVy + matrix[9] * cVz
+                val czDev = matrix[2] * cVx + matrix[6] * cVy + matrix[10] * cVz
 
-                val acxs: Float
-                val acys: Float
+                val cxs: Float
+                val cys: Float
                 when (displayRotation) {
-                    Surface.ROTATION_0 -> { acxs = acxDev; acys = acyDev }
-                    Surface.ROTATION_90 -> { acxs = acyDev; acys = -acxDev }
-                    Surface.ROTATION_180 -> { acxs = -acxDev; acys = -acyDev }
-                    Surface.ROTATION_270 -> { acxs = -acyDev; acys = acxDev }
-                    else -> { acxs = acxDev; acys = acyDev }
+                    Surface.ROTATION_0 -> { cxs = cxDev; cys = cyDev }
+                    Surface.ROTATION_90 -> { cxs = cyDev; cys = -cxDev }
+                    Surface.ROTATION_180 -> { cxs = -cxDev; cys = -cyDev }
+                    Surface.ROTATION_270 -> { cxs = -cyDev; cys = cxDev }
+                    else -> { cxs = cxDev; cys = cyDev }
                 }
-                val aczs = -aczDev
-                if (aczs <= 0.001f) continue
+                val czs = -czDev
+                if (czs <= 0.001f) continue
 
-                val acScreenX = halfW + focalLengthPixels * (acxs / aczs)
-                val acScreenY = halfH - focalLengthPixels * (acys / aczs)
+                val cScreenX = halfW + focalLengthPixels * (cxs / czs)
+                val cScreenY = halfH - focalLengthPixels * (cys / czs)
 
-                // Project Top orientation vector for rotation alignment
-                val rRa = Math.toRadians(artCenterRa)
-                val rDec = Math.toRadians(artCenterDec)
-                val rRot = Math.toRadians(artRotDeg.toDouble())
-                val cosRot = kotlin.math.cos(rRot).toFloat()
-                val sinRot = kotlin.math.sin(rRot).toFloat()
+                // 2. Project Celestial North Anchor Point (nX, nY) along local meridian
+                val northDec = if (artCenterDec <= 88.0) artCenterDec + 1.0 else artCenterDec - 1.0
+                val northSign = if (artCenterDec <= 88.0) 1.0f else -1.0f
 
-                val uEastX = -kotlin.math.sin(rRa).toFloat()
-                val uEastY = kotlin.math.cos(rRa).toFloat()
-                val uEastZ = 0f
+                EquatorialCoordinates.computeWorldVector(artCenterRa, northDec, lstDegrees, latitudeDegrees, tempArtTopWorldVec, 0)
+                val nVx = tempArtTopWorldVec[0]
+                val nVy = tempArtTopWorldVec[1]
+                val nVz = tempArtTopWorldVec[2]
 
-                val uNorthX = (-kotlin.math.sin(rDec) * kotlin.math.cos(rRa)).toFloat()
-                val uNorthY = (-kotlin.math.sin(rDec) * kotlin.math.sin(rRa)).toFloat()
-                val uNorthZ = kotlin.math.cos(rDec).toFloat()
+                val nxDev = matrix[0] * nVx + matrix[4] * nVy + matrix[8] * nVz
+                val nyDev = matrix[1] * nVx + matrix[5] * nVy + matrix[9] * nVz
+                val nzDev = matrix[2] * nVx + matrix[6] * nVy + matrix[10] * nVz
 
-                val vTopDirX = cosRot * uNorthX + sinRot * uEastX
-                val vTopDirY = cosRot * uNorthY + sinRot * uEastY
-                val vTopDirZ = cosRot * uNorthZ + sinRot * uEastZ
-
-                val eps = 0.01745329f
-                val atVx = acVx + eps * vTopDirX
-                val atVy = acVy + eps * vTopDirY
-                val atVz = acVz + eps * vTopDirZ
-
-                val atxDev = matrix[0] * atVx + matrix[4] * atVy + matrix[8] * atVz
-                val atyDev = matrix[1] * atVx + matrix[5] * atVy + matrix[9] * atVz
-                val atzDev = matrix[2] * atVx + matrix[6] * atVy + matrix[10] * atVz
-
-                val atxs: Float
-                val atys: Float
+                val nxs: Float
+                val nys: Float
                 when (displayRotation) {
-                    Surface.ROTATION_0 -> { atxs = atxDev; atys = atyDev }
-                    Surface.ROTATION_90 -> { atxs = atyDev; atys = -atxDev }
-                    Surface.ROTATION_180 -> { atxs = -atxDev; atys = -atyDev }
-                    Surface.ROTATION_270 -> { atxs = -atyDev; atys = atxDev }
-                    else -> { atxs = atxDev; atys = atyDev }
+                    Surface.ROTATION_0 -> { nxs = nxDev; nys = nyDev }
+                    Surface.ROTATION_90 -> { nxs = nyDev; nys = -nxDev }
+                    Surface.ROTATION_180 -> { nxs = -nxDev; nys = -nyDev }
+                    Surface.ROTATION_270 -> { nxs = -nyDev; nys = nxDev }
+                    else -> { nxs = nxDev; nys = nyDev }
                 }
-                val atzs = -atzDev
-                if (atzs <= 0.001f) continue
+                val nzs = -nzDev
+                if (nzs <= 0.001f) continue
 
-                val atScreenX = halfW + focalLengthPixels * (atxs / atzs)
-                val atScreenY = halfH - focalLengthPixels * (atys / atzs)
+                val nScreenX = halfW + focalLengthPixels * (nxs / nzs)
+                val nScreenY = halfH - focalLengthPixels * (nys / nzs)
 
-                val deltaX = atScreenX - acScreenX
-                val deltaY = atScreenY - acScreenY
-                val screenRotDeg = Math.toDegrees(kotlin.math.atan2(deltaY.toDouble(), deltaX.toDouble())).toFloat() + 90f
+                // 3. Calculate 2D screen-space orientation of Celestial North at this celestial location
+                val deltaX = (nScreenX - cScreenX) * northSign
+                val deltaY = (nScreenY - cScreenY) * northSign
+                val celestialNorthAngleDeg = Math.toDegrees(kotlin.math.atan2(deltaY.toDouble(), deltaX.toDouble())).toFloat()
+                val gridAlignedRotation = celestialNorthAngleDeg + 90f
+                val finalRotation = gridAlignedRotation + artRotDeg + debugRotationOffset
 
+                // 4. Transform and draw artwork with zero allocations
                 val widthInPixels = Math.toRadians(artWidthDeg.toDouble()).toFloat() * focalLengthPixels
                 val baseScale = widthInPixels / bitmap.width.toFloat()
                 val finalScale = baseScale * debugScaleMultiplier
@@ -1002,8 +991,8 @@ class NightSkyRenderer {
                 artMatrix.reset()
                 artMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
                 artMatrix.postScale(finalScale, finalScale)
-                artMatrix.postRotate(screenRotDeg + debugRotationOffset)
-                artMatrix.postTranslate(acScreenX + debugOffsetX, acScreenY + debugOffsetY)
+                artMatrix.postRotate(finalRotation)
+                artMatrix.postTranslate(cScreenX + debugOffsetX, cScreenY + debugOffsetY)
 
                 artPaint.alpha = (56f * p).toInt().coerceIn(0, 255)
                 nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)
