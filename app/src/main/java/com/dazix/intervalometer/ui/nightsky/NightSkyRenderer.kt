@@ -709,6 +709,10 @@ class NightSkyRenderer {
         showConstellationArt: Boolean = true,
         isAtmosphereVisible: Boolean = true,
         context: Context? = null,
+        debugOffsetX: Float = 0f,
+        debugOffsetY: Float = 0f,
+        debugScaleMultiplier: Float = 1.0f,
+        debugRotationOffset: Float = 0f,
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
         val totalStars = minOf(catalog.starsLength(), maxStars)
@@ -992,13 +996,14 @@ class NightSkyRenderer {
                 val screenRotDeg = Math.toDegrees(kotlin.math.atan2(deltaY.toDouble(), deltaX.toDouble())).toFloat() + 90f
 
                 val widthInPixels = Math.toRadians(artWidthDeg.toDouble()).toFloat() * focalLengthPixels
-                val scale = widthInPixels / bitmap.width.toFloat()
+                val baseScale = widthInPixels / bitmap.width.toFloat()
+                val finalScale = baseScale * debugScaleMultiplier
 
                 artMatrix.reset()
                 artMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
-                artMatrix.postScale(scale, scale)
-                artMatrix.postRotate(screenRotDeg)
-                artMatrix.postTranslate(acScreenX, acScreenY)
+                artMatrix.postScale(finalScale, finalScale)
+                artMatrix.postRotate(screenRotDeg + debugRotationOffset)
+                artMatrix.postTranslate(acScreenX + debugOffsetX, acScreenY + debugOffsetY)
 
                 artPaint.alpha = (150f * p).toInt().coerceIn(0, 255)
                 nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)

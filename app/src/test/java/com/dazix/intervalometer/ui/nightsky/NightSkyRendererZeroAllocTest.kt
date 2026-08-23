@@ -579,6 +579,33 @@ class NightSkyRendererZeroAllocTest {
 
         assertTrue("Constellation progress must ramp up", renderer.constellationProgress[0] > 0.001f)
 
+        // Second render pass with debug calibration offsets injected
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = true,
+                debugOffsetX = 25f,
+                debugOffsetY = -15f,
+                debugScaleMultiplier = 1.25f,
+                debugRotationOffset = 10f,
+            )
+        }
+
         // Apply Red Vision mode and Normal mode to verify theme switching runs without exception
         renderer.applyTheme(redVisionMode = true)
         renderer.applyTheme(redVisionMode = false)

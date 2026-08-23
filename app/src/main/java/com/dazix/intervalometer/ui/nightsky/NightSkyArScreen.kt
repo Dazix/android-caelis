@@ -11,6 +11,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
@@ -41,6 +44,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
@@ -325,6 +330,10 @@ fun NightSkyArScreen(
                     isConstellationsVisible = uiState.isConstellationsVisible,
                     isConstellationArtVisible = uiState.isConstellationArtVisible,
                     selectedBody = uiState.selectedBody,
+                    debugArtOffsetX = uiState.debugArtOffsetX,
+                    debugArtOffsetY = uiState.debugArtOffsetY,
+                    debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
+                    debugArtRotationOffset = uiState.debugArtRotationOffset,
                     onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -335,6 +344,30 @@ fun NightSkyArScreen(
                     onBack = onBack,
                     redVisionMode = uiState.redVisionMode,
                     modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // In-App Calibration Debugger Overlay
+            androidx.compose.animation.AnimatedVisibility(
+                visible = uiState.isDebugCalibrationVisible,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp, top = 80.dp, bottom = 80.dp),
+            ) {
+                CalibrationDebugOverlay(
+                    offsetX = uiState.debugArtOffsetX,
+                    offsetY = uiState.debugArtOffsetY,
+                    scaleMultiplier = uiState.debugArtScaleMultiplier,
+                    rotationOffset = uiState.debugArtRotationOffset,
+                    redVisionMode = uiState.redVisionMode,
+                    onOffsetXChange = viewModel::setDebugArtOffsetX,
+                    onOffsetYChange = viewModel::setDebugArtOffsetY,
+                    onScaleMultiplierChange = viewModel::setDebugArtScaleMultiplier,
+                    onRotationOffsetChange = viewModel::setDebugArtRotationOffset,
+                    onReset = viewModel::resetDebugCalibration,
+                    onClose = { viewModel.setDebugCalibrationVisible(false) },
                 )
             }
 
@@ -431,6 +464,7 @@ fun NightSkyArScreen(
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 isConstellationArtVisible = uiState.isConstellationArtVisible,
+                isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 isGridVisible = uiState.isGridVisible,
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 redVisionMode = uiState.redVisionMode,
@@ -458,6 +492,9 @@ fun NightSkyArScreen(
                     val nextState = !uiState.isConstellationArtVisible
                     showToggleToast(context, R.string.night_sky_constellation_art, nextState)
                     viewModel.toggleConstellationArtVisible()
+                },
+                onToggleDebugCalibration = {
+                    viewModel.toggleDebugCalibration()
                 },
                 onToggleGridVisible = {
                     val nextState = !uiState.isGridVisible
@@ -501,6 +538,10 @@ private fun NightSkyOverlayCanvas(
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     selectedBody: CelestialBodyDetails? = null,
+    debugArtOffsetX: Float = 0f,
+    debugArtOffsetY: Float = 0f,
+    debugArtScaleMultiplier: Float = 1.0f,
+    debugArtRotationOffset: Float = 0f,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -589,6 +630,10 @@ private fun NightSkyOverlayCanvas(
             showConstellationArt = isConstellationArtVisible,
             isAtmosphereVisible = isAtmosphereVisible,
             context = context,
+            debugOffsetX = debugArtOffsetX,
+            debugOffsetY = debugArtOffsetY,
+            debugScaleMultiplier = debugArtScaleMultiplier,
+            debugRotationOffset = debugArtRotationOffset,
         )
 
         // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)
@@ -918,5 +963,169 @@ private fun showToggleToast(context: Context, @androidx.annotation.StringRes act
 
 private fun showResetToast(context: Context) {
     Toast.makeText(context, context.getString(R.string.calib_reset_toast), Toast.LENGTH_SHORT).show()
+}
+
+@Composable
+private fun CalibrationDebugOverlay(
+    offsetX: Float,
+    offsetY: Float,
+    scaleMultiplier: Float,
+    rotationOffset: Float,
+    redVisionMode: Boolean,
+    onOffsetXChange: (Float) -> Unit,
+    onOffsetYChange: (Float) -> Unit,
+    onScaleMultiplierChange: (Float) -> Unit,
+    onRotationOffsetChange: (Float) -> Unit,
+    onReset: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xEE121824)
+    val borderColor = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x444DD0E1)
+    val textColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
+    val labelColor = if (redVisionMode) RedSecondary else Color(0xFF94A3B8)
+    val sliderColors = if (redVisionMode) {
+        SliderDefaults.colors(
+            thumbColor = RedPrimary,
+            activeTrackColor = RedPrimary,
+            inactiveTrackColor = Color(0xFF3B0000),
+        )
+    } else {
+        SliderDefaults.colors(
+            thumbColor = Color(0xFF4DD0E1),
+            activeTrackColor = Color(0xFF00ACC1),
+            inactiveTrackColor = Color(0xFF1E293B),
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = containerBg,
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier.widthIn(max = 300.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Setup,
+                        contentDescription = null,
+                        tint = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.night_sky_debug_calibration),
+                        color = textColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    IconButton(
+                        onClick = onReset,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.ResetCalibration,
+                            contentDescription = stringResource(R.string.night_sky_debug_reset),
+                            tint = labelColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Clear,
+                            contentDescription = stringResource(R.string.celestial_close),
+                            tint = labelColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+
+            // X Offset Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_offset_x, offsetX),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = offsetX,
+                    onValueChange = onOffsetXChange,
+                    valueRange = -500f..500f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+
+            // Y Offset Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_offset_y, offsetY),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = offsetY,
+                    onValueChange = onOffsetYChange,
+                    valueRange = -500f..500f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+
+            // Scale Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_scale, scaleMultiplier),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = scaleMultiplier,
+                    onValueChange = onScaleMultiplierChange,
+                    valueRange = 0.5f..2.5f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+
+            // Rotation Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_rotation, rotationOffset),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = rotationOffset,
+                    onValueChange = onRotationOffsetChange,
+                    valueRange = -90f..90f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+        }
+    }
 }
 

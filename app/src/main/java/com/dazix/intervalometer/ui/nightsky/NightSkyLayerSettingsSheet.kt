@@ -36,6 +36,7 @@ fun NightSkyLayerSettingsSheet(
     isMilkyWayVisible: Boolean,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
+    isDebugCalibrationVisible: Boolean = false,
     isGridVisible: Boolean,
     isSkyBackgroundOpaque: Boolean,
     redVisionMode: Boolean,
@@ -44,6 +45,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleMilkyWayVisible: () -> Unit,
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
+    onToggleDebugCalibration: () -> Unit = {},
     onToggleGridVisible: () -> Unit,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleRedVisionMode: () -> Unit,
@@ -133,6 +135,16 @@ fun NightSkyLayerSettingsSheet(
             iconColor = iconColor,
             switchColors = switchColors,
             onCheckedChange = { onToggleConstellationArtVisible() },
+        )
+
+        LayerToggleRow(
+            label = stringResource(R.string.night_sky_debug_calibration),
+            icon = AppIcons.Setup,
+            isChecked = isDebugCalibrationVisible,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onToggleDebugCalibration() },
         )
 
         LayerToggleRow(

@@ -326,4 +326,12 @@
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>
     <string name="celestial_parent_constellation">Mateřské souhvězdí</string>
     <string name="celestial_close">Zavřít podrobnosti</string>
+
+    <!-- Calibration Debugger -->
+    <string name="night_sky_debug_calibration">Ladění zarovnání ilustrací</string>
+    <string name="night_sky_debug_offset_x">Posun X: %1$.1f px</string>
+    <string name="night_sky_debug_offset_y">Posun Y: %1$.1f px</string>
+    <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
+    <string name="night_sky_debug_rotation">Rotace: %1$.1f°</string>
+    <string name="night_sky_debug_reset">Obnovit</string>
 </resources>

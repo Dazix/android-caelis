@@ -320,4 +320,12 @@
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>
     <string name="celestial_parent_constellation">Parent constellation</string>
     <string name="celestial_close">Close details</string>
+
+    <!-- Calibration Debugger -->
+    <string name="night_sky_debug_calibration">Artwork alignment debug</string>
+    <string name="night_sky_debug_offset_x">X Offset: %1$.1f px</string>
+    <string name="night_sky_debug_offset_y">Y Offset: %1$.1f px</string>
+    <string name="night_sky_debug_scale">Scale: %1$.2fx</string>
+    <string name="night_sky_debug_rotation">Rotation: %1$.1f°</string>
+    <string name="night_sky_debug_reset">Reset</string>
 </resources>

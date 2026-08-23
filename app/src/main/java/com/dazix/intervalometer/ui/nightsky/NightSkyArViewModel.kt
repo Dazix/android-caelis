@@ -57,6 +57,11 @@ data class NightSkyArUiState(
     val isConstellationsVisible: Boolean = true,
     val isConstellationArtVisible: Boolean = true,
     val selectedBody: CelestialBodyDetails? = null,
+    val debugArtOffsetX: Float = 0f,
+    val debugArtOffsetY: Float = 0f,
+    val debugArtScaleMultiplier: Float = 1.0f,
+    val debugArtRotationOffset: Float = 0f,
+    val isDebugCalibrationVisible: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -156,6 +161,13 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    // In-App Calibration Debugger StateFlows
+    val debugArtOffsetX = MutableStateFlow(0f)
+    val debugArtOffsetY = MutableStateFlow(0f)
+    val debugArtScaleMultiplier = MutableStateFlow(1.0f)
+    val debugArtRotationOffset = MutableStateFlow(0f)
+    val isDebugCalibrationVisible = MutableStateFlow(false)
+
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
 
@@ -181,6 +193,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isConstellationsVisible,
         isConstellationArtVisible,
         selectedBodyState,
+        debugArtOffsetX,
+        debugArtOffsetY,
+        debugArtScaleMultiplier,
+        debugArtRotationOffset,
+        isDebugCalibrationVisible,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
         val gps = args[1] as Boolean
@@ -203,6 +220,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val constellations = args[18] as Boolean
         val constellationArt = args[19] as Boolean
         val selected = args[20] as CelestialBodyDetails?
+        val dbgOffsetX = args[21] as Float
+        val dbgOffsetY = args[22] as Float
+        val dbgScale = args[23] as Float
+        val dbgRot = args[24] as Float
+        val dbgVis = args[25] as Boolean
 
         NightSkyArUiState(
             location = loc,
@@ -227,6 +249,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isConstellationsVisible = constellations,
             isConstellationArtVisible = constellationArt,
             selectedBody = selected,
+            debugArtOffsetX = dbgOffsetX,
+            debugArtOffsetY = dbgOffsetY,
+            debugArtScaleMultiplier = dbgScale,
+            debugArtRotationOffset = dbgRot,
+            isDebugCalibrationVisible = dbgVis,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -543,6 +570,38 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             settingsStore.saveNightSkyConstellationArtVisible(enabled)
         }
+    }
+
+    // In-App Calibration Debugger controls
+    fun setDebugArtOffsetX(v: Float) {
+        debugArtOffsetX.value = v
+    }
+
+    fun setDebugArtOffsetY(v: Float) {
+        debugArtOffsetY.value = v
+    }
+
+    fun setDebugArtScaleMultiplier(v: Float) {
+        debugArtScaleMultiplier.value = v
+    }
+
+    fun setDebugArtRotationOffset(v: Float) {
+        debugArtRotationOffset.value = v
+    }
+
+    fun toggleDebugCalibration() {
+        isDebugCalibrationVisible.value = !isDebugCalibrationVisible.value
+    }
+
+    fun setDebugCalibrationVisible(visible: Boolean) {
+        isDebugCalibrationVisible.value = visible
+    }
+
+    fun resetDebugCalibration() {
+        debugArtOffsetX.value = 0f
+        debugArtOffsetY.value = 0f
+        debugArtScaleMultiplier.value = 1.0f
+        debugArtRotationOffset.value = 0f
     }
 
     fun startSensors() {
