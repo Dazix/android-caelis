@@ -8,17 +8,20 @@ class StarOpticsTest {
 
     @Test
     fun `verifies limiting magnitude increases logarithmically with zoom`() {
+        val mag04x = StarOptics.computeFaintestVisibleMagnitude(0.4f)
         val mag1x = StarOptics.computeFaintestVisibleMagnitude(1.0f)
         val mag2x = StarOptics.computeFaintestVisibleMagnitude(2.0f)
         val mag4x = StarOptics.computeFaintestVisibleMagnitude(4.0f)
         val mag10x = StarOptics.computeFaintestVisibleMagnitude(10.0f)
 
+        assertEquals(3.11f, mag04x, 0.02f)
         assertEquals(4.5f, mag1x, 0.01f)
         assertEquals(5.55f, mag2x, 0.05f)
         assertEquals(6.60f, mag4x, 0.05f)
         assertEquals(8.0f, mag10x, 0.01f)
 
         // Monotonic progression
+        assertTrue(mag04x < mag1x)
         assertTrue(mag1x < mag2x)
         assertTrue(mag2x < mag4x)
         assertTrue(mag4x < mag10x)
@@ -26,10 +29,12 @@ class StarOpticsTest {
 
     @Test
     fun `verifies optical stroke scaling uses square root to prevent ballooning`() {
+        val scale04x = StarOptics.computeOpticScale(0.4f)
         val scale1x = StarOptics.computeOpticScale(1.0f)
         val scale4x = StarOptics.computeOpticScale(4.0f)
         val scale9x = StarOptics.computeOpticScale(9.0f)
 
+        assertEquals(0.632f, scale04x, 0.01f)
         assertEquals(1.0f, scale1x, 0.001f)
         assertEquals(2.0f, scale4x, 0.001f)
         assertEquals(3.0f, scale9x, 0.001f)

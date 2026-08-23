@@ -29,8 +29,8 @@ object StarOptics {
      * @return Maximum visible apparent magnitude (fainter stars have higher magnitude numbers).
      */
     fun computeFaintestVisibleMagnitude(zoomFactor: Float): Float {
-        val clampedZoom = zoomFactor.coerceIn(1.0f, 10.0f)
-        return BASE_MAGNITUDE_LIMIT + (MAGNITUDE_SLOPE * log10(clampedZoom.toDouble())).toFloat()
+        val clampedZoom = zoomFactor.coerceIn(0.2f, 10.0f)
+        return (BASE_MAGNITUDE_LIMIT + (MAGNITUDE_SLOPE * log10(clampedZoom.toDouble())).toFloat()).coerceAtLeast(3.0f)
     }
 
     /**
@@ -41,7 +41,7 @@ object StarOptics {
      * @return Optical stroke scale factor.
      */
     fun computeOpticScale(zoomFactor: Float): Float {
-        return sqrt(zoomFactor.coerceAtLeast(1.0f))
+        return sqrt(zoomFactor.coerceIn(0.4f, 10.0f))
     }
 
     /**

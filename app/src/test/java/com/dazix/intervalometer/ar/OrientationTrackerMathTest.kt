@@ -238,4 +238,126 @@ class OrientationTrackerMathTest {
         )
         assertEquals(OrientationTracker.ALPHA_MOVING, panAlpha, 0.001f)
     }
+
+    @Test
+    fun `verifies roll rotation with quaternion preserves 100 percent orthonormality`() {
+        val sensorMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val tempDec = FloatArray(16)
+        val tempUser = FloatArray(16)
+        val adjusted = FloatArray(16)
+
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        val rollRad = Math.toRadians(45.0).toFloat()
+        OrientationTracker.rotateQuaternion(userQuat, 0f, 0f, rollRad, userQuat)
+
+        OrientationTracker.applyCalibration(
+            sensorMatrix = sensorMatrix,
+            declinationDeg = 0.0f,
+            userQuat = userQuat,
+            tempDeclinationBuffer = tempDec,
+            tempUserMatrixBuffer = tempUser,
+            outMatrix = adjusted,
+        )
+
+        // Check each column is a unit vector
+        for (col in 0..2) {
+            val lenSq = adjusted[col] * adjusted[col] +
+                adjusted[col + 4] * adjusted[col + 4] +
+                adjusted[col + 8] * adjusted[col + 8]
+            assertEquals("Column $col norm should be 1.0", 1.0f, sqrt(lenSq), 0.001f)
+        }
+
+        // Check columns are mutually orthogonal
+        val dot01 = adjusted[0] * adjusted[1] + adjusted[4] * adjusted[5] + adjusted[8] * adjusted[9]
+        val dot02 = adjusted[0] * adjusted[2] + adjusted[4] * adjusted[6] + adjusted[8] * adjusted[10]
+        val dot12 = adjusted[1] * adjusted[2] + adjusted[5] * adjusted[6] + adjusted[9] * adjusted[10]
+
+        assertEquals(0.0f, dot01, 0.001f)
+        assertEquals(0.0f, dot02, 0.001f)
+        assertEquals(0.0f, dot12, 0.001f)
+    }
+
+    @Test
+    fun `verifies two-finger clockwise rotation rotates celestial points clockwise on screen`() {
+        val sensorMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val tempDec = FloatArray(16)
+        val tempUser = FloatArray(16)
+        val adjusted = FloatArray(16)
+
+        // Point initially on the right of screen (+X_dev = East in North-facing camera)
+        // World point = [1, 0, 0] (East)
+        val worldEast = floatArrayOf(1f, 0f, 0f)
+
+        // User rotates two fingers clockwise by 90 degrees (+90°)
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        val roll90Rad = Math.toRadians(90.0).toFloat()
+        OrientationTracker.rotateQuaternion(userQuat, 0f, 0f, roll90Rad, userQuat)
+
+        OrientationTracker.applyCalibration(
+            sensorMatrix = sensorMatrix,
+            declinationDeg = 0.0f,
+            userQuat = userQuat,
+            tempDeclinationBuffer = tempDec,
+            tempUserMatrixBuffer = tempUser,
+            outMatrix = adjusted,
+        )
+
+        // Transform World -> Device: V_dev = R^T * V_world
+        val xDev = adjusted[0] * worldEast[0] + adjusted[4] * worldEast[1] + adjusted[8] * worldEast[2]
+        val yDev = adjusted[1] * worldEast[0] + adjusted[5] * worldEast[1] + adjusted[9] * worldEast[2]
+        val zDev = adjusted[2] * worldEast[0] + adjusted[6] * worldEast[1] + adjusted[10] * worldEast[2]
+
+        // At 90° clockwise roll, point from right (+X) should rotate to bottom (-Y_dev)
+        assertEquals(0.0f, xDev, 0.01f)
+        assertEquals(-1.0f, yDev, 0.01f) // Towards bottom of screen (-Y_dev)
+        assertEquals(0.0f, zDev, 0.01f)
+    }
+
+    @Test
+    fun `verifies combined pitch, yaw, and roll rotations execute without singularity or gimbal lock`() {
+        val userQuat = floatArrayOf(0f, 0f, 0f, 1f)
+        val tempDec = FloatArray(16)
+        val tempUser = FloatArray(16)
+        val adjusted = FloatArray(16)
+        val sensorMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Perform arbitrary 3D multi-axis rotation
+        val pitchRad = Math.toRadians(45.0).toFloat()
+        val yawRad = Math.toRadians(60.0).toFloat()
+        val rollRad = Math.toRadians(-30.0).toFloat()
+
+        OrientationTracker.rotateQuaternion(userQuat, pitchRad, yawRad, rollRad, userQuat)
+
+        OrientationTracker.applyCalibration(
+            sensorMatrix = sensorMatrix,
+            declinationDeg = 12.0f,
+            userQuat = userQuat,
+            tempDeclinationBuffer = tempDec,
+            tempUserMatrixBuffer = tempUser,
+            outMatrix = adjusted,
+        )
+
+        // Check orthonormality
+        for (col in 0..2) {
+            val lenSq = adjusted[col] * adjusted[col] +
+                adjusted[col + 4] * adjusted[col + 4] +
+                adjusted[col + 8] * adjusted[col + 8]
+            assertEquals("Column $col norm should be 1.0", 1.0f, sqrt(lenSq), 0.001f)
+        }
+    }
 }

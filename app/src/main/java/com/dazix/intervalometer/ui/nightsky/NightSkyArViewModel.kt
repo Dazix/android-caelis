@@ -74,7 +74,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     // Dynamic effective FOV factoring in pinch-to-zoom
     val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 120.0f)
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 140.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
@@ -386,8 +386,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedBodyState.value = null
     }
 
-    fun rotatePan(pitchRad: Float, yawRad: Float) {
-        orientationTracker.rotateUser(pitchRad, yawRad)
+    fun rotatePan(pitchRad: Float, yawRad: Float, rollRad: Float = 0.0f) {
+        orientationTracker.rotateUser(pitchRad, yawRad, rollRad)
         userQuatState.value = orientationTracker.getUserQuaternion()
     }
 
@@ -419,14 +419,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun adjustZoomBy(factor: Float) {
         val current = zoomRatioState.value
-        val updated = (current * factor).coerceIn(1.0f, 10.0f)
+        val updated = (current * factor).coerceIn(0.4f, 10.0f)
         if (kotlin.math.abs(updated - current) > 0.001f) {
             zoomRatioState.value = updated
         }
     }
 
     fun setZoomRatio(ratio: Float) {
-        zoomRatioState.value = ratio.coerceIn(1.0f, 10.0f)
+        zoomRatioState.value = ratio.coerceIn(0.4f, 10.0f)
     }
 
     fun resetZoom() {

@@ -108,8 +108,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     fun getUserQuaternion(): FloatArray = userQuat.clone()
 
-    fun rotateUser(pitchRad: Float, yawRad: Float) {
-        rotateQuaternion(userQuat, pitchRad, yawRad, userQuat)
+    fun rotateUser(pitchRad: Float, yawRad: Float, rollRad: Float = 0.0f) {
+        rotateQuaternion(userQuat, pitchRad, yawRad, rollRad, userQuat)
     }
 
     fun resetUserRotation() {
@@ -329,18 +329,19 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
 
         /**
-         * Increments a rotation quaternion [currentQuat] by pitch ([pitchRad] around device X)
-         * and yaw ([yawRad] around device Y) without any gimbal lock, singularity, or pole lock.
+         * Increments a rotation quaternion [currentQuat] by pitch ([pitchRad] around device X),
+         * yaw ([yawRad] around device Y), and roll ([rollRad] around device Z) without any gimbal lock, singularity, or pole lock.
          *
-         * Allows continuous, seamless 360-degree rotation across Zenith and Nadir in any direction.
+         * Allows continuous, seamless 360-degree rotation across Zenith, Nadir, and roll in any direction.
          */
         fun rotateQuaternion(
             currentQuat: FloatArray,
             pitchRad: Float,
             yawRad: Float,
+            rollRad: Float = 0.0f,
             outQuat: FloatArray,
         ) {
-            if (kotlin.math.abs(pitchRad) < 1e-7f && kotlin.math.abs(yawRad) < 1e-7f) {
+            if (kotlin.math.abs(pitchRad) < 1e-7f && kotlin.math.abs(yawRad) < 1e-7f && kotlin.math.abs(rollRad) < 1e-7f) {
                 System.arraycopy(currentQuat, 0, outQuat, 0, minOf(currentQuat.size, outQuat.size))
                 return
             }
@@ -353,11 +354,21 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             val sinY = kotlin.math.sin(halfY)
             val cosY = kotlin.math.cos(halfY)
 
-            // dq = dq_pitch * dq_yaw (pitch around +X_dev, yaw around +Y_dev)
-            val dqX = sinP * cosY
-            val dqY = cosP * sinY
-            val dqZ = -sinP * sinY
-            val dqW = cosP * cosY
+            val halfR = rollRad * 0.5f
+            val sinR = kotlin.math.sin(halfR)
+            val cosR = kotlin.math.cos(halfR)
+
+            // dq_py = dq_pitch * dq_yaw (pitch around +X_dev, yaw around +Y_dev)
+            val pyX = sinP * cosY
+            val pyY = cosP * sinY
+            val pyZ = -sinP * sinY
+            val pyW = cosP * cosY
+
+            // dq = dq_py * dq_roll (roll around +Z_dev)
+            val dqX = pyX * cosR + pyY * sinR
+            val dqY = pyY * cosR - pyX * sinR
+            val dqZ = pyW * sinR + pyZ * cosR
+            val dqW = pyW * cosR - pyZ * sinR
 
             // out = currentQuat * dq (post-multiplication in camera frame)
             val x1 = currentQuat[0]
@@ -382,6 +393,18 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
                 outQuat[2] = 0f
                 outQuat[3] = 1f
             }
+        }
+
+        /**
+         * Backward-compatible overload for pitch and yaw only.
+         */
+        fun rotateQuaternion(
+            currentQuat: FloatArray,
+            pitchRad: Float,
+            yawRad: Float,
+            outQuat: FloatArray,
+        ) {
+            rotateQuaternion(currentQuat, pitchRad, yawRad, 0.0f, outQuat)
         }
 
         fun isIdentityQuaternion(q: FloatArray): Boolean {

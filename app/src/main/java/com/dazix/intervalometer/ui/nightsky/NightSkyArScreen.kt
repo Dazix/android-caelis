@@ -215,13 +215,16 @@ fun NightSkyArScreen(
                 .pointerInput(Unit) {
                     detectTransformGestures(
                         panZoomLock = false,
-                        onGesture = { _, pan, zoom, _ ->
+                        onGesture = { _, pan, zoom, rotation ->
                             val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                            if (pan.x != 0f || pan.y != 0f) {
+                            val hasPan = pan.x != 0f || pan.y != 0f
+                            val hasRotation = rotation != 0f
+                            if (hasPan || hasRotation) {
                                 val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
-                                val pitchRad = (pan.y / viewWidth) * fovRad
-                                val yawRad = (pan.x / viewWidth) * fovRad
-                                viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                                val pitchRad = if (hasPan) (pan.y / viewWidth) * fovRad else 0f
+                                val yawRad = if (hasPan) (pan.x / viewWidth) * fovRad else 0f
+                                val rollRad = if (hasRotation) Math.toRadians(rotation.toDouble()).toFloat() else 0f
+                                viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad, rollRad = rollRad)
                             }
                             if (zoom != 1.0f) {
                                 viewModel.adjustZoomBy(zoom)
