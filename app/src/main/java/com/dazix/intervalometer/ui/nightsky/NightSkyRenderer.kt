@@ -1005,7 +1005,7 @@ class NightSkyRenderer {
                 artMatrix.postRotate(screenRotDeg + debugRotationOffset)
                 artMatrix.postTranslate(acScreenX + debugOffsetX, acScreenY + debugOffsetY)
 
-                artPaint.alpha = (128f * p).toInt().coerceIn(0, 255)
+                artPaint.alpha = (75f * p).toInt().coerceIn(0, 255)
                 nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)
             }
         }
