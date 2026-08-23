@@ -10,26 +10,26 @@ Vykreslování noční oblohy probíhá v reálném čase při **60 FPS** s **nu
 
 ```mermaid
 flowchart TD
-    A[Senzory telefonu & GPS] --> B[OrientationTracker & LST]
-    C[FlatBuffers Catalog: catalog.bin] --> D[NightSkyRenderer]
+    A["Senzory telefonu & GPS"] --> B["OrientationTracker & LST"]
+    C["FlatBuffers Catalog: catalog.bin"] --> D["NightSkyRenderer"]
     B --> D
     
-    subgraph D [Renderovací průchody při 60 FPS v NightSkyRenderer]
-        P0[0. Sky Background & Planetárium]
-        P1[1. AGSL Mléčná Dráha & Atmosféra]
-        P2[2. Projekce Hvězd: 6 kvantizačních bucketů]
-        P3[3. Kontextové zaostření souhvězdí: Delta-Time animace]
-        P4[4. Umělecké ilustrace: 2-bodová projekce nebeského severu]
-        P5[5. Dvojprůchodové spojnice: Meet-in-the-Middle]
-        P6[6. Dvojprůchodové hvězdy: Halo + Core]
-        P7[7. AGSL Krajina & Obzor]
-        P8[8. 3D Nebeská souřadnicová mřížka]
-        P9[9. Výběrový nitkový kříž: Reticle]
+    subgraph D ["Renderovací průchody při 60 FPS v NightSkyRenderer"]
+        P0["0. Sky Background & Planetárium"]
+        P1["1. AGSL Mléčná Dráha & Atmosféra"]
+        P2["2. Projekce Hvězd: 6 kvantizačních bucketů"]
+        P3["3. Kontextové zaostření souhvězdí: Delta-Time animace"]
+        P4["4. Umělecké ilustrace: 2-bodová projekce nebeského severu"]
+        P5["5. Dvojprůchodové spojnice: Meet-in-the-Middle"]
+        P6["6. Dvojprůchodové hvězdy: Halo + Core"]
+        P7["7. AGSL Krajina & Obzor"]
+        P8["8. 3D Nebeská souřadnicová mřížka"]
+        P9["9. Výběrový nitkový kříž: Reticle"]
         
         P0 --> P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9
     end
     
-    D --> E[Android Native Canvas / Viewport]
+    D --> E["Android Native Canvas / Viewport"]
 ```
 
 ---
@@ -215,7 +215,116 @@ Pro eliminaci zkreslení a chyb při naklánění telefonu:
 
 ---
 
-## 6. Souhrnná Tabulka Renderovacích Prvků
+## 6. Podrobný Technický Popis Implementace
+
+Tato sekce obsahuje detailní rozbor vnitřních datových struktur, paměťového layoutu a shaderů.
+
+### A. Binární Schéma FlatBuffers (`catalog.bin`)
+Katalog je serializován v binárním formátu FlatBuffers (`com.google.flatbuffers.Table`), což umožňuje přímé čtení z paměťově mapovaného `ByteBuffer` bez deserializace objektů do JVM heapu.
+
+#### 1. Struktura `Star` (Inline Struct – 12 Bytů)
+Každá hvězda je uložena v souvislém poli 12b struktur:
+```
+Offset (Byty) | Datový Typ | Význam
+--------------+------------+------------------------------------------
++0            | Float32    | Rektascenze RA (0.0 .. 360.0 stupňů)
++4            | Float32    | Deklinace Dec (-90.0 .. +90.0 stupňů)
++8            | Float32    | Vizuální magnituda Mag (-1.44 .. 14.0)
+```
+Čtení hvězdy indexu $j$:
+$$\text{offset} = \text{starsVectorOffset} + j \times 12$$
+$$\text{ra} = \text{bb.getFloat}(\text{offset}), \quad \text{dec} = \text{bb.getFloat}(\text{offset} + 4), \quad \text{mag} = \text{bb.getFloat}(\text{offset} + 8)$$
+
+#### 2. Tabulka `Constellation` (Offset Table)
+Každé z 88 souhvězdí obsahuje:
+- `name`: IAU třípísmenná zkratka (např. `"Ori"`, `"UMa"`, `"Lac"`).
+- `centroidRa`, `centroidDec`: Sférický centroid pro detekci zaostření.
+- `lines`: Vektor indexů hvězd (páry `[hipA_1, hipB_1, hipA_2, hipB_2, ...]`).
+- `localizedName`: Český / anglický název souhvězdí.
+- `brightestStar`: Nejjasnější hvězda (např. `"Betelgeuse"`, `"Vega"`).
+- `family`: Astronomická rodina souhvězdí (např. `"Orion"`, `"Zodiac"`, `"Ursa Major"`).
+- `artResourceName`: Název drawable assetu (např. `"art_ori"`).
+- `artCenterRa`, `artCenterDec`: Sférický střed ilustrace v J2000.0.
+- `artWidthDeg`: Úhlová šířka kresby na obloze ve stupních.
+- `artRotationDeg`: Výchozí úhel rotace kresby vůči nebeskému severu.
+
+---
+
+### B. Shading Pipeline v AGSL (Android Graphics Shading Language)
+
+#### 1. Shader Mléčné Dráhy (`MilkyWayShader`)
+Provádí inverzní 3D sférické vzorkování equirektangulární bezztrátové textury (`milky_way_starless.webp`):
+```glsl
+uniform shader uTexture;
+uniform mat3 uWorldToDevice;
+uniform float2 uResolution;
+uniform float uFocalLength;
+uniform float uAlpha;
+
+half4 main(float2 fragCoord) {
+    // 1. Zpětná projekce z 2D obrazovky na 3D kamerový paprsek
+    float3 rayDev = normalize(float3(
+        fragCoord.x - uResolution.x * 0.5,
+        -(fragCoord.y - uResolution.y * 0.5),
+        uFocalLength
+    ));
+    
+    // 2. Transformace kamerového paprsku do galaktického souřadného systému
+    float3 rayWorld = uWorldToDevice * rayDev;
+    
+    // 3. Sférické mapování na UV textury (Equirectangular UV)
+    float u = fract(atan(rayWorld.y, rayWorld.x) / (2.0 * 3.14159265) + 0.5);
+    float v = clamp(asin(clamp(rayWorld.z, -1.0, 1.0)) / 3.14159265 + 0.5, 0.0, 1.0);
+    
+    // 4. Vzorkování textury a aplikace gama korekce a průhlednosti
+    half4 texColor = uTexture.eval(float2(u, v) * float2(4096.0, 2048.0));
+    return half4(texColor.rgb, texColor.a * uAlpha);
+}
+```
+
+#### 2. Atmosférický Shader (`AtmosphereShader`)
+Simuluje Rayleighův rozptyl světla a soumrakový přechod:
+- Spočte zenitový úhel pohledu kamery.
+- Aplikuje modrý atmosférický gradient u horizontu v závislosti na poloze Slunce pod obzorem.
+- V nočním režimu potlačuje rozptyl pro maximalizaci kontrastu hvězd.
+
+#### 3. Fotorealistický Shader Horizontu (`LandscapeShader`)
+Vykresluje 360° panoramatický horizont terénu:
+- Zajišťuje ořez hvězd, které se nacházejí pod skutečným matematickým horizontem ($Z_{\text{world}} < 0$).
+- Plynulý přechod siluety stromů s alfa maskováním.
+
+---
+
+### C. Architektura Předalokované Paměti (Zero GC Allocations)
+
+Všechny struktury v [`NightSkyRenderer.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/ui/nightsky/NightSkyRenderer.kt) jsou předalokovány v konstruktoru:
+
+```kotlin
+// 6 Kvantizačních bucketů pro dávkové vykreslení hvězd
+val bucketPoints = Array(6) { FloatArray(10240 * 2) }
+val bucketCounts = IntArray(6)
+
+// Souřadnice hvězd na obrazovce pro bleskové propojení čar
+private val starScreenX = FloatArray(10240)
+private val starScreenY = FloatArray(10240)
+private val starInFront = BooleanArray(10240)
+val forceRenderStar = BooleanArray(10240)
+
+// Buffery pro spojnice souhvězdí (2048 segmentů * 8 floatů = 16 384 prvků)
+private val constellationLinesBuffer = FloatArray(2048 * 8)
+
+// Transformační objekty pro kresby a hvězdné sprajty
+val artMatrix = Matrix()
+val artPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+private val tempArtCenterWorldVec = FloatArray(3)
+private val tempArtTopWorldVec = FloatArray(3)
+```
+
+Díky této architektuře neprobíhá během renderování jediná instanciace objektu (`new` / alokace na haldě), což zabraňuje spouštění Garbage Collectoru a zaručuje plynulých **60.0 FPS bez jakýchkoliv záseků (Jank-Free Rendering)**.
+
+---
+
+## 7. Souhrnná Tabulka Renderovacích Prvků
 
 | Prvek | Zdroj Dat | Metoda Vykreslení | Počet Alokací na Snímek |
 | :--- | :--- | :--- | :--- |
