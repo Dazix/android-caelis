@@ -431,6 +431,9 @@ class NightSkyRenderer {
 
         reticlePaint.strokeWidth = 2.2f * densityScale
         reticleTextPaint.textSize = 15f * densityScale
+
+        skyDomeRenderer.horizonTextPaint.textSize = 10.5f * densityScale
+        skyDomeRenderer.gridTextPaint.textSize = 9.0f * densityScale
     }
 
     /**

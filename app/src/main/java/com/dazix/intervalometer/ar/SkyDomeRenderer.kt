@@ -63,12 +63,14 @@ class SkyDomeRenderer {
         isFakeBoldText = true
         textAlign = Paint.Align.CENTER
         isAntiAlias = true
+        textSize = 10.5f
     }
 
     val gridTextPaint = Paint().apply {
         isFakeBoldText = false
         textAlign = Paint.Align.CENTER
         isAntiAlias = true
+        textSize = 9.0f
     }
 
     val bubbleTextPaint = Paint().apply {
@@ -121,8 +123,8 @@ class SkyDomeRenderer {
 
     fun applyTheme(redVisionMode: Boolean) {
         if (redVisionMode) {
-            horizonTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            gridTextPaint.color = AndroidColor.argb(200, 183, 28, 28)
+            horizonTextPaint.color = AndroidColor.argb(143, 255, 23, 68)
+            gridTextPaint.color = AndroidColor.argb(143, 183, 28, 28)
             bubbleTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
             bubbleBgPaint.color = AndroidColor.argb(240, 15, 0, 0)
             bubbleBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
@@ -133,8 +135,8 @@ class SkyDomeRenderer {
             pointerBgPaint.color = AndroidColor.argb(240, 15, 0, 0)
             pointerBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
         } else {
-            horizonTextPaint.color = AndroidColor.WHITE
-            gridTextPaint.color = AndroidColor.argb(200, 77, 208, 225)
+            horizonTextPaint.color = AndroidColor.argb(143, 255, 255, 255)
+            gridTextPaint.color = AndroidColor.argb(143, 77, 208, 225)
             bubbleTextPaint.color = AndroidColor.WHITE
             bubbleBgPaint.color = AndroidColor.argb(220, 20, 20, 20)
             bubbleBorderPaint.color = AndroidColor.argb(255, 255, 179, 0)
@@ -370,7 +372,7 @@ class SkyDomeRenderer {
             drawScope.drawContext.canvas.nativeCanvas.drawText(
                 zenithLabel,
                 zx,
-                zy - 16f,
+                zy - 15f,
                 horizonTextPaint,
             )
         }
@@ -411,7 +413,7 @@ class SkyDomeRenderer {
             drawScope.drawContext.canvas.nativeCanvas.drawText(
                 nadirLabel,
                 nx,
-                ny - 14f,
+                ny - 13f,
                 gridTextPaint,
             )
         }

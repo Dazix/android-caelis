@@ -396,8 +396,8 @@ private fun SkyDomeOverlayCanvas(
         val h = size.height
         val matrix = orientation.rotationMatrix
 
-        renderer.horizonTextPaint.textSize = 12.sp.toPx()
-        renderer.gridTextPaint.textSize = 10.sp.toPx()
+        renderer.horizonTextPaint.textSize = 5.3.sp.toPx()
+        renderer.gridTextPaint.textSize = 4.5.sp.toPx()
         renderer.bubbleTextPaint.textSize = 11.sp.toPx()
         renderer.bubbleBorderPaint.strokeWidth = 1.2.dp.toPx()
         renderer.markerTextPaint.textSize = 12.sp.toPx()
