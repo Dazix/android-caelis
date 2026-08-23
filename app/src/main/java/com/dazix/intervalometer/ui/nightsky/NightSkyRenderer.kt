@@ -180,8 +180,8 @@ class NightSkyRenderer {
         setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
     }
 
-    // 4 line segments * 4 coordinates (x0, y0, x1, y1) = 16 floats
-    private val reticleLinesBuffer = FloatArray(16)
+    // 3 line segments * 4 coordinates (x0, y0, x1, y1) = 12 floats (Left, Right, Bottom arms)
+    private val reticleLinesBuffer = FloatArray(12)
     private val tempReticleVec = FloatArray(3)
 
     init {
@@ -689,8 +689,8 @@ class NightSkyRenderer {
             return
         }
 
-        val r1 = 16f * density
-        val r2 = 30f * density
+        val r1 = 13f * density
+        val r2 = 24f * density
 
         // Left arm
         reticleLinesBuffer[0] = screenX - r2
@@ -704,22 +704,17 @@ class NightSkyRenderer {
         reticleLinesBuffer[6] = screenX + r2
         reticleLinesBuffer[7] = screenY
 
-        // Top arm
-        reticleLinesBuffer[8] = screenX
-        reticleLinesBuffer[9] = screenY - r2
-        reticleLinesBuffer[10] = screenX
-        reticleLinesBuffer[11] = screenY - r1
-
         // Bottom arm
-        reticleLinesBuffer[12] = screenX
-        reticleLinesBuffer[13] = screenY + r1
-        reticleLinesBuffer[14] = screenX
-        reticleLinesBuffer[15] = screenY + r2
+        reticleLinesBuffer[8] = screenX
+        reticleLinesBuffer[9] = screenY + r1
+        reticleLinesBuffer[10] = screenX
+        reticleLinesBuffer[11] = screenY + r2
 
         val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
-        nativeCanvas.drawLines(reticleLinesBuffer, 0, 16, reticlePaint)
+        nativeCanvas.drawLines(reticleLinesBuffer, 0, 12, reticlePaint)
 
-        val textY = screenY - r2 - (8f * density)
+        // Position text 30% closer to the star (16dp above center)
+        val textY = screenY - (16f * density)
         nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
     }
 }

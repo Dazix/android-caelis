@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,6 +93,7 @@ fun NightSkyArScreen(
 
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
+        confirmValueChange = { true },
     )
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
@@ -103,11 +106,18 @@ fun NightSkyArScreen(
         }
     }
 
-    // Synchronize UI Gestures back to ViewModel
-    LaunchedEffect(sheetState.currentValue) {
-        if (sheetState.currentValue == SheetValue.Hidden && uiState.selectedBody != null) {
-            viewModel.clearSelectedBody()
-        }
+    // Sync swipe-down dismiss back to ViewModel safely without anchor layout race conditions
+    LaunchedEffect(sheetState) {
+        var wasVisible = false
+        snapshotFlow { sheetState.currentValue }
+            .collect { value ->
+                if (value != SheetValue.Hidden) {
+                    wasVisible = true
+                } else if (wasVisible) {
+                    viewModel.clearSelectedBody()
+                    wasVisible = false
+                }
+            }
     }
 
     var hasCameraPermission by remember {
@@ -165,9 +175,19 @@ fun NightSkyArScreen(
     val sheetContainerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0121622)
     val sheetBorderColor = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.8f) else Color(0xFF283248)
 
+    var headerHeightPx by remember { mutableStateOf(0) }
+    val headerHeightDp = with(density) { headerHeightPx.toDp() }
+
+    val sheetPeekHeight = if (uiState.selectedBody != null) {
+        if (headerHeightDp > 0.dp) headerHeightDp else 100.dp
+    } else {
+        0.dp
+    }
+
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 112.dp,
+        sheetPeekHeight = sheetPeekHeight,
+        sheetDragHandle = null,
         sheetContainerColor = sheetContainerColor,
         sheetContentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
         sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -175,7 +195,11 @@ fun NightSkyArScreen(
             CelestialDetailSheetContent(
                 selectedBody = uiState.selectedBody,
                 redVisionMode = uiState.redVisionMode,
-                onDismiss = { viewModel.clearSelectedBody() },
+                onHeaderMeasured = { height ->
+                    if (height > 0 && height != headerHeightPx) {
+                        headerHeightPx = height
+                    }
+                },
             )
         },
         containerColor = Color.Transparent,
@@ -286,10 +310,6 @@ fun NightSkyArScreen(
                     val nextState = !uiState.redVisionMode
                     showToggleToast(context, R.string.sun_ar_red_vision, nextState)
                     viewModel.toggleRedVisionMode()
-                },
-                onResetCalibration = {
-                    showResetToast(context)
-                    viewModel.resetCalibration()
                 },
                 onResetZoom = {
                     viewModel.resetZoom()
@@ -537,7 +557,6 @@ private fun NightSkyTopBar(
     onBack: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
     onToggleRedVision: () -> Unit,
-    onResetCalibration: () -> Unit,
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -635,28 +654,6 @@ private fun NightSkyTopBar(
 
         // Action Buttons Row (Material 3 Expressive Round)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Reset Calibration Button (if rotated)
-            if (isCalibrated) {
-                Surface(
-                    shape = CircleShape,
-                    color = containerColor,
-                    border = androidx.compose.foundation.BorderStroke(1.2.dp, borderColor),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    IconButton(
-                        onClick = onResetCalibration,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.ResetCalibration,
-                            contentDescription = stringResource(R.string.sun_ar_calib_reset),
-                            tint = contentColor,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            }
-
             // Keep Screen Awake Button
             Surface(
                 shape = CircleShape,
