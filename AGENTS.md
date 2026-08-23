@@ -49,23 +49,31 @@ Compose BOM. This is deliberate: the BOM's 1.4.0 ships the Material 3 Expressive
 `MotionScheme.expressive()` out of its public API, so an app cannot actually build in the expressive
 system with it. Do not "fix" the pin back to the BOM.
 
-## The gates
+## The gates and scoped test suites
+
+To keep iteration fast (6-7s), unit test suites are partitioned by functional domain. **Always run only the test suite(s) relevant to the current changes during development:**
 
 ```bash
-# 1. everything that does not need a device (JAVA_HOME from scripts/env.local.sh)
-./gradlew \
-  :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug --rerun-tasks
+# 1. Scoped domain test runners (fast JVM execution):
+scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, session planner, calibration (252 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris, AR projection (74 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (48 tests)
 
-# 2. the real engine on the real device (installs, runs, restores)
+# 2. Full gate before final commit (all suites + assemble + Android Lint):
+scripts/run_tests.sh all
+# or directly:
+# JAVA_HOME="$JAVA_HOME" ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug --rerun-tasks
+
+# 3. Instrumented device tests on dedicated dev user (when testing device behaviour):
 scripts/run_instrumented.sh                    # optional filter: scripts/run_instrumented.sh ScreenOffTest
+scripts/run_instrumented.sh StarCatalogDeviceTest
 
-# 3. the proof: real Pixel camera, real photos
+# 4. The end-to-end proof: real Pixel camera, real photos
 scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **290 JVM tests, 18 instrumented tests, 0 failures,
-0 skips, lint 0 errors.** Anything less is a regression.
+`skipped`), not from the console. Current baseline: **374 JVM tests (252 intervalometer, 74 solar, 48 night sky), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -161,6 +169,7 @@ Each of these was found by review or on the device and is now covered by a test.
 
 ## Style of work
 
+- **Scoped test runs during development**: Run only the domain test suite corresponding to your changes (`scripts/run_tests.sh intervalometer|solar|nightsky`). Run the full suite (`scripts/run_tests.sh all`) and device tests only for final verification before commit.
 - Do the whole task and report what actually happened, including what failed and what you left out.
 - When a subagent reports success, verify it — several "green" reports in this repo's history were not.
 - Keep the device restored at the end of every session, and say so with the values, not with a claim.
