@@ -299,6 +299,8 @@
     <string name="night_sky_grid_desc">Toggle 3D celestial coordinate grid and horizon</string>
     <string name="night_sky_constellations">Constellations</string>
     <string name="night_sky_constellations_desc">Toggle constellation stick figure lines</string>
+    <string name="night_sky_layers_title">Layers &amp; Display</string>
+    <string name="night_sky_layers_desc">Configure night sky AR layers and visual toggles</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="calib_reset_toast">Azimuth calibration reset</string>

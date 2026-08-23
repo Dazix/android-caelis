@@ -6,8 +6,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -96,6 +100,8 @@ fun NightSkyArScreen(
         confirmValueChange = { true },
     )
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+
+    var isLayerSheetOpen by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
     val renderer = remember { NightSkyRenderer() }
@@ -182,11 +188,31 @@ fun NightSkyArScreen(
     var headerHeightPx by remember { mutableStateOf(0) }
     val headerHeightDp = with(density) { headerHeightPx.toDp() }
 
+    var fullHeightPx by remember { mutableStateOf(0) }
+    val fullHeightDp = with(density) { fullHeightPx.toDp() }
+
     val sheetPeekHeight = if (uiState.selectedBody != null) {
         if (headerHeightDp > 0.dp) headerHeightDp else 100.dp
     } else {
         0.dp
     }
+
+    val isSheetExpanded = sheetState.targetValue == SheetValue.Expanded || sheetState.currentValue == SheetValue.Expanded
+    val activeSheetHeightDp = if (isSheetExpanded) {
+        if (fullHeightDp > 0.dp) fullHeightDp else 240.dp
+    } else {
+        if (headerHeightDp > 0.dp) headerHeightDp else 100.dp
+    }
+
+    val targetBottomPadding = if (uiState.selectedBody != null && activeSheetHeightDp > 0.dp) {
+        activeSheetHeightDp + 14.dp
+    } else {
+        24.dp
+    }
+    val animatedBottomPadding by animateDpAsState(
+        targetValue = targetBottomPadding,
+        label = "bottomControlsOffset",
+    )
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
@@ -202,6 +228,11 @@ fun NightSkyArScreen(
                 onHeaderMeasured = { height ->
                     if (height > 0 && height != headerHeightPx) {
                         headerHeightPx = height
+                    }
+                },
+                onFullHeightMeasured = { height ->
+                    if (height > 0 && height != fullHeightPx) {
+                        fullHeightPx = height
                     }
                 },
             )
@@ -308,15 +339,12 @@ fun NightSkyArScreen(
 
             // Top Controls & HUD Bar
             NightSkyTopBar(
+                hasGpsFix = uiState.hasGpsFix,
+                locationText = uiState.location.formatShort(),
                 orientation = orientation,
-                lstFormatted = uiState.lstFormatted,
-                visibleStarCount = uiState.visibleStarCount,
-                totalStarCount = uiState.totalStarCount,
                 cameraFovHorizontal = uiState.cameraFovHorizontal,
                 zoomRatio = uiState.zoomRatio,
                 isCalibrated = uiState.isCalibrated,
-                hasGpsFix = uiState.hasGpsFix,
-                locationText = uiState.location.formatShort(),
                 keepScreenOn = uiState.keepScreenOn,
                 redVisionMode = uiState.redVisionMode,
                 onBack = onBack,
@@ -325,11 +353,7 @@ fun NightSkyArScreen(
                     showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
                     viewModel.toggleKeepScreenOn()
                 },
-                onToggleRedVision = {
-                    val nextState = !uiState.redVisionMode
-                    showToggleToast(context, R.string.sun_ar_red_vision, nextState)
-                    viewModel.toggleRedVisionMode()
-                },
+                onOpenLayers = { isLayerSheetOpen = true },
                 onResetZoom = {
                     viewModel.resetZoom()
                 },
@@ -339,74 +363,114 @@ fun NightSkyArScreen(
                     .padding(top = 36.dp, start = 12.dp, end = 12.dp),
             )
 
-            // Bottom Controls: Action Dock & HUD Indicator Chips (visible when no object selected)
-            AnimatedVisibility(
-                visible = uiState.selectedBody == null,
-                enter = fadeIn(),
-                exit = fadeOut(),
+            // Bottom Controls Layer: Contextual Reset View & HUD Indicator Pill
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp, start = 12.dp, end = 12.dp),
+                    .padding(bottom = animatedBottomPadding, start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                // Contextual Reset View / Calibration Button
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isCalibrated,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut(),
                 ) {
-                    // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Landscape, Grid, Constellations, Reset)
-                    NightSkyActionDock(
-                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                        isMilkyWayVisible = uiState.isMilkyWayVisible,
-                        isAtmosphereVisible = uiState.isAtmosphereVisible,
-                        isLandscapeVisible = uiState.isLandscapeVisible,
-                        isGridVisible = uiState.isGridVisible,
-                        isConstellationsVisible = uiState.isConstellationsVisible,
-                        redVisionMode = uiState.redVisionMode,
-                        isCalibrated = uiState.isCalibrated,
-                        onToggleSkyBackgroundOpaque = {
-                            val nextState = !uiState.isSkyBackgroundOpaque
-                            showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
-                            viewModel.toggleSkyBackgroundOpaque()
-                        },
-                        onToggleMilkyWayVisible = {
-                            val nextState = !uiState.isMilkyWayVisible
-                            showToggleToast(context, R.string.night_sky_milky_way, nextState)
-                            viewModel.toggleMilkyWayVisible()
-                        },
-                        onToggleAtmosphereVisible = {
-                            val nextState = !uiState.isAtmosphereVisible
-                            showToggleToast(context, R.string.night_sky_atmosphere, nextState)
-                            viewModel.toggleAtmosphereVisible()
-                        },
-                        onToggleLandscapeVisible = {
-                            val nextState = !uiState.isLandscapeVisible
-                            showToggleToast(context, R.string.night_sky_landscape, nextState)
-                            viewModel.toggleLandscapeVisible()
-                        },
-                        onToggleGridVisible = {
-                            val nextState = !uiState.isGridVisible
-                            showToggleToast(context, R.string.night_sky_grid, nextState)
-                            viewModel.toggleGridVisible()
-                        },
-                        onToggleConstellationsVisible = {
-                            val nextState = !uiState.isConstellationsVisible
-                            showToggleToast(context, R.string.night_sky_constellations, nextState)
-                            viewModel.toggleConstellationsVisible()
-                        },
-                        onResetCalibration = {
-                            showResetToast(context)
-                            viewModel.resetCalibration()
-                        },
-                    )
-
-                    // Bottom HUD (LST & Visible Stars)
-                    NightSkyBottomHud(
-                        lstFormatted = uiState.lstFormatted,
-                        visibleStarCount = uiState.visibleStarCount,
-                        totalStarCount = uiState.totalStarCount,
-                        redVisionMode = uiState.redVisionMode,
-                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A),
+                        border = BorderStroke(1.dp, if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)),
+                        modifier = Modifier.size(44.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                showResetToast(context)
+                                viewModel.resetCalibration()
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.ResetCalibration,
+                                contentDescription = stringResource(R.string.sun_ar_calib_reset),
+                                tint = if (uiState.redVisionMode) RedPrimary else Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
+
+                // Bottom HUD (LST & Visible Stars)
+                NightSkyBottomHud(
+                    lstFormatted = uiState.lstFormatted,
+                    visibleStarCount = uiState.visibleStarCount,
+                    redVisionMode = uiState.redVisionMode,
+                )
             }
+        }
+    }
+
+    // Modal Bottom Sheet for Layer Controls
+    if (isLayerSheetOpen) {
+        ModalBottomSheet(
+            onDismissRequest = { isLayerSheetOpen = false },
+            containerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0151820),
+            contentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
+            scrimColor = if (uiState.redVisionMode) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f),
+            dragHandle = {
+                BottomSheetDefaults.DragHandle(
+                    color = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0xFF718096),
+                )
+            },
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        ) {
+            NightSkyLayerSettingsSheet(
+                isLandscapeVisible = uiState.isLandscapeVisible,
+                isAtmosphereVisible = uiState.isAtmosphereVisible,
+                isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isConstellationsVisible = uiState.isConstellationsVisible,
+                isGridVisible = uiState.isGridVisible,
+                isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                redVisionMode = uiState.redVisionMode,
+                onToggleLandscapeVisible = {
+                    val nextState = !uiState.isLandscapeVisible
+                    showToggleToast(context, R.string.night_sky_landscape, nextState)
+                    viewModel.toggleLandscapeVisible()
+                },
+                onToggleAtmosphereVisible = {
+                    val nextState = !uiState.isAtmosphereVisible
+                    showToggleToast(context, R.string.night_sky_atmosphere, nextState)
+                    viewModel.toggleAtmosphereVisible()
+                },
+                onToggleMilkyWayVisible = {
+                    val nextState = !uiState.isMilkyWayVisible
+                    showToggleToast(context, R.string.night_sky_milky_way, nextState)
+                    viewModel.toggleMilkyWayVisible()
+                },
+                onToggleConstellationsVisible = {
+                    val nextState = !uiState.isConstellationsVisible
+                    showToggleToast(context, R.string.night_sky_constellations, nextState)
+                    viewModel.toggleConstellationsVisible()
+                },
+                onToggleGridVisible = {
+                    val nextState = !uiState.isGridVisible
+                    showToggleToast(context, R.string.night_sky_grid, nextState)
+                    viewModel.toggleGridVisible()
+                },
+                onToggleSkyBackgroundOpaque = {
+                    val nextState = !uiState.isSkyBackgroundOpaque
+                    showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
+                    viewModel.toggleSkyBackgroundOpaque()
+                },
+                onToggleRedVisionMode = {
+                    val nextState = !uiState.redVisionMode
+                    showToggleToast(context, R.string.sun_ar_red_vision, nextState)
+                    viewModel.toggleRedVisionMode()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            )
         }
     }
 }
@@ -562,155 +626,157 @@ private fun NightSkyOverlayCanvas(
 
 @Composable
 private fun NightSkyTopBar(
+    hasGpsFix: Boolean,
+    locationText: String,
     orientation: DeviceOrientation?,
-    lstFormatted: String,
-    visibleStarCount: Int,
-    totalStarCount: Int,
     cameraFovHorizontal: Float,
     zoomRatio: Float,
     isCalibrated: Boolean,
-    hasGpsFix: Boolean,
-    locationText: String,
     keepScreenOn: Boolean,
     redVisionMode: Boolean,
     onBack: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
-    onToggleRedVision: () -> Unit,
+    onOpenLayers: () -> Unit,
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = if (redVisionMode) Color(0xF0180000) else Color(0xF0151820)
-    val contentColor = if (redVisionMode) RedPrimary else Color(0xFFE0E0E0)
-    val borderColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A)
+    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)
+    val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+    val textColor = if (redVisionMode) RedPrimary else Color.White
+    val subTextColor = if (redVisionMode) RedSecondary else Color(0xCCFFFFFF)
 
     Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(containerBg)
+            .border(1.dp, containerBorder, CircleShape)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Back Button (Material 3 Expressive Perfect Circle)
-        Surface(
-            shape = CircleShape,
-            color = containerColor,
-            border = androidx.compose.foundation.BorderStroke(1.2.dp, borderColor),
-            modifier = Modifier.size(48.dp),
-        ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Back,
-                    contentDescription = stringResource(R.string.action_back),
-                    tint = contentColor,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+        IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
+            Icon(
+                imageVector = AppIcons.Back,
+                contentDescription = stringResource(R.string.action_back),
+                tint = textColor,
+            )
         }
 
-        // Center HUD Pill (Expressive Round)
-        Surface(
-            shape = CircleShape,
-            color = containerColor,
-            border = androidx.compose.foundation.BorderStroke(1.dp, borderColor.copy(alpha = 0.7f)),
+        Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp)
-                .height(48.dp),
+                .padding(horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
+            // Row 1: Status Dot + Location Text
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                // Heading / Elevation
-                if (orientation != null) {
-                    val az = orientation.cameraAzimuthDegrees.toInt()
-                    val el = orientation.cameraElevationDegrees.toInt()
-                    Text(
-                        text = String.format(java.util.Locale.US, "%03d° · %+d°", az, el),
-                        color = contentColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(
+                            if (redVisionMode) {
+                                RedPrimary
+                            } else {
+                                if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
+                            },
+                            CircleShape,
+                        )
+                )
+                Text(
+                    text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
 
-                // FOV & Zoom indicator
+            // Row 2: Azimuth, Elevation, FOV Data
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                val az = orientation?.cameraAzimuthDegrees?.toInt() ?: 0
+                val el = orientation?.cameraElevationDegrees?.toInt() ?: 0
+                val cardinalRes = when {
+                    az < 23 || az >= 338 -> R.string.sun_ar_cardinal_n
+                    az < 68 -> R.string.sun_ar_cardinal_ne
+                    az < 113 -> R.string.sun_ar_cardinal_e
+                    az < 158 -> R.string.sun_ar_cardinal_se
+                    az < 203 -> R.string.sun_ar_cardinal_s
+                    az < 248 -> R.string.sun_ar_cardinal_sw
+                    az < 293 -> R.string.sun_ar_cardinal_w
+                    else -> R.string.sun_ar_cardinal_nw
+                }
+                val cardinalName = stringResource(cardinalRes).substringBefore(" ")
+                Text(
+                    text = "🧭 $az° $cardinalName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "•",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = subTextColor,
+                )
+                Text(
+                    text = String.format(java.util.Locale.US, "%+d°", el),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "•",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = subTextColor,
+                )
                 val isZoomed = kotlin.math.abs(zoomRatio - 1.0f) > 0.05f
-                val fovText = if (isZoomed) {
+                val fovLabel = if (isZoomed) {
                     String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
                 } else {
-                    String.format(java.util.Locale.US, "FOV %.0f°", cameraFovHorizontal)
+                    stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
                 }
                 Text(
-                    text = fovText,
-                    color = if (isZoomed) {
-                        if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
-                    } else {
-                        contentColor.copy(alpha = 0.8f)
-                    },
-                    fontSize = 11.sp,
-                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Normal,
-                    fontFamily = FontFamily.Monospace,
+                    text = "📐 $fovLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isZoomed) accentColor else subTextColor,
+                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
                     modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
                 )
-
-                // Calibration Offset Badge (if user has rotated manually)
-                if (isCalibrated) {
-                    Text(
-                        text = "MANUAL",
-                        color = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
             }
         }
 
-        // Action Buttons Row (Material 3 Expressive Round)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            // Keep Screen Awake Button
-            Surface(
-                shape = CircleShape,
-                color = if (keepScreenOn) (if (redVisionMode) RedPrimary else Color(0xFF00ACC1)) else containerColor,
-                border = androidx.compose.foundation.BorderStroke(1.2.dp, borderColor),
-                modifier = Modifier.size(48.dp),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            IconButton(
+                onClick = onToggleKeepScreenOn,
+                modifier = Modifier.size(38.dp),
             ) {
-                IconButton(
-                    onClick = onToggleKeepScreenOn,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Icon(
-                        imageVector = AppIcons.ScreenAwake,
-                        contentDescription = stringResource(R.string.sun_ar_keep_screen_on),
-                        tint = if (keepScreenOn) (if (redVisionMode) Color.Black else Color.White) else contentColor,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                Icon(
+                    imageVector = AppIcons.ScreenAwake,
+                    contentDescription = stringResource(R.string.sun_ar_keep_screen_on),
+                    tint = if (keepScreenOn) accentColor else (if (redVisionMode) RedSecondary else Color.White.copy(alpha = 0.4f)),
+                )
             }
 
-            // Red Vision Mode Toggle Button
-            Surface(
-                shape = CircleShape,
-                color = if (redVisionMode) RedPrimary else containerColor,
-                border = androidx.compose.foundation.BorderStroke(1.2.dp, borderColor),
-                modifier = Modifier.size(48.dp),
+            IconButton(
+                onClick = onOpenLayers,
+                modifier = Modifier.size(38.dp),
             ) {
-                IconButton(
-                    onClick = onToggleRedVision,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Icon(
-                        imageVector = AppIcons.RedVision,
-                        contentDescription = stringResource(R.string.sun_ar_red_vision),
-                        tint = if (redVisionMode) Color.Black else contentColor,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                Icon(
+                    imageVector = AppIcons.Layers,
+                    contentDescription = stringResource(R.string.night_sky_layers_title),
+                    tint = if (redVisionMode) RedPrimary else Color.White,
+                )
             }
         }
     }
@@ -720,18 +786,17 @@ private fun NightSkyTopBar(
 private fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
-    totalStarCount: Int,
     redVisionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val containerColor = if (redVisionMode) Color(0xF0180000) else Color(0xF0151820)
+    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A)
+    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)
     val contentColor = if (redVisionMode) RedPrimary else Color(0xFFE0E0E0)
-    val borderColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
 
     Surface(
         shape = CircleShape,
-        color = containerColor,
-        border = androidx.compose.foundation.BorderStroke(1.2.dp, borderColor.copy(alpha = 0.8f)),
+        color = containerBg,
+        border = androidx.compose.foundation.BorderStroke(1.dp, containerBorder),
         modifier = modifier.height(44.dp),
     ) {
         Row(
@@ -767,7 +832,7 @@ private fun NightSkyBottomHud(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = String.format(java.util.Locale.US, "%d / %d", visibleStarCount, totalStarCount),
+                    text = visibleStarCount.toString(),
                     color = contentColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,

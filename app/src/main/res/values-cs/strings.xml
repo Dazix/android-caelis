@@ -305,6 +305,8 @@
     <string name="night_sky_grid_desc">Zobrazit/skrýt 3D nebeskou mřížku a obzor</string>
     <string name="night_sky_constellations">Souhvězdí</string>
     <string name="night_sky_constellations_desc">Zobrazit/skrýt spojnice souhvězdí</string>
+    <string name="night_sky_layers_title">Vrstvy a zobrazení</string>
+    <string name="night_sky_layers_desc">Nastavení vrstev noční oblohy a možností zobrazení</string>
     <string name="state_on">Zapnuto</string>
     <string name="state_off">Vypnuto</string>
     <string name="calib_reset_toast">Kalibrace azimutu resetována</string>

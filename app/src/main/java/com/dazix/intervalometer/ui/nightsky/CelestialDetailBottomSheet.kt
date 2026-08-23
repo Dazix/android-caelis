@@ -47,6 +47,7 @@ fun CelestialDetailSheetContent(
     selectedBody: CelestialBodyDetails?,
     redVisionMode: Boolean,
     onHeaderMeasured: (Int) -> Unit,
+    onFullHeightMeasured: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (selectedBody == null) {
@@ -60,7 +61,11 @@ fun CelestialDetailSheetContent(
     val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { layoutCoordinates ->
+                onFullHeightMeasured?.invoke(layoutCoordinates.size.height)
+            },
     ) {
         // HEADER (Visible in the Partially Expanded state)
         // Measured dynamically via onGloballyPositioned (including Drag Handle) for exact peekHeight alignment

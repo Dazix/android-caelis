@@ -527,6 +527,28 @@ object AppIcons {
         }
     }
 
+    /** Layers: stacked planes for toggling visual overlays. */
+    val Layers: ImageVector by lazy {
+        icon("Layers") {
+            strokePath {
+                // Top layer plane
+                moveTo(12f, 3.5f)
+                lineTo(20.5f, 7.8f)
+                lineTo(12f, 12.1f)
+                lineTo(3.5f, 7.8f)
+                close()
+                // Middle layer plane
+                moveTo(3.5f, 12.2f)
+                lineTo(12f, 16.5f)
+                lineTo(20.5f, 12.2f)
+                // Bottom layer plane
+                moveTo(3.5f, 16.6f)
+                lineTo(12f, 20.9f)
+                lineTo(20.5f, 16.6f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,
