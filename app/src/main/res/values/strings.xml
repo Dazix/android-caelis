@@ -309,9 +309,11 @@
     <string name="celestial_brightest_star">Brightest star</string>
     <string name="celestial_family">Family</string>
     <string name="celestial_constellation_subtitle">Constellation</string>
+    <string name="celestial_asterism_subtitle">Asterism</string>
     <string name="celestial_star_subtitle">Star</string>
     <string name="celestial_distance">Distance</string>
     <string name="celestial_magnitude">Magnitude</string>
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>
+    <string name="celestial_parent_constellation">Parent constellation</string>
     <string name="celestial_close">Close details</string>
 </resources>

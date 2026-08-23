@@ -86,7 +86,7 @@ class NightSkyRenderer {
     // Fast O(1) zero-allocation lookup table to force render constituent stars of visible constellations
     val forceRenderStar = BooleanArray(maxStars)
 
-    private val maxConstellations = 88
+    private val maxConstellations = 256
     val constellationProgress = FloatArray(maxConstellations) { 0f }
     val constellationCentroidScreenX = FloatArray(maxConstellations)
     val constellationCentroidScreenY = FloatArray(maxConstellations)
@@ -203,6 +203,43 @@ class NightSkyRenderer {
         setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
     }
 
+    // Pre-allocated paints for Asterisms (fainter line styles, italic typography)
+    val asterismPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 1.0f
+    }
+
+    val asterismHaloPaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 4.2f
+    }
+
+    val asterismCorePaint = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.BUTT
+        strokeWidth = 1.7f
+    }
+
+    val asterismLabelPaint = Paint().apply {
+        isAntiAlias = true
+        textSize = 22f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+    }
+
+    val asterismHighlightLabelPaint = Paint().apply {
+        isAntiAlias = true
+        textSize = 26f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
+    }
+
     // Zero-allocation broken-crosshair selection reticle & target text paints and buffers
     val reticlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
@@ -258,6 +295,13 @@ class NightSkyRenderer {
             constellationCorePaint.color = AndroidColor.argb(255, 255, 82, 82)
             constellationLabelPaint.color = AndroidColor.argb(210, 255, 23, 68)
             constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 23, 68)
+
+            asterismPaint.color = AndroidColor.argb(120, 255, 23, 68)
+            asterismHaloPaint.color = AndroidColor.argb(40, 255, 23, 68)
+            asterismCorePaint.color = AndroidColor.argb(230, 255, 82, 82)
+            asterismLabelPaint.color = AndroidColor.argb(170, 255, 82, 82)
+            asterismHighlightLabelPaint.color = AndroidColor.rgb(255, 82, 82)
+
             reticlePaint.color = AndroidColor.rgb(255, 23, 68)
             reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
         } else {
@@ -266,6 +310,13 @@ class NightSkyRenderer {
             constellationCorePaint.color = AndroidColor.argb(255, 255, 255, 255)
             constellationLabelPaint.color = AndroidColor.argb(220, 77, 208, 225)
             constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
+
+            asterismPaint.color = AndroidColor.argb(130, 144, 202, 249)
+            asterismHaloPaint.color = AndroidColor.argb(35, 144, 202, 249)
+            asterismCorePaint.color = AndroidColor.argb(240, 240, 248, 255)
+            asterismLabelPaint.color = AndroidColor.argb(180, 176, 190, 197)
+            asterismHighlightLabelPaint.color = AndroidColor.rgb(129, 212, 250)
+
             reticlePaint.color = AndroidColor.WHITE
             reticleTextPaint.color = AndroidColor.WHITE
         }
@@ -298,6 +349,13 @@ class NightSkyRenderer {
         constellationCorePaint.strokeWidth = 2.16f * densityScale
         constellationLabelPaint.textSize = 13f * densityScale
         constellationHighlightLabelPaint.textSize = 15f * densityScale
+
+        asterismPaint.strokeWidth = 1.15f * densityScale
+        asterismHaloPaint.strokeWidth = 4.2f * densityScale
+        asterismCorePaint.strokeWidth = 1.7f * densityScale
+        asterismLabelPaint.textSize = 10.5f * densityScale
+        asterismHighlightLabelPaint.textSize = 12.5f * densityScale
+
         reticlePaint.strokeWidth = 2.2f * densityScale
         reticleTextPaint.textSize = 15f * densityScale
     }
@@ -808,21 +866,25 @@ class NightSkyRenderer {
                     }
                 }
 
+                val isAsterism = reusableConstellation.isAsterism()
+
                 if (lineCoordsCount > 0) {
                     if (isSelected) {
-                        // Pass 1: Outer Optical Halo
-                        constellationHaloPaint.alpha = (42f * p).toInt().coerceIn(0, 255)
-                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationHaloPaint)
-                        // Pass 2: Sharp Inner Core
-                        constellationCorePaint.alpha = (240f * p).toInt().coerceIn(0, 255)
-                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationCorePaint)
+                        val haloPaint = if (isAsterism) asterismHaloPaint else constellationHaloPaint
+                        val corePaint = if (isAsterism) asterismCorePaint else constellationCorePaint
+                        haloPaint.alpha = (42f * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, haloPaint)
+                        corePaint.alpha = (240f * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, corePaint)
                     } else {
-                        constellationPaint.alpha = (48f * p).toInt().coerceIn(0, 255)
-                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, constellationPaint)
+                        val linePaint = if (isAsterism) asterismPaint else constellationPaint
+                        val baseAlpha = if (isAsterism) 32f else 48f
+                        linePaint.alpha = (baseAlpha * p).toInt().coerceIn(0, 255)
+                        nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, linePaint)
                     }
                 }
 
-                // Render Animated Constellation Name Label with vertical slide
+                // Render Animated Constellation / Asterism Name Label with vertical slide
                 if (constellationCentroidInFront[c] && p > 0.05f) {
                     val cx = constellationCentroidScreenX[c]
                     val cy = constellationCentroidScreenY[c]
@@ -830,11 +892,14 @@ class NightSkyRenderer {
                     val label = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: ""
                     if (label.isNotEmpty() && cx in -margin..(w + margin) && textY in -margin..(h + margin)) {
                         if (isSelected) {
-                            constellationHighlightLabelPaint.alpha = (255f * p).toInt().coerceIn(0, 255)
-                            nativeCanvas.drawText(label, cx, textY, constellationHighlightLabelPaint)
+                            val highlightLabelPaint = if (isAsterism) asterismHighlightLabelPaint else constellationHighlightLabelPaint
+                            highlightLabelPaint.alpha = (255f * p).toInt().coerceIn(0, 255)
+                            nativeCanvas.drawText(label, cx, textY, highlightLabelPaint)
                         } else {
-                            constellationLabelPaint.alpha = (200f * p).toInt().coerceIn(0, 255)
-                            nativeCanvas.drawText(label, cx, textY, constellationLabelPaint)
+                            val labelPaint = if (isAsterism) asterismLabelPaint else constellationLabelPaint
+                            val baseLabelAlpha = if (isAsterism) 160f else 200f
+                            labelPaint.alpha = (baseLabelAlpha * p).toInt().coerceIn(0, 255)
+                            nativeCanvas.drawText(label, cx, textY, labelPaint)
                         }
                     }
                 }

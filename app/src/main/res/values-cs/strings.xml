@@ -315,9 +315,11 @@
     <string name="celestial_brightest_star">Nejjasnější hvězda</string>
     <string name="celestial_family">Rodina</string>
     <string name="celestial_constellation_subtitle">Souhvězdí</string>
+    <string name="celestial_asterism_subtitle">Asterismus</string>
     <string name="celestial_star_subtitle">Hvězda</string>
     <string name="celestial_distance">Vzdálenost</string>
     <string name="celestial_magnitude">Magnituda</string>
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>
+    <string name="celestial_parent_constellation">Mateřské souhvězdí</string>
     <string name="celestial_close">Zavřít podrobnosti</string>
 </resources>

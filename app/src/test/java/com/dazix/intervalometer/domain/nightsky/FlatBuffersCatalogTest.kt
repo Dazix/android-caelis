@@ -19,14 +19,22 @@ class FlatBuffersCatalogTest {
     fun `verifies programmatic FlatBuffers serialization and zero-allocation reading`() {
         val fbb = FlatBufferBuilder(1024)
 
-        // 1. Constellation with 7 fields
+        // 1. Constellations: 1 IAU Constellation (isAsterism = false) and 1 Asterism (isAsterism = true)
         val constNameOff = fbb.createString("Ursa Major")
         val locNameOff = fbb.createString("Velká medvědice")
         val brightOff = fbb.createString("Alioth")
         val famOff = fbb.createString("Ursa Major Family")
         val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2, 2, 3))
-        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, locNameOff, brightOff, famOff)
-        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, locNameOff, brightOff, famOff, false)
+
+        val astNameOff = fbb.createString("Big Dipper (Plough)")
+        val astLocNameOff = fbb.createString("Velký vůz")
+        val astBrightOff = fbb.createString("Alioth")
+        val astFamOff = fbb.createString("Ursa Major")
+        val astLinesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2))
+        val astOff = Constellation.createConstellation(fbb, astNameOff, 175.5f, 56.2f, astLinesVec, astLocNameOff, astBrightOff, astFamOff, true)
+
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff, astOff))
 
         // 2. StarMetadata with rich fields
         val metaNameOff = fbb.createString("Sirius")
@@ -50,7 +58,7 @@ class FlatBuffersCatalogTest {
 
         assertEquals(2, catalog.starsLength())
         assertEquals(1, catalog.metadataLength())
-        assertEquals(1, catalog.constellationsLength())
+        assertEquals(2, catalog.constellationsLength())
 
         // Verify zero-allocation reused struct access
         val starReusable = Star()
@@ -73,7 +81,7 @@ class FlatBuffersCatalogTest {
         assertEquals("Canis Major", meta.constellation())
         assertEquals(8.6f, meta.distanceLy(), 0.01f)
 
-        // Verify constellation
+        // Verify IAU constellation (isAsterism = false)
         val constObj = catalog.constellations(0)
         assertNotNull(constObj)
         assertEquals("Ursa Major", constObj.name())
@@ -82,9 +90,20 @@ class FlatBuffersCatalogTest {
         assertEquals("Velká medvědice", constObj.localizedName())
         assertEquals("Alioth", constObj.brightestStar())
         assertEquals("Ursa Major Family", constObj.family())
+        assertEquals(false, constObj.isAsterism())
         assertEquals(6, constObj.linesLength())
         assertEquals(0, constObj.lines(0))
         assertEquals(1, constObj.lines(1))
+
+        // Verify Asterism (isAsterism = true)
+        val astObj = catalog.constellations(1)
+        assertNotNull(astObj)
+        assertEquals("Big Dipper (Plough)", astObj.name())
+        assertEquals("Velký vůz", astObj.localizedName())
+        assertEquals("Alioth", astObj.brightestStar())
+        assertEquals("Ursa Major", astObj.family())
+        assertEquals(true, astObj.isAsterism())
+        assertEquals(4, astObj.linesLength())
     }
 
     @Test
@@ -99,7 +118,7 @@ class FlatBuffersCatalogTest {
 
         assertTrue("Star count should be >= 8000, got ${catalog.starsLength()}", catalog.starsLength() >= 8000)
         assertTrue("Metadata count should be >= 400, got ${catalog.metadataLength()}", catalog.metadataLength() >= 400)
-        assertEquals("Constellations count must be 88 IAU constellations", 88, catalog.constellationsLength())
+        assertEquals("Constellations count must be 151 (88 IAU + 63 asterisms)", 151, catalog.constellationsLength())
 
         // Check Sirius (brightest star at index 0)
         val star0 = catalog.stars(0)
@@ -112,9 +131,15 @@ class FlatBuffersCatalogTest {
         assertEquals(0, meta0.starIndex())
         assertEquals(8.6f, meta0.distanceLy(), 0.1f)
 
-        // Check constellations
-        val consts = (0 until catalog.constellationsLength()).map { catalog.constellations(it) }
-        val constNames = consts.map { it.name() }
+        // Check constellations & asterisms partition
+        val allConsts = (0 until catalog.constellationsLength()).map { catalog.constellations(it) }
+        val iauConsts = allConsts.filter { !it.isAsterism() }
+        val asterisms = allConsts.filter { it.isAsterism() }
+
+        assertEquals("Must have exactly 88 IAU constellations", 88, iauConsts.size)
+        assertEquals("Must have 63 asterisms", 63, asterisms.size)
+
+        val constNames = iauConsts.map { it.name() }
         assertTrue("Must include Ursa Major", constNames.contains("Ursa Major"))
         assertTrue("Must include Orion", constNames.contains("Orion"))
         assertTrue("Must include Cassiopeia", constNames.contains("Cassiopeia"))
@@ -123,20 +148,38 @@ class FlatBuffersCatalogTest {
         assertTrue("Must include Leo", constNames.contains("Leo"))
         assertTrue("Must include Scorpius", constNames.contains("Scorpius"))
 
-        // Check Ursa Major metadata
-        val um = consts.first { it.name() == "Ursa Major" }
+        // Check Ursa Major metadata (IAU constellation)
+        val um = iauConsts.first { it.name() == "Ursa Major" }
         assertEquals("Velká medvědice", um.localizedName())
         assertEquals("Alioth", um.brightestStar())
         assertEquals("Ursa Major Family", um.family())
+        assertEquals(false, um.isAsterism())
         assertTrue("Ursa Major centroid RA should be ~164, got ${um.centroidRa()}", um.centroidRa() in 155f..175f)
         assertTrue("Ursa Major centroid Dec should be ~55, got ${um.centroidDec()}", um.centroidDec() in 50f..60f)
 
-        // Check Orion metadata
-        val ori = consts.first { it.name() == "Orion" }
+        // Check Orion metadata (IAU constellation)
+        val ori = iauConsts.first { it.name() == "Orion" }
         assertEquals("Orion", ori.localizedName())
         assertEquals("Rigel", ori.brightestStar())
         assertEquals("Orion Family", ori.family())
+        assertEquals(false, ori.isAsterism())
         assertTrue("Orion centroid RA should be ~84, got ${ori.centroidRa()}", ori.centroidRa() in 80f..90f)
         assertTrue("Orion centroid Dec should be ~6.8, got ${ori.centroidDec()}", ori.centroidDec() in 0f..15f)
+
+        // Check Big Dipper metadata (Asterism)
+        val bigDipper = asterisms.first { it.name() == "Big Dipper (Plough)" }
+        assertEquals("Velký vůz", bigDipper.localizedName())
+        assertEquals("Alioth", bigDipper.brightestStar())
+        assertEquals("Ursa Major", bigDipper.family())
+        assertEquals(true, bigDipper.isAsterism())
+        assertTrue("Big Dipper centroid RA should be ~180, got ${bigDipper.centroidRa()}", bigDipper.centroidRa() in 170f..190f)
+        assertTrue("Big Dipper centroid Dec should be ~56, got ${bigDipper.centroidDec()}", bigDipper.centroidDec() in 50f..65f)
+
+        // Check Summer Triangle (Asterism)
+        val summerTriangle = asterisms.first { it.name() == "Summer Triangle" }
+        assertEquals("Letní trojúhelník", summerTriangle.localizedName())
+        assertEquals("Vega", summerTriangle.brightestStar())
+        assertEquals("Lyra / Cygnus / Aquila", summerTriangle.family())
+        assertEquals(true, summerTriangle.isAsterism())
     }
 }

@@ -40,14 +40,19 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.constellationCorePaint)
         assertNotNull(renderer.constellationLabelPaint)
         assertNotNull(renderer.constellationHighlightLabelPaint)
+        assertNotNull(renderer.asterismPaint)
+        assertNotNull(renderer.asterismHaloPaint)
+        assertNotNull(renderer.asterismCorePaint)
+        assertNotNull(renderer.asterismLabelPaint)
+        assertNotNull(renderer.asterismHighlightLabelPaint)
         assertNotNull(renderer.reticlePaint)
         assertNotNull(renderer.reticleTextPaint)
         assertNotNull(renderer.skyDomeRenderer)
 
-        org.junit.Assert.assertEquals(88, renderer.constellationProgress.size)
-        org.junit.Assert.assertEquals(88, renderer.constellationCentroidScreenX.size)
-        org.junit.Assert.assertEquals(88, renderer.constellationCentroidScreenY.size)
-        org.junit.Assert.assertEquals(88, renderer.constellationCentroidInFront.size)
+        org.junit.Assert.assertEquals(256, renderer.constellationProgress.size)
+        org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenX.size)
+        org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenY.size)
+        org.junit.Assert.assertEquals(256, renderer.constellationCentroidInFront.size)
         org.junit.Assert.assertEquals(10240, renderer.forceRenderStar.size)
 
         // Apply Red Vision mode
@@ -250,5 +255,85 @@ class NightSkyRendererZeroAllocTest {
         assertTrue("Star 1 must NOT be forced when constellations are disabled", !renderer.forceRenderStar[1])
         assertTrue("Star 2 must NOT be forced", !renderer.forceRenderStar[2])
         assertEquals("Only 1 bright star should be rendered when constellations disabled", 1, visibleStarsDisabled)
+    }
+
+    @Test
+    fun `verifies asterisms render and hit-test independently from parent constellations`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        // 1. IAU Constellation (Ursa Major, index 0, isAsterism = false)
+        val umNameOff = fbb.createString("Ursa Major")
+        val umLocOff = fbb.createString("Velká medvědice")
+        val umLinesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val umOff = Constellation.createConstellation(fbb, umNameOff, 0.0f, 90.0f, umLinesVec, umLocOff, 0, 0, false)
+
+        // 2. Asterism (Big Dipper, index 1, isAsterism = true) at distinct coordinates in front of camera
+        val bdNameOff = fbb.createString("Big Dipper (Plough)")
+        val bdLocOff = fbb.createString("Velký vůz")
+        val bdLinesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val bdOff = Constellation.createConstellation(fbb, bdNameOff, 0.0f, 85.0f, bdLinesVec, bdLocOff, 0, 0, true)
+
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(umOff, bdOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 85.0f, 1.8f) // star 1
+        Star.createStar(fbb, 0.0f, 90.0f, 1.8f) // star 0
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        renderer.applyTheme(redVisionMode = false)
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+            )
+        }
+
+        // Both IAU constellation (0) and Asterism (1) should have progress > 0
+        assertTrue("Ursa Major progress > 0", renderer.constellationProgress[0] > 0.001f)
+        assertTrue("Big Dipper progress > 0", renderer.constellationProgress[1] > 0.001f)
+
+        // Set progress to 1.0f to simulate fully revealed animation
+        renderer.constellationProgress[0] = 1.0f
+        renderer.constellationProgress[1] = 1.0f
+
+        // Hit testing at asterism centroid should resolve ConstellationHit(1)
+        val centroidX = renderer.constellationCentroidScreenX[1]
+        val centroidY = renderer.constellationCentroidScreenY[1]
+        val hit = renderer.findHitAt(centroidX, centroidY, 48f * 2.5f, 2.5f, catalog)
+        assertTrue("Hit must be ConstellationHit", hit is NightSkyRenderer.HitTarget.ConstellationHit)
+        assertEquals(1, (hit as NightSkyRenderer.HitTarget.ConstellationHit).index)
     }
 }

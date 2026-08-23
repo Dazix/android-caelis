@@ -361,12 +361,21 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         val app = getApplication<Application>()
         val name = reusableConst.localizedName() ?: reusableConst.name() ?: ""
-        val subtitle = app.getString(R.string.celestial_constellation_subtitle)
+        val isAsterism = reusableConst.isAsterism()
+        val subtitle = if (isAsterism) {
+            app.getString(R.string.celestial_asterism_subtitle)
+        } else {
+            app.getString(R.string.celestial_constellation_subtitle)
+        }
         val brightestStar = reusableConst.brightestStar() ?: "—"
         val family = reusableConst.family() ?: "—"
 
         val prop1 = Pair(app.getString(R.string.celestial_brightest_star), brightestStar)
-        val prop2 = Pair(app.getString(R.string.celestial_family), family)
+        val prop2 = if (isAsterism) {
+            Pair(app.getString(R.string.celestial_parent_constellation), family)
+        } else {
+            Pair(app.getString(R.string.celestial_family), family)
+        }
 
         selectedBodyState.value = CelestialBodyDetails(
             name = name,

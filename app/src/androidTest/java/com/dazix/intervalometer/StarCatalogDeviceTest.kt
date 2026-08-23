@@ -36,7 +36,7 @@ class StarCatalogDeviceTest {
         }
 
         assertTrue("catalog on device should contain at least 1000 stars, got ${catalog.starsLength()}", catalog.starsLength() >= 1000)
-        assertTrue("catalog on device should contain constellations, got ${catalog.constellationsLength()}", catalog.constellationsLength() >= 5)
+        assertTrue("catalog on device should contain constellations and asterisms, got ${catalog.constellationsLength()}", catalog.constellationsLength() >= 140)
 
         // Verify Sirius
         val sirius = catalog.stars(0)

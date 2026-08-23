@@ -12,6 +12,7 @@ import urllib.request
 import gzip
 import io
 import csv
+import re
 import flatbuffers
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -22,22 +23,24 @@ CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 HYG_V41_URL = "https://astronexus.com/downloads/catalogs/hygdata_v41.csv.gz"
 STELLARIUM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellationship.fab"
 STELLARIUM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellation_names.eng.fab"
+STELLARIUM_ASTERISM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/asterism_lines.fab"
+STELLARIUM_ASTERISM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/asterism_names.eng.fab"
 
 # FlatBuffers Python Schema Serialization
 
 def pack_catalog(stars_data, star_names, constellations_data, output_path):
     """
-    Serializes star list, metadata, and constellations using FlatBuffers.
+    Serializes star list, metadata, and constellations (including asterisms) using FlatBuffers.
     
     stars_data: list of (ra_deg, dec_deg, mag)
     star_names: list of (star_index, name_str, body_type, constel, dist_ly)
-    constellations_data: list of (constellation_name, centroid_ra, centroid_dec, [line_index_pairs], localized_name, brightest_star, family)
+    constellations_data: list of (constellation_name, centroid_ra, centroid_dec, [line_index_pairs], localized_name, brightest_star, family, is_asterism)
     """
     builder = flatbuffers.Builder(1024 * 1024)
 
-    # 1. Serialize Constellations
+    # 1. Serialize Constellations and Asterisms
     constellation_offsets = []
-    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam in constellations_data:
+    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast in constellations_data:
         name_off = builder.CreateString(name)
         loc_name_off = builder.CreateString(loc_name) if loc_name else 0
         bright_off = builder.CreateString(bright_star) if bright_star else 0
@@ -49,8 +52,8 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
             builder.PrependInt32(idx)
         lines_vec = builder.EndVector()
         
-        # Start Constellation table (7 fields)
-        builder.StartObject(7)
+        # Start Constellation table (8 fields)
+        builder.StartObject(8)
         builder.PrependUOffsetTRelativeSlot(0, name_off, 0)
         builder.PrependFloat32Slot(1, float(c_ra), 0.0)
         builder.PrependFloat32Slot(2, float(c_dec), 0.0)
@@ -61,6 +64,7 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
             builder.PrependUOffsetTRelativeSlot(5, bright_off, 0)
         if fam_off:
             builder.PrependUOffsetTRelativeSlot(6, fam_off, 0)
+        builder.PrependBoolSlot(7, bool(is_ast), False)
         const_off = builder.EndObject()
         constellation_offsets.append(const_off)
 
@@ -312,6 +316,141 @@ CONSTELLATION_FAMILIES = {
     "Scl": "La Caille Family",
 }
 
+# Asterisms: Czech Localized Names
+CZECH_ASTERISM_NAMES = {
+    "Big Dipper (Plough)": "Velký vůz",
+    "Big Dipper": "Velký vůz",
+    "Little Dipper": "Malý vůz",
+    "Summer Triangle": "Letní trojúhelník",
+    "Winter Triangle": "Zimní trojúhelník",
+    "Winter Hexagon (Winter Circle)": "Zimní šestiúhelník",
+    "Great Square of Pegasus": "Pegasův čtverec",
+    "Northern Cross": "Severní kříž",
+    "Keystone": "Základní kámen",
+    "Butterfly": "Motýl",
+    "Kite": "Drak",
+    "Sail": "Plachta",
+    "Coathanger": "Ramínko",
+    "Job's Coffin": "Jobova rakev",
+    "V of Taurus": "Véčko v Býku",
+    "Triangulum Minus": "Malý trojúhelník",
+    "Ptolemy's Triangle": "Ptolemaiův trojúhelník",
+    "Seven Stars Row": "Řada sedmi hvězd",
+    "The Pointers": "Ukazatelé",
+    "Dragon Head (Lozenge)": "Hlava draka",
+    "Head of Medusa Gorgon": "Hlava Medúzy",
+    "Goatlings (Kids)": "Kůzlata",
+    "The Y in Aquarius (The Urn or Water Jar)": "Džbán Vodnáře",
+    "Orion's Belt": "Orionův pás",
+    "Orion's Sword": "Orionův meč",
+    "Orion's Shield": "Orionův štít",
+    "Orion's Cudgel": "Orionův kyj",
+    "Head of Whale": "Hlava Velryby",
+    "Head of Serpent": "Hlava Hada",
+    "Head of Hydra": "Hlava Hydry",
+    "Teapot": "Čajník",
+    "Milk Dipper": "Mléčný vůz",
+    "Terebellum": "Terebellum",
+    "Egyptian Cross": "Egyptský kříž",
+    "False Cross": "Nepravý kříž",
+    "Sickle": "Srp",
+    "Diamond Cross": "Diamantový kříž",
+    "Circlet": "Kroužek",
+    "The Arc of the King": "Královský oblouk",
+    "Head of Centaurus": "Hlava Kentaura",
+    "Sudor Ophiuchi": "Sudor Ophiuchi",
+    "Venus' Mirror": "Venušino zrcátko",
+    "The Butterfly of Orion": "Motýl v Orionu",
+    "The Fish Hook": "Rybářský háček",
+    "The Bull of Poniatowski": "Býk Poniatowského",
+    "The Trapezoid": "Lichoběžník",
+    "The Three Patriarchs": "Tři patriarchové",
+    "The Northern Fly": "Severní moucha",
+    "Great Diamond": "Diamant",
+    "Spring Triangle": "Jarní trojúhelník",
+    "Segment of Perseus": "Perseův oblouk",
+    "Heavenly G": "Nebeské G",
+    "W": "W (Kasiopeja)",
+    "Bier": "Nosítka",
+    "Guardians of the Pole (Guards)": "Strážci pólu",
+    "Mini-Cassiopeia": "Malá Kasiopeja",
+    "Mini-Dipper": "Malý vůz (Mini)",
+    "Davis' Dog": "Davisův pes",
+    "Honores Friderici (Frederick's Glory)": "Sláva Fridricha",
+    "Christmas Goose": "Vánoční husa",
+    "The Arrow": "Šíp",
+    "The Flying Minnow": "Létající střevle",
+    "Harrington 7": "Harrington 7",
+    "Red-Necked Emu": "Emu",
+}
+
+# Asterisms: Parent Constellations
+ASTERISM_PARENTS = {
+    "BDr": "Ursa Major",
+    "LDr": "Ursa Minor",
+    "STr": "Lyra / Cygnus / Aquila",
+    "WTr": "Orion / Canis Major",
+    "WHx": "Winter Hexagon",
+    "GDi": "Spring Diamond",
+    "SpT": "Spring Triangle",
+    "GSP": "Pegasus",
+    "HeG": "Orion / Taurus / Gemini",
+    "SoP": "Perseus",
+    "NCr": "Cygnus",
+    "WAs": "Cassiopeia",
+    "KSt": "Hercules",
+    "Bfl": "Hercules",
+    "Kit": "Boötes",
+    "Sal": "Vela / Carina",
+    "CoH": "Vulpecula",
+    "JbC": "Delphinus",
+    "VTa": "Taurus",
+    "TrM": "Triangulum",
+    "TrP": "Boötes",
+    "Bie": "Ursa Major",
+    "GoP": "Ursa Minor",
+    "MCs": "Cassiopeia",
+    "SSR": "Andromeda / Cassiopeia",
+    "Ptr": "Ursa Major",
+    "HDr": "Draco",
+    "HMG": "Perseus",
+    "Goa": "Auriga",
+    "Urn": "Aquarius",
+    "OrB": "Orion",
+    "OrS": "Orion",
+    "OSh": "Orion",
+    "OrC": "Orion",
+    "HWl": "Cetus",
+    "HSr": "Serpens",
+    "HHy": "Hydra",
+    "Tea": "Sagittarius",
+    "Mlk": "Sagittarius",
+    "Ter": "Sagittarius",
+    "ECr": "Canis Major",
+    "FCr": "Vela / Carina",
+    "Sic": "Leo",
+    "DCr": "Carina",
+    "Cir": "Pisces",
+    "TAK": "Pegasus",
+    "HCn": "Centaurus",
+    "SuO": "Ophiuchus",
+    "VMr": "Orion",
+    "OBf": "Orion",
+    "FHA": "Scorpius",
+    "BPN": "Ophiuchus",
+    "TrB": "Boötes",
+    "TPT": "Cassiopeia",
+    "NFy": "Aries",
+    "BA1": "Taurus",
+    "BA2": "Andromeda / Lacerta",
+    "ChG": "Perseus",
+    "Arr": "Centaurus",
+    "FMi": "Auriga / Gemini",
+    "Hr7": "Corona Borealis",
+    "TA7": "Ursa Major",
+    "TA10": "Vulpecula",
+}
+
 def classify_spectral_type(spect, mag, dist_ly):
     """Provides a human-readable astrophysics body type from spectral class and luminosity."""
     if not spect:
@@ -399,6 +538,47 @@ def parse_stellarium_data():
     print(f"Parsed {len(constellation_lines)} IAU constellation shapes and {len(english_names)} names.")
     return constellation_lines, english_names
 
+def parse_stellarium_asterisms():
+    """Parses Stellarium asterism lines and official English names."""
+    lines_bytes = download_or_read_cache(STELLARIUM_ASTERISM_LINES_URL, "asterism_lines.fab")
+    names_bytes = download_or_read_cache(STELLARIUM_ASTERISM_NAMES_URL, "asterism_names.eng.fab")
+
+    lines_text = lines_bytes.decode("utf-8")
+    names_text = names_bytes.decode("utf-8")
+
+    # 1. Parse asterism English names
+    english_names = {}
+    for line in names_text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r'^(\S+)\s+_?\(\"([^\"]+)\"', line)
+        if m:
+            abbr = m.group(1).strip()
+            name = m.group(2).strip()
+            english_names[abbr] = name
+
+    # 2. Parse asterism lines (flag == 1 for standard naked-eye asterisms using HIP pairs)
+    asterism_lines = {}
+    for line in lines_text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 4:
+            abbr = parts[0]
+            try:
+                flag = int(parts[1])
+                num_pairs = int(parts[2])
+                if flag == 1:
+                    hip_ids = [int(x) for x in parts[3:]]
+                    asterism_lines[abbr] = hip_ids
+            except Exception:
+                continue
+
+    print(f"Parsed {len(asterism_lines)} modern asterism shapes and {len(english_names)} asterism names.")
+    return asterism_lines, english_names
+
 def load_hyg_database():
     """Downloads and parses the HYG v4.1 database."""
     hyg_gz_bytes = download_or_read_cache(HYG_V41_URL, "hygdata_v41.csv.gz")
@@ -465,22 +645,27 @@ def load_hyg_database():
     return all_hyg_stars, stars_by_hip
 
 def build_astronomical_catalog():
-    print("=== Step 1: Parsing Stellarium IAU stick figures & names ===")
+    print("=== Step 1: Parsing Stellarium IAU stick figures, Asterisms & names ===")
     constellation_lines, english_names = parse_stellarium_data()
+    asterism_lines, asterism_names = parse_stellarium_asterisms()
 
     print("=== Step 2: Loading authentic HYG Database v4.1 ===")
     all_hyg_stars, stars_by_hip = load_hyg_database()
 
     print("=== Step 3: Filtering & Cross-Referencing Dataset ===")
-    # Collect all HIP IDs referenced by constellation lines (mandatory inclusion)
+    # Collect all HIP IDs referenced by constellation lines and asterism lines (mandatory inclusion)
     mandatory_hip_ids = set()
     for abbr, hip_list in constellation_lines.items():
         for hip_id in hip_list:
             mandatory_hip_ids.add(hip_id)
-            
-    print(f"Found {len(mandatory_hip_ids)} unique stars referenced across all 88 IAU constellations.")
 
-    # Select stars: mag <= 6.5 OR mandatory constellation star
+    for abbr, hip_list in asterism_lines.items():
+        for hip_id in hip_list:
+            mandatory_hip_ids.add(hip_id)
+            
+    print(f"Found {len(mandatory_hip_ids)} unique stars referenced across all 88 IAU constellations and {len(asterism_lines)} asterisms.")
+
+    # Select stars: mag <= 6.5 OR mandatory constellation/asterism star
     selected_stars = []
     selected_hips = set()
     
@@ -569,16 +754,75 @@ def build_astronomical_catalog():
             line_indices,
             czech_name,
             brightest_star_name,
-            family
+            family,
+            False # is_asterism = False
         ))
 
-    print(f"Successfully processed all {len(constellations_data)} IAU constellations.")
-    return stars_data, star_metadata, constellations_data
+    print(f"Processed {len(constellations_data)} IAU constellations.")
+
+    print("=== Step 5: Constructing Modern Asterisms with Geometry & Localization ===")
+    asterisms_data = []
+
+    for abbr in sorted(asterism_lines.keys()):
+        hip_list = asterism_lines[abbr]
+        eng_name = asterism_names.get(abbr, abbr)
+        czech_name = CZECH_ASTERISM_NAMES.get(eng_name, CZECH_ASTERISM_NAMES.get(abbr, eng_name))
+        family = ASTERISM_PARENTS.get(abbr, "General")
+
+        line_indices = []
+        member_ras = []
+        member_decs = []
+        member_stars = []
+
+        for i in range(0, len(hip_list), 2):
+            if i + 1 < len(hip_list):
+                hip1 = hip_list[i]
+                hip2 = hip_list[i + 1]
+                idx1 = hip_to_catalog_index.get(hip1)
+                idx2 = hip_to_catalog_index.get(hip2)
+                if idx1 is not None and idx2 is not None:
+                    line_indices.extend([idx1, idx2])
+                    star1 = selected_stars[idx1]
+                    star2 = selected_stars[idx2]
+                    member_ras.extend([star1["ra"], star2["ra"]])
+                    member_decs.extend([star1["dec"], star2["dec"]])
+                    member_stars.extend([star1, star2])
+
+        if member_ras and member_decs:
+            vx = sum(math.cos(math.radians(d)) * math.cos(math.radians(r)) for r, d in zip(member_ras, member_decs)) / len(member_ras)
+            vy = sum(math.cos(math.radians(d)) * math.sin(math.radians(r)) for r, d in zip(member_ras, member_decs)) / len(member_ras)
+            vz = sum(math.sin(math.radians(d)) for d in member_decs) / len(member_decs)
+
+            centroid_ra = (math.degrees(math.atan2(vy, vx))) % 360.0
+            centroid_dec = math.degrees(math.asin(max(-1.0, min(1.0, vz / max(1e-6, math.sqrt(vx*vx + vy*vy + vz*vz))))))
+
+            brightest = min(member_stars, key=lambda s: s["mag"])
+            brightest_star_name = brightest["proper"] if brightest["proper"] else brightest["display_name"]
+        else:
+            centroid_ra = 0.0
+            centroid_dec = 0.0
+            brightest_star_name = ""
+
+        asterisms_data.append((
+            eng_name,
+            centroid_ra,
+            centroid_dec,
+            line_indices,
+            czech_name,
+            brightest_star_name,
+            family,
+            True # is_asterism = True
+        ))
+
+    print(f"Processed {len(asterisms_data)} Asterisms.")
+    all_constellations_and_asterisms = constellations_data + asterisms_data
+
+    return stars_data, star_metadata, all_constellations_and_asterisms
 
 def main():
     stars_data, star_metadata, constellations_data = build_astronomical_catalog()
     
-    print("=== Step 5: Packaging into FlatBuffers binary ===")
+    print("=== Step 6: Packaging into FlatBuffers binary ===")
     pack_catalog(stars_data, star_metadata, constellations_data, OUTPUT_RAW_BIN)
     pack_catalog(stars_data, star_metadata, constellations_data, OUTPUT_PIPELINE_BIN)
     print("Catalog generation completed successfully!")

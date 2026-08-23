@@ -26,6 +26,7 @@ table Constellation {
   localized_name: string;
   brightest_star: string;
   family: string;
+  is_asterism: bool;
 }
 
 table NightSkyCatalog {
