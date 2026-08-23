@@ -12,10 +12,10 @@ object StarOptics {
     const val NUM_BUCKETS = 6
 
     // Magnitude thresholds
-    const val BASE_MAGNITUDE_LIMIT = 4.5f
-    const val MAGNITUDE_SLOPE = 3.5f
-    const val EXTINCTION_ANGLE_DEG = 15.0f
-    const val MAX_AIRMASS_EXTINCTION_MAG = 2.5f
+    const val BASE_MAGNITUDE_LIMIT = 5.8f
+    const val MAGNITUDE_SLOPE = 2.5f
+    const val EXTINCTION_ANGLE_DEG = 10.0f
+    const val MAX_AIRMASS_EXTINCTION_MAG = 1.5f
 
     // Hybrid Star Rendering: Sprite Caching vs Pinpoint Point Batching
     const val SPRITE_MAGNITUDE_THRESHOLD = 3.0f // Buckets 0, 1, 2 use radial gradient sprite glow

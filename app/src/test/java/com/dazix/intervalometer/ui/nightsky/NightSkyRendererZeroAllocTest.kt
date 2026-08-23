@@ -101,13 +101,13 @@ class NightSkyRendererZeroAllocTest {
     @Test
     fun `verifies star extinction calculation math`() {
         fun computeExtinction(elevationDeg: Float): Float {
-            return if (elevationDeg <= 0.0f) 0.0f else (elevationDeg / 15.0f).coerceIn(0.0f, 1.0f)
+            return if (elevationDeg <= 0.0f) 0.0f else (elevationDeg / 10.0f).coerceIn(0.0f, 1.0f)
         }
 
         org.junit.Assert.assertEquals(0.0f, computeExtinction(-5.0f), 0.001f)
         org.junit.Assert.assertEquals(0.0f, computeExtinction(0.0f), 0.001f)
-        org.junit.Assert.assertEquals(0.5f, computeExtinction(7.5f), 0.001f)
-        org.junit.Assert.assertEquals(1.0f, computeExtinction(15.0f), 0.001f)
+        org.junit.Assert.assertEquals(0.5f, computeExtinction(5.0f), 0.001f)
+        org.junit.Assert.assertEquals(1.0f, computeExtinction(10.0f), 0.001f)
         org.junit.Assert.assertEquals(1.0f, computeExtinction(30.0f), 0.001f)
     }
 
@@ -155,15 +155,15 @@ class NightSkyRendererZeroAllocTest {
         val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf(metaOff))
 
         // 3. Stars (Structs vector) near North Celestial Pole:
-        // Star 0: RA=0.0, Dec=90.0, Mag=5.8f (faint, in Crater constellation)
-        // Star 1: RA=0.0, Dec=89.0, Mag=5.6f (faint, in Crater constellation)
-        // Star 2: RA=0.0, Dec=88.0, Mag=5.7f (faint, standalone - NOT in any constellation)
+        // Star 0: RA=0.0, Dec=90.0, Mag=6.8f (faint, in Crater constellation)
+        // Star 1: RA=0.0, Dec=89.0, Mag=6.6f (faint, in Crater constellation)
+        // Star 2: RA=0.0, Dec=88.0, Mag=6.7f (faint, standalone - NOT in any constellation)
         // Star 3: RA=0.0, Dec=87.0, Mag=1.2f (bright, standalone)
         NightSkyCatalog.startStarsVector(fbb, 4)
         Star.createStar(fbb, 0.0f, 87.0f, 1.2f) // index 3
-        Star.createStar(fbb, 0.0f, 88.0f, 5.7f) // index 2
-        Star.createStar(fbb, 0.0f, 89.0f, 5.6f) // index 1
-        Star.createStar(fbb, 0.0f, 90.0f, 5.8f) // index 0
+        Star.createStar(fbb, 0.0f, 88.0f, 6.7f) // index 2
+        Star.createStar(fbb, 0.0f, 89.0f, 6.6f) // index 1
+        Star.createStar(fbb, 0.0f, 90.0f, 6.8f) // index 0
         val starsVec = fbb.endVector()
 
         val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)

@@ -14,11 +14,11 @@ class StarOpticsTest {
         val mag4x = StarOptics.computeFaintestVisibleMagnitude(4.0f)
         val mag10x = StarOptics.computeFaintestVisibleMagnitude(10.0f)
 
-        assertEquals(3.11f, mag04x, 0.02f)
-        assertEquals(4.5f, mag1x, 0.01f)
-        assertEquals(5.55f, mag2x, 0.05f)
-        assertEquals(6.60f, mag4x, 0.05f)
-        assertEquals(8.0f, mag10x, 0.01f)
+        assertEquals(4.81f, mag04x, 0.02f)
+        assertEquals(5.8f, mag1x, 0.01f)
+        assertEquals(6.55f, mag2x, 0.05f)
+        assertEquals(7.30f, mag4x, 0.05f)
+        assertEquals(8.30f, mag10x, 0.01f)
 
         // Monotonic progression
         assertTrue(mag04x < mag1x)
@@ -73,14 +73,14 @@ class StarOpticsTest {
     fun `verifies atmospheric airmass extinction dims magnitude near horizon`() {
         val baseMag = 2.0f
 
-        // High above horizon (> 15°): no extinction
+        // High above horizon (> 10°): no extinction
         assertEquals(2.0f, StarOptics.computeAirmassExtinction(baseMag, 30.0f), 0.001f)
-        assertEquals(2.0f, StarOptics.computeAirmassExtinction(baseMag, 15.0f), 0.001f)
+        assertEquals(2.0f, StarOptics.computeAirmassExtinction(baseMag, 10.0f), 0.001f)
 
-        // Midway in extinction band (7.5°): +1.25 mag dimmer
-        assertEquals(3.25f, StarOptics.computeAirmassExtinction(baseMag, 7.5f), 0.01f)
+        // Midway in extinction band (5.0°): +0.75 mag dimmer
+        assertEquals(2.75f, StarOptics.computeAirmassExtinction(baseMag, 5.0f), 0.01f)
 
-        // Exactly at horizon (0.0°): full +2.5 mag extinction
+        // Exactly at horizon (0.0°): full extinction
         assertEquals(baseMag, StarOptics.computeAirmassExtinction(baseMag, 0.0f), 0.001f)
 
         // Sub-horizon (< 0°): unaffected by atmosphere (handled by landscape layer)
