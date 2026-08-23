@@ -1,6 +1,8 @@
 package com.dazix.intervalometer.ui.nightsky
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Color as AndroidColor
 import android.graphics.Matrix
@@ -12,6 +14,7 @@ import android.graphics.RadialGradient
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.util.LruCache
 import android.view.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
@@ -331,6 +334,32 @@ class NightSkyRenderer {
     private val reticleLinesBuffer = FloatArray(12)
     private val tempReticleVec = FloatArray(3)
 
+    // Pre-allocated artwork transformation matrix, paints, filters, and projection buffers
+    val artworkCache = LruCache<String, Bitmap>(16)
+    val artMatrix = Matrix()
+    val artPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
+        isDither = true
+    }
+    private val redVisionArtFilter = PorterDuffColorFilter(AndroidColor.RED, PorterDuff.Mode.MULTIPLY)
+    private val tempArtCenterWorldVec = FloatArray(3)
+    private val tempArtTopWorldVec = FloatArray(3)
+
+    fun getOrLoadArtwork(context: Context, resourceName: String): Bitmap? {
+        var bitmap = artworkCache.get(resourceName)
+        if (bitmap == null) {
+            val resId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
+            if (resId != 0) {
+                val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                bitmap = BitmapFactory.decodeResource(context.resources, resId, options)
+                if (bitmap != null) {
+                    artworkCache.put(resourceName, bitmap)
+                }
+            }
+        }
+        return bitmap
+    }
+
     init {
         setupStarPaints(redVisionMode = false)
     }
@@ -361,6 +390,8 @@ class NightSkyRenderer {
         setupStarPaints(redVisionMode)
 
         if (redVisionMode) {
+            artPaint.colorFilter = redVisionArtFilter
+
             constellationPaint.color = AndroidColor.argb(160, 255, 23, 68)
             constellationHaloPaint.color = AndroidColor.argb(50, 255, 23, 68)
             constellationCorePaint.color = AndroidColor.argb(255, 255, 82, 82)
@@ -377,6 +408,8 @@ class NightSkyRenderer {
             reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
             arrowPaint.color = AndroidColor.rgb(255, 23, 68)
         } else {
+            artPaint.colorFilter = null
+
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
             constellationHaloPaint.color = AndroidColor.argb(45, 128, 222, 234)
             constellationCorePaint.color = AndroidColor.argb(255, 255, 255, 255)
@@ -673,7 +706,9 @@ class NightSkyRenderer {
         h: Float,
         zoomFactor: Float = 1.0f,
         showConstellations: Boolean = true,
+        showConstellationArt: Boolean = true,
         isAtmosphereVisible: Boolean = true,
+        context: Context? = null,
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
         val totalStars = minOf(catalog.starsLength(), maxStars)
@@ -864,6 +899,109 @@ class NightSkyRenderer {
                 bucketPoints[bucketIndex][idx + 1] = screenY
                 bucketCounts[bucketIndex] = count + 1
                 totalVisibleStars++
+            }
+        }
+
+        // 6b. Batch Render Artistic Constellation Overlays (Behind constellation lines and stars)
+        if (showConstellations && showConstellationArt && context != null) {
+            for (c in 0 until constCount) {
+                val p = constellationProgress[c]
+                if (p <= 0.001f) continue
+
+                catalog.constellations(reusableConstellation, c)
+                val artName = reusableConstellation.artResourceName()
+                if (artName.isNullOrEmpty()) continue
+
+                val bitmap = getOrLoadArtwork(context, artName) ?: continue
+
+                val artCenterRa = reusableConstellation.artCenterRa().toDouble()
+                val artCenterDec = reusableConstellation.artCenterDec().toDouble()
+                val artWidthDeg = reusableConstellation.artWidthDeg()
+                val artRotDeg = reusableConstellation.artRotationDeg()
+
+                // Project Center
+                EquatorialCoordinates.computeWorldVector(artCenterRa, artCenterDec, lstDegrees, latitudeDegrees, tempArtCenterWorldVec, 0)
+                val acVx = tempArtCenterWorldVec[0]
+                val acVy = tempArtCenterWorldVec[1]
+                val acVz = tempArtCenterWorldVec[2]
+
+                val acxDev = matrix[0] * acVx + matrix[4] * acVy + matrix[8] * acVz
+                val acyDev = matrix[1] * acVx + matrix[5] * acVy + matrix[9] * acVz
+                val aczDev = matrix[2] * acVx + matrix[6] * acVy + matrix[10] * acVz
+
+                val acxs: Float
+                val acys: Float
+                when (displayRotation) {
+                    Surface.ROTATION_0 -> { acxs = acxDev; acys = acyDev }
+                    Surface.ROTATION_90 -> { acxs = acyDev; acys = -acxDev }
+                    Surface.ROTATION_180 -> { acxs = -acxDev; acys = -acyDev }
+                    Surface.ROTATION_270 -> { acxs = -acyDev; acys = acxDev }
+                    else -> { acxs = acxDev; acys = acyDev }
+                }
+                val aczs = -aczDev
+                if (aczs <= 0.001f) continue
+
+                val acScreenX = halfW + focalLengthPixels * (acxs / aczs)
+                val acScreenY = halfH - focalLengthPixels * (acys / aczs)
+
+                // Project Top orientation vector for rotation alignment
+                val rRa = Math.toRadians(artCenterRa)
+                val rDec = Math.toRadians(artCenterDec)
+                val rRot = Math.toRadians(artRotDeg.toDouble())
+                val cosRot = kotlin.math.cos(rRot).toFloat()
+                val sinRot = kotlin.math.sin(rRot).toFloat()
+
+                val uEastX = -kotlin.math.sin(rRa).toFloat()
+                val uEastY = kotlin.math.cos(rRa).toFloat()
+                val uEastZ = 0f
+
+                val uNorthX = (-kotlin.math.sin(rDec) * kotlin.math.cos(rRa)).toFloat()
+                val uNorthY = (-kotlin.math.sin(rDec) * kotlin.math.sin(rRa)).toFloat()
+                val uNorthZ = kotlin.math.cos(rDec).toFloat()
+
+                val vTopDirX = cosRot * uNorthX + sinRot * uEastX
+                val vTopDirY = cosRot * uNorthY + sinRot * uEastY
+                val vTopDirZ = cosRot * uNorthZ + sinRot * uEastZ
+
+                val eps = 0.01745329f
+                val atVx = acVx + eps * vTopDirX
+                val atVy = acVy + eps * vTopDirY
+                val atVz = acVz + eps * vTopDirZ
+
+                val atxDev = matrix[0] * atVx + matrix[4] * atVy + matrix[8] * atVz
+                val atyDev = matrix[1] * atVx + matrix[5] * atVy + matrix[9] * atVz
+                val atzDev = matrix[2] * atVx + matrix[6] * atVy + matrix[10] * atVz
+
+                val atxs: Float
+                val atys: Float
+                when (displayRotation) {
+                    Surface.ROTATION_0 -> { atxs = atxDev; atys = atyDev }
+                    Surface.ROTATION_90 -> { atxs = atyDev; atys = -atxDev }
+                    Surface.ROTATION_180 -> { atxs = -atxDev; atys = -atyDev }
+                    Surface.ROTATION_270 -> { atxs = -atyDev; atys = atxDev }
+                    else -> { atxs = atxDev; atys = atyDev }
+                }
+                val atzs = -atzDev
+                if (atzs <= 0.001f) continue
+
+                val atScreenX = halfW + focalLengthPixels * (atxs / atzs)
+                val atScreenY = halfH - focalLengthPixels * (atys / atzs)
+
+                val deltaX = atScreenX - acScreenX
+                val deltaY = atScreenY - acScreenY
+                val screenRotDeg = Math.toDegrees(kotlin.math.atan2(deltaY.toDouble(), deltaX.toDouble())).toFloat() + 90f
+
+                val widthInPixels = Math.toRadians(artWidthDeg.toDouble()).toFloat() * focalLengthPixels
+                val scale = widthInPixels / bitmap.width.toFloat()
+
+                artMatrix.reset()
+                artMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
+                artMatrix.postScale(scale, scale)
+                artMatrix.postRotate(screenRotDeg)
+                artMatrix.postTranslate(acScreenX, acScreenY)
+
+                artPaint.alpha = (150f * p).toInt().coerceIn(0, 255)
+                nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)
             }
         }
 

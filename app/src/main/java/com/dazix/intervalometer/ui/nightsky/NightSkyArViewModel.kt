@@ -55,6 +55,7 @@ data class NightSkyArUiState(
     val isLandscapeVisible: Boolean = true,
     val isGridVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
+    val isConstellationArtVisible: Boolean = true,
     val selectedBody: CelestialBodyDetails? = null,
 )
 
@@ -149,6 +150,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    val isConstellationArtVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationArtVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
 
@@ -172,6 +179,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isLandscapeVisible,
         isGridVisible,
         isConstellationsVisible,
+        isConstellationArtVisible,
         selectedBodyState,
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -193,7 +201,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val landscape = args[16] as Boolean
         val grid = args[17] as Boolean
         val constellations = args[18] as Boolean
-        val selected = args[19] as CelestialBodyDetails?
+        val constellationArt = args[19] as Boolean
+        val selected = args[20] as CelestialBodyDetails?
 
         NightSkyArUiState(
             location = loc,
@@ -216,6 +225,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isLandscapeVisible = landscape,
             isGridVisible = grid,
             isConstellationsVisible = constellations,
+            isConstellationArtVisible = constellationArt,
             selectedBody = selected,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
@@ -522,6 +532,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setConstellationsVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyConstellationsVisible(enabled)
+        }
+    }
+
+    fun toggleConstellationArtVisible() {
+        setConstellationArtVisible(!isConstellationArtVisible.value)
+    }
+
+    fun setConstellationArtVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyConstellationArtVisible(enabled)
         }
     }
 

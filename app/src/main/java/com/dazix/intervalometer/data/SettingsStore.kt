@@ -85,6 +85,7 @@ class SettingsStore(context: Context) {
     val nightSkyGridVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyGridVisible(it) }
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
+    val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
 
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeSunArKeepScreenOn(it, enabled) }
@@ -156,6 +157,10 @@ class SettingsStore(context: Context) {
 
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyConstellationsVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyConstellationArtVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyConstellationArtVisible(it, enabled) }
     }
 
     suspend fun saveConfig(config: SessionConfig) {
@@ -251,6 +256,7 @@ internal object SettingsMapping {
     private val NIGHT_SKY_LANDSCAPE_VISIBLE = booleanPreferencesKey("night_sky_landscape_visible")
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
+    private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -566,6 +572,13 @@ internal object SettingsMapping {
 
     fun writeNightSkyConstellationsVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_CONSTELLATIONS_VISIBLE] = enabled
+    }
+
+    fun readNightSkyConstellationArtVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_CONSTELLATION_ART_VISIBLE] ?: true
+
+    fun writeNightSkyConstellationArtVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_CONSTELLATION_ART_VISIBLE] = enabled
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

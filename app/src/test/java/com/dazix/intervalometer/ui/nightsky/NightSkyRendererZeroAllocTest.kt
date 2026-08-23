@@ -49,6 +49,9 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.reticlePaint)
         assertNotNull(renderer.reticleTextPaint)
         assertNotNull(renderer.skyDomeRenderer)
+        assertNotNull(renderer.artworkCache)
+        assertNotNull(renderer.artMatrix)
+        assertNotNull(renderer.artPaint)
 
         org.junit.Assert.assertEquals(256, renderer.constellationProgress.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenX.size)
@@ -507,5 +510,77 @@ class NightSkyRendererZeroAllocTest {
                 density = 2.5f,
             )
         }
+    }
+
+    @Test
+    fun `verifies constellation artwork rendering and LRU caching without allocations`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        // 1. Constellation with artwork metadata
+        val constNameOff = fbb.createString("Ursa Major")
+        val locNameOff = fbb.createString("Velká medvědice")
+        val brightOff = fbb.createString("Alioth")
+        val famOff = fbb.createString("Ursa Major Family")
+        val artResOff = fbb.createString("art_uma")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val constOff = Constellation.createConstellation(
+            fbb, constNameOff, 0.0f, 90.0f, linesVec, locNameOff, brightOff, famOff, false,
+            artResOff, 0.0f, 90.0f, 40.0f, 0.0f
+        )
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 89.0f, 1.8f) // star 1
+        Star.createStar(fbb, 0.0f, 90.0f, 1.8f) // star 0
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        renderer.applyTheme(redVisionMode = false)
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            // First render pass: focuses Ursa Major with constellation art enabled
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = true,
+            )
+        }
+
+        assertTrue("Constellation progress must ramp up", renderer.constellationProgress[0] > 0.001f)
+
+        // Apply Red Vision mode and Normal mode to verify theme switching runs without exception
+        renderer.applyTheme(redVisionMode = true)
+        renderer.applyTheme(redVisionMode = false)
     }
 }

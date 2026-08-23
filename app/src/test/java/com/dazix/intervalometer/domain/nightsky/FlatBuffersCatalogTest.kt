@@ -24,15 +24,16 @@ class FlatBuffersCatalogTest {
         val locNameOff = fbb.createString("Velká medvědice")
         val brightOff = fbb.createString("Alioth")
         val famOff = fbb.createString("Ursa Major Family")
+        val artResOff = fbb.createString("art_uma")
         val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2, 2, 3))
-        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, locNameOff, brightOff, famOff, false)
+        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, locNameOff, brightOff, famOff, false, artResOff, 165.2f, 58.4f, 42.5f, 15.0f)
 
         val astNameOff = fbb.createString("Big Dipper (Plough)")
         val astLocNameOff = fbb.createString("Velký vůz")
         val astBrightOff = fbb.createString("Alioth")
         val astFamOff = fbb.createString("Ursa Major")
         val astLinesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2))
-        val astOff = Constellation.createConstellation(fbb, astNameOff, 175.5f, 56.2f, astLinesVec, astLocNameOff, astBrightOff, astFamOff, true)
+        val astOff = Constellation.createConstellation(fbb, astNameOff, 175.5f, 56.2f, astLinesVec, astLocNameOff, astBrightOff, astFamOff, true, 0, 0f, 0f, 0f, 0f)
 
         val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff, astOff))
 
@@ -91,6 +92,11 @@ class FlatBuffersCatalogTest {
         assertEquals("Alioth", constObj.brightestStar())
         assertEquals("Ursa Major Family", constObj.family())
         assertEquals(false, constObj.isAsterism())
+        assertEquals("art_uma", constObj.artResourceName())
+        assertEquals(165.2f, constObj.artCenterRa(), 0.01f)
+        assertEquals(58.4f, constObj.artCenterDec(), 0.01f)
+        assertEquals(42.5f, constObj.artWidthDeg(), 0.01f)
+        assertEquals(15.0f, constObj.artRotationDeg(), 0.01f)
         assertEquals(6, constObj.linesLength())
         assertEquals(0, constObj.lines(0))
         assertEquals(1, constObj.lines(1))
@@ -103,6 +109,7 @@ class FlatBuffersCatalogTest {
         assertEquals("Alioth", astObj.brightestStar())
         assertEquals("Ursa Major", astObj.family())
         assertEquals(true, astObj.isAsterism())
+        assertEquals(null, astObj.artResourceName())
         assertEquals(4, astObj.linesLength())
     }
 
@@ -154,6 +161,8 @@ class FlatBuffersCatalogTest {
         assertEquals("Alioth", um.brightestStar())
         assertEquals("Ursa Major Family", um.family())
         assertEquals(false, um.isAsterism())
+        assertEquals("art_uma", um.artResourceName())
+        assertTrue("Ursa Major art width should be > 20 deg, got ${um.artWidthDeg()}", um.artWidthDeg() > 20f)
         assertTrue("Ursa Major centroid RA should be ~164, got ${um.centroidRa()}", um.centroidRa() in 155f..175f)
         assertTrue("Ursa Major centroid Dec should be ~55, got ${um.centroidDec()}", um.centroidDec() in 50f..60f)
 
@@ -163,6 +172,8 @@ class FlatBuffersCatalogTest {
         assertEquals("Rigel", ori.brightestStar())
         assertEquals("Orion Family", ori.family())
         assertEquals(false, ori.isAsterism())
+        assertEquals("art_ori", ori.artResourceName())
+        assertTrue("Orion art width should be > 20 deg, got ${ori.artWidthDeg()}", ori.artWidthDeg() > 20f)
         assertTrue("Orion centroid RA should be ~84, got ${ori.centroidRa()}", ori.centroidRa() in 80f..90f)
         assertTrue("Orion centroid Dec should be ~6.8, got ${ori.centroidDec()}", ori.centroidDec() in 0f..15f)
 
@@ -172,6 +183,7 @@ class FlatBuffersCatalogTest {
         assertEquals("Alioth", bigDipper.brightestStar())
         assertEquals("Ursa Major", bigDipper.family())
         assertEquals(true, bigDipper.isAsterism())
+        assertEquals(null, bigDipper.artResourceName())
         assertTrue("Big Dipper centroid RA should be ~180, got ${bigDipper.centroidRa()}", bigDipper.centroidRa() in 170f..190f)
         assertTrue("Big Dipper centroid Dec should be ~56, got ${bigDipper.centroidDec()}", bigDipper.centroidDec() in 50f..65f)
 

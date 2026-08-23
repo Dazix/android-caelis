@@ -495,6 +495,18 @@ class SettingsMappingTest {
         assertEquals(true, SettingsMapping.readNightSkyConstellationsVisible(prefs))
     }
 
+    @Test
+    fun `night sky constellation art visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyConstellationArtVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyConstellationArtVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyConstellationArtVisible(prefs))
+
+        SettingsMapping.writeNightSkyConstellationArtVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyConstellationArtVisible(prefs))
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

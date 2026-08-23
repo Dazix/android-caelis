@@ -323,6 +323,7 @@ fun NightSkyArScreen(
                     isLandscapeVisible = uiState.isLandscapeVisible,
                     isGridVisible = uiState.isGridVisible,
                     isConstellationsVisible = uiState.isConstellationsVisible,
+                    isConstellationArtVisible = uiState.isConstellationArtVisible,
                     selectedBody = uiState.selectedBody,
                     onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                     modifier = Modifier.fillMaxSize(),
@@ -429,6 +430,7 @@ fun NightSkyArScreen(
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
+                isConstellationArtVisible = uiState.isConstellationArtVisible,
                 isGridVisible = uiState.isGridVisible,
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 redVisionMode = uiState.redVisionMode,
@@ -451,6 +453,11 @@ fun NightSkyArScreen(
                     val nextState = !uiState.isConstellationsVisible
                     showToggleToast(context, R.string.night_sky_constellations, nextState)
                     viewModel.toggleConstellationsVisible()
+                },
+                onToggleConstellationArtVisible = {
+                    val nextState = !uiState.isConstellationArtVisible
+                    showToggleToast(context, R.string.night_sky_constellation_art, nextState)
+                    viewModel.toggleConstellationArtVisible()
                 },
                 onToggleGridVisible = {
                     val nextState = !uiState.isGridVisible
@@ -492,6 +499,7 @@ private fun NightSkyOverlayCanvas(
     isLandscapeVisible: Boolean,
     isGridVisible: Boolean,
     isConstellationsVisible: Boolean,
+    isConstellationArtVisible: Boolean,
     selectedBody: CelestialBodyDetails? = null,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -565,7 +573,7 @@ private fun NightSkyOverlayCanvas(
             isRedVision = redVisionMode,
         )
 
-        // Layer 2: Dual-pass batch render visible stars (halo + core) and constellation lines
+        // Layer 2: Dual-pass batch render visible stars (halo + core), constellation lines, and artwork illustrations
         val visibleCount = renderer.drawNightSky(
             drawScope = this,
             catalog = catalog,
@@ -578,7 +586,9 @@ private fun NightSkyOverlayCanvas(
             h = h,
             zoomFactor = zoomRatio,
             showConstellations = isConstellationsVisible,
+            showConstellationArt = isConstellationArtVisible,
             isAtmosphereVisible = isAtmosphereVisible,
+            context = context,
         )
 
         // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)

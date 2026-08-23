@@ -25,6 +25,135 @@ STELLARIUM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/
 STELLARIUM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellation_names.eng.fab"
 STELLARIUM_ASTERISM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/asterism_lines.fab"
 STELLARIUM_ASTERISM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/asterism_names.eng.fab"
+STELLARIUM_ART_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellationsart.fab"
+
+def solve_3x3(A, b):
+    def det3(m):
+        return (m[0][0]*(m[1][1]*m[2][2] - m[1][2]*m[2][1])
+              - m[0][1]*(m[1][0]*m[2][2] - m[1][2]*m[2][0])
+              + m[0][2]*(m[1][0]*m[2][1] - m[1][1]*m[2][0]))
+    d = det3(A)
+    if abs(d) < 1e-9:
+        return [1.0/3, 1.0/3, 1.0/3]
+    A0 = [[b[0], A[0][1], A[0][2]], [b[1], A[1][1], A[1][2]], [b[2], A[2][1], A[2][2]]]
+    A1 = [[A[0][0], b[0], A[0][2]], [A[1][0], b[1], A[1][2]], [A[2][0], b[2], A[2][2]]]
+    A2 = [[A[0][0], A[0][1], b[0]], [A[1][0], A[1][1], b[1]], [A[2][0], A[2][1], b[2]]]
+    return [det3(A0)/d, det3(A1)/d, det3(A2)/d]
+
+def parse_stellarium_art(stars_by_hip):
+    """Parses constellationsart.fab and computes celestial placement for each constellation artwork."""
+    art_bytes = download_or_read_cache(STELLARIUM_ART_URL, "constellationsart.fab")
+    art_text = art_bytes.decode("utf-8")
+    
+    art_data = {}
+    for line in art_text.strip().split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 11:
+            continue
+        abbr = parts[0]
+        res_name = f"art_{abbr.lower()}"
+        
+        try:
+            x1, y1, hip1 = float(parts[2]), float(parts[3]), int(parts[4])
+            x2, y2, hip2 = float(parts[5]), float(parts[6]), int(parts[7])
+            x3, y3, hip3 = float(parts[8]), float(parts[9]), int(parts[10])
+            
+            s1 = stars_by_hip.get(hip1)
+            s2 = stars_by_hip.get(hip2)
+            s3 = stars_by_hip.get(hip3)
+            if not s1 or not s2 or not s3:
+                continue
+                
+            def to_vec(ra_deg, dec_deg):
+                r_ra = math.radians(ra_deg)
+                r_dec = math.radians(dec_deg)
+                return [
+                    math.cos(r_dec) * math.cos(r_ra),
+                    math.cos(r_dec) * math.sin(r_ra),
+                    math.sin(r_dec)
+                ]
+            
+            v1 = to_vec(s1["ra"], s1["dec"])
+            v2 = to_vec(s2["ra"], s2["dec"])
+            v3 = to_vec(s3["ra"], s3["dec"])
+            
+            w = 512.0
+            h = 512.0
+            if max(x1, x2, x3, y1, y2, y3) <= 256.0:
+                w, h = 256.0, 256.0
+                
+            A = [
+                [x1, x2, x3],
+                [y1, y2, y3],
+                [1.0, 1.0, 1.0]
+            ]
+            
+            b_center = [w / 2.0, h / 2.0, 1.0]
+            weights = solve_3x3(A, b_center)
+            
+            vc = [
+                weights[0]*v1[0] + weights[1]*v2[0] + weights[2]*v3[0],
+                weights[0]*v1[1] + weights[1]*v2[1] + weights[2]*v3[1],
+                weights[0]*v1[2] + weights[1]*v2[2] + weights[2]*v3[2]
+            ]
+            vlen = math.sqrt(vc[0]*vc[0] + vc[1]*vc[1] + vc[2]*vc[2])
+            if vlen < 1e-6:
+                continue
+            vc = [x / vlen for x in vc]
+            
+            center_ra = math.degrees(math.atan2(vc[1], vc[0])) % 360.0
+            center_dec = math.degrees(math.asin(max(-1.0, min(1.0, vc[2]))))
+            
+            def dot3(a, b):
+                return sum(x*y for x, y in zip(a, b))
+            
+            d12_px = math.hypot(x2 - x1, y2 - y1)
+            d13_px = math.hypot(x3 - x1, y3 - y1)
+            d23_px = math.hypot(x3 - x2, y3 - y2)
+            
+            th12 = math.acos(max(-1.0, min(1.0, dot3(v1, v2))))
+            th13 = math.acos(max(-1.0, min(1.0, dot3(v1, v3))))
+            th23 = math.acos(max(-1.0, min(1.0, dot3(v2, v3))))
+            
+            scales = []
+            if d12_px > 1.0: scales.append(th12 / d12_px)
+            if d13_px > 1.0: scales.append(th13 / d13_px)
+            if d23_px > 1.0: scales.append(th23 / d23_px)
+            if not scales:
+                continue
+            avg_scale = sum(scales) / len(scales)
+            width_deg = math.degrees(avg_scale * w)
+            
+            b_up = [w / 2.0, h / 2.0 - 100.0, 1.0]
+            w_up = solve_3x3(A, b_up)
+            v_up = [
+                w_up[0]*v1[0] + w_up[1]*v2[0] + w_up[2]*v3[0],
+                w_up[0]*v1[1] + w_up[1]*v2[1] + w_up[2]*v3[1],
+                w_up[0]*v1[2] + w_up[1]*v2[2] + w_up[2]*v3[2]
+            ]
+            v_up_len = math.sqrt(v_up[0]*v_up[0] + v_up[1]*v_up[1] + v_up[2]*v_up[2])
+            if v_up_len > 1e-6:
+                v_up = [x / v_up_len for x in v_up]
+            
+            r_ra = math.radians(center_ra)
+            r_dec = math.radians(center_dec)
+            u_east = [-math.sin(r_ra), math.cos(r_ra), 0.0]
+            u_north = [-math.sin(r_dec)*math.cos(r_ra), -math.sin(r_dec)*math.sin(r_ra), math.cos(r_dec)]
+            
+            proj_east = dot3(v_up, u_east)
+            proj_north = dot3(v_up, u_north)
+            rot_deg = math.degrees(math.atan2(proj_east, proj_north))
+            
+            art_data[abbr] = (res_name, center_ra, center_dec, width_deg, rot_deg)
+        except Exception as e:
+            print(f"Failed to calibrate art for {abbr}: {e}")
+            continue
+            
+    print(f"Parsed and calibrated {len(art_data)} constellation artworks.")
+    return art_data
 
 # FlatBuffers Python Schema Serialization
 
@@ -40,11 +169,12 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
 
     # 1. Serialize Constellations and Asterisms
     constellation_offsets = []
-    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast in constellations_data:
+    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast, art_res, art_c_ra, art_c_dec, art_w_deg, art_rot_deg in constellations_data:
         name_off = builder.CreateString(name)
         loc_name_off = builder.CreateString(loc_name) if loc_name else 0
         bright_off = builder.CreateString(bright_star) if bright_star else 0
         fam_off = builder.CreateString(fam) if fam else 0
+        art_res_off = builder.CreateString(art_res) if art_res else 0
         
         # Create lines vector: [int]
         builder.StartVector(4, len(line_indices), 4)
@@ -52,8 +182,8 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
             builder.PrependInt32(idx)
         lines_vec = builder.EndVector()
         
-        # Start Constellation table (8 fields)
-        builder.StartObject(8)
+        # Start Constellation table (13 fields)
+        builder.StartObject(13)
         builder.PrependUOffsetTRelativeSlot(0, name_off, 0)
         builder.PrependFloat32Slot(1, float(c_ra), 0.0)
         builder.PrependFloat32Slot(2, float(c_dec), 0.0)
@@ -65,6 +195,12 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
         if fam_off:
             builder.PrependUOffsetTRelativeSlot(6, fam_off, 0)
         builder.PrependBoolSlot(7, bool(is_ast), False)
+        if art_res_off:
+            builder.PrependUOffsetTRelativeSlot(8, art_res_off, 0)
+        builder.PrependFloat32Slot(9, float(art_c_ra), 0.0)
+        builder.PrependFloat32Slot(10, float(art_c_dec), 0.0)
+        builder.PrependFloat32Slot(11, float(art_w_deg), 0.0)
+        builder.PrependFloat32Slot(12, float(art_rot_deg), 0.0)
         const_off = builder.EndObject()
         constellation_offsets.append(const_off)
 
@@ -701,7 +837,10 @@ def build_astronomical_catalog():
 
     print(f"Selected {len(stars_data):,} catalog stars and {len(star_metadata):,} rich metadata records.")
 
-    print("=== Step 4: Constructing 88 IAU Constellations with Authentic Geometry ===")
+    print("=== Step 4: Parsing Stellarium Constellation Artwork Mapping ===")
+    art_data = parse_stellarium_art(stars_by_hip)
+
+    print("=== Step 5: Constructing 88 IAU Constellations with Authentic Geometry & Artwork ===")
     constellations_data = []
     
     for abbr in sorted(constellation_lines.keys()):
@@ -747,6 +886,17 @@ def build_astronomical_catalog():
             centroid_dec = 0.0
             brightest_star_name = ""
 
+        # Artwork placement
+        art_info = art_data.get(abbr)
+        if art_info:
+            art_res_name, art_c_ra, art_c_dec, art_w_deg, art_rot_deg = art_info
+        else:
+            art_res_name = ""
+            art_c_ra = 0.0
+            art_c_dec = 0.0
+            art_w_deg = 0.0
+            art_rot_deg = 0.0
+
         constellations_data.append((
             eng_name,
             centroid_ra,
@@ -755,12 +905,17 @@ def build_astronomical_catalog():
             czech_name,
             brightest_star_name,
             family,
-            False # is_asterism = False
+            False, # is_asterism = False
+            art_res_name,
+            art_c_ra,
+            art_c_dec,
+            art_w_deg,
+            art_rot_deg
         ))
 
     print(f"Processed {len(constellations_data)} IAU constellations.")
 
-    print("=== Step 5: Constructing Modern Asterisms with Geometry & Localization ===")
+    print("=== Step 6: Constructing Modern Asterisms with Geometry & Localization ===")
     asterisms_data = []
 
     for abbr in sorted(asterism_lines.keys()):
@@ -811,7 +966,12 @@ def build_astronomical_catalog():
             czech_name,
             brightest_star_name,
             family,
-            True # is_asterism = True
+            True, # is_asterism = True
+            "",   # Asterisms have no separate artwork illustration
+            0.0,
+            0.0,
+            0.0,
+            0.0
         ))
 
     print(f"Processed {len(asterisms_data)} Asterisms.")

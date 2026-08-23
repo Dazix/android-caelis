@@ -549,6 +549,29 @@ object AppIcons {
         }
     }
 
+    /** Brush: artistic paintbrush for constellation illustrations / artwork layer. */
+    val Brush: ImageVector by lazy {
+        icon("Brush") {
+            strokePath {
+                // Brush handle & ferrule
+                moveTo(20.5f, 3.5f)
+                lineTo(14.5f, 9.5f)
+                lineTo(12.5f, 7.5f)
+                lineTo(18.5f, 1.5f)
+                close()
+                // Brush bristle body
+                moveTo(14.5f, 9.5f)
+                curveTo(12.5f, 11.5f, 9.0f, 13.0f, 6.0f, 15.0f)
+                curveTo(4.5f, 16.0f, 3.5f, 18.0f, 3.5f, 20.5f)
+                curveTo(6.0f, 20.5f, 8.0f, 19.5f, 9.0f, 18.0f)
+                curveTo(11.0f, 15.0f, 12.5f, 11.5f, 14.5f, 9.5f)
+            }
+            fillPath {
+                circle(centerX = 5.5f, centerY = 18.5f, radius = 1.6f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,
