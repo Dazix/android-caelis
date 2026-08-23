@@ -27,55 +27,22 @@ object LunarDayTimesCalculator {
         val startSec = startLocal.epochSecond
         val endSec = endLocal.epochSecond
 
-        var moonriseUtc: Instant? = null
-        var moonriseAz: Double? = null
-        var moonsetUtc: Instant? = null
-        var moonsetAz: Double? = null
-
         var maxElevation = -999.0
         var bestTransitSec = startSec
 
-        // 5-minute sampling to find crossings and peak
+        // 1. 5-minute sampling across the calendar day to find the peak culmination (transit)
         val step = 300L
-        var prevSec = startSec
-        var prevCoords = LunarPositionCalculator.computePosition(Instant.ofEpochSecond(prevSec), location)
-        if (prevCoords.apparentElevationDegrees > maxElevation) {
-            maxElevation = prevCoords.apparentElevationDegrees
-            bestTransitSec = prevSec
-        }
-
-        var curSec = startSec + step
+        var curSec = startSec
         while (curSec <= endSec) {
-            val curCoords = LunarPositionCalculator.computePosition(Instant.ofEpochSecond(curSec), location)
-            if (curCoords.apparentElevationDegrees > maxElevation) {
-                maxElevation = curCoords.apparentElevationDegrees
+            val coords = LunarPositionCalculator.computePosition(Instant.ofEpochSecond(curSec), location)
+            if (coords.apparentElevationDegrees > maxElevation) {
+                maxElevation = coords.apparentElevationDegrees
                 bestTransitSec = curSec
             }
-
-            // Check moonrise (apparent elev crosses -0.8333° upwards)
-            if (moonriseUtc == null && prevCoords.apparentElevationDegrees <= -0.8333 && curCoords.apparentElevationDegrees >= -0.8333) {
-                val crossingSec = refineCrossing(prevSec, curSec, location, target = -0.8333, isRising = true)
-                val crossingInstant = Instant.ofEpochSecond(crossingSec)
-                val cCoords = LunarPositionCalculator.computePosition(crossingInstant, location)
-                moonriseUtc = crossingInstant
-                moonriseAz = cCoords.azimuthDegrees
-            }
-
-            // Check moonset (apparent elev crosses -0.8333° downwards)
-            if (moonsetUtc == null && prevCoords.apparentElevationDegrees >= -0.8333 && curCoords.apparentElevationDegrees <= -0.8333) {
-                val crossingSec = refineCrossing(prevSec, curSec, location, target = -0.8333, isRising = false)
-                val crossingInstant = Instant.ofEpochSecond(crossingSec)
-                val cCoords = LunarPositionCalculator.computePosition(crossingInstant, location)
-                moonsetUtc = crossingInstant
-                moonsetAz = cCoords.azimuthDegrees
-            }
-
-            prevSec = curSec
-            prevCoords = curCoords
             curSec += step
         }
 
-        // Refine peak transit second
+        // 2. Refine peak transit second
         var lowSec = maxOf(startSec, bestTransitSec - 300L)
         var highSec = minOf(endSec, bestTransitSec + 300L)
         while (highSec - lowSec > 2) {
@@ -90,6 +57,50 @@ object LunarDayTimesCalculator {
             }
         }
         val transitInstant = Instant.ofEpochSecond((lowSec + highSec) / 2)
+        val transitSec = transitInstant.epochSecond
+
+        // 3. Search backwards from transit (up to 14h) for Moonrise belonging to this passage
+        var moonriseUtc: Instant? = null
+        var moonriseAz: Double? = null
+        val riseSearchLimitSec = transitSec - (14 * 3600L)
+        var searchSec = transitSec
+        var nextCoords = LunarPositionCalculator.computePosition(transitInstant, location)
+
+        while (searchSec > riseSearchLimitSec) {
+            val prevS = searchSec - step
+            val prevC = LunarPositionCalculator.computePosition(Instant.ofEpochSecond(prevS), location)
+            if (prevC.apparentElevationDegrees <= -0.8333 && nextCoords.apparentElevationDegrees >= -0.8333) {
+                val crossingSec = refineCrossing(prevS, searchSec, location, target = -0.8333, isRising = true)
+                val crossingInstant = Instant.ofEpochSecond(crossingSec)
+                moonriseUtc = crossingInstant
+                moonriseAz = LunarPositionCalculator.computePosition(crossingInstant, location).azimuthDegrees
+                break
+            }
+            nextCoords = prevC
+            searchSec = prevS
+        }
+
+        // 4. Search forwards from transit (up to 14h) for Moonset belonging to this passage
+        var moonsetUtc: Instant? = null
+        var moonsetAz: Double? = null
+        val setSearchLimitSec = transitSec + (14 * 3600L)
+        searchSec = transitSec
+        var prevCoords = LunarPositionCalculator.computePosition(transitInstant, location)
+
+        while (searchSec < setSearchLimitSec) {
+            val nextS = searchSec + step
+            val nextC = LunarPositionCalculator.computePosition(Instant.ofEpochSecond(nextS), location)
+            if (prevCoords.apparentElevationDegrees >= -0.8333 && nextC.apparentElevationDegrees <= -0.8333) {
+                val crossingSec = refineCrossing(searchSec, nextS, location, target = -0.8333, isRising = false)
+                val crossingInstant = Instant.ofEpochSecond(crossingSec)
+                moonsetUtc = crossingInstant
+                moonsetAz = LunarPositionCalculator.computePosition(crossingInstant, location).azimuthDegrees
+                break
+            }
+            prevCoords = nextC
+            searchSec = nextS
+        }
+
         val noonApprox = date.atTime(12, 0).atZone(zoneId).toInstant()
         val noonLunar = LunarPositionCalculator.computePosition(noonApprox, location)
 

@@ -1,13 +1,7 @@
 package com.dazix.intervalometer.ui.nightsky
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,21 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -47,192 +36,175 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Material 3 Expressive bottom sheet displaying rich astronomical details of a tapped celestial object.
- * Supports peek mode (header + key metrics) and expanded mode (full coordinate & astrophysical data table).
+ * Material 3 Expressive draggable bottom sheet content displaying rich astronomical details of a selected celestial object.
+ * Designed to be embedded in [androidx.compose.material3.BottomSheetScaffold].
+ *
+ * In PartiallyExpanded (peek) state, displays the Drag Handle and Header Row (Name, Magnitude badge, Type pill, Dismiss button).
+ * In Expanded state, smoothly reveals the complete astrophysics & equatorial coordinate data grid.
  * Fully complies with Red Vision (Astrophotography Night Mode).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CelestialDetailBottomSheet(
+fun CelestialDetailSheetContent(
     selectedBody: CelestialBodyDetails?,
     redVisionMode: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    AnimatedVisibility(
-        visible = selectedBody != null,
-        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-        modifier = modifier,
+    if (selectedBody == null) {
+        Spacer(modifier = Modifier.height(1.dp))
+        return
+    }
+
+    val titleColor = if (redVisionMode) RedPrimary else Color.White
+    val labelColor = if (redVisionMode) RedSecondary else Color(0xFF8C9BAE)
+    val valueColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
+    val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+    val badgeContainer = if (redVisionMode) Color(0xFF330000) else Color(0xFF1B2334)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
     ) {
-        if (selectedBody == null) return@AnimatedVisibility
-
-        var isExpanded by remember { mutableStateOf(false) }
-
-        val containerColor = if (redVisionMode) Color(0xF0180000) else Color(0xF0121622)
-        val borderColor = if (redVisionMode) RedPrimary.copy(alpha = 0.8f) else Color(0xFF283248)
-        val titleColor = if (redVisionMode) RedPrimary else Color.White
-        val labelColor = if (redVisionMode) RedSecondary else Color(0xFF8C9BAE)
-        val valueColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
-        val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
-        val badgeContainer = if (redVisionMode) Color(0xFF330000) else Color(0xFF1B2334)
-
-        Surface(
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            color = containerColor,
-            border = BorderStroke(1.2.dp, borderColor),
+        // Drag Handle
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { isExpanded = !isExpanded },
+                .padding(top = 8.dp, bottom = 6.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                // Drag Handle
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .width(36.dp)
-                        .height(4.dp)
-                        .clip(CircleShape)
-                        .background(if (redVisionMode) RedPrimary.copy(alpha = 0.5f) else Color(0xFF4A5568)),
+            BottomSheetDefaults.DragHandle(
+                color = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0xFF718096),
+            )
+        }
+
+        // Header Row: Object Name, Magnitude/Type Badges, and Dismiss Button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = selectedBody.name,
+                    color = titleColor,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Header Row: Object Name, Magnitude/Type Badges, and Dismiss Button
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Magnitude Badge
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = badgeContainer,
+                        border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.5f)),
+                    ) {
                         Text(
-                            text = selectedBody.name,
-                            color = titleColor,
-                            fontSize = 20.sp,
+                            text = String.format(Locale.US, "V %+.2f", selectedBody.magnitude),
+                            color = accentColor,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            // Magnitude Badge
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = badgeContainer,
-                                border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.5f)),
-                            ) {
-                                Text(
-                                    text = String.format(Locale.US, "V %+.2f", selectedBody.magnitude),
-                                    color = accentColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-
-                            // Body Type Pill
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = badgeContainer,
-                            ) {
-                                Text(
-                                    text = selectedBody.type,
-                                    color = valueColor.copy(alpha = 0.9f),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-
-                            if (selectedBody.constellation != null && !isExpanded) {
-                                Text(
-                                    text = "· ${selectedBody.constellation}",
-                                    color = labelColor,
-                                    fontSize = 12.sp,
-                                )
-                            }
-                        }
                     }
 
-                    // Close Button
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(36.dp),
+                    // Body Type Pill
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = badgeContainer,
                     ) {
-                        Icon(
-                            imageVector = AppIcons.Clear,
-                            contentDescription = stringResource(R.string.celestial_close),
-                            tint = labelColor,
-                            modifier = Modifier.size(18.dp),
+                        Text(
+                            text = selectedBody.type,
+                            color = valueColor.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+
+                    if (selectedBody.constellation != null) {
+                        Text(
+                            text = "· ${selectedBody.constellation}",
+                            color = labelColor,
+                            fontSize = 12.sp,
                         )
                     }
                 }
+            }
 
-                // Expanded Section: Detailed Astrophysics & Celestial Coordinates Table
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        // Divider
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(0.8.dp)
-                                .background(if (redVisionMode) RedPrimary.copy(alpha = 0.25f) else Color(0xFF283248)),
-                        )
+            // Close Button
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Clear,
+                    contentDescription = stringResource(R.string.celestial_close),
+                    tint = labelColor,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
 
-                        // Data Grid Row 1: Constellation & Distance
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            CelestialDataField(
-                                label = stringResource(R.string.celestial_constellation),
-                                value = selectedBody.constellation ?: "—",
-                                labelColor = labelColor,
-                                valueColor = valueColor,
-                                modifier = Modifier.weight(1f),
-                            )
+        // Divider
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.8.dp)
+                .background(if (redVisionMode) RedPrimary.copy(alpha = 0.25f) else Color(0xFF283248)),
+        )
 
-                            CelestialDataField(
-                                label = stringResource(R.string.celestial_distance),
-                                value = selectedBody.distance,
-                                labelColor = labelColor,
-                                valueColor = valueColor,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
+        // Expanded Section: Detailed Astrophysics & Celestial Coordinates Table
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Data Grid Row 1: Constellation & Distance
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                CelestialDataField(
+                    label = stringResource(R.string.celestial_constellation),
+                    value = selectedBody.constellation ?: "—",
+                    labelColor = labelColor,
+                    valueColor = valueColor,
+                    modifier = Modifier.weight(1f),
+                )
 
-                        // Data Grid Row 2: Equatorial Coordinates (RA & Dec)
-                        if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
-                            val raFormatted = formatRa(selectedBody.raDegrees)
-                            val decFormatted = formatDec(selectedBody.decDegrees)
+                CelestialDataField(
+                    label = stringResource(R.string.celestial_distance),
+                    value = selectedBody.distance,
+                    labelColor = labelColor,
+                    valueColor = valueColor,
+                    modifier = Modifier.weight(1f),
+                )
+            }
 
-                            CelestialDataField(
-                                label = stringResource(R.string.celestial_coordinates),
-                                value = "$raFormatted  ·  $decFormatted",
-                                labelColor = labelColor,
-                                valueColor = accentColor,
-                                isMonospace = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                }
+            // Data Grid Row 2: Equatorial Coordinates (RA & Dec)
+            if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
+                val raFormatted = formatRa(selectedBody.raDegrees)
+                val decFormatted = formatDec(selectedBody.decDegrees)
+
+                CelestialDataField(
+                    label = stringResource(R.string.celestial_coordinates),
+                    value = "$raFormatted  ·  $decFormatted",
+                    labelColor = labelColor,
+                    valueColor = accentColor,
+                    isMonospace = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

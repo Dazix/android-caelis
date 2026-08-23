@@ -20,6 +20,7 @@ import com.dazix.intervalometer.ar.SkyDomeRenderer
 import com.dazix.intervalometer.data.nightsky.Constellation
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
+import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.intervalometer.domain.nightsky.EquatorialCoordinates
 import com.dazix.intervalometer.domain.nightsky.StarFrustumCulling
@@ -163,6 +164,26 @@ class NightSkyRenderer {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
 
+    // Zero-allocation broken-crosshair selection reticle & target text paints and buffers
+    val reticlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 5f
+        strokeCap = Paint.Cap.SQUARE
+    }
+
+    val reticleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textSize = 42f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
+    }
+
+    // 4 line segments * 4 coordinates (x0, y0, x1, y1) = 16 floats
+    private val reticleLinesBuffer = FloatArray(16)
+    private val tempReticleVec = FloatArray(3)
+
     init {
         setupStarPaints(redVisionMode = false)
     }
@@ -195,9 +216,13 @@ class NightSkyRenderer {
         if (redVisionMode) {
             constellationPaint.color = AndroidColor.argb(160, 255, 23, 68)
             constellationLabelPaint.color = AndroidColor.argb(210, 255, 23, 68)
+            reticlePaint.color = AndroidColor.rgb(255, 23, 68)
+            reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
         } else {
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
             constellationLabelPaint.color = AndroidColor.argb(220, 77, 208, 225)
+            reticlePaint.color = AndroidColor.WHITE
+            reticleTextPaint.color = AndroidColor.WHITE
         }
     }
 
@@ -224,6 +249,8 @@ class NightSkyRenderer {
             corePaints[b].strokeWidth = baseCoreDp[b] * densityScale * opticScale
         }
         constellationPaint.strokeWidth = constellationPx
+        reticlePaint.strokeWidth = 2.2f * densityScale
+        reticleTextPaint.textSize = 15f * densityScale
     }
 
     /**
@@ -603,5 +630,96 @@ class NightSkyRenderer {
         }
 
         return totalVisibleStars
+    }
+
+    /**
+     * Renders the zero-allocation broken-crosshair selection reticle and name label for the selected celestial body.
+     * Rendered on top of all celestial, atmospheric, landscape, and grid layers.
+     *
+     * Zero heap allocations per frame.
+     */
+    fun drawSelectionReticle(
+        drawScope: DrawScope,
+        selectedBody: CelestialBodyDetails?,
+        matrix: FloatArray,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        displayRotation: Int,
+        fovHorizontalDegrees: Float,
+        w: Float,
+        h: Float,
+        density: Float = 1.0f,
+    ) {
+        if (selectedBody == null || matrix.size < 16) return
+        val ra = selectedBody.raDegrees ?: return
+        val dec = selectedBody.decDegrees ?: return
+
+        // Compute ENU world unit vector
+        EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempReticleVec, 0)
+        val vx = tempReticleVec[0]
+        val vy = tempReticleVec[1]
+        val vz = tempReticleVec[2]
+
+        // Transform World -> Device coordinates: V_dev = R^T * V_world
+        val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
+        val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
+        val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+
+        // Map physical device axes to camera screen coordinate system
+        val xs: Float
+        val ys: Float
+        when (displayRotation) {
+            Surface.ROTATION_0 -> { xs = xDev; ys = yDev }
+            Surface.ROTATION_90 -> { xs = yDev; ys = -xDev }
+            Surface.ROTATION_180 -> { xs = -xDev; ys = -yDev }
+            Surface.ROTATION_270 -> { xs = -yDev; ys = xDev }
+            else -> { xs = xDev; ys = yDev }
+        }
+        val zs = -zDev
+        if (zs <= 0.001f) return
+
+        // Perspective projection
+        val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
+        val focalLengthPixels = (w * 0.5f) / tan(halfFovHRad)
+        val screenX = w * 0.5f + focalLengthPixels * (xs / zs)
+        val screenY = h * 0.5f - focalLengthPixels * (ys / zs)
+
+        val margin = 50.0f
+        if (screenX !in -margin..(w + margin) || screenY !in -margin..(h + margin)) {
+            return
+        }
+
+        val r1 = 16f * density
+        val r2 = 30f * density
+
+        // Left arm
+        reticleLinesBuffer[0] = screenX - r2
+        reticleLinesBuffer[1] = screenY
+        reticleLinesBuffer[2] = screenX - r1
+        reticleLinesBuffer[3] = screenY
+
+        // Right arm
+        reticleLinesBuffer[4] = screenX + r1
+        reticleLinesBuffer[5] = screenY
+        reticleLinesBuffer[6] = screenX + r2
+        reticleLinesBuffer[7] = screenY
+
+        // Top arm
+        reticleLinesBuffer[8] = screenX
+        reticleLinesBuffer[9] = screenY - r2
+        reticleLinesBuffer[10] = screenX
+        reticleLinesBuffer[11] = screenY - r1
+
+        // Bottom arm
+        reticleLinesBuffer[12] = screenX
+        reticleLinesBuffer[13] = screenY + r1
+        reticleLinesBuffer[14] = screenX
+        reticleLinesBuffer[15] = screenY + r2
+
+        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
+        nativeCanvas.drawLines(reticleLinesBuffer, 0, 16, reticlePaint)
+
+        val textY = screenY - r2 - (8f * density)
+        nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
     }
 }

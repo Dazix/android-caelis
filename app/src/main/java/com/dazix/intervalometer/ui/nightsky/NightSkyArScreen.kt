@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,13 +27,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +69,7 @@ import com.dazix.intervalometer.ar.CameraPreview
 import com.dazix.intervalometer.ar.DeviceOrientation
 import com.dazix.intervalometer.ar.RedPrimary
 import com.dazix.intervalometer.ar.RedSecondary
+import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.StarCatalog
 import com.dazix.intervalometer.service.DisplayGeometry
 import com.dazix.intervalometer.ui.AppIcons
@@ -69,6 +77,7 @@ import com.dazix.intervalometer.ui.Permissions
 
 import android.graphics.BitmapFactory
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NightSkyArScreen(
     onBack: () -> Unit,
@@ -79,6 +88,27 @@ fun NightSkyArScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
+
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+
+    // Synchronize ViewModel State with UI State
+    LaunchedEffect(uiState.selectedBody) {
+        if (uiState.selectedBody != null) {
+            sheetState.partialExpand()
+        } else {
+            sheetState.hide()
+        }
+    }
+
+    // Synchronize UI Gestures back to ViewModel
+    LaunchedEffect(sheetState.currentValue) {
+        if (sheetState.currentValue == SheetValue.Hidden && uiState.selectedBody != null) {
+            viewModel.clearSelectedBody()
+        }
+    }
 
     var hasCameraPermission by remember {
         mutableStateOf(Permissions.granted(context, Manifest.permission.CAMERA))
@@ -132,202 +162,213 @@ fun NightSkyArScreen(
     val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
 
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
+    val sheetContainerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0121622)
+    val sheetBorderColor = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.8f) else Color(0xFF283248)
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(bgColor)
-            .pointerInput(Unit) {
-                detectTransformGestures(
-                    panZoomLock = false,
-                    onGesture = { _, pan, zoom, _ ->
-                        val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                        if (pan.x != 0f || pan.y != 0f) {
-                            val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
-                            val pitchRad = (pan.y / viewWidth) * fovRad
-                            val yawRad = (pan.x / viewWidth) * fovRad
-                            viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
-                        }
-                        if (zoom != 1.0f) {
-                            viewModel.adjustZoomBy(zoom)
-                        }
-                    }
-                )
-            }
-            .pointerInput(catalog, maxTouchRadiusPx) {
-                detectTapGestures(
-                    onTap = { offset ->
-                        val totalStars = catalog?.starsLength() ?: 0
-                        val hitIndex = renderer.findClosestStarAt(
-                            tapX = offset.x,
-                            tapY = offset.y,
-                            maxRadiusPx = maxTouchRadiusPx,
-                            totalStars = totalStars,
-                        )
-                        if (hitIndex >= 0) {
-                            viewModel.selectStarByIndex(hitIndex)
-                        } else {
-                            viewModel.clearSelectedBody()
-                        }
-                    },
-                    onDoubleTap = {
-                        viewModel.resetZoom()
-                    }
-                )
-            }
-    ) {
-        if (hasCameraPermission) {
-            // Live Camera Viewport (rendered underneath AR overlay)
-            CameraPreview(
-                modifier = Modifier.fillMaxSize(),
-                lifecycleOwner = lifecycleOwner,
-                isPortrait = isPortrait,
-                onFovCalculated = viewModel::setCameraFov,
-            )
-
-            // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, Landscape, and Opaque Sky Dome layers
-            NightSkyOverlayCanvas(
-                renderer = renderer,
-                orientation = orientation,
-                displayRotation = displayRotation,
-                fovHorizontalDegrees = uiState.cameraFovHorizontal,
-                zoomRatio = uiState.zoomRatio,
-                catalog = catalog,
-                lstDegrees = uiState.lstDegrees,
-                latitudeDegrees = uiState.location.latitude,
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = 112.dp,
+        sheetContainerColor = sheetContainerColor,
+        sheetContentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
+        sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        sheetContent = {
+            CelestialDetailSheetContent(
+                selectedBody = uiState.selectedBody,
                 redVisionMode = uiState.redVisionMode,
-                isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                isMilkyWayVisible = uiState.isMilkyWayVisible,
-                isAtmosphereVisible = uiState.isAtmosphereVisible,
-                isLandscapeVisible = uiState.isLandscapeVisible,
-                isGridVisible = uiState.isGridVisible,
-                isConstellationsVisible = uiState.isConstellationsVisible,
-                onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
-                modifier = Modifier.fillMaxSize(),
+                onDismiss = { viewModel.clearSelectedBody() },
             )
-        } else {
-            // Camera Permission Request Surface
-            NightSkyPermissionPrompt(
-                onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                onBack = onBack,
-                redVisionMode = uiState.redVisionMode,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        // Top Controls & HUD Bar
-        NightSkyTopBar(
-            orientation = orientation,
-            lstFormatted = uiState.lstFormatted,
-            visibleStarCount = uiState.visibleStarCount,
-            totalStarCount = uiState.totalStarCount,
-            cameraFovHorizontal = uiState.cameraFovHorizontal,
-            zoomRatio = uiState.zoomRatio,
-            isCalibrated = uiState.isCalibrated,
-            hasGpsFix = uiState.hasGpsFix,
-            locationText = uiState.location.formatShort(),
-            keepScreenOn = uiState.keepScreenOn,
-            redVisionMode = uiState.redVisionMode,
-            onBack = onBack,
-            onToggleKeepScreenOn = {
-                val nextState = !uiState.keepScreenOn
-                showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
-                viewModel.toggleKeepScreenOn()
-            },
-            onToggleRedVision = {
-                val nextState = !uiState.redVisionMode
-                showToggleToast(context, R.string.sun_ar_red_vision, nextState)
-                viewModel.toggleRedVisionMode()
-            },
-            onResetCalibration = {
-                showResetToast(context)
-                viewModel.resetCalibration()
-            },
-            onResetZoom = {
-                viewModel.resetZoom()
-            },
+        },
+        containerColor = Color.Transparent,
+    ) { _ ->
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(top = 36.dp, start = 12.dp, end = 12.dp),
-        )
-
-        // Bottom Controls: Action Dock & HUD Indicator Chips (visible when no object selected)
-        AnimatedVisibility(
-            visible = uiState.selectedBody == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp, start = 12.dp, end = 12.dp),
+                .fillMaxSize()
+                .background(bgColor)
+                .pointerInput(Unit) {
+                    detectTransformGestures(
+                        panZoomLock = false,
+                        onGesture = { _, pan, zoom, _ ->
+                            val viewWidth = size.width.toFloat().coerceAtLeast(1f)
+                            if (pan.x != 0f || pan.y != 0f) {
+                                val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
+                                val pitchRad = (pan.y / viewWidth) * fovRad
+                                val yawRad = (pan.x / viewWidth) * fovRad
+                                viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                            }
+                            if (zoom != 1.0f) {
+                                viewModel.adjustZoomBy(zoom)
+                            }
+                        }
+                    )
+                }
+                .pointerInput(catalog, maxTouchRadiusPx) {
+                    detectTapGestures(
+                        onTap = { offset ->
+                            val totalStars = catalog?.starsLength() ?: 0
+                            val hitIndex = renderer.findClosestStarAt(
+                                tapX = offset.x,
+                                tapY = offset.y,
+                                maxRadiusPx = maxTouchRadiusPx,
+                                totalStars = totalStars,
+                            )
+                            if (hitIndex >= 0) {
+                                viewModel.selectStarByIndex(hitIndex)
+                            } else {
+                                viewModel.clearSelectedBody()
+                            }
+                        },
+                        onDoubleTap = {
+                            viewModel.resetZoom()
+                        }
+                    )
+                }
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Landscape, Grid, Constellations, Reset)
-                NightSkyActionDock(
+            if (hasCameraPermission) {
+                // Live Camera Viewport (rendered underneath AR overlay)
+                CameraPreview(
+                    modifier = Modifier.fillMaxSize(),
+                    lifecycleOwner = lifecycleOwner,
+                    isPortrait = isPortrait,
+                    onFovCalculated = viewModel::setCameraFov,
+                )
+
+                // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, Landscape, and Opaque Sky Dome layers
+                NightSkyOverlayCanvas(
+                    renderer = renderer,
+                    orientation = orientation,
+                    displayRotation = displayRotation,
+                    fovHorizontalDegrees = uiState.cameraFovHorizontal,
+                    zoomRatio = uiState.zoomRatio,
+                    catalog = catalog,
+                    lstDegrees = uiState.lstDegrees,
+                    latitudeDegrees = uiState.location.latitude,
+                    redVisionMode = uiState.redVisionMode,
                     isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                     isMilkyWayVisible = uiState.isMilkyWayVisible,
                     isAtmosphereVisible = uiState.isAtmosphereVisible,
                     isLandscapeVisible = uiState.isLandscapeVisible,
                     isGridVisible = uiState.isGridVisible,
                     isConstellationsVisible = uiState.isConstellationsVisible,
-                    redVisionMode = uiState.redVisionMode,
-                    isCalibrated = uiState.isCalibrated,
-                    onToggleSkyBackgroundOpaque = {
-                        val nextState = !uiState.isSkyBackgroundOpaque
-                        showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
-                        viewModel.toggleSkyBackgroundOpaque()
-                    },
-                    onToggleMilkyWayVisible = {
-                        val nextState = !uiState.isMilkyWayVisible
-                        showToggleToast(context, R.string.night_sky_milky_way, nextState)
-                        viewModel.toggleMilkyWayVisible()
-                    },
-                    onToggleAtmosphereVisible = {
-                        val nextState = !uiState.isAtmosphereVisible
-                        showToggleToast(context, R.string.night_sky_atmosphere, nextState)
-                        viewModel.toggleAtmosphereVisible()
-                    },
-                    onToggleLandscapeVisible = {
-                        val nextState = !uiState.isLandscapeVisible
-                        showToggleToast(context, R.string.night_sky_landscape, nextState)
-                        viewModel.toggleLandscapeVisible()
-                    },
-                    onToggleGridVisible = {
-                        val nextState = !uiState.isGridVisible
-                        showToggleToast(context, R.string.night_sky_grid, nextState)
-                        viewModel.toggleGridVisible()
-                    },
-                    onToggleConstellationsVisible = {
-                        val nextState = !uiState.isConstellationsVisible
-                        showToggleToast(context, R.string.night_sky_constellations, nextState)
-                        viewModel.toggleConstellationsVisible()
-                    },
-                    onResetCalibration = {
-                        showResetToast(context)
-                        viewModel.resetCalibration()
-                    },
+                    selectedBody = uiState.selectedBody,
+                    onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
+                    modifier = Modifier.fillMaxSize(),
                 )
-
-                // Bottom HUD (LST & Visible Stars)
-                NightSkyBottomHud(
-                    lstFormatted = uiState.lstFormatted,
-                    visibleStarCount = uiState.visibleStarCount,
-                    totalStarCount = uiState.totalStarCount,
+            } else {
+                // Camera Permission Request Surface
+                NightSkyPermissionPrompt(
+                    onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                    onBack = onBack,
                     redVisionMode = uiState.redVisionMode,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
 
-        // Celestial Object Detail Bottom Sheet
-        CelestialDetailBottomSheet(
-            selectedBody = uiState.selectedBody,
-            redVisionMode = uiState.redVisionMode,
-            onDismiss = { viewModel.clearSelectedBody() },
-            modifier = Modifier.align(Alignment.BottomCenter),
-        )
+            // Top Controls & HUD Bar
+            NightSkyTopBar(
+                orientation = orientation,
+                lstFormatted = uiState.lstFormatted,
+                visibleStarCount = uiState.visibleStarCount,
+                totalStarCount = uiState.totalStarCount,
+                cameraFovHorizontal = uiState.cameraFovHorizontal,
+                zoomRatio = uiState.zoomRatio,
+                isCalibrated = uiState.isCalibrated,
+                hasGpsFix = uiState.hasGpsFix,
+                locationText = uiState.location.formatShort(),
+                keepScreenOn = uiState.keepScreenOn,
+                redVisionMode = uiState.redVisionMode,
+                onBack = onBack,
+                onToggleKeepScreenOn = {
+                    val nextState = !uiState.keepScreenOn
+                    showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
+                    viewModel.toggleKeepScreenOn()
+                },
+                onToggleRedVision = {
+                    val nextState = !uiState.redVisionMode
+                    showToggleToast(context, R.string.sun_ar_red_vision, nextState)
+                    viewModel.toggleRedVisionMode()
+                },
+                onResetCalibration = {
+                    showResetToast(context)
+                    viewModel.resetCalibration()
+                },
+                onResetZoom = {
+                    viewModel.resetZoom()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(top = 36.dp, start = 12.dp, end = 12.dp),
+            )
+
+            // Bottom Controls: Action Dock & HUD Indicator Chips (visible when no object selected)
+            AnimatedVisibility(
+                visible = uiState.selectedBody == null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp, start = 12.dp, end = 12.dp),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    // Expressive Action Dock (Planetarium, Milky Way, Atmosphere, Landscape, Grid, Constellations, Reset)
+                    NightSkyActionDock(
+                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                        isMilkyWayVisible = uiState.isMilkyWayVisible,
+                        isAtmosphereVisible = uiState.isAtmosphereVisible,
+                        isLandscapeVisible = uiState.isLandscapeVisible,
+                        isGridVisible = uiState.isGridVisible,
+                        isConstellationsVisible = uiState.isConstellationsVisible,
+                        redVisionMode = uiState.redVisionMode,
+                        isCalibrated = uiState.isCalibrated,
+                        onToggleSkyBackgroundOpaque = {
+                            val nextState = !uiState.isSkyBackgroundOpaque
+                            showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
+                            viewModel.toggleSkyBackgroundOpaque()
+                        },
+                        onToggleMilkyWayVisible = {
+                            val nextState = !uiState.isMilkyWayVisible
+                            showToggleToast(context, R.string.night_sky_milky_way, nextState)
+                            viewModel.toggleMilkyWayVisible()
+                        },
+                        onToggleAtmosphereVisible = {
+                            val nextState = !uiState.isAtmosphereVisible
+                            showToggleToast(context, R.string.night_sky_atmosphere, nextState)
+                            viewModel.toggleAtmosphereVisible()
+                        },
+                        onToggleLandscapeVisible = {
+                            val nextState = !uiState.isLandscapeVisible
+                            showToggleToast(context, R.string.night_sky_landscape, nextState)
+                            viewModel.toggleLandscapeVisible()
+                        },
+                        onToggleGridVisible = {
+                            val nextState = !uiState.isGridVisible
+                            showToggleToast(context, R.string.night_sky_grid, nextState)
+                            viewModel.toggleGridVisible()
+                        },
+                        onToggleConstellationsVisible = {
+                            val nextState = !uiState.isConstellationsVisible
+                            showToggleToast(context, R.string.night_sky_constellations, nextState)
+                            viewModel.toggleConstellationsVisible()
+                        },
+                        onResetCalibration = {
+                            showResetToast(context)
+                            viewModel.resetCalibration()
+                        },
+                    )
+
+                    // Bottom HUD (LST & Visible Stars)
+                    NightSkyBottomHud(
+                        lstFormatted = uiState.lstFormatted,
+                        visibleStarCount = uiState.visibleStarCount,
+                        totalStarCount = uiState.totalStarCount,
+                        redVisionMode = uiState.redVisionMode,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -348,6 +389,7 @@ private fun NightSkyOverlayCanvas(
     isLandscapeVisible: Boolean,
     isGridVisible: Boolean,
     isConstellationsVisible: Boolean,
+    selectedBody: CelestialBodyDetails? = null,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -460,6 +502,20 @@ private fun NightSkyOverlayCanvas(
                 h = h,
             )
         }
+
+        // Layer 5: 3D Celestial Selection Reticle (Broken Crosshair & Star Name Text)
+        renderer.drawSelectionReticle(
+            drawScope = this,
+            selectedBody = selectedBody,
+            matrix = matrix,
+            lstDegrees = lstDegrees,
+            latitudeDegrees = latitudeDegrees,
+            displayRotation = displayRotation,
+            fovHorizontalDegrees = fovHorizontalDegrees,
+            w = w,
+            h = h,
+            density = density,
+        )
 
         onVisibleStarsUpdated(visibleCount)
     }

@@ -167,6 +167,34 @@ class CameraFovCalculatorTest {
     }
 
     @Test
+    fun `effective FOV applies 4 to 3 sensor aspect crop when sensor dimensions are missing`() {
+        // Fallback 56° raw portrait FOV on 1080x2400 screen (aspect 0.45) with default 4:3 sensor (aspect 0.75 in portrait)
+        // Crop ratio = 0.45 / 0.75 = 0.60
+        // tan(28°) * 0.60 = 0.5317 * 0.60 = 0.3190 -> atan = 17.69° -> effective FOV = 35.38°
+        val effectiveFov = CameraFovCalculator.computeEffectiveHorizontalFov(
+            sensorWidthMm = null,
+            sensorHeightMm = null,
+            focalLengthMm = null,
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            isPortrait = true,
+            fallbackFovDegrees = 56f,
+        )
+
+        assertEquals(35.38f, effectiveFov, 0.5f)
+    }
+
+    @Test
+    fun `calculates effective focal length in pixels accurately`() {
+        val effectiveFov = 35.38f
+        val viewportW = 1080f
+        val focalLengthPx = CameraFovCalculator.computeEffectiveFocalLengthPx(effectiveFov, viewportW)
+
+        // focalLengthPx = 540 / tan(35.38° / 2) = 540 / tan(17.69°) = 540 / 0.3190 = 1692.8 px
+        assertEquals(1692.8f, focalLengthPx, 5.0f)
+    }
+
+    @Test
     fun `calculates zoomed FOV correctly and clamps within valid bounds`() {
         val baseFov = 56.0f
 

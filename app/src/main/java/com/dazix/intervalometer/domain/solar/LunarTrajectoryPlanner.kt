@@ -63,15 +63,22 @@ object LunarTrajectoryPlanner {
         samplingStepMinutes: Int = 2,
     ): LunarTrajectory {
         val dayTimes = LunarDayTimesCalculator.calculate(date, location, zoneId)
+        val transitInstant = dayTimes.moonTransitUtc ?: date.atTime(12, 0).atZone(zoneId).toInstant()
 
-        // 1. Generate path vertices across the 24-hour day (sampled every 2 minutes)
+        // 1. Generate path vertices across the 24-hour lunar passage centered on transit
+        // Sampling 12 hours before transit to 12 hours after transit (total 24 hours = 720 points with step = 2 min).
+        // Endpoints fall into lunar nadir (deep underground, ~ -60° elevation), so the above-horizon passage
+        // (Rise -> Culmination -> Set) is completely continuous, smooth, and free of midnight discontinuities.
         val pathPoints = mutableListOf<LunarTrajectoryPoint>()
-        var currentMinutes = 0
-        while (currentMinutes < 1440) {
-            val hour = currentMinutes / 60
-            val minute = currentMinutes % 60
-            val localTime = LocalTime.of(hour, minute)
-            val instant = date.atTime(localTime).atZone(zoneId).toInstant()
+        val startInstant = transitInstant.minusSeconds(12L * 3600L)
+        val endInstant = transitInstant.plusSeconds(12L * 3600L)
+        val stepSec = samplingStepMinutes * 60L
+
+        var curSec = startInstant.epochSecond
+        val endSec = endInstant.epochSecond
+        while (curSec < endSec) {
+            val instant = Instant.ofEpochSecond(curSec)
+            val localTime = instant.atZone(zoneId).toLocalTime()
             val coords = LunarPositionCalculator.computePosition(instant, location)
 
             pathPoints.add(
@@ -82,28 +89,31 @@ object LunarTrajectoryPlanner {
                     isAboveHorizon = coords.isAboveHorizon,
                 )
             )
-            currentMinutes += samplingStepMinutes
+            curSec += stepSec
         }
 
         // 2. Generate time bubbles at configured interval along the path
         val timeBubbles = mutableListOf<LunarTimeBubble>()
-        var bubbleMin = 0
-        while (bubbleMin < 1440) {
-            val hour = bubbleMin / 60
-            val minute = bubbleMin % 60
-            val localTime = LocalTime.of(hour, minute)
-            val instant = date.atTime(localTime).atZone(zoneId).toInstant()
-            val coords = LunarPositionCalculator.computePosition(instant, location)
+        val startZdt = startInstant.atZone(zoneId)
+        val remMin = startZdt.minute % bubbleInterval.minutes
+        val bubbleOffsetMin = if (remMin > 0) bubbleInterval.minutes - remMin else 0
+        var bubbleZdt = startZdt.plusMinutes(bubbleOffsetMin.toLong()).withSecond(0).withNano(0)
+        val endZdt = endInstant.atZone(zoneId)
+
+        while (!bubbleZdt.isAfter(endZdt)) {
+            val bInstant = bubbleZdt.toInstant()
+            val bLocalTime = bubbleZdt.toLocalTime()
+            val coords = LunarPositionCalculator.computePosition(bInstant, location)
 
             timeBubbles.add(
                 LunarTimeBubble(
-                    instant = instant,
-                    formattedTime = localTime.format(TIME_FORMATTER),
+                    instant = bInstant,
+                    formattedTime = bLocalTime.format(TIME_FORMATTER),
                     coordinates = coords,
                     isAboveHorizon = coords.isAboveHorizon,
                 )
             )
-            bubbleMin += bubbleInterval.minutes
+            bubbleZdt = bubbleZdt.plusMinutes(bubbleInterval.minutes.toLong())
         }
 
         // 3. Create markers for Moonrise, Moonset, and Moon Transit

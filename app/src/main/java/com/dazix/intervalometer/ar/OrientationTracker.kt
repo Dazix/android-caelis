@@ -76,7 +76,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     private var isListening = false
     private var isFirstSample = true
-    private val alpha = 0.22f // Smooth low-pass factor for stable AR overlay
 
     private var magneticDeclinationDeg = 0.0f
 
@@ -156,14 +155,20 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             smoothedQuat[3] = qw
             isFirstSample = false
         } else {
-            // Shortest-path quaternion interpolation
+            // Shortest-path quaternion interpolation with dynamic adaptive SLERP alpha:
+            // High responsiveness (alpha -> 0.85) during panning to eliminate camera lag,
+            // dropping to 0.30 when stationary to filter micro-jitters.
             val dot = smoothedQuat[0] * qx + smoothedQuat[1] * qy + smoothedQuat[2] * qz + smoothedQuat[3] * qw
             val sign = if (dot < 0f) -1f else 1f
+            val absDot = (dot * sign).coerceIn(0f, 1f)
+            val deltaAngleRad = 2.0 * kotlin.math.acos(absDot.toDouble())
+            val t = ((deltaAngleRad - 0.002) / (0.025 - 0.002)).toFloat().coerceIn(0f, 1f)
+            val currentAlpha = ALPHA_STATIONARY + t * (ALPHA_MOVING - ALPHA_STATIONARY)
 
-            smoothedQuat[0] += alpha * (qx * sign - smoothedQuat[0])
-            smoothedQuat[1] += alpha * (qy * sign - smoothedQuat[1])
-            smoothedQuat[2] += alpha * (qz * sign - smoothedQuat[2])
-            smoothedQuat[3] += alpha * (qw * sign - smoothedQuat[3])
+            smoothedQuat[0] += currentAlpha * (qx * sign - smoothedQuat[0])
+            smoothedQuat[1] += currentAlpha * (qy * sign - smoothedQuat[1])
+            smoothedQuat[2] += currentAlpha * (qz * sign - smoothedQuat[2])
+            smoothedQuat[3] += currentAlpha * (qw * sign - smoothedQuat[3])
 
             // Re-normalize quaternion
             val norm = sqrt(
@@ -385,6 +390,31 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
                    kotlin.math.abs(q[1]) < 1e-4f &&
                    kotlin.math.abs(q[2]) < 1e-4f &&
                    kotlin.math.abs(q[3] - 1.0f) < 1e-4f
+        }
+
+        const val ALPHA_STATIONARY = 0.30f
+        const val ALPHA_MOVING = 0.85f
+
+        /**
+         * Computes the dynamic adaptive SLERP alpha based on the angular distance between quaternions.
+         * Returns high alpha (up to [maxAlpha]) during fast movement to eliminate lag,
+         * and low alpha (down to [minAlpha]) when stationary to filter micro-jitters.
+         */
+        fun computeAdaptiveAlpha(
+            currentQuat: FloatArray,
+            targetQx: Float,
+            targetQy: Float,
+            targetQz: Float,
+            targetQw: Float,
+            minAlpha: Float = ALPHA_STATIONARY,
+            maxAlpha: Float = ALPHA_MOVING,
+        ): Float {
+            val dot = currentQuat[0] * targetQx + currentQuat[1] * targetQy +
+                currentQuat[2] * targetQz + currentQuat[3] * targetQw
+            val absDot = kotlin.math.abs(dot).coerceIn(0f, 1f)
+            val deltaAngleRad = 2.0 * kotlin.math.acos(absDot.toDouble())
+            val t = ((deltaAngleRad - 0.002) / (0.025 - 0.002)).toFloat().coerceIn(0f, 1f)
+            return minAlpha + t * (maxAlpha - minAlpha)
         }
 
         /**

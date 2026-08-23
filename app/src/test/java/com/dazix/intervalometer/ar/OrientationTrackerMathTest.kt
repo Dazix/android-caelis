@@ -197,4 +197,45 @@ class OrientationTrackerMathTest {
             assertTrue("Star X on screen after right drag must be strictly positive at pitch step $step (was $starCamX)", starCamX > 0f)
         }
     }
+
+    @Test
+    fun `verifies adaptive alpha produces low alpha when stationary and high alpha when panning`() {
+        val currentQuat = floatArrayOf(0f, 0f, 0f, 1f)
+
+        // 1. Perfectly stationary (0° delta) -> min alpha (0.30)
+        val stationaryAlpha = OrientationTracker.computeAdaptiveAlpha(
+            currentQuat = currentQuat,
+            targetQx = 0f,
+            targetQy = 0f,
+            targetQz = 0f,
+            targetQw = 1f,
+        )
+        assertEquals(OrientationTracker.ALPHA_STATIONARY, stationaryAlpha, 0.001f)
+
+        // 2. Micro-jitter (0.05° delta) -> still near min alpha (0.30)
+        val jitterAngleRad = Math.toRadians(0.05).toFloat()
+        val jitterSin = kotlin.math.sin(jitterAngleRad * 0.5f)
+        val jitterCos = kotlin.math.cos(jitterAngleRad * 0.5f)
+        val jitterAlpha = OrientationTracker.computeAdaptiveAlpha(
+            currentQuat = currentQuat,
+            targetQx = jitterSin,
+            targetQy = 0f,
+            targetQz = 0f,
+            targetQw = jitterCos,
+        )
+        assertEquals(OrientationTracker.ALPHA_STATIONARY, jitterAlpha, 0.02f)
+
+        // 3. Fast panning movement (2.5° delta in single frame) -> max alpha (0.85)
+        val panAngleRad = Math.toRadians(2.5).toFloat()
+        val panSin = kotlin.math.sin(panAngleRad * 0.5f)
+        val panCos = kotlin.math.cos(panAngleRad * 0.5f)
+        val panAlpha = OrientationTracker.computeAdaptiveAlpha(
+            currentQuat = currentQuat,
+            targetQx = panSin,
+            targetQy = 0f,
+            targetQz = 0f,
+            targetQw = panCos,
+        )
+        assertEquals(OrientationTracker.ALPHA_MOVING, panAlpha, 0.001f)
+    }
 }

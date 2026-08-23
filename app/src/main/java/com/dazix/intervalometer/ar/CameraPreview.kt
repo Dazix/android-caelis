@@ -42,9 +42,10 @@ fun CameraPreview(
                 cameraProvider.unbindAll()
                 val camera = cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
 
-                // Dynamically extract physical sensor dimensions and primary focal length
+                // Dynamically extract physical sensor dimensions, active pixel array, and primary focal length
                 val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
                 val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+                val activeArraySize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
                 val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
                 val primaryFocalLength = focalLengths?.let { list ->
                     if (list.size == 1) {
@@ -55,11 +56,17 @@ fun CameraPreview(
                     }
                 }
 
+                // If physical size in mm is missing, fallback to active array pixel dimensions for aspect ratio
+                val effectiveSensorW = sensorSize?.width
+                    ?: activeArraySize?.let { if (it.width() > 0) it.width().toFloat() else null }
+                val effectiveSensorH = sensorSize?.height
+                    ?: activeArraySize?.let { if (it.height() > 0) it.height().toFloat() else null }
+
                 fun calculateAndDispatchFov(w: Float, h: Float) {
                     if (w > 10f && h > 10f) {
                         val dynamicFov = CameraFovCalculator.computeEffectiveHorizontalFov(
-                            sensorWidthMm = sensorSize?.width,
-                            sensorHeightMm = sensorSize?.height,
+                            sensorWidthMm = effectiveSensorW,
+                            sensorHeightMm = effectiveSensorH,
                             focalLengthMm = primaryFocalLength,
                             viewportWidth = w,
                             viewportHeight = h,

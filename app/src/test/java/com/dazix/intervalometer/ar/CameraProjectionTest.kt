@@ -294,4 +294,56 @@ class CameraProjectionTest {
         assertFalse(downProj.isVisible)
         assertEquals(180f, downProj.offscreenBearingDegrees ?: 0f, 2f)
     }
+
+    @Test
+    fun `verifies diagonal panning with simultaneous pitch and yaw projects center landmark to exact screen center`() {
+        // Construct rotation matrix for camera pointing at Azimuth 25°, Elevation 20°
+        // In this diagonal orientation, a celestial landmark at (25°, 20°) must project to exact screen center (W/2, H/2).
+        val azRad = Math.toRadians(25.0)
+        val elRad = Math.toRadians(20.0)
+
+        // Optical axis of camera in ENU: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
+        // Screen Right (+X_dev) is perpendicular to optical axis and horizontal (in xy plane): (cos(az), -sin(az), 0)
+        // Screen Up (+Y_dev) = Z_dev x X_dev (cross product)
+        val fwdX = (kotlin.math.sin(azRad) * kotlin.math.cos(elRad)).toFloat()
+        val fwdY = (kotlin.math.cos(azRad) * kotlin.math.cos(elRad)).toFloat()
+        val fwdZ = kotlin.math.sin(elRad).toFloat()
+
+        // Col 2 (+Z_dev) is backwards (-fwd)
+        val zX = -fwdX
+        val zY = -fwdY
+        val zZ = -fwdZ
+
+        // Col 0 (+X_dev): right vector (cos(az), -sin(az), 0)
+        val xX = kotlin.math.cos(azRad).toFloat()
+        val xY = -kotlin.math.sin(azRad).toFloat()
+        val xZ = 0f
+
+        // Col 1 (+Y_dev) = +Z_dev cross +X_dev
+        val yX = zY * xZ - zZ * xY
+        val yY = zZ * xX - zX * xZ
+        val yZ = zX * xY - zY * xX
+
+        val diagonalMatrix = floatArrayOf(
+            xX, yX, zX, 0f,
+            xY, yY, zY, 0f,
+            xZ, yZ, zZ, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        val proj = CameraProjection.project(
+            azimuthDegrees = 25.0,
+            elevationDegrees = 20.0,
+            rotationMatrix = diagonalMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+        )
+
+        assertTrue(proj.isInFront)
+        assertTrue(proj.isVisible)
+        assertEquals(screenW / 2f, proj.x, 0.5f)
+        assertEquals(screenH / 2f, proj.y, 0.5f)
+    }
 }

@@ -51,7 +51,7 @@ object CameraFovCalculator {
      * @param viewportWidth Width of the preview surface in pixels.
      * @param viewportHeight Height of the preview surface in pixels.
      * @param isPortrait True if the device is currently in portrait orientation.
-     * @param fallbackFovDegrees Default fallback if sensor info is unavailable.
+     * @param fallbackFovDegrees Default fallback uncropped FOV if sensor info is unavailable.
      */
     fun computeEffectiveHorizontalFov(
         sensorWidthMm: Float?,
@@ -70,14 +70,21 @@ object CameraFovCalculator {
             fallbackFovDegrees,
         )
 
-        if (viewportWidth <= 1f || viewportHeight <= 1f || sensorWidthMm == null || sensorHeightMm == null) {
+        if (viewportWidth <= 1f || viewportHeight <= 1f) {
             return rawFovH
         }
 
-        val sensorW = if (isPortrait) minOf(sensorWidthMm, sensorHeightMm) else maxOf(sensorWidthMm, sensorHeightMm)
-        val sensorH = if (isPortrait) maxOf(sensorWidthMm, sensorHeightMm) else minOf(sensorWidthMm, sensorHeightMm)
+        val sensorAspect = if (sensorWidthMm != null && sensorHeightMm != null &&
+            sensorWidthMm > 0.001f && sensorHeightMm > 0.001f
+        ) {
+            val sensorW = if (isPortrait) minOf(sensorWidthMm, sensorHeightMm) else maxOf(sensorWidthMm, sensorHeightMm)
+            val sensorH = if (isPortrait) maxOf(sensorWidthMm, sensorHeightMm) else minOf(sensorWidthMm, sensorHeightMm)
+            sensorW / sensorH.coerceAtLeast(0.001f)
+        } else {
+            // Standard camera sensor is 4:3 (in portrait: 3/4 = 0.75, in landscape: 4/3 = 1.3333)
+            if (isPortrait) 3.0f / 4.0f else 4.0f / 3.0f
+        }
 
-        val sensorAspect = sensorW / sensorH.coerceAtLeast(0.001f)
         val viewportAspect = viewportWidth / viewportHeight.coerceAtLeast(0.001f)
 
         // When viewport is narrower/taller than sensor aspect ratio (viewportAspect < sensorAspect),
@@ -90,6 +97,21 @@ object CameraFovCalculator {
         } else {
             rawFovH
         }
+    }
+
+    /**
+     * Computes the effective focal length in pixels for perspective projection matching PreviewView FILL_CENTER.
+     *
+     * @param effectiveFovHorizontalDegrees Effective horizontal field of view in degrees.
+     * @param viewportWidth Width of the preview viewport in pixels.
+     * @return Focal length in screen pixels.
+     */
+    fun computeEffectiveFocalLengthPx(
+        effectiveFovHorizontalDegrees: Float,
+        viewportWidth: Float,
+    ): Float {
+        val halfAngleRad = effectiveFovHorizontalDegrees * 0.5 * DEG_TO_RAD
+        return ((viewportWidth * 0.5f) / tan(halfAngleRad)).toFloat()
     }
 
     /**

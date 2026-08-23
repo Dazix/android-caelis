@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import subprocess
 
-commit_msg = """feat(ephemeris): add Moon position, lunar trajectory, and rename menu to Position
+commit_msg = """feat(ar): ensure continuous lunar trajectory passage and enhance AR sky renderers
 
-- Rename navigation destination to 'Poloha' (CS) / 'Position' (EN) with SunAndMoon vector icon
-- Implement high-precision Lunar ephemeris (Jean Meeus Ch. 47) with topocentric parallax and Saemundsson atmospheric refraction
-- Add 24-hour lunar trajectory planner with configurable time bubbles and Moonrise/Moonset/Transit markers
-- Render Moon in cool ice-blue/silver-cyan palette alongside warm golden Sun in AR overlay
-- Add Moonrise, Moon transit, Moonset, and phase/illumination % to Day Summary card
-- Add comprehensive LunarPositionCalculatorTest and LunarTrajectoryPlannerTest (39 suites passing)
+- Sample lunar trajectory continuously centered on culmination transit (T_transit ± 12h) to eliminate midnight gaps
+- Align lunar day times calculator to find cohesive rise, transit, and set for the active passage
+- Ensure time bubbles cross midnight in proper chronological order with smooth angular deltas (< 2°)
+- Add comprehensive lunar trajectory tests covering continuity, midnight transitions, and all 31 days of the month
+- Add camera FOV aspect-ratio crop calculation tests and zero-allocation night sky render validations
+- Add helper scripts for safe dedicated profile APK installation and automated gate verification
 
 Co-authored-by: Antigravity <antigravity@google.com>
 """

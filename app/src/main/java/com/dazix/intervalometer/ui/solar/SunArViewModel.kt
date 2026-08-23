@@ -85,7 +85,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     // Dynamic effective FOV factoring in pinch-to-zoom
     val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        (baseFov / zoom).coerceIn(8.0f, 120.0f)
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 120.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation

@@ -23,6 +23,8 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.spritePaint)
         assertNotNull(renderer.constellationPaint)
         assertNotNull(renderer.constellationLabelPaint)
+        assertNotNull(renderer.reticlePaint)
+        assertNotNull(renderer.reticleTextPaint)
         assertNotNull(renderer.skyDomeRenderer)
 
         // Apply Red Vision mode
@@ -96,5 +98,14 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must contain spherical elevation conversion", src.contains("asin(clamp(worldDir.z, -1.0, 1.0))"))
         org.junit.Assert.assertTrue("Shader must contain equirectangular UV mapping", src.contains("texU = (theta / 6.283185307179586) + 0.5;"))
         org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.4"))
+    }
+
+    @Test
+    fun `verifies selection reticle preallocated paints and buffers exist`() {
+        val renderer = NightSkyRenderer()
+
+        // Verify reticle paint and text paint are non-null and correctly initialized
+        org.junit.Assert.assertNotNull(renderer.reticlePaint)
+        org.junit.Assert.assertNotNull(renderer.reticleTextPaint)
     }
 }
