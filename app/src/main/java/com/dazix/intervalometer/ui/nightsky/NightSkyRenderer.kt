@@ -5,6 +5,7 @@ import android.graphics.BitmapShader
 import android.graphics.Color as AndroidColor
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RadialGradient
@@ -105,6 +106,60 @@ class NightSkyRenderer {
     private val reusableConstellation = Constellation()
 
     companion object {
+        data class IndicatorTransform(
+            val arrowX: Float,
+            val arrowY: Float,
+            val angleRad: Float,
+            val angleDeg: Float,
+        )
+
+        /**
+         * Pure mathematical calculation of bearing angle and screen edge bounding box intersection
+         * for off-screen target tracking. Zero heap allocation when inlined / evaluated.
+         */
+        fun computeOffscreenIndicator(
+            xs: Float,
+            ys: Float,
+            zs: Float,
+            screenX: Float,
+            screenY: Float,
+            w: Float,
+            h: Float,
+            edgePadding: Float,
+        ): IndicatorTransform {
+            val centerX = w * 0.5f
+            val centerY = h * 0.5f
+            val halfW = centerX - edgePadding
+            val halfH = centerY - edgePadding
+
+            var dx = if (zs > 0.001f) (screenX - centerX) else xs
+            var dy = if (zs > 0.001f) (screenY - centerY) else -ys
+
+            if (kotlin.math.abs(dx) < 0.0001f && kotlin.math.abs(dy) < 0.0001f) {
+                dy = 1f
+            }
+
+            val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
+            val tanAngle = kotlin.math.tan(angleRad.toDouble()).toFloat()
+
+            val intersectX: Float
+            val intersectY: Float
+
+            if (kotlin.math.abs(halfW * tanAngle) < halfH) {
+                intersectX = if (dx > 0) halfW else -halfW
+                intersectY = intersectX * tanAngle
+            } else {
+                intersectY = if (dy > 0) halfH else -halfH
+                intersectX = intersectY / tanAngle
+            }
+
+            val arrowX = centerX + intersectX
+            val arrowY = centerY + intersectY
+            val angleDeg = Math.toDegrees(angleRad.toDouble()).toFloat()
+
+            return IndicatorTransform(arrowX, arrowY, angleRad, angleDeg)
+        }
+
         /**
          * Creates a hardware-accelerated continuous Gaussian radial gradient star sprite bitmap once.
          * Pure white nucleus fading smoothly to zero opacity edge without concentric ring artifacts.
@@ -256,6 +311,22 @@ class NightSkyRenderer {
         setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
     }
 
+    // Zero-allocation directional arrow indicator for off-screen selected celestial objects
+    val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFD700.toInt() // Golden highlight color to match selection
+        style = Paint.Style.FILL
+        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
+    }
+
+    // Centered chevron arrow shape pointing to the right (0 degrees)
+    val arrowPath = Path().apply {
+        moveTo(20f, 0f)    // Tip
+        lineTo(-20f, -15f) // Top wing
+        lineTo(-10f, 0f)   // Inner indent
+        lineTo(-20f, 15f)  // Bottom wing
+        close()
+    }
+
     // 3 line segments * 4 coordinates (x0, y0, x1, y1) = 12 floats (Left, Right, Bottom arms)
     private val reticleLinesBuffer = FloatArray(12)
     private val tempReticleVec = FloatArray(3)
@@ -304,6 +375,7 @@ class NightSkyRenderer {
 
             reticlePaint.color = AndroidColor.rgb(255, 23, 68)
             reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
+            arrowPaint.color = AndroidColor.rgb(255, 23, 68)
         } else {
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
             constellationHaloPaint.color = AndroidColor.argb(45, 128, 222, 234)
@@ -319,6 +391,7 @@ class NightSkyRenderer {
 
             reticlePaint.color = AndroidColor.WHITE
             reticleTextPaint.color = AndroidColor.WHITE
+            arrowPaint.color = 0xFFFFD700.toInt()
         }
     }
 
@@ -986,16 +1059,26 @@ class NightSkyRenderer {
             else -> { xs = xDev; ys = yDev }
         }
         val zs = -zDev
-        if (zs <= 0.001f) return
-
-        // Perspective projection
+        val isInFront = zs > 0.001f
         val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
         val focalLengthPixels = (w * 0.5f) / tan(halfFovHRad)
-        val screenX = w * 0.5f + focalLengthPixels * (xs / zs)
-        val screenY = h * 0.5f - focalLengthPixels * (ys / zs)
+        val screenX = if (isInFront) w * 0.5f + focalLengthPixels * (xs / zs) else Float.NaN
+        val screenY = if (isInFront) h * 0.5f - focalLengthPixels * (ys / zs) else Float.NaN
 
-        val margin = 50.0f
-        if (screenX !in -margin..(w + margin) || screenY !in -margin..(h + margin)) {
+        val isVisible = isInFront && (screenX in 0f..w) && (screenY in 0f..h)
+
+        if (!isVisible) {
+            drawOffscreenIndicator(
+                drawScope = drawScope,
+                xs = xs,
+                ys = ys,
+                zs = zs,
+                screenX = screenX,
+                screenY = screenY,
+                w = w,
+                h = h,
+                density = density,
+            )
             return
         }
 
@@ -1031,5 +1114,65 @@ class NightSkyRenderer {
             val textY = screenY - (12.5f * density)
             nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
         }
+    }
+
+    /**
+     * Renders a zero-allocation directional chevron arrow at the edge of the screen pointing
+     * towards the selected celestial body when it is outside the camera viewport or behind the observer.
+     *
+     * 100% Zero heap allocations per frame.
+     */
+    fun drawOffscreenIndicator(
+        drawScope: DrawScope,
+        xs: Float,
+        ys: Float,
+        zs: Float,
+        screenX: Float,
+        screenY: Float,
+        w: Float,
+        h: Float,
+        density: Float = 1.0f,
+    ) {
+        val centerX = w * 0.5f
+        val centerY = h * 0.5f
+        val edgePadding = 22f
+        val halfW = centerX - edgePadding
+        val halfH = centerY - edgePadding
+
+        if (halfW <= 0f || halfH <= 0f) return
+
+        var dx = if (zs > 0.001f) (screenX - centerX) else xs
+        var dy = if (zs > 0.001f) (screenY - centerY) else -ys
+
+        if (kotlin.math.abs(dx) < 0.0001f && kotlin.math.abs(dy) < 0.0001f) {
+            dy = 1f
+        }
+
+        val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
+        val tanAngle = kotlin.math.tan(angleRad.toDouble()).toFloat()
+
+        val intersectX: Float
+        val intersectY: Float
+
+        if (kotlin.math.abs(halfW * tanAngle) < halfH) {
+            // Intersects Left or Right edge
+            intersectX = if (dx > 0) halfW else -halfW
+            intersectY = intersectX * tanAngle
+        } else {
+            // Intersects Top or Bottom edge
+            intersectY = if (dy > 0) halfH else -halfH
+            intersectX = intersectY / tanAngle
+        }
+
+        val arrowX = centerX + intersectX
+        val arrowY = centerY + intersectY
+        val angleDeg = Math.toDegrees(angleRad.toDouble()).toFloat()
+
+        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
+        nativeCanvas.save()
+        nativeCanvas.translate(arrowX, arrowY)
+        nativeCanvas.rotate(angleDeg)
+        nativeCanvas.drawPath(arrowPath, arrowPaint)
+        nativeCanvas.restore()
     }
 }

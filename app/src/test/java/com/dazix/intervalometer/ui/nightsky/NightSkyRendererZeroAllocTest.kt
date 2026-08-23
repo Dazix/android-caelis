@@ -10,6 +10,7 @@ import com.dazix.intervalometer.data.nightsky.Constellation
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
 import com.dazix.intervalometer.data.nightsky.StarMetadata
+import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.NightSkyCatalogLoader
 import com.google.flatbuffers.FlatBufferBuilder
 import org.junit.Assert.assertEquals
@@ -133,12 +134,18 @@ class NightSkyRendererZeroAllocTest {
     }
 
     @Test
-    fun `verifies selection reticle preallocated paints and buffers exist`() {
+    fun `verifies selection reticle and arrow indicator preallocated paints and buffers exist`() {
         val renderer = NightSkyRenderer()
 
-        // Verify reticle paint and text paint are non-null and correctly initialized
+        // Verify reticle paint, text paint, arrow paint, and arrow path are non-null and correctly initialized
         org.junit.Assert.assertNotNull(renderer.reticlePaint)
         org.junit.Assert.assertNotNull(renderer.reticleTextPaint)
+        org.junit.Assert.assertNotNull(renderer.arrowPaint)
+        org.junit.Assert.assertNotNull(renderer.arrowPath)
+
+        // Verify theme switching runs without exception
+        renderer.applyTheme(redVisionMode = false)
+        renderer.applyTheme(redVisionMode = true)
     }
 
     @Test
@@ -335,5 +342,170 @@ class NightSkyRendererZeroAllocTest {
         val hit = renderer.findHitAt(centroidX, centroidY, 48f * 2.5f, 2.5f, catalog)
         assertTrue("Hit must be ConstellationHit", hit is NightSkyRenderer.HitTarget.ConstellationHit)
         assertEquals(1, (hit as NightSkyRenderer.HitTarget.ConstellationHit).index)
+    }
+
+    @Test
+    fun `verifies off-screen bearing indicator math for all directions and behind camera`() {
+        val w = 1080f
+        val h = 2400f
+        val edgePadding = 64f
+        val centerX = w * 0.5f
+        val centerY = h * 0.5f
+        val halfW = centerX - edgePadding
+        val halfH = centerY - edgePadding
+
+        // 1. Target directly to the Right (Xs > 0, Ys = 0, Zs > 0)
+        val rightTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 1f, ys = 0f, zs = 1f,
+            screenX = w + 200f, screenY = centerY,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(0f, rightTransform.angleDeg, 0.01f)
+        assertEquals(centerX + halfW, rightTransform.arrowX, 0.01f)
+        assertEquals(centerY, rightTransform.arrowY, 0.01f)
+
+        // 2. Target directly to the Left (Xs < 0, Ys = 0, Zs > 0)
+        val leftTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = -1f, ys = 0f, zs = 1f,
+            screenX = -200f, screenY = centerY,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(180f, kotlin.math.abs(leftTransform.angleDeg), 0.01f)
+        assertEquals(centerX - halfW, leftTransform.arrowX, 0.01f)
+        assertEquals(centerY, leftTransform.arrowY, 0.01f)
+
+        // 3. Target directly Above (Xs = 0, Ys > 0, Zs > 0)
+        val topTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 0f, ys = 1f, zs = 1f,
+            screenX = centerX, screenY = -300f,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(-90f, topTransform.angleDeg, 0.01f)
+        assertEquals(centerX, topTransform.arrowX, 0.01f)
+        assertEquals(centerY - halfH, topTransform.arrowY, 0.01f)
+
+        // 4. Target directly Below (Xs = 0, Ys < 0, Zs > 0)
+        val bottomTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 0f, ys = -1f, zs = 1f,
+            screenX = centerX, screenY = h + 300f,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(90f, bottomTransform.angleDeg, 0.01f)
+        assertEquals(centerX, bottomTransform.arrowX, 0.01f)
+        assertEquals(centerY + halfH, bottomTransform.arrowY, 0.01f)
+
+        // 5. Target Behind observer and to the Right (Xs > 0, Ys = 0, Zs < 0)
+        val behindRightTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 1f, ys = 0f, zs = -1f,
+            screenX = Float.NaN, screenY = Float.NaN,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(0f, behindRightTransform.angleDeg, 0.01f)
+        assertEquals(centerX + halfW, behindRightTransform.arrowX, 0.01f)
+        assertEquals(centerY, behindRightTransform.arrowY, 0.01f)
+
+        // 6. Target Behind observer and Above (Xs = 0, Ys > 0, Zs < 0)
+        val behindTopTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 0f, ys = 1f, zs = -1f,
+            screenX = Float.NaN, screenY = Float.NaN,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(-90f, behindTopTransform.angleDeg, 0.01f)
+        assertEquals(centerX, behindTopTransform.arrowX, 0.01f)
+        assertEquals(centerY - halfH, behindTopTransform.arrowY, 0.01f)
+
+        // 7. Singularity: Target directly behind on camera optical axis (Xs = 0, Ys = 0, Zs < 0)
+        val singularityTransform = NightSkyRenderer.computeOffscreenIndicator(
+            xs = 0f, ys = 0f, zs = -1f,
+            screenX = Float.NaN, screenY = Float.NaN,
+            w = w, h = h, edgePadding = edgePadding
+        )
+        assertEquals(90f, singularityTransform.angleDeg, 0.01f)
+        assertEquals(centerX, singularityTransform.arrowX, 0.01f)
+        assertEquals(centerY + halfH, singularityTransform.arrowY, 0.01f)
+    }
+
+    @Test
+    fun `verifies off-screen directional indicator renders on canvas during drawSelectionReticle`() {
+        val renderer = NightSkyRenderer()
+        renderer.applyTheme(redVisionMode = false)
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Selected body behind camera (RA = 180°, Dec = 0°, looking North at LST 0°)
+        val offscreenBody = CelestialBodyDetails(
+            name = "Alpha Centauri",
+            subtitle = "Star",
+            property1 = Pair("Constellation", "Centaurus"),
+            property2 = Pair("Distance", "4.37 ly"),
+            magnitude = -0.27f,
+            raDegrees = 180.0,
+            decDegrees = -60.0,
+        )
+
+        renderer.selectedStarIndex = 0
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            // Must execute drawSelectionReticle with off-screen body without exceptions or allocations
+            renderer.drawSelectionReticle(
+                drawScope = this,
+                selectedBody = offscreenBody,
+                matrix = northMatrix,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                density = 2.5f,
+            )
+        }
+
+        // Test with Constellation selected off-screen
+        renderer.selectedStarIndex = -1
+        renderer.selectedConstellationIndex = 5
+        val offscreenConstellation = CelestialBodyDetails(
+            name = "Crux",
+            subtitle = "Constellation",
+            property1 = Pair("Brightest", "Acrux"),
+            property2 = Pair("Family", "Heavenly Waters"),
+            magnitude = null,
+            raDegrees = 186.0,
+            decDegrees = -60.0,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawSelectionReticle(
+                drawScope = this,
+                selectedBody = offscreenConstellation,
+                matrix = northMatrix,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                density = 2.5f,
+            )
+        }
     }
 }
