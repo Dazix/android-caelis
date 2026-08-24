@@ -61,8 +61,8 @@ fun NightSkyLayerSettingsSheet(
             checkedTrackColor = RedPrimary,
             checkedBorderColor = RedPrimary,
             uncheckedThumbColor = RedSecondary,
-            uncheckedTrackColor = Color(0xFF280000),
-            uncheckedBorderColor = RedSecondary.copy(alpha = 0.5f),
+            uncheckedTrackColor = Color(0xFF201010),
+            uncheckedBorderColor = RedSecondary.copy(alpha = 0.3f),
         )
     } else {
         SwitchDefaults.colors(

@@ -187,8 +187,8 @@ fun NightSkyArScreen(
         displayRotation == android.view.Surface.ROTATION_180
 
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
-    val sheetContainerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0121622)
-    val sheetBorderColor = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.8f) else Color(0xFF283248)
+    val sheetContainerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0121622)
+    val sheetBorderColor = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF283248)
 
     var headerHeightPx by remember { mutableStateOf(0) }
     val headerHeightDp = with(density) { headerHeightPx.toDp() }
@@ -413,8 +413,8 @@ fun NightSkyArScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A),
-                        border = BorderStroke(1.dp, if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)),
+                        color = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A),
+                        border = BorderStroke(1.dp, if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)),
                         modifier = Modifier.size(44.dp),
                     ) {
                         IconButton(
@@ -448,12 +448,12 @@ fun NightSkyArScreen(
     if (isLayerSheetOpen) {
         ModalBottomSheet(
             onDismissRequest = { isLayerSheetOpen = false },
-            containerColor = if (uiState.redVisionMode) Color(0xF0180000) else Color(0xF0151820),
+            containerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0151820),
             contentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
             scrimColor = if (uiState.redVisionMode) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f),
             dragHandle = {
                 BottomSheetDefaults.DragHandle(
-                    color = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0xFF718096),
+                    color = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF718096),
                 )
             },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -696,8 +696,8 @@ private fun NightSkyTopBar(
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)
+    val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
+    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
     val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
     val textColor = if (redVisionMode) RedPrimary else Color.White
     val subTextColor = if (redVisionMode) RedSecondary else Color(0xCCFFFFFF)
@@ -845,8 +845,8 @@ private fun NightSkyBottomHud(
     redVisionMode: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x33FFFFFF)
+    val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
+    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
     val contentColor = if (redVisionMode) RedPrimary else Color(0xFFE0E0E0)
 
     Surface(
@@ -981,8 +981,8 @@ private fun CalibrationDebugOverlay(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val containerBg = if (redVisionMode) Color(0xF0180000) else Color(0xEE121824)
-    val borderColor = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0x444DD0E1)
+    val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xEE121824)
+    val borderColor = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x444DD0E1)
     val textColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
     val labelColor = if (redVisionMode) RedSecondary else Color(0xFF94A3B8)
     val sliderColors = if (redVisionMode) {

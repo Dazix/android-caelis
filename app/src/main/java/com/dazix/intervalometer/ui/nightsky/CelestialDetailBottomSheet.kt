@@ -78,7 +78,7 @@ fun CelestialDetailSheetContent(
         ) {
             // Drag Handle (Inside measured header block)
             BottomSheetDefaults.DragHandle(
-                color = if (redVisionMode) RedPrimary.copy(alpha = 0.6f) else Color(0xFF718096),
+                color = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF718096),
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 

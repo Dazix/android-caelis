@@ -55,7 +55,7 @@ object AtmosphereShader {
             if (isRedVision > 0.5) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
                 // Mute the atmosphere significantly in Red Mode to avoid overpowering stars
-                color = half4(luminance * 0.4, 0.0, 0.0, color.a * 0.4);
+                color = half4(luminance * 0.15, 0.0, 0.0, color.a * 0.15);
             }
             
             return color;

@@ -23,8 +23,8 @@ val NormalNightArc = Color(0x44FFB300)
 
 // Red Vision (Astrophotography Night Mode) Palette
 val RedPrimary = Color(0xFFFF1744)
-val RedSecondary = Color(0xFFB71C1C)
-val RedGrid = Color(0x66B71C1C)
+val RedSecondary = Color(0xFFD32F2F)
+val RedGrid = Color(0x33FF1744)
 val RedNightArc = Color(0x33FF1744)
 
 /**
@@ -124,15 +124,15 @@ class SkyDomeRenderer {
     fun applyTheme(redVisionMode: Boolean) {
         if (redVisionMode) {
             horizonTextPaint.color = AndroidColor.argb(143, 255, 23, 68)
-            gridTextPaint.color = AndroidColor.argb(143, 183, 28, 28)
+            gridTextPaint.color = AndroidColor.argb(143, 211, 47, 47)
             bubbleTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            bubbleBgPaint.color = AndroidColor.argb(240, 15, 0, 0)
+            bubbleBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
             bubbleBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
             markerTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            markerBgPaint.color = AndroidColor.argb(240, 15, 0, 0)
+            markerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
             markerBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
             pointerTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            pointerBgPaint.color = AndroidColor.argb(240, 15, 0, 0)
+            pointerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
             pointerBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
         } else {
             horizonTextPaint.color = AndroidColor.argb(143, 255, 255, 255)

@@ -117,7 +117,7 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must discard pixels below horizon", src.contains("if (sinElevation < 0.0) return half4(0.0);"))
         org.junit.Assert.assertTrue("Shader must apply max elevation of 15 degrees", src.contains("0.258"))
         org.junit.Assert.assertTrue("Shader must apply non-linear exponential decay", src.contains("pow(factor, 3.0)"))
-        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.4"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15"))
     }
 
     @Test
@@ -146,7 +146,7 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must contain spherical azimuth conversion", src.contains("atan(worldDir.x, worldDir.y)"))
         org.junit.Assert.assertTrue("Shader must contain spherical elevation conversion", src.contains("asin(clamp(worldDir.z, -1.0, 1.0))"))
         org.junit.Assert.assertTrue("Shader must contain equirectangular UV mapping", src.contains("texU = (theta / 6.283185307179586) + 0.5;"))
-        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.4"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15"))
     }
 
     @Test

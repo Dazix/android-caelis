@@ -48,7 +48,7 @@ object MilkyWayShader {
             // Extract luminance and map it purely to the red channel to protect night vision
             if (isRedVision > 0.5) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                color = half4(luminance * 0.9, 0.0, 0.0, color.a);
+                color = half4(luminance * 0.3, 0.0, 0.0, color.a);
             }
 
             return color;

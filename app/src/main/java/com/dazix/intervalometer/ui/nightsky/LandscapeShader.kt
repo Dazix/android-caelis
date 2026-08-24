@@ -46,7 +46,7 @@ object LandscapeShader {
             // 7. Red Vision (Night Mode) Filter
             if (isRedVision > 0.5 && color.a > 0.0) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                color = half4(luminance * 0.4, 0.0, 0.0, color.a);
+                color = half4(luminance * 0.15, 0.0, 0.0, color.a);
             }
 
             return color;
