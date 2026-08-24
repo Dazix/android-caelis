@@ -42,6 +42,7 @@ enum class NavigationDestination(
     SESSION(Screen.HOME, R.string.nav_short_home, AppIcons.Session),
     SUN_AR(Screen.SUN_AR, R.string.nav_short_sun_ar, AppIcons.SunAndMoon),
     NIGHT_SKY_AR(Screen.NIGHT_SKY_AR, R.string.nav_short_night_sky, AppIcons.NightSky),
+    SETTINGS(Screen.SETTINGS, R.string.nav_short_settings, AppIcons.Settings),
     ;
 
     companion object {
@@ -94,19 +95,22 @@ fun AppNavigationShell(
                     ShortNavigationBar {
                         NavigationDestination.entries.forEach { destination ->
                             val label = stringResource(destination.labelRes)
+                            val showLabel = destination != NavigationDestination.SETTINGS
                             ShortNavigationBarItem(
                                 selected = destination.screen == current,
                                 onClick = { onNavigate(destination.screen) },
                                 icon = {
-                                    Icon(imageVector = destination.icon, contentDescription = null)
+                                    Icon(imageVector = destination.icon, contentDescription = label)
                                 },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
+                                label = if (showLabel) {
+                                    {
+                                        Text(
+                                            text = label,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                } else null,
                             )
                         }
                     }
@@ -127,19 +131,22 @@ fun AppNavigationShell(
                     ) {
                         NavigationDestination.entries.forEach { destination ->
                             val label = stringResource(destination.labelRes)
+                            val showLabel = destination != NavigationDestination.SETTINGS
                             WideNavigationRailItem(
                                 selected = destination.screen == current,
                                 onClick = { onNavigate(destination.screen) },
                                 icon = {
-                                    Icon(imageVector = destination.icon, contentDescription = null)
+                                    Icon(imageVector = destination.icon, contentDescription = label)
                                 },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                },
+                                label = if (showLabel) {
+                                    {
+                                        Text(
+                                            text = label,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                } else null,
                                 railExpanded = false,
                             )
                         }

@@ -101,6 +101,7 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must declare viewMatrix uniform", src.contains("uniform mat3 viewMatrix;"))
         org.junit.Assert.assertTrue("Shader must declare fovFactor uniform", src.contains("uniform float fovFactor;"))
         org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
+        org.junit.Assert.assertTrue("Shader must declare nightVisionTint uniform", src.contains("uniform float3 nightVisionTint;"))
         org.junit.Assert.assertTrue("Shader must contain spherical coordinate conversion", src.contains("atan(worldDir.z, worldDir.x)"))
         org.junit.Assert.assertTrue("Shader must contain declination latitude conversion", src.contains("asin(clamp(worldDir.y, -1.0, 1.0))"))
     }
@@ -113,11 +114,12 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must declare viewMatrix uniform", src.contains("uniform mat3 viewMatrix;"))
         org.junit.Assert.assertTrue("Shader must declare fovFactor uniform", src.contains("uniform float fovFactor;"))
         org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
+        org.junit.Assert.assertTrue("Shader must declare nightVisionTint uniform", src.contains("uniform float3 nightVisionTint;"))
         org.junit.Assert.assertTrue("Shader must extract Z elevation", src.contains("sinElevation = worldDir.z"))
         org.junit.Assert.assertTrue("Shader must discard pixels below horizon", src.contains("if (sinElevation < 0.0) return half4(0.0);"))
         org.junit.Assert.assertTrue("Shader must apply max elevation of 15 degrees", src.contains("0.258"))
         org.junit.Assert.assertTrue("Shader must apply non-linear exponential decay", src.contains("pow(factor, 3.0)"))
-        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15 * nightVisionTint"))
     }
 
     @Test
@@ -143,10 +145,11 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertTrue("Shader must declare viewMatrix uniform", src.contains("uniform mat3 viewMatrix;"))
         org.junit.Assert.assertTrue("Shader must declare fovFactor uniform", src.contains("uniform float fovFactor;"))
         org.junit.Assert.assertTrue("Shader must declare isRedVision uniform", src.contains("uniform float isRedVision;"))
+        org.junit.Assert.assertTrue("Shader must declare nightVisionTint uniform", src.contains("uniform float3 nightVisionTint;"))
         org.junit.Assert.assertTrue("Shader must contain spherical azimuth conversion", src.contains("atan(worldDir.x, worldDir.y)"))
         org.junit.Assert.assertTrue("Shader must contain spherical elevation conversion", src.contains("asin(clamp(worldDir.z, -1.0, 1.0))"))
         org.junit.Assert.assertTrue("Shader must contain equirectangular UV mapping", src.contains("texU = (theta / 6.283185307179586) + 0.5;"))
-        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15"))
+        org.junit.Assert.assertTrue("Shader must contain red vision filter", src.contains("luminance * 0.15 * nightVisionTint"))
     }
 
     @Test

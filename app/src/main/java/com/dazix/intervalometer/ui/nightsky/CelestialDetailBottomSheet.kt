@@ -27,9 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.intervalometer.R
-import com.dazix.intervalometer.ar.RedPrimary
-import com.dazix.intervalometer.ar.RedSecondary
+import com.dazix.intervalometer.ar.paletteForTheme
 import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
 import java.util.Locale
 import kotlin.math.abs
 
@@ -39,7 +39,7 @@ import kotlin.math.abs
  *
  * In PartiallyExpanded (peek) state, displays the Header Row (Name, Type, Divider) perfectly measured via [onHeaderMeasured].
  * In Expanded state, smoothly reveals the complete astrophysics & equatorial coordinate data grid.
- * Fully complies with Red Vision (Astrophotography Night Mode).
+ * Fully complies with Night Vision themes (Red, Amber, NVG Green).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +48,7 @@ fun CelestialDetailSheetContent(
     redVisionMode: Boolean,
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
     if (selectedBody == null) {
@@ -55,10 +56,11 @@ fun CelestialDetailSheetContent(
         return
     }
 
-    val titleColor = if (redVisionMode) RedPrimary else Color.White
-    val labelColor = if (redVisionMode) RedSecondary else Color(0xFF8C9BAE)
-    val valueColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
-    val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+    val palette = paletteForTheme(nightVisionTheme)
+    val titleColor = if (redVisionMode) palette.primary else Color.White
+    val labelColor = if (redVisionMode) palette.secondary else Color(0xFF8C9BAE)
+    val valueColor = if (redVisionMode) palette.primary else Color(0xFFE2E8F0)
+    val accentColor = if (redVisionMode) palette.primary else Color(0xFF4DD0E1)
 
     Column(
         modifier = modifier
@@ -78,7 +80,7 @@ fun CelestialDetailSheetContent(
         ) {
             // Drag Handle (Inside measured header block)
             BottomSheetDefaults.DragHandle(
-                color = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF718096),
+                color = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0xFF718096),
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
@@ -105,7 +107,7 @@ fun CelestialDetailSheetContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(0.8.dp)
-                    .background(if (redVisionMode) RedPrimary.copy(alpha = 0.25f) else Color(0xFF283248)),
+                    .background(if (redVisionMode) palette.primary.copy(alpha = 0.25f) else Color(0xFF283248)),
             )
         }
 

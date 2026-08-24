@@ -21,12 +21,15 @@ import com.dazix.intervalometer.domain.StopConditions
 import com.dazix.intervalometer.domain.StopReason
 import com.dazix.intervalometer.domain.TapTarget
 import com.dazix.intervalometer.domain.TriggerMode
+import com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
 import com.dazix.intervalometer.overlay.CalibrationOverlay
 import com.dazix.intervalometer.overlay.OverlayOptions
 import com.dazix.intervalometer.overlay.OverlaySettings
 import com.dazix.intervalometer.service.CameraProfiles
 import com.dazix.intervalometer.service.DisplayGeometry
 import com.dazix.intervalometer.service.ShutterAccessibilityService
+import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,7 +46,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 
 /** The app is a single activity; this is the whole navigation model. */
-enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER, SUN_AR, NIGHT_SKY_AR }
+enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER, SUN_AR, NIGHT_SKY_AR, SETTINGS }
 
 enum class ModeChoice { TIMELAPSE, PERIODIC_TAP }
 
@@ -256,6 +259,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val serviceUnavailable: StateFlow<Boolean> = serviceUnavailableState.asStateFlow()
 
     val snapshot: StateFlow<SessionSnapshot> = SessionRepository.snapshot
+
+    val nightVisionTheme: StateFlow<NightVisionTheme> = settings.nightVisionTheme
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionTheme.RED)
+
+    val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settings.nightVisionActivationMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionActivationMode.AUTO_SOLAR)
+
+    val customStartTime: StateFlow<LocalTime> = settings.customStartTime
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LocalTime.of(22, 0))
+
+    val customEndTime: StateFlow<LocalTime> = settings.customEndTime
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LocalTime.of(6, 0))
+
+    fun setNightVisionTheme(theme: NightVisionTheme) {
+        viewModelScope.launch { settings.saveNightVisionTheme(theme) }
+    }
+
+    fun setNightVisionActivationMode(mode: NightVisionActivationMode) {
+        viewModelScope.launch { settings.saveNightVisionActivationMode(mode) }
+    }
+
+    fun setCustomStartTime(time: LocalTime) {
+        viewModelScope.launch { settings.saveCustomStartTime(time) }
+    }
+
+    fun setCustomEndTime(time: LocalTime) {
+        viewModelScope.launch { settings.saveCustomEndTime(time) }
+    }
 
     /** The shortest interval the chosen camera app can sustain, straight from its profile. */
     val intervalFloorMs: StateFlow<Long> = setupState

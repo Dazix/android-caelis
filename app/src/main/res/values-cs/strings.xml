@@ -39,8 +39,9 @@
       podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
     -->
     <string name="nav_short_home">Intervalometr</string>
-    <string name="nav_short_sun_ar">Poloha</string>
-    <string name="nav_short_setup">Nastavení</string>
+    <string name="nav_short_sun_ar">Slunce</string>
+    <string name="nav_short_settings">Nastavení</string>
+    <string name="nav_short_setup">Série</string>
     <string name="nav_short_ramp">Interval</string>
     <string name="nav_short_advanced">Pokročilé</string>
     <string name="nav_short_permissions">Práva</string>
@@ -287,11 +288,12 @@
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
 
     <!-- Night Sky AR -->
-    <string name="nav_short_night_sky">Noční obloha (AR)</string>
-    <string name="night_sky_title">Noční obloha (AR)</string>
+    <string name="nav_short_night_sky">Noční obloha</string>
+    <string name="night_sky_title">Noční obloha</string>
     <string name="night_sky_desc">Rozšířená realita hvězdné mapy a nebeské sféry</string>
     <string name="night_sky_stars_label">Hvězdy:</string>
     <string name="night_sky_lst_label">LST</string>
+    <string name="night_sky_keep_screen_on">Stále zapnutý displej</string>
     <string name="night_sky_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení noční oblohy</string>
     <string name="night_sky_milky_way">Mléčná dráha</string>
     <string name="night_sky_milky_way_desc">Zobrazit/skrýt hardwarově akcelerované pozadí Mléčné dráhy</string>
@@ -334,4 +336,29 @@
     <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
     <string name="night_sky_debug_rotation">Rotace: %1$.1f°</string>
     <string name="night_sky_debug_reset">Obnovit</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Nastavení</string>
+    <string name="settings_subtitle">Předvolby aplikace a noční vidění</string>
+    <string name="settings_theme_title">Barevný motiv nočního vidění</string>
+    <string name="settings_theme_subtitle">Monochromatická paleta pro ochranu adaptace očí na tmu na AMOLED displeji</string>
+    <string name="settings_theme_red">Červená</string>
+    <string name="settings_theme_amber">Jantarová</string>
+    <string name="settings_theme_green">NVG Zelená</string>
+    <string name="settings_activation_title">Režim aktivace</string>
+    <string name="settings_activation_subtitle">Určete, kdy se noční vidění automaticky zapne</string>
+    <string name="settings_activation_off">Vždy vypnuto</string>
+    <string name="settings_activation_off_desc">Běžné plnobarevné rozhraní</string>
+    <string name="settings_activation_auto_solar">Automaticky (podle slunce)</string>
+    <string name="settings_activation_auto_solar_desc">Aktivuje se automaticky během astronomické noci</string>
+    <string name="settings_activation_custom_time">Vlastní časový plán</string>
+    <string name="settings_activation_custom_time_desc">Aktivuje se mezi nastaveným počátečním a koncovým časem</string>
+    <string name="settings_custom_schedule_title">Časový rozvrh</string>
+    <string name="settings_custom_schedule_desc">Aktivní denně od %1$s do %2$s</string>
+    <string name="settings_time_start">Čas začátku</string>
+    <string name="settings_time_end">Čas konce</string>
+    <string name="settings_dialog_title_start">Nastavit čas začátku</string>
+    <string name="settings_dialog_title_end">Nastavit čas konce</string>
+    <string name="settings_confirm">OK</string>
+    <string name="settings_cancel">Zrušit</string>
 </resources>

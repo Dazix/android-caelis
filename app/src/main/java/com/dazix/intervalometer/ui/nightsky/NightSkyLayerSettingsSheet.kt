@@ -21,13 +21,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.intervalometer.R
-import com.dazix.intervalometer.ar.RedPrimary
-import com.dazix.intervalometer.ar.RedSecondary
+import com.dazix.intervalometer.ar.paletteForTheme
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
 import com.dazix.intervalometer.ui.AppIcons
 
 /**
  * Modal bottom sheet content for configuring Night Sky AR layers and visual toggles.
- * Fully compliant with Red Vision astrophotography mode.
+ * Fully compliant with Night Vision astrophotography mode themes (Red, Amber, NVG Green).
  */
 @Composable
 fun NightSkyLayerSettingsSheet(
@@ -36,33 +36,37 @@ fun NightSkyLayerSettingsSheet(
     isMilkyWayVisible: Boolean,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
-    isDebugCalibrationVisible: Boolean = false,
     isGridVisible: Boolean,
     isSkyBackgroundOpaque: Boolean,
     redVisionMode: Boolean,
+    isKeepScreenOn: Boolean = false,
+    isDebugCalibrationVisible: Boolean = false,
     onToggleLandscapeVisible: () -> Unit,
     onToggleAtmosphereVisible: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
-    onToggleDebugCalibration: () -> Unit = {},
     onToggleGridVisible: () -> Unit,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleRedVisionMode: () -> Unit,
+    onToggleKeepScreenOn: () -> Unit = {},
+    onToggleDebugCalibration: () -> Unit = {},
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
-    val titleColor = if (redVisionMode) RedPrimary else Color.White
-    val headlineColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
-    val iconColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
+    val palette = paletteForTheme(nightVisionTheme)
+    val titleColor = if (redVisionMode) palette.primary else Color.White
+    val headlineColor = if (redVisionMode) palette.primary else Color(0xFFE2E8F0)
+    val iconColor = if (redVisionMode) palette.primary else Color(0xFF4DD0E1)
 
     val switchColors = if (redVisionMode) {
         SwitchDefaults.colors(
             checkedThumbColor = Color.Black,
-            checkedTrackColor = RedPrimary,
-            checkedBorderColor = RedPrimary,
-            uncheckedThumbColor = RedSecondary,
+            checkedTrackColor = palette.primary,
+            checkedBorderColor = palette.primary,
+            uncheckedThumbColor = palette.secondary,
             uncheckedTrackColor = Color(0xFF201010),
-            uncheckedBorderColor = RedSecondary.copy(alpha = 0.3f),
+            uncheckedBorderColor = palette.secondary.copy(alpha = 0.3f),
         )
     } else {
         SwitchDefaults.colors(
@@ -138,16 +142,6 @@ fun NightSkyLayerSettingsSheet(
         )
 
         LayerToggleRow(
-            label = stringResource(R.string.night_sky_debug_calibration),
-            icon = AppIcons.Setup,
-            isChecked = isDebugCalibrationVisible,
-            headlineColor = headlineColor,
-            iconColor = iconColor,
-            switchColors = switchColors,
-            onCheckedChange = { onToggleDebugCalibration() },
-        )
-
-        LayerToggleRow(
             label = stringResource(R.string.night_sky_grid),
             icon = AppIcons.Grid,
             isChecked = isGridVisible,
@@ -175,6 +169,26 @@ fun NightSkyLayerSettingsSheet(
             iconColor = iconColor,
             switchColors = switchColors,
             onCheckedChange = { onToggleRedVisionMode() },
+        )
+
+        LayerToggleRow(
+            label = stringResource(R.string.night_sky_keep_screen_on),
+            icon = AppIcons.ScreenAwake,
+            isChecked = isKeepScreenOn,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onToggleKeepScreenOn() },
+        )
+
+        LayerToggleRow(
+            label = stringResource(R.string.night_sky_debug_calibration),
+            icon = AppIcons.Setup,
+            isChecked = isDebugCalibrationVisible,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onToggleDebugCalibration() },
         )
     }
 }

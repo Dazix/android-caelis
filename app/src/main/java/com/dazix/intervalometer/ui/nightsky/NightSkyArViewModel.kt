@@ -13,7 +13,11 @@ import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
 import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.NightSkyCatalogLoader
+import com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode
+import com.dazix.intervalometer.domain.nightsky.NightVisionState
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
 import com.dazix.intervalometer.domain.nightsky.SiderealTime
+import com.dazix.intervalometer.domain.nightsky.isTimeInRange
 import com.dazix.intervalometer.domain.solar.GeoLocation
 import com.dazix.intervalometer.domain.solar.SolarPositionCalculator
 import kotlinx.coroutines.Dispatchers
@@ -33,12 +37,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.LocalTime
 
 data class NightSkyArUiState(
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
     val keepScreenOn: Boolean = false,
-    val redVisionMode: Boolean = true,
+    val nightVisionState: NightVisionState = NightVisionState(),
+    val redVisionMode: Boolean = nightVisionState.isActive,
     val isNight: Boolean = true,
     val isRedVisionOverridden: Boolean = false,
     val isCalibrated: Boolean = false,
@@ -100,9 +106,62 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         override != null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val redVisionMode: StateFlow<Boolean> = combine(isNightState, manualRedVisionOverride) { night, override ->
-        override ?: night
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    private val currentTimeState = MutableStateFlow(LocalTime.now())
+
+    val nightVisionTheme: StateFlow<NightVisionTheme> = settingsStore.nightVisionTheme.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        NightVisionTheme.RED,
+    )
+
+    val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settingsStore.nightVisionActivationMode.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        NightVisionActivationMode.AUTO_SOLAR,
+    )
+
+    val customStartTime: StateFlow<LocalTime> = settingsStore.customStartTime.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LocalTime.of(22, 0),
+    )
+
+    val customEndTime: StateFlow<LocalTime> = settingsStore.customEndTime.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        LocalTime.of(6, 0),
+    )
+
+    val nightVisionState: StateFlow<NightVisionState> = combine(
+        nightVisionActivationMode,
+        nightVisionTheme,
+        customStartTime,
+        customEndTime,
+        isNightState,
+        currentTimeState,
+        manualRedVisionOverride,
+    ) { args: Array<Any?> ->
+        val mode = args[0] as NightVisionActivationMode
+        val theme = args[1] as NightVisionTheme
+        val start = args[2] as LocalTime
+        val end = args[3] as LocalTime
+        val isSolarNight = args[4] as Boolean
+        val currentTime = args[5] as LocalTime
+        val override = args[6] as? Boolean
+
+        val isActive = override ?: when (mode) {
+            NightVisionActivationMode.OFF -> false
+            NightVisionActivationMode.AUTO_SOLAR -> isSolarNight
+            NightVisionActivationMode.CUSTOM_TIME -> isTimeInRange(currentTime, start, end)
+        }
+        NightVisionState(isActive = isActive, theme = theme)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionState())
+
+    val redVisionMode: StateFlow<Boolean> = nightVisionState.map { it.isActive }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
     val location: StateFlow<GeoLocation> = locationProvider.location
@@ -175,7 +234,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         locationProvider.location,
         locationProvider.hasGpsFix,
         keepScreenOn,
-        redVisionMode,
+        nightVisionState,
         isNightState,
         manualRedVisionOverride,
         isCalibrated,
@@ -202,7 +261,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val loc = args[0] as GeoLocation
         val gps = args[1] as Boolean
         val keepOn = args[2] as Boolean
-        val redMode = args[3] as Boolean
+        val nvState = args[3] as NightVisionState
         val night = args[4] as Boolean
         val redOverride = args[5] as Boolean?
         val calib = args[6] as Boolean
@@ -230,7 +289,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             location = loc,
             hasGpsFix = gps,
             keepScreenOn = keepOn,
-            redVisionMode = redMode,
+            nightVisionState = nvState,
+            redVisionMode = nvState.isActive,
             isNight = night,
             isRedVisionOverridden = redOverride != null,
             isCalibrated = calib,
@@ -307,6 +367,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 lstDegreesState.value = lstDeg
                 lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
                 isNightState.value = SolarPositionCalculator.isNight(now, loc)
+                currentTimeState.value = LocalTime.now()
                 delay(1000L)
             }
         }
@@ -480,7 +541,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun toggleRedVisionMode() {
-        val currentActive = manualRedVisionOverride.value ?: isNightState.value
+        val currentActive = nightVisionState.value.isActive
         manualRedVisionOverride.value = !currentActive
     }
 

@@ -68,6 +68,10 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
     val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val appsLoading by viewModel.appsLoading.collectAsStateWithLifecycle()
     val query by viewModel.appQuery.collectAsStateWithLifecycle()
+    val nightVisionTheme by viewModel.nightVisionTheme.collectAsStateWithLifecycle()
+    val nightVisionActivationMode by viewModel.nightVisionActivationMode.collectAsStateWithLifecycle()
+    val customStartTime by viewModel.customStartTime.collectAsStateWithLifecycle()
+    val customEndTime by viewModel.customEndTime.collectAsStateWithLifecycle()
 
     // Every one of these is granted outside the app, so the state is re-read on each resume.
     LifecycleResumeEffect(Unit) {
@@ -120,8 +124,8 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
     AppNavigationShell(
         current = screen,
         onNavigate = viewModel::navigate,
-        // Top-level navigation bar is shown on the home screen; sub-screens and standalone tools leave by Back.
-        enabled = screen == Screen.HOME,
+        // Top-level navigation bar is shown on home and settings; sub-screens and standalone tools leave by Back.
+        enabled = screen == Screen.HOME || screen == Screen.SETTINGS,
     ) {
         // Screens arrive on the expressive springs: a small scale-up under a cross-fade, which is the
         // expressive "container transform without a shared element" and reads as one surface being
@@ -157,6 +161,10 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
                     appsLoading = appsLoading,
                     query = query,
                     profile = profile,
+                    nightVisionTheme = nightVisionTheme,
+                    nightVisionActivationMode = nightVisionActivationMode,
+                    customStartTime = customStartTime,
+                    customEndTime = customEndTime,
                     homeScrollState = homeScrollState,
                     startCalibration = startCalibration,
                     onRequestNotifications = {
@@ -191,6 +199,10 @@ private fun IntervalometerScreen(
     appsLoading: Boolean,
     query: String,
     profile: CameraProfile,
+    nightVisionTheme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme,
+    nightVisionActivationMode: com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode,
+    customStartTime: java.time.LocalTime,
+    customEndTime: java.time.LocalTime,
     homeScrollState: ScrollState,
     startCalibration: () -> Unit,
     onRequestNotifications: () -> Unit,
@@ -277,6 +289,18 @@ private fun IntervalometerScreen(
         )
 
         Screen.NIGHT_SKY_AR -> com.dazix.intervalometer.ui.nightsky.NightSkyArScreen(
+            onBack = viewModel::back,
+        )
+
+        Screen.SETTINGS -> SettingsScreen(
+            theme = nightVisionTheme,
+            activationMode = nightVisionActivationMode,
+            startTime = customStartTime,
+            endTime = customEndTime,
+            onThemeChange = viewModel::setNightVisionTheme,
+            onActivationModeChange = viewModel::setNightVisionActivationMode,
+            onStartTimeChange = viewModel::setCustomStartTime,
+            onEndTimeChange = viewModel::setCustomEndTime,
             onBack = viewModel::back,
         )
     }

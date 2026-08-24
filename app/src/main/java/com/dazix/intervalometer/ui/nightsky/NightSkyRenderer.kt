@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import com.dazix.intervalometer.ar.SkyDomeRenderer
+import com.dazix.intervalometer.ar.paletteForTheme
 import com.dazix.intervalometer.data.nightsky.Constellation
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
@@ -208,6 +209,8 @@ class NightSkyRenderer {
     }
 
     private val redVisionFilter = PorterDuffColorFilter(AndroidColor.rgb(255, 23, 68), PorterDuff.Mode.SRC_IN)
+    private val amberVisionFilter = PorterDuffColorFilter(AndroidColor.rgb(255, 179, 0), PorterDuff.Mode.SRC_IN)
+    private val greenVisionFilter = PorterDuffColorFilter(AndroidColor.rgb(0, 230, 118), PorterDuff.Mode.SRC_IN)
 
     // Base optical sprite glow diameters in DP for bright & medium star buckets (Bucket 0: mag < 1.0, Bucket 1: 1.0..2.0, Bucket 2: 2.0..3.0)
     private val baseSpriteDiameterDp = floatArrayOf(30.0f, 20.0f, 13.0f)
@@ -342,6 +345,8 @@ class NightSkyRenderer {
         isDither = true
     }
     private val redVisionArtFilter = PorterDuffColorFilter(AndroidColor.RED, PorterDuff.Mode.MULTIPLY)
+    private val amberVisionArtFilter = PorterDuffColorFilter(AndroidColor.rgb(255, 179, 0), PorterDuff.Mode.MULTIPLY)
+    private val greenVisionArtFilter = PorterDuffColorFilter(AndroidColor.rgb(0, 230, 118), PorterDuff.Mode.MULTIPLY)
     val artSrcCorners = FloatArray(8)
     val artDstCorners = FloatArray(8)
     val artCornerProjected = FloatArray(12)
@@ -412,14 +417,27 @@ class NightSkyRenderer {
     }
 
     init {
-        setupStarPaints(redVisionMode = false)
+        setupStarPaints(isNightVision = false)
     }
 
-    private fun setupStarPaints(redVisionMode: Boolean) {
-        if (redVisionMode) {
-            spritePaint.colorFilter = redVisionFilter
+    private fun setupStarPaints(
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        isNightVision: Boolean,
+    ) {
+        if (isNightVision) {
+            spritePaint.colorFilter = when (theme) {
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED -> redVisionFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER -> amberVisionFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN -> greenVisionFilter
+            }
+            val palette = paletteForTheme(theme)
+            val coreColor = AndroidColor.rgb(
+                (palette.secondary.red * 255).toInt(),
+                (palette.secondary.green * 255).toInt(),
+                (palette.secondary.blue * 255).toInt(),
+            )
             for (b in 0 until numBuckets) {
-                corePaints[b].color = AndroidColor.argb(255, 255, 82, 82) // Bright red pinpoint core
+                corePaints[b].color = coreColor
             }
         } else {
             spritePaint.colorFilter = null
@@ -436,28 +454,50 @@ class NightSkyRenderer {
         }
     }
 
-    fun applyTheme(redVisionMode: Boolean) {
-        skyDomeRenderer.applyTheme(redVisionMode)
-        setupStarPaints(redVisionMode)
+    fun applyTheme(state: com.dazix.intervalometer.domain.nightsky.NightVisionState) {
+        applyTheme(theme = state.theme, isNightVision = state.isActive)
+    }
 
-        if (redVisionMode) {
-            artPaint.colorFilter = redVisionArtFilter
+    fun applyTheme(
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        isNightVision: Boolean,
+    ) {
+        skyDomeRenderer.applyTheme(theme = theme, isNightVision = isNightVision)
+        setupStarPaints(theme = theme, isNightVision = isNightVision)
 
-            constellationPaint.color = AndroidColor.argb(160, 255, 23, 68)
-            constellationHaloPaint.color = AndroidColor.argb(50, 255, 23, 68)
-            constellationCorePaint.color = AndroidColor.argb(255, 255, 82, 82)
-            constellationLabelPaint.color = AndroidColor.argb(210, 255, 23, 68)
-            constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 23, 68)
+        if (isNightVision) {
+            val palette = paletteForTheme(theme)
+            val pr = (palette.primary.red * 255).toInt()
+            val pg = (palette.primary.green * 255).toInt()
+            val pb = (palette.primary.blue * 255).toInt()
+            val sr = (palette.secondary.red * 255).toInt()
+            val sg = (palette.secondary.green * 255).toInt()
+            val sb = (palette.secondary.blue * 255).toInt()
 
-            asterismPaint.color = AndroidColor.argb(120, 255, 23, 68)
-            asterismHaloPaint.color = AndroidColor.argb(40, 255, 23, 68)
-            asterismCorePaint.color = AndroidColor.argb(230, 255, 82, 82)
-            asterismLabelPaint.color = AndroidColor.argb(170, 255, 82, 82)
-            asterismHighlightLabelPaint.color = AndroidColor.rgb(255, 82, 82)
+            val primaryInt = AndroidColor.rgb(pr, pg, pb)
+            val secondaryInt = AndroidColor.rgb(sr, sg, sb)
 
-            reticlePaint.color = AndroidColor.rgb(255, 23, 68)
-            reticleTextPaint.color = AndroidColor.rgb(255, 23, 68)
-            arrowPaint.color = AndroidColor.rgb(255, 23, 68)
+            artPaint.colorFilter = when (theme) {
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED -> redVisionArtFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER -> amberVisionArtFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN -> greenVisionArtFilter
+            }
+
+            constellationPaint.color = AndroidColor.argb(160, pr, pg, pb)
+            constellationHaloPaint.color = AndroidColor.argb(50, pr, pg, pb)
+            constellationCorePaint.color = AndroidColor.argb(255, sr, sg, sb)
+            constellationLabelPaint.color = AndroidColor.argb(210, pr, pg, pb)
+            constellationHighlightLabelPaint.color = primaryInt
+
+            asterismPaint.color = AndroidColor.argb(120, pr, pg, pb)
+            asterismHaloPaint.color = AndroidColor.argb(40, pr, pg, pb)
+            asterismCorePaint.color = AndroidColor.argb(230, sr, sg, sb)
+            asterismLabelPaint.color = AndroidColor.argb(170, sr, sg, sb)
+            asterismHighlightLabelPaint.color = secondaryInt
+
+            reticlePaint.color = primaryInt
+            reticleTextPaint.color = primaryInt
+            arrowPaint.color = primaryInt
         } else {
             artPaint.colorFilter = null
 
@@ -477,6 +517,10 @@ class NightSkyRenderer {
             reticleTextPaint.color = AndroidColor.WHITE
             arrowPaint.color = 0xFFFFD700.toInt()
         }
+    }
+
+    fun applyTheme(redVisionMode: Boolean) {
+        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = redVisionMode)
     }
 
     /**
@@ -556,9 +600,11 @@ class NightSkyRenderer {
         }
     }
 
+    private val shaderTintBuffer = FloatArray(3)
+
     /**
      * Renders background layers:
-     * - Layer 0: Opaque Sky Background (Planetarium Mode #050810 / #080000)
+     * - Layer 0: Opaque Sky Background (Planetarium Mode #050810 / #000000)
      * - Layer 1: Hardware-Accelerated AGSL Milky Way Ray-Casting Shader
      * - Layer 1b: Hardware-Accelerated AGSL Atmosphere Glow Shader
      *
@@ -577,7 +623,13 @@ class NightSkyRenderer {
         isMilkyWayVisible: Boolean,
         isAtmosphereVisible: Boolean,
         isRedVision: Boolean,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
     ) {
+        val palette = paletteForTheme(theme)
+        shaderTintBuffer[0] = palette.shaderTintR
+        shaderTintBuffer[1] = palette.shaderTintG
+        shaderTintBuffer[2] = palette.shaderTintB
+
         // Layer 0: Opaque Sky Background
         if (isSkyBackgroundOpaque) {
             drawScope.drawRect(color = if (isRedVision) opaqueColorRed else opaqueColorNormal)
@@ -601,6 +653,7 @@ class NightSkyRenderer {
             runtimeShader.setFloatUniform("viewMatrix", matrixBuffer)
             runtimeShader.setFloatUniform("fovFactor", fovFactor)
             runtimeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+            runtimeShader.setFloatUniform("nightVisionTint", shaderTintBuffer)
 
             drawScope.drawRect(brush = shaderBrush)
         }
@@ -620,6 +673,7 @@ class NightSkyRenderer {
             atmosphereShader.setFloatUniform("viewMatrix", atmosphereMatrixBuffer)
             atmosphereShader.setFloatUniform("fovFactor", fovFactor)
             atmosphereShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+            atmosphereShader.setFloatUniform("nightVisionTint", shaderTintBuffer)
 
             drawScope.drawRect(brush = atmosphereBrush)
         }
@@ -641,6 +695,7 @@ class NightSkyRenderer {
         h: Float,
         isLandscapeVisible: Boolean,
         isRedVision: Boolean,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
     ) {
         if (isLandscapeVisible && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
             val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
@@ -652,11 +707,17 @@ class NightSkyRenderer {
                 outMatrix9 = landscapeMatrixBuffer,
             )
 
+            val palette = paletteForTheme(theme)
+            shaderTintBuffer[0] = palette.shaderTintR
+            shaderTintBuffer[1] = palette.shaderTintG
+            shaderTintBuffer[2] = palette.shaderTintB
+
             landscapeShader.setFloatUniform("resolution", w, h)
             landscapeShader.setFloatUniform("textureSize", landscapeTextureWidth, landscapeTextureHeight)
             landscapeShader.setFloatUniform("viewMatrix", landscapeMatrixBuffer)
             landscapeShader.setFloatUniform("fovFactor", fovFactor)
             landscapeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
+            landscapeShader.setFloatUniform("nightVisionTint", shaderTintBuffer)
 
             drawScope.drawRect(brush = landscapeBrush)
         }

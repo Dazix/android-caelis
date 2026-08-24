@@ -80,7 +80,10 @@ import com.dazix.intervalometer.ar.CameraPreview
 import com.dazix.intervalometer.ar.DeviceOrientation
 import com.dazix.intervalometer.ar.RedPrimary
 import com.dazix.intervalometer.ar.RedSecondary
+import com.dazix.intervalometer.ar.paletteForTheme
 import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
+import com.dazix.intervalometer.domain.nightsky.NightVisionState
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
 import com.dazix.intervalometer.domain.nightsky.StarCatalog
 import com.dazix.intervalometer.service.DisplayGeometry
 import com.dazix.intervalometer.ui.AppIcons
@@ -186,9 +189,10 @@ fun NightSkyArScreen(
     val isPortrait = displayRotation == android.view.Surface.ROTATION_0 ||
         displayRotation == android.view.Surface.ROTATION_180
 
+    val activePalette = paletteForTheme(uiState.nightVisionState.theme)
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
     val sheetContainerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0121622)
-    val sheetBorderColor = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF283248)
+    val sheetBorderColor = if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0xFF283248)
 
     var headerHeightPx by remember { mutableStateOf(0) }
     val headerHeightDp = with(density) { headerHeightPx.toDp() }
@@ -224,7 +228,7 @@ fun NightSkyArScreen(
         sheetPeekHeight = sheetPeekHeight,
         sheetDragHandle = null,
         sheetContainerColor = sheetContainerColor,
-        sheetContentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
+        sheetContentColor = if (uiState.redVisionMode) activePalette.primary else Color.White,
         sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         sheetContent = {
             CelestialDetailSheetContent(
@@ -240,6 +244,7 @@ fun NightSkyArScreen(
                         fullHeightPx = height
                     }
                 },
+                nightVisionTheme = uiState.nightVisionState.theme,
             )
         },
         containerColor = Color.Transparent,
@@ -321,7 +326,7 @@ fun NightSkyArScreen(
                     catalog = catalog,
                     lstDegrees = uiState.lstDegrees,
                     latitudeDegrees = uiState.location.latitude,
-                    redVisionMode = uiState.redVisionMode,
+                    nightVisionState = uiState.nightVisionState,
                     isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                     isMilkyWayVisible = uiState.isMilkyWayVisible,
                     isAtmosphereVisible = uiState.isAtmosphereVisible,
@@ -343,6 +348,7 @@ fun NightSkyArScreen(
                     onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
                     onBack = onBack,
                     redVisionMode = uiState.redVisionMode,
+                    nightVisionTheme = uiState.nightVisionState.theme,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -368,6 +374,7 @@ fun NightSkyArScreen(
                     onRotationOffsetChange = viewModel::setDebugArtRotationOffset,
                     onReset = viewModel::resetDebugCalibration,
                     onClose = { viewModel.setDebugCalibrationVisible(false) },
+                    nightVisionTheme = uiState.nightVisionState.theme,
                 )
             }
 
@@ -391,6 +398,7 @@ fun NightSkyArScreen(
                 onResetZoom = {
                     viewModel.resetZoom()
                 },
+                nightVisionTheme = uiState.nightVisionState.theme,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
@@ -414,7 +422,7 @@ fun NightSkyArScreen(
                     Surface(
                         shape = CircleShape,
                         color = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A),
-                        border = BorderStroke(1.dp, if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)),
+                        border = BorderStroke(1.dp, if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF)),
                         modifier = Modifier.size(44.dp),
                     ) {
                         IconButton(
@@ -427,7 +435,7 @@ fun NightSkyArScreen(
                             Icon(
                                 imageVector = AppIcons.ResetCalibration,
                                 contentDescription = stringResource(R.string.sun_ar_calib_reset),
-                                tint = if (uiState.redVisionMode) RedPrimary else Color.White,
+                                tint = if (uiState.redVisionMode) activePalette.primary else Color.White,
                                 modifier = Modifier.size(20.dp),
                             )
                         }
@@ -439,6 +447,7 @@ fun NightSkyArScreen(
                     lstFormatted = uiState.lstFormatted,
                     visibleStarCount = uiState.visibleStarCount,
                     redVisionMode = uiState.redVisionMode,
+                    nightVisionTheme = uiState.nightVisionState.theme,
                 )
             }
         }
@@ -449,11 +458,11 @@ fun NightSkyArScreen(
         ModalBottomSheet(
             onDismissRequest = { isLayerSheetOpen = false },
             containerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0151820),
-            contentColor = if (uiState.redVisionMode) RedPrimary else Color.White,
+            contentColor = if (uiState.redVisionMode) activePalette.primary else Color.White,
             scrimColor = if (uiState.redVisionMode) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f),
             dragHandle = {
                 BottomSheetDefaults.DragHandle(
-                    color = if (uiState.redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0xFF718096),
+                    color = if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0xFF718096),
                 )
             },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -464,10 +473,11 @@ fun NightSkyArScreen(
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 isConstellationArtVisible = uiState.isConstellationArtVisible,
-                isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 isGridVisible = uiState.isGridVisible,
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 redVisionMode = uiState.redVisionMode,
+                isKeepScreenOn = uiState.keepScreenOn,
+                isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 onToggleLandscapeVisible = {
                     val nextState = !uiState.isLandscapeVisible
                     showToggleToast(context, R.string.night_sky_landscape, nextState)
@@ -493,9 +503,6 @@ fun NightSkyArScreen(
                     showToggleToast(context, R.string.night_sky_constellation_art, nextState)
                     viewModel.toggleConstellationArtVisible()
                 },
-                onToggleDebugCalibration = {
-                    viewModel.toggleDebugCalibration()
-                },
                 onToggleGridVisible = {
                     val nextState = !uiState.isGridVisible
                     showToggleToast(context, R.string.night_sky_grid, nextState)
@@ -511,6 +518,15 @@ fun NightSkyArScreen(
                     showToggleToast(context, R.string.sun_ar_red_vision, nextState)
                     viewModel.toggleRedVisionMode()
                 },
+                onToggleKeepScreenOn = {
+                    val nextState = !uiState.keepScreenOn
+                    showToggleToast(context, R.string.night_sky_keep_screen_on, nextState)
+                    viewModel.toggleKeepScreenOn()
+                },
+                onToggleDebugCalibration = {
+                    viewModel.toggleDebugCalibration()
+                },
+                nightVisionTheme = uiState.nightVisionState.theme,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
@@ -529,7 +545,7 @@ private fun NightSkyOverlayCanvas(
     catalog: com.dazix.intervalometer.data.nightsky.NightSkyCatalog?,
     lstDegrees: Double,
     latitudeDegrees: Double,
-    redVisionMode: Boolean,
+    nightVisionState: NightVisionState,
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
     isAtmosphereVisible: Boolean,
@@ -576,7 +592,7 @@ private fun NightSkyOverlayCanvas(
     }
 
     renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
-    renderer.applyTheme(redVisionMode)
+    renderer.applyTheme(nightVisionState)
 
     LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
         milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
@@ -594,7 +610,7 @@ private fun NightSkyOverlayCanvas(
         renderer.updateOpticalPaints(
             zoomFactor = zoomRatio,
             density = density,
-            redVisionMode = redVisionMode,
+            redVisionMode = nightVisionState.isActive,
             constellationPx = 1.8.dp.toPx(),
             boostStarAndLines = isConstellationArtVisible,
         )
@@ -612,7 +628,8 @@ private fun NightSkyOverlayCanvas(
             isSkyBackgroundOpaque = isSkyBackgroundOpaque,
             isMilkyWayVisible = isMilkyWayVisible,
             isAtmosphereVisible = isAtmosphereVisible,
-            isRedVision = redVisionMode,
+            isRedVision = nightVisionState.isActive,
+            theme = nightVisionState.theme,
         )
 
         // Layer 2: Dual-pass batch render visible stars (halo + core), constellation lines, and artwork illustrations
@@ -646,7 +663,8 @@ private fun NightSkyOverlayCanvas(
             w = w,
             h = h,
             isLandscapeVisible = isLandscapeVisible,
-            isRedVision = redVisionMode,
+            isRedVision = nightVisionState.isActive,
+            theme = nightVisionState.theme,
         )
 
         // Layer 4: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
@@ -656,9 +674,10 @@ private fun NightSkyOverlayCanvas(
                 matrix = matrix,
                 displayRotation = displayRotation,
                 fovH = fovHorizontalDegrees,
-                redVisionMode = redVisionMode,
+                redVisionMode = nightVisionState.isActive,
                 w = w,
                 h = h,
+                theme = nightVisionState.theme,
             )
         }
 
@@ -694,13 +713,15 @@ private fun NightSkyTopBar(
     onToggleKeepScreenOn: () -> Unit,
     onOpenLayers: () -> Unit,
     onResetZoom: () -> Unit,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
+    val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
-    val accentColor = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1)
-    val textColor = if (redVisionMode) RedPrimary else Color.White
-    val subTextColor = if (redVisionMode) RedSecondary else Color(0xCCFFFFFF)
+    val containerBorder = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
+    val accentColor = if (redVisionMode) palette.primary else Color(0xFF4DD0E1)
+    val textColor = if (redVisionMode) palette.primary else Color.White
+    val subTextColor = if (redVisionMode) palette.secondary else Color(0xCCFFFFFF)
 
     Row(
         modifier = modifier
@@ -737,7 +758,7 @@ private fun NightSkyTopBar(
                         .size(6.dp)
                         .background(
                             if (redVisionMode) {
-                                RedPrimary
+                                palette.primary
                             } else {
                                 if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
                             },
@@ -820,7 +841,7 @@ private fun NightSkyTopBar(
                 Icon(
                     imageVector = AppIcons.ScreenAwake,
                     contentDescription = stringResource(R.string.sun_ar_keep_screen_on),
-                    tint = if (keepScreenOn) accentColor else (if (redVisionMode) RedSecondary else Color.White.copy(alpha = 0.4f)),
+                    tint = if (keepScreenOn) accentColor else (if (redVisionMode) palette.secondary else Color.White.copy(alpha = 0.4f)),
                 )
             }
 
@@ -831,7 +852,7 @@ private fun NightSkyTopBar(
                 Icon(
                     imageVector = AppIcons.Layers,
                     contentDescription = stringResource(R.string.night_sky_layers_title),
-                    tint = if (redVisionMode) RedPrimary else Color.White,
+                    tint = if (redVisionMode) palette.primary else Color.White,
                 )
             }
         }
@@ -843,11 +864,13 @@ private fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
     redVisionMode: Boolean,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
+    val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
-    val containerBorder = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
-    val contentColor = if (redVisionMode) RedPrimary else Color(0xFFE0E0E0)
+    val containerBorder = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF)
+    val contentColor = if (redVisionMode) palette.primary else Color(0xFFE0E0E0)
 
     Surface(
         shape = CircleShape,
@@ -904,11 +927,13 @@ private fun NightSkyPermissionPrompt(
     onRequestPermission: () -> Unit,
     onBack: () -> Unit,
     redVisionMode: Boolean,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
-    val textColor = if (redVisionMode) RedPrimary else Color.White
+    val palette = paletteForTheme(nightVisionTheme)
+    val textColor = if (redVisionMode) palette.primary else Color.White
     val containerColor = if (redVisionMode) Color(0xFF000000) else Color(0xFF10141C)
-    val btnColor = if (redVisionMode) RedPrimary else Color(0xFF00ACC1)
+    val btnColor = if (redVisionMode) palette.primary else Color(0xFF00ACC1)
 
     Box(
         modifier = modifier
@@ -979,16 +1004,18 @@ private fun CalibrationDebugOverlay(
     onRotationOffsetChange: (Float) -> Unit,
     onReset: () -> Unit,
     onClose: () -> Unit,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
+    val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xEE121824)
-    val borderColor = if (redVisionMode) RedPrimary.copy(alpha = 0.3f) else Color(0x444DD0E1)
-    val textColor = if (redVisionMode) RedPrimary else Color(0xFFE2E8F0)
-    val labelColor = if (redVisionMode) RedSecondary else Color(0xFF94A3B8)
+    val borderColor = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0x444DD0E1)
+    val textColor = if (redVisionMode) palette.primary else Color(0xFFE2E8F0)
+    val labelColor = if (redVisionMode) palette.secondary else Color(0xFF94A3B8)
     val sliderColors = if (redVisionMode) {
         SliderDefaults.colors(
-            thumbColor = RedPrimary,
-            activeTrackColor = RedPrimary,
+            thumbColor = palette.primary,
+            activeTrackColor = palette.primary,
             inactiveTrackColor = Color(0xFF3B0000),
         )
     } else {
@@ -1022,7 +1049,7 @@ private fun CalibrationDebugOverlay(
                     Icon(
                         imageVector = AppIcons.Setup,
                         contentDescription = null,
-                        tint = if (redVisionMode) RedPrimary else Color(0xFF4DD0E1),
+                        tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
                         modifier = Modifier.size(18.dp),
                     )
                     Text(

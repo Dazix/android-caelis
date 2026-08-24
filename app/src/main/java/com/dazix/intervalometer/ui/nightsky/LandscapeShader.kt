@@ -19,6 +19,7 @@ object LandscapeShader {
         uniform mat3 viewMatrix; // Sensor R^T matrix (World ENU space)
         uniform float fovFactor; // 1.0 / tan(effectiveFov_H / 2.0)
         uniform float isRedVision; // 1.0 for Night Mode, 0.0 for Normal
+        uniform float3 nightVisionTint;
 
         half4 main(float2 fragCoord) {
             // 1. Normalize screen coordinates to [-1, 1] with Aspect Ratio correction
@@ -43,10 +44,10 @@ object LandscapeShader {
             vec2 sampleCoords = vec2(texU * textureSize.x, texV * textureSize.y);
             half4 color = landscapeTexture.eval(sampleCoords);
 
-            // 7. Red Vision (Night Mode) Filter
+            // 7. Night Vision (Night Mode) Filter
             if (isRedVision > 0.5 && color.a > 0.0) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                color = half4(luminance * 0.15, 0.0, 0.0, color.a);
+                color = half4(luminance * 0.15 * nightVisionTint, color.a);
             }
 
             return color;

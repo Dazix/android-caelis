@@ -19,6 +19,7 @@ object MilkyWayShader {
         uniform mat3 viewMatrix; // Combined rotation: M_enu2cel * R_sensor * M_disp
         uniform float fovFactor; // 1.0 / tan(effectiveFov_H / 2.0)
         uniform float isRedVision; // 1.0 for Red Vision Mode, 0.0 for Normal
+        uniform float3 nightVisionTint; // RGB tint factor e.g. (1.0, 0.0, 0.0)
 
         half4 main(float2 fragCoord) {
             // 1. Normalize screen coordinates to [-1, 1] with Aspect Ratio correction
@@ -44,11 +45,11 @@ object MilkyWayShader {
             vec2 sampleCoords = vec2(texU * textureSize.x, texV * textureSize.y);
             half4 color = milkyWayTexture.eval(sampleCoords);
 
-            // 7. Red Vision (Astrophotography Night Mode) Filter
-            // Extract luminance and map it purely to the red channel to protect night vision
+            // 7. Night Vision (Astrophotography Night Mode) Filter
+            // Extract luminance and map it to the active night vision theme tint
             if (isRedVision > 0.5) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                color = half4(luminance * 0.3, 0.0, 0.0, color.a);
+                color = half4(luminance * 0.3 * nightVisionTint, color.a);
             }
 
             return color;

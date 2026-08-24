@@ -18,6 +18,7 @@ object AtmosphereShader {
         uniform mat3 viewMatrix; // Sensor R^T matrix (World ENU space)
         uniform float fovFactor; // Calculated from CameraFovCalculator: 1.0 / tan(halfFovH)
         uniform float isRedVision; // 1.0 for Night Mode, 0.0 for Normal
+        uniform float3 nightVisionTint;
 
         // Colors for the gradient
         const half4 colorBottom = half4(0.1, 0.25, 0.45, 1.0); // Deep twilight blue
@@ -51,11 +52,11 @@ object AtmosphereShader {
             // 6. Blend colors
             half4 color = mix(colorTop, colorBottom, factor);
 
-            // 7. Red Vision (Night Mode) Filter
+            // 7. Night Vision (Night Mode) Filter
             if (isRedVision > 0.5) {
                 float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-                // Mute the atmosphere significantly in Red Mode to avoid overpowering stars
-                color = half4(luminance * 0.15, 0.0, 0.0, color.a * 0.15);
+                // Mute the atmosphere significantly in Night Vision Mode to avoid overpowering stars
+                color = half4(luminance * 0.15 * nightVisionTint, color.a * 0.15);
             }
             
             return color;

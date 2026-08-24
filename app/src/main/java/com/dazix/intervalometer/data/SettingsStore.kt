@@ -18,6 +18,9 @@ import com.dazix.intervalometer.domain.SessionConfig
 import com.dazix.intervalometer.domain.StopConditions
 import com.dazix.intervalometer.domain.TapTarget
 import com.dazix.intervalometer.domain.TriggerMode
+import com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode
+import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
+import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -86,6 +89,30 @@ class SettingsStore(context: Context) {
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
+
+    val nightVisionTheme: Flow<NightVisionTheme> = preferences.map { SettingsMapping.readNightVisionTheme(it) }
+
+    val nightVisionActivationMode: Flow<NightVisionActivationMode> = preferences.map { SettingsMapping.readNightVisionActivationMode(it) }
+
+    val customStartTime: Flow<LocalTime> = preferences.map { SettingsMapping.readCustomStartTime(it) }
+
+    val customEndTime: Flow<LocalTime> = preferences.map { SettingsMapping.readCustomEndTime(it) }
+
+    suspend fun saveNightVisionTheme(theme: NightVisionTheme) {
+        dataStore.edit { SettingsMapping.writeNightVisionTheme(it, theme) }
+    }
+
+    suspend fun saveNightVisionActivationMode(mode: NightVisionActivationMode) {
+        dataStore.edit { SettingsMapping.writeNightVisionActivationMode(it, mode) }
+    }
+
+    suspend fun saveCustomStartTime(time: LocalTime) {
+        dataStore.edit { SettingsMapping.writeCustomStartTime(it, time) }
+    }
+
+    suspend fun saveCustomEndTime(time: LocalTime) {
+        dataStore.edit { SettingsMapping.writeCustomEndTime(it, time) }
+    }
 
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeSunArKeepScreenOn(it, enabled) }
@@ -257,6 +284,10 @@ internal object SettingsMapping {
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
+    private val NIGHT_VISION_THEME_KEY = stringPreferencesKey("night_vision_theme")
+    private val NIGHT_VISION_MODE_KEY = stringPreferencesKey("night_vision_mode")
+    private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
+    private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -579,6 +610,46 @@ internal object SettingsMapping {
 
     fun writeNightSkyConstellationArtVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_CONSTELLATION_ART_VISIBLE] = enabled
+    }
+
+    fun readNightVisionTheme(prefs: Preferences): NightVisionTheme {
+        val name = prefs[NIGHT_VISION_THEME_KEY] ?: return NightVisionTheme.RED
+        return runCatching { NightVisionTheme.valueOf(name) }.getOrDefault(NightVisionTheme.RED)
+    }
+
+    fun writeNightVisionTheme(prefs: MutablePreferences, theme: NightVisionTheme) {
+        prefs[NIGHT_VISION_THEME_KEY] = theme.name
+    }
+
+    fun readNightVisionActivationMode(prefs: Preferences): NightVisionActivationMode {
+        val name = prefs[NIGHT_VISION_MODE_KEY] ?: return NightVisionActivationMode.AUTO_SOLAR
+        return runCatching { NightVisionActivationMode.valueOf(name) }.getOrDefault(NightVisionActivationMode.AUTO_SOLAR)
+    }
+
+    fun writeNightVisionActivationMode(prefs: MutablePreferences, mode: NightVisionActivationMode) {
+        prefs[NIGHT_VISION_MODE_KEY] = mode.name
+    }
+
+    fun readCustomStartTime(prefs: Preferences): LocalTime {
+        val minutes = prefs[CUSTOM_START_MINUTES_KEY] ?: (22 * 60)
+        val h = (minutes / 60).coerceIn(0, 23)
+        val m = (minutes % 60).coerceIn(0, 59)
+        return LocalTime.of(h, m)
+    }
+
+    fun writeCustomStartTime(prefs: MutablePreferences, time: LocalTime) {
+        prefs[CUSTOM_START_MINUTES_KEY] = time.hour * 60 + time.minute
+    }
+
+    fun readCustomEndTime(prefs: Preferences): LocalTime {
+        val minutes = prefs[CUSTOM_END_MINUTES_KEY] ?: (6 * 60)
+        val h = (minutes / 60).coerceIn(0, 23)
+        val m = (minutes % 60).coerceIn(0, 59)
+        return LocalTime.of(h, m)
+    }
+
+    fun writeCustomEndTime(prefs: MutablePreferences, time: LocalTime) {
+        prefs[CUSTOM_END_MINUTES_KEY] = time.hour * 60 + time.minute
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

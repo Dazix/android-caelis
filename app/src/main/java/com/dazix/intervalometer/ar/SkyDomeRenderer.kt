@@ -27,6 +27,52 @@ val RedSecondary = Color(0xFFD32F2F)
 val RedGrid = Color(0x33FF1744)
 val RedNightArc = Color(0x33FF1744)
 
+data class NightVisionPalette(
+    val primary: Color,
+    val secondary: Color,
+    val grid: Color,
+    val nightArc: Color,
+    val shaderTintR: Float,
+    val shaderTintG: Float,
+    val shaderTintB: Float,
+)
+
+val RedNightVisionPalette = NightVisionPalette(
+    primary = Color(0xFFFF1744),
+    secondary = Color(0xFFD32F2F),
+    grid = Color(0x33FF1744),
+    nightArc = Color(0x33FF1744),
+    shaderTintR = 1.0f,
+    shaderTintG = 0.0f,
+    shaderTintB = 0.0f,
+)
+
+val AmberNightVisionPalette = NightVisionPalette(
+    primary = Color(0xFFFFB300),
+    secondary = Color(0xFFFF8F00),
+    grid = Color(0x33FFB300),
+    nightArc = Color(0x33FFB300),
+    shaderTintR = 1.0f,
+    shaderTintG = 0.7f,
+    shaderTintB = 0.0f,
+)
+
+val GreenNightVisionPalette = NightVisionPalette(
+    primary = Color(0xFF00E676),
+    secondary = Color(0xFF00C853),
+    grid = Color(0x3300E676),
+    nightArc = Color(0x3300E676),
+    shaderTintR = 0.0f,
+    shaderTintG = 1.0f,
+    shaderTintB = 0.0f,
+)
+
+fun paletteForTheme(theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme): NightVisionPalette = when (theme) {
+    com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED -> RedNightVisionPalette
+    com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER -> AmberNightVisionPalette
+    com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN -> GreenNightVisionPalette
+}
+
 /**
  * High-performance zero-allocation renderer for the 3D Sky Dome coordinate frame,
  * horizon ring, altitude parallels, azimuth meridians, and cardinal points.
@@ -121,19 +167,40 @@ class SkyDomeRenderer {
         isAntiAlias = true
     }
 
-    fun applyTheme(redVisionMode: Boolean) {
-        if (redVisionMode) {
-            horizonTextPaint.color = AndroidColor.argb(143, 255, 23, 68)
-            gridTextPaint.color = AndroidColor.argb(143, 211, 47, 47)
-            bubbleTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
+    var activePalette: NightVisionPalette = RedNightVisionPalette
+        private set
+
+    fun applyTheme(state: com.dazix.intervalometer.domain.nightsky.NightVisionState) {
+        applyTheme(theme = state.theme, isNightVision = state.isActive)
+    }
+
+    fun applyTheme(
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        isNightVision: Boolean,
+    ) {
+        activePalette = paletteForTheme(theme)
+        if (isNightVision) {
+            val p = activePalette
+            val pr = (p.primary.red * 255).toInt()
+            val pg = (p.primary.green * 255).toInt()
+            val pb = (p.primary.blue * 255).toInt()
+            val sr = (p.secondary.red * 255).toInt()
+            val sg = (p.secondary.green * 255).toInt()
+            val sb = (p.secondary.blue * 255).toInt()
+
+            val primaryInt = AndroidColor.rgb(pr, pg, pb)
+
+            horizonTextPaint.color = AndroidColor.argb(143, pr, pg, pb)
+            gridTextPaint.color = AndroidColor.argb(143, sr, sg, sb)
+            bubbleTextPaint.color = primaryInt
             bubbleBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            bubbleBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            markerTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
+            bubbleBorderPaint.color = primaryInt
+            markerTextPaint.color = primaryInt
             markerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            markerBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
-            pointerTextPaint.color = AndroidColor.argb(255, 255, 23, 68)
+            markerBorderPaint.color = primaryInt
+            pointerTextPaint.color = primaryInt
             pointerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            pointerBorderPaint.color = AndroidColor.argb(255, 255, 23, 68)
+            pointerBorderPaint.color = primaryInt
         } else {
             horizonTextPaint.color = AndroidColor.argb(143, 255, 255, 255)
             gridTextPaint.color = AndroidColor.argb(143, 77, 208, 225)
@@ -149,6 +216,10 @@ class SkyDomeRenderer {
         }
     }
 
+    fun applyTheme(redVisionMode: Boolean) {
+        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = redVisionMode)
+    }
+
     /**
      * Draws the full 3D celestial wireframe grid (Horizon ring 0°, Altitude rings, Meridians, Cardinals, Zenith, Nadir).
      */
@@ -160,10 +231,12 @@ class SkyDomeRenderer {
         redVisionMode: Boolean,
         w: Float,
         h: Float,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
     ) {
-        val horizonColor = if (redVisionMode) RedSecondary else NormalHorizon
-        val majorGridColor = if (redVisionMode) RedSecondary.copy(alpha = 0.6f) else NormalHorizon.copy(alpha = 0.55f)
-        val minorGridColor = if (redVisionMode) RedGrid else NormalGrid
+        val palette = paletteForTheme(theme)
+        val horizonColor = if (redVisionMode) palette.secondary else NormalHorizon
+        val majorGridColor = if (redVisionMode) palette.secondary.copy(alpha = 0.6f) else NormalHorizon.copy(alpha = 0.55f)
+        val minorGridColor = if (redVisionMode) palette.grid else NormalGrid
 
         // 1. Azimuth Meridians (Vertical lines from Nadir -85° to Zenith +85°)
         val elevationSteps = 35 // -85° to +85° in 5° steps

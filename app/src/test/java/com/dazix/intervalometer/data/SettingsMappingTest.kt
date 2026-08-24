@@ -507,6 +507,67 @@ class SettingsMappingTest {
         assertEquals(true, SettingsMapping.readNightSkyConstellationArtVisible(prefs))
     }
 
+    @Test
+    fun `night vision theme defaults to RED and survives round trip`() {
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+            SettingsMapping.readNightVisionTheme(emptyPreferences()),
+        )
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightVisionTheme(prefs, com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER)
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
+            SettingsMapping.readNightVisionTheme(prefs),
+        )
+
+        SettingsMapping.writeNightVisionTheme(prefs, com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN)
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN,
+            SettingsMapping.readNightVisionTheme(prefs),
+        )
+
+        SettingsMapping.writeNightVisionTheme(prefs, com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED)
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+            SettingsMapping.readNightVisionTheme(prefs),
+        )
+    }
+
+    @Test
+    fun `night vision activation mode defaults to AUTO_SOLAR and survives round trip`() {
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode.AUTO_SOLAR,
+            SettingsMapping.readNightVisionActivationMode(emptyPreferences()),
+        )
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightVisionActivationMode(prefs, com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode.OFF)
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode.OFF,
+            SettingsMapping.readNightVisionActivationMode(prefs),
+        )
+
+        SettingsMapping.writeNightVisionActivationMode(prefs, com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode.CUSTOM_TIME)
+        assertEquals(
+            com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode.CUSTOM_TIME,
+            SettingsMapping.readNightVisionActivationMode(prefs),
+        )
+    }
+
+    @Test
+    fun `night vision custom times default and survive round trip`() {
+        assertEquals(java.time.LocalTime.of(22, 0), SettingsMapping.readCustomStartTime(emptyPreferences()))
+        assertEquals(java.time.LocalTime.of(6, 0), SettingsMapping.readCustomEndTime(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeCustomStartTime(prefs, java.time.LocalTime.of(22, 30))
+        SettingsMapping.writeCustomEndTime(prefs, java.time.LocalTime.of(4, 15))
+
+        assertEquals(java.time.LocalTime.of(22, 30), SettingsMapping.readCustomStartTime(prefs))
+        assertEquals(java.time.LocalTime.of(4, 15), SettingsMapping.readCustomEndTime(prefs))
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {
