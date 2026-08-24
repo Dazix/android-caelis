@@ -311,6 +311,13 @@
     <string name="night_sky_constellation_art_desc">Zobrazit/skrýt ilustrace souhvězdí</string>
     <string name="night_sky_layers_title">Vrstvy a zobrazení</string>
     <string name="night_sky_layers_desc">Nastavení vrstev noční oblohy a možností zobrazení</string>
+    <string name="night_sky_sensor_tracking">Senzorové sledování (AR)</string>
+    <string name="night_sky_sensor_tracking_desc">Využívat gyroskop a kompas pro rozhlížení</string>
+    <string name="night_sky_sensor_mode_active">Senzorový AR režim</string>
+    <string name="night_sky_manual_mode_active">Ruční režim posunu</string>
+    <string name="search_celestial_placeholder">Hledat souhvězdí nebo hvězdu…</string>
+    <string name="search_celestial_empty">Nebylo nalezeno žádné těleso</string>
+    <string name="search_celestial_clear">Vymazat hledání</string>
     <string name="state_on">Zapnuto</string>
     <string name="state_off">Vypnuto</string>
     <string name="calib_reset_toast">Kalibrace azimutu resetována</string>

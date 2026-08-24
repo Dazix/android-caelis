@@ -508,6 +508,18 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky sensor tracking defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkySensorTracking(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkySensorTracking(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkySensorTracking(prefs))
+
+        SettingsMapping.writeNightSkySensorTracking(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkySensorTracking(prefs))
+    }
+
+    @Test
     fun `night vision theme defaults to RED and survives round trip`() {
         assertEquals(
             com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,

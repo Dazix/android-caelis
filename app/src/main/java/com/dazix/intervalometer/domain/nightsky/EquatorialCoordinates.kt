@@ -93,4 +93,50 @@ object EquatorialCoordinates {
         // vz (Up) = sin(Lat) * sin(Dec) + cos(Lat) * cos(Dec) * cos(H)
         outVector[offset + 2] = (sinLat * sinDec + cosLat * cosDec * cosHa).toFloat()
     }
+
+    /**
+     * Converts Horizontal coordinates (Azimuth, Elevation) to Equatorial coordinates (RA, Dec).
+     *
+     * @param azimuthDegrees Azimuth in degrees [0.0, 360.0) from North.
+     * @param elevationDegrees Elevation in degrees [-90.0, +90.0].
+     * @param lstDegrees Local Sidereal Time in degrees [0.0, 360.0).
+     * @param latitudeDegrees Observer latitude in degrees [-90.0, +90.0].
+     * @return Pair of (RightAscensionDegrees [0.0, 360.0), DeclinationDegrees [-90.0, +90.0]).
+     */
+    fun horizontalToEquatorial(
+        azimuthDegrees: Double,
+        elevationDegrees: Double,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+    ): Pair<Double, Double> {
+        val azRad = azimuthDegrees * DEG_TO_RAD
+        val elRad = elevationDegrees * DEG_TO_RAD
+        val latRad = latitudeDegrees * DEG_TO_RAD
+
+        val sinEl = sin(elRad)
+        val cosEl = cos(elRad)
+        val sinLat = sin(latRad)
+        val cosLat = cos(latRad)
+        val cosAz = cos(azRad)
+        val sinAz = sin(azRad)
+
+        // Declination
+        val sinDec = sinLat * sinEl + cosLat * cosEl * cosAz
+        val decRad = asin(sinDec.coerceIn(-1.0, 1.0))
+        val decDeg = decRad * RAD_TO_DEG
+
+        // Hour Angle (H)
+        val x = -cosEl * sinAz
+        val y = cosLat * sinEl - sinLat * cosEl * cosAz
+        var haDeg = atan2(x, y) * RAD_TO_DEG
+        if (haDeg < 0.0) haDeg += 360.0
+        if (haDeg >= 360.0) haDeg -= 360.0
+
+        // Right Ascension = LST - H
+        var raDeg = (lstDegrees - haDeg) % 360.0
+        if (raDeg < 0.0) raDeg += 360.0
+
+        return Pair(raDeg, decDeg)
+    }
 }
+

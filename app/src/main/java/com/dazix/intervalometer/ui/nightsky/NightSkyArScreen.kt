@@ -116,12 +116,12 @@ fun NightSkyArScreen(
     val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
 
     // Synchronize ViewModel State with UI State
-    LaunchedEffect(uiState.selectedBody) {
+    LaunchedEffect(uiState.selectedBody, uiState.selectedStarIndex, uiState.selectedConstellationIndex) {
+        renderer.selectedStarIndex = uiState.selectedStarIndex
+        renderer.selectedConstellationIndex = uiState.selectedConstellationIndex
         if (uiState.selectedBody != null) {
             sheetState.partialExpand()
         } else {
-            renderer.selectedConstellationIndex = -1
-            renderer.selectedStarIndex = -1
             sheetState.hide()
         }
     }
@@ -134,8 +134,6 @@ fun NightSkyArScreen(
                 if (value != SheetValue.Hidden) {
                     wasVisible = true
                 } else if (wasVisible) {
-                    renderer.selectedConstellationIndex = -1
-                    renderer.selectedStarIndex = -1
                     viewModel.clearSelectedBody()
                     wasVisible = false
                 }
@@ -378,32 +376,58 @@ fun NightSkyArScreen(
                 )
             }
 
-            // Top Controls & HUD Bar
-            NightSkyTopBar(
-                hasGpsFix = uiState.hasGpsFix,
-                locationText = uiState.location.formatShort(),
-                orientation = orientation,
-                cameraFovHorizontal = uiState.cameraFovHorizontal,
-                zoomRatio = uiState.zoomRatio,
-                isCalibrated = uiState.isCalibrated,
-                keepScreenOn = uiState.keepScreenOn,
-                redVisionMode = uiState.redVisionMode,
-                onBack = onBack,
-                onToggleKeepScreenOn = {
-                    val nextState = !uiState.keepScreenOn
-                    showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
-                    viewModel.toggleKeepScreenOn()
-                },
-                onOpenLayers = { isLayerSheetOpen = true },
-                onResetZoom = {
-                    viewModel.resetZoom()
-                },
-                nightVisionTheme = uiState.nightVisionState.theme,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(top = 36.dp, start = 12.dp, end = 12.dp),
-            )
+            // Top Controls: Global Celestial Search Bar or Top Bar HUD
+            if (uiState.isSearchActive) {
+                CelestialSearchBar(
+                    query = uiState.searchQuery,
+                    results = uiState.searchResults,
+                    active = uiState.isSearchActive,
+                    onQueryChange = viewModel::setSearchQuery,
+                    onActiveChange = viewModel::setSearchActive,
+                    onSelectItem = { item -> viewModel.selectCelestialBody(item) },
+                    redVisionMode = uiState.redVisionMode,
+                    nightVisionTheme = uiState.nightVisionState.theme,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 36.dp),
+                )
+            } else {
+                NightSkyTopBar(
+                    hasGpsFix = uiState.hasGpsFix,
+                    locationText = uiState.location.formatShort(),
+                    orientation = orientation,
+                    cameraFovHorizontal = uiState.cameraFovHorizontal,
+                    zoomRatio = uiState.zoomRatio,
+                    isCalibrated = uiState.isCalibrated,
+                    keepScreenOn = uiState.keepScreenOn,
+                    redVisionMode = uiState.redVisionMode,
+                    isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
+                    onBack = onBack,
+                    onToggleKeepScreenOn = {
+                        val nextState = !uiState.keepScreenOn
+                        showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
+                        viewModel.toggleKeepScreenOn()
+                    },
+                    onToggleSensorTracking = {
+                        val next = !uiState.isSensorTrackingEnabled
+                        val toastRes = if (next) R.string.night_sky_sensor_mode_active else R.string.night_sky_manual_mode_active
+                        Toast.makeText(context, toastRes, Toast.LENGTH_SHORT).show()
+                        viewModel.toggleSensorTracking()
+                    },
+                    onOpenSearch = {
+                        viewModel.setSearchActive(true)
+                    },
+                    onOpenLayers = { isLayerSheetOpen = true },
+                    onResetZoom = {
+                        viewModel.resetZoom()
+                    },
+                    nightVisionTheme = uiState.nightVisionState.theme,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(top = 36.dp, start = 12.dp, end = 12.dp),
+                )
+            }
 
             // Bottom Controls Layer: Contextual Reset View & HUD Indicator Pill
             Row(
@@ -476,6 +500,7 @@ fun NightSkyArScreen(
                 isGridVisible = uiState.isGridVisible,
                 isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                 redVisionMode = uiState.redVisionMode,
+                isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
                 isKeepScreenOn = uiState.keepScreenOn,
                 isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 onToggleLandscapeVisible = {
@@ -517,6 +542,12 @@ fun NightSkyArScreen(
                     val nextState = !uiState.redVisionMode
                     showToggleToast(context, R.string.sun_ar_red_vision, nextState)
                     viewModel.toggleRedVisionMode()
+                },
+                onToggleSensorTracking = {
+                    val next = !uiState.isSensorTrackingEnabled
+                    val toastRes = if (next) R.string.night_sky_sensor_mode_active else R.string.night_sky_manual_mode_active
+                    Toast.makeText(context, toastRes, Toast.LENGTH_SHORT).show()
+                    viewModel.toggleSensorTracking()
                 },
                 onToggleKeepScreenOn = {
                     val nextState = !uiState.keepScreenOn
@@ -709,8 +740,11 @@ private fun NightSkyTopBar(
     isCalibrated: Boolean,
     keepScreenOn: Boolean,
     redVisionMode: Boolean,
+    isSensorTrackingEnabled: Boolean = true,
     onBack: () -> Unit,
     onToggleKeepScreenOn: () -> Unit,
+    onToggleSensorTracking: () -> Unit = {},
+    onOpenSearch: () -> Unit = {},
     onOpenLayers: () -> Unit,
     onResetZoom: () -> Unit,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
@@ -834,6 +868,28 @@ private fun NightSkyTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            IconButton(
+                onClick = onOpenSearch,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Search,
+                    contentDescription = stringResource(R.string.search_celestial_placeholder),
+                    tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                )
+            }
+
+            IconButton(
+                onClick = onToggleSensorTracking,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Sensors,
+                    contentDescription = stringResource(R.string.night_sky_sensor_tracking),
+                    tint = if (isSensorTrackingEnabled) accentColor else (if (redVisionMode) palette.secondary else Color.White.copy(alpha = 0.4f)),
+                )
+            }
+
             IconButton(
                 onClick = onToggleKeepScreenOn,
                 modifier = Modifier.size(38.dp),

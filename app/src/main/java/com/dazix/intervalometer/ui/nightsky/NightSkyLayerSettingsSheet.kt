@@ -39,6 +39,7 @@ fun NightSkyLayerSettingsSheet(
     isGridVisible: Boolean,
     isSkyBackgroundOpaque: Boolean,
     redVisionMode: Boolean,
+    isSensorTrackingEnabled: Boolean = true,
     isKeepScreenOn: Boolean = false,
     isDebugCalibrationVisible: Boolean = false,
     onToggleLandscapeVisible: () -> Unit,
@@ -49,6 +50,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleGridVisible: () -> Unit,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleRedVisionMode: () -> Unit,
+    onToggleSensorTracking: () -> Unit = {},
     onToggleKeepScreenOn: () -> Unit = {},
     onToggleDebugCalibration: () -> Unit = {},
     nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
@@ -169,6 +171,16 @@ fun NightSkyLayerSettingsSheet(
             iconColor = iconColor,
             switchColors = switchColors,
             onCheckedChange = { onToggleRedVisionMode() },
+        )
+
+        LayerToggleRow(
+            label = stringResource(R.string.night_sky_sensor_tracking),
+            icon = AppIcons.Sensors,
+            isChecked = isSensorTrackingEnabled,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onToggleSensorTracking() },
         )
 
         LayerToggleRow(

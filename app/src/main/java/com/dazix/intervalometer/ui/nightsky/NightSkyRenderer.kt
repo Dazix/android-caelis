@@ -906,7 +906,8 @@ class NightSkyRenderer {
 
                 val cdx = cxScreen - halfW
                 val cdy = cyScreen - halfH
-                val inFocus = showConstellations && ((cdx * cdx + cdy * cdy) <= focusRadiusSq)
+                val isSelectedConstellation = (c == selectedConstellationIndex)
+                val inFocus = showConstellations && (((cdx * cdx + cdy * cdy) <= focusRadiusSq) || isSelectedConstellation)
                 if (inFocus) {
                     constellationProgress[c] = minOf(1.0f, constellationProgress[c] + dt * 2.0f)
                 } else {
@@ -914,7 +915,11 @@ class NightSkyRenderer {
                 }
             } else {
                 constellationCentroidInFront[c] = false
-                constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
+                if (c == selectedConstellationIndex) {
+                    constellationProgress[c] = 1.0f
+                } else {
+                    constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
+                }
             }
         }
 
@@ -923,7 +928,7 @@ class NightSkyRenderer {
         if (showConstellations) {
             for (c in 0 until constCount) {
                 val progress = constellationProgress[c]
-                if (progress > 0.001f) {
+                if (progress > 0.001f || c == selectedConstellationIndex) {
                     catalog.constellations(reusableConstellation, c)
                     val linesLen = reusableConstellation.linesLength()
                     for (j in 0 until linesLen) {
@@ -943,10 +948,11 @@ class NightSkyRenderer {
             val dec = bb.getFloat(offset + 4).toDouble()
             val rawMag = bb.getFloat(offset + 8)
 
-            val isForced = forceRenderStar[i]
+            val isSelectedStar = (i == selectedStarIndex)
+            val isForced = forceRenderStar[i] || isSelectedStar
             val isBrightEnough = rawMag <= faintestVisibleMag
 
-            // Dynamic telescope ocular reveal: cull stars fainter than current zoom limit unless forced by visible constellation
+            // Dynamic telescope ocular reveal: cull stars fainter than current zoom limit unless forced by visible constellation or selection
             if (!isBrightEnough && !isForced) {
                 starInFront[i] = false
                 continue

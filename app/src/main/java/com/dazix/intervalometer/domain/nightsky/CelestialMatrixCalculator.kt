@@ -260,4 +260,56 @@ object CelestialMatrixCalculator {
             }
         }
     }
+
+    /**
+     * Constructs a 100% orthonormal 4x4 rotation matrix in Earth ENU coordinates for a virtual camera
+     * directly targeted at Horizontal (Azimuth, Elevation) coordinates with 0 roll.
+     *
+     * In this matrix:
+     * - Optical axis -Z_dev points along: [sin(Az)*cos(El), cos(Az)*cos(El), sin(El)] (Forward)
+     * - Right axis +X_dev points along: [cos(Az), -sin(Az), 0]
+     * - Up axis +Y_dev points along: [-sin(Az)*sin(El), -cos(Az)*sin(El), cos(El)]
+     *
+     * @param azDeg Azimuth in degrees [0.0, 360.0) from North.
+     * @param elDeg Elevation in degrees [-90.0, +90.0].
+     * @param outMatrix16 FloatArray of size at least 16 to receive the 4x4 matrix.
+     */
+    fun computeManualRotationMatrix(
+        azDeg: Double,
+        elDeg: Double,
+        outMatrix16: FloatArray,
+    ) {
+        val azRad = azDeg * DEG_TO_RAD
+        val elRad = elDeg.coerceIn(-89.9, 89.9) * DEG_TO_RAD
+
+        val sinA = sin(azRad).toFloat()
+        val cosA = cos(azRad).toFloat()
+        val sinE = sin(elRad).toFloat()
+        val cosE = cos(elRad).toFloat()
+
+        // Col 0: +X_dev (Right) = [cosA, -sinA, 0, 0]
+        outMatrix16[0] = cosA
+        outMatrix16[4] = -sinA
+        outMatrix16[8] = 0f
+        outMatrix16[12] = 0f
+
+        // Col 1: +Y_dev (Up) = [-sinA * sinE, -cosA * sinE, cosE, 0]
+        outMatrix16[1] = -sinA * sinE
+        outMatrix16[5] = -cosA * sinE
+        outMatrix16[9] = cosE
+        outMatrix16[13] = 0f
+
+        // Col 2: +Z_dev (Backward) = -v_cam = [-sinA * cosE, -cosA * cosE, -sinE, 0]
+        outMatrix16[2] = -sinA * cosE
+        outMatrix16[6] = -cosA * cosE
+        outMatrix16[10] = -sinE
+        outMatrix16[14] = 0f
+
+        // Col 3: Origin = [0, 0, 0, 1]
+        outMatrix16[3] = 0f
+        outMatrix16[7] = 0f
+        outMatrix16[11] = 0f
+        outMatrix16[15] = 1f
+    }
 }
+

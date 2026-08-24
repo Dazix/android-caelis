@@ -91,4 +91,27 @@ class EquatorialCoordinatesTest {
         assertEquals(expectedVy, vy, 0.001f)
         assertEquals(expectedVz, vz, 0.001f)
     }
+
+    @Test
+    fun `verifies equatorialToHorizontal and horizontalToEquatorial form exact round-trip`() {
+        val testObjects = listOf(
+            Pair(101.28, -16.71), // Sirius
+            Pair(279.23, 38.78),  // Vega
+            Pair(88.79, 7.41),    // Betelgeuse
+            Pair(184.8, 55.7),    // Ursa Major centroid
+            Pair(0.0, 89.0),      // Near Polaris
+            Pair(180.0, -60.0),   // Southern sky
+        )
+        val testLst = 135.5
+        val testLat = 48.15
+
+        for ((ra, dec) in testObjects) {
+            val (az, el) = EquatorialCoordinates.equatorialToHorizontal(ra, dec, testLst, testLat)
+            val (restoredRa, restoredDec) = EquatorialCoordinates.horizontalToEquatorial(az, el, testLst, testLat)
+
+            assertEquals("Round-trip RA for ($ra, $dec)", ra, restoredRa, 1e-3)
+            assertEquals("Round-trip Dec for ($ra, $dec)", dec, restoredDec, 1e-3)
+        }
+    }
 }
+

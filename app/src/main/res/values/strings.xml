@@ -305,6 +305,13 @@
     <string name="night_sky_constellation_art_desc">Toggle constellation illustrations</string>
     <string name="night_sky_layers_title">Layers &amp; Display</string>
     <string name="night_sky_layers_desc">Configure night sky AR layers and visual toggles</string>
+    <string name="night_sky_sensor_tracking">AR sensor tracking</string>
+    <string name="night_sky_sensor_tracking_desc">Use device gyroscope and compass to look around</string>
+    <string name="night_sky_sensor_mode_active">AR Sensor Mode</string>
+    <string name="night_sky_manual_mode_active">Manual Pan Mode</string>
+    <string name="search_celestial_placeholder">Search constellation or star…</string>
+    <string name="search_celestial_empty">No matching stars or constellations</string>
+    <string name="search_celestial_clear">Clear search</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
     <string name="calib_reset_toast">Azimuth calibration reset</string>

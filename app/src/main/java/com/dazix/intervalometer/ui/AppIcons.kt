@@ -214,6 +214,68 @@ object AppIcons {
         }
     }
 
+    /** Magnifying glass search icon. */
+    val Search: ImageVector by lazy {
+        icon("Search") {
+            strokePath {
+                circle(centerX = 10.5f, centerY = 10.5f, radius = 5.8f)
+                moveTo(14.8f, 14.8f)
+                lineTo(20.2f, 20.2f)
+            }
+        }
+    }
+
+    /** Star icon for single celestial bodies. */
+    val Star: ImageVector by lazy {
+        icon("Star") {
+            strokePath {
+                moveTo(12f, 3.2f)
+                lineTo(14.7f, 8.7f)
+                lineTo(20.8f, 9.6f)
+                lineTo(16.4f, 13.9f)
+                lineTo(17.4f, 20.0f)
+                lineTo(12f, 17.1f)
+                lineTo(6.6f, 20.0f)
+                lineTo(7.6f, 13.9f)
+                lineTo(3.2f, 9.6f)
+                lineTo(9.3f, 8.7f)
+                close()
+            }
+        }
+    }
+
+    /** 4-pointed celestial sparkle for asterisms and specials. */
+    val AutoAwesome: ImageVector by lazy {
+        icon("AutoAwesome") {
+            strokePath {
+                moveTo(12f, 3.2f)
+                lineTo(13.8f, 9.8f)
+                lineTo(20.4f, 11.6f)
+                lineTo(13.8f, 13.4f)
+                lineTo(12f, 20.0f)
+                lineTo(10.2f, 13.4f)
+                lineTo(3.6f, 11.6f)
+                lineTo(10.2f, 9.8f)
+                close()
+            }
+        }
+    }
+
+    /** Sensors: phone tracking wave icon. */
+    val Sensors: ImageVector by lazy {
+        icon("Sensors") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 3f)
+                // Left wave
+                moveTo(6.5f, 6.5f)
+                arcTo(7.8f, 7.8f, 0f, false, false, 6.5f, 17.5f)
+                // Right wave
+                moveTo(17.5f, 6.5f)
+                arcTo(7.8f, 7.8f, 0f, false, true, 17.5f, 17.5f)
+            }
+        }
+    }
+
     /** Sun: central disk with 8 radial rays. Stands for Sun AR and solar trajectory. */
     val Sun: ImageVector by lazy {
         icon("Sun") {

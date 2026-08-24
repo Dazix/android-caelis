@@ -90,6 +90,8 @@ class SettingsStore(context: Context) {
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
 
+    val nightSkySensorTracking: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkySensorTracking(it) }
+
     val nightVisionTheme: Flow<NightVisionTheme> = preferences.map { SettingsMapping.readNightVisionTheme(it) }
 
     val nightVisionActivationMode: Flow<NightVisionActivationMode> = preferences.map { SettingsMapping.readNightVisionActivationMode(it) }
@@ -190,6 +192,10 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyConstellationArtVisible(it, enabled) }
     }
 
+    suspend fun saveNightSkySensorTracking(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkySensorTracking(it, enabled) }
+    }
+
     suspend fun saveConfig(config: SessionConfig) {
         dataStore.edit { SettingsMapping.writeConfig(it, config) }
     }
@@ -284,6 +290,7 @@ internal object SettingsMapping {
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
+    private val NIGHT_SKY_SENSOR_TRACKING = booleanPreferencesKey("night_sky_sensor_tracking")
     private val NIGHT_VISION_THEME_KEY = stringPreferencesKey("night_vision_theme")
     private val NIGHT_VISION_MODE_KEY = stringPreferencesKey("night_vision_mode")
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
@@ -610,6 +617,13 @@ internal object SettingsMapping {
 
     fun writeNightSkyConstellationArtVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_CONSTELLATION_ART_VISIBLE] = enabled
+    }
+
+    fun readNightSkySensorTracking(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_SENSOR_TRACKING] ?: true
+
+    fun writeNightSkySensorTracking(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_SENSOR_TRACKING] = enabled
     }
 
     fun readNightVisionTheme(prefs: Preferences): NightVisionTheme {

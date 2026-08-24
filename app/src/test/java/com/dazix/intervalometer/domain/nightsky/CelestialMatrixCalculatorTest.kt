@@ -162,4 +162,58 @@ class CelestialMatrixCalculatorTest {
         val topZ = outMatrix[5]
         assertEquals("Screen top points straight up towards zenith", 1.0f, topZ, 0.001f)
     }
+
+    @Test
+    fun `computeManualRotationMatrix constructs strictly orthonormal 4x4 matrix pointing to requested Az and El`() {
+        val mat = FloatArray(16)
+        val testAngles = listOf(
+            Pair(0.0, 0.0),      // North horizon
+            Pair(90.0, 0.0),     // East horizon
+            Pair(180.0, 0.0),    // South horizon
+            Pair(270.0, 0.0),    // West horizon
+            Pair(45.0, 30.0),    // NE 30 deg el
+            Pair(215.0, 60.0),   // SW 60 deg el
+            Pair(120.0, -45.0),  // SE -45 deg el (below horizon)
+        )
+
+        for ((az, el) in testAngles) {
+            CelestialMatrixCalculator.computeManualRotationMatrix(az, el, mat)
+
+            // Col 0: Right (X)
+            val r0 = mat[0]; val r1 = mat[4]; val r2 = mat[8]
+            // Col 1: Up (Y)
+            val u0 = mat[1]; val u1 = mat[5]; val u2 = mat[9]
+            // Col 2: Backward (Z)
+            val b0 = mat[2]; val b1 = mat[6]; val b2 = mat[10]
+
+            // Assert unit magnitudes
+            val magR = sqrt(r0 * r0 + r1 * r1 + r2 * r2)
+            val magU = sqrt(u0 * u0 + u1 * u1 + u2 * u2)
+            val magB = sqrt(b0 * b0 + b1 * b1 + b2 * b2)
+
+            assertEquals("Right axis magnitude at Az $az, El $el", 1.0f, magR, 1e-4f)
+            assertEquals("Up axis magnitude at Az $az, El $el", 1.0f, magU, 1e-4f)
+            assertEquals("Backward axis magnitude at Az $az, El $el", 1.0f, magB, 1e-4f)
+
+            // Assert orthogonality
+            assertEquals("Dot R-U at Az $az, El $el", 0.0f, r0 * u0 + r1 * u1 + r2 * u2, 1e-4f)
+            assertEquals("Dot R-B at Az $az, El $el", 0.0f, r0 * b0 + r1 * b1 + r2 * b2, 1e-4f)
+            assertEquals("Dot U-B at Az $az, El $el", 0.0f, u0 * b0 + u1 * b1 + u2 * b2, 1e-4f)
+
+            // Assert camera forward vector points at (Az, El):
+            // v_cam = [-b0, -b1, -b2] in world ENU:
+            // East = v_cam[0], North = v_cam[1], Up = v_cam[2]
+            val fwdEast = -b0
+            val fwdNorth = -b1
+            val fwdUp = -b2
+
+            val computedEl = Math.toDegrees(asin(fwdUp.coerceIn(-1f, 1f).toDouble()))
+            var computedAz = Math.toDegrees(atan2(fwdEast.toDouble(), fwdNorth.toDouble()))
+            if (computedAz < 0.0) computedAz += 360.0
+
+            assertEquals("Target Azimuth at Az $az, El $el", az, computedAz, 0.01)
+            assertEquals("Target Elevation at Az $az, El $el", el, computedEl, 0.01)
+        }
+    }
 }
+
