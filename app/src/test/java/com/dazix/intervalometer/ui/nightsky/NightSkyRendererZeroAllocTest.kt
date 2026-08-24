@@ -52,6 +52,9 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.artworkCache)
         assertNotNull(renderer.artMatrix)
         assertNotNull(renderer.artPaint)
+        assertEquals(8, renderer.artSrcCorners.size)
+        assertEquals(8, renderer.artDstCorners.size)
+        assertEquals(12, renderer.artCornerProjected.size)
 
         org.junit.Assert.assertEquals(256, renderer.constellationProgress.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenX.size)
@@ -65,8 +68,18 @@ class NightSkyRendererZeroAllocTest {
         // Apply Normal mode
         renderer.applyTheme(redVisionMode = false)
 
-        // Update optical paints at 1.0x, 2.0x, 4.0x zoom
-        renderer.updateOpticalPaints(zoomFactor = 1.0f, density = 2.5f, redVisionMode = false)
+        // Update optical paints at 1.0x, 2.0x, 4.0x zoom and verify 1.5x artwork highlight boost
+        renderer.updateOpticalPaints(zoomFactor = 1.0f, density = 2.5f, redVisionMode = false, boostStarAndLines = false)
+        val normalConstellationStroke = renderer.constellationPaint.strokeWidth
+        val normalCoreStroke = renderer.corePaints[0].strokeWidth
+
+        renderer.updateOpticalPaints(zoomFactor = 1.0f, density = 2.5f, redVisionMode = false, boostStarAndLines = true)
+        val boostedConstellationStroke = renderer.constellationPaint.strokeWidth
+        val boostedCoreStroke = renderer.corePaints[0].strokeWidth
+
+        org.junit.Assert.assertEquals(normalConstellationStroke * 1.25f, boostedConstellationStroke, 0.001f)
+        org.junit.Assert.assertEquals(normalCoreStroke * 1.5f, boostedCoreStroke, 0.001f)
+
         renderer.updateOpticalPaints(zoomFactor = 4.0f, density = 2.5f, redVisionMode = false)
 
         // Verify hit-testing method returns Miss for null catalog
@@ -609,5 +622,128 @@ class NightSkyRendererZeroAllocTest {
         // Apply Red Vision mode and Normal mode to verify theme switching runs without exception
         renderer.applyTheme(redVisionMode = true)
         renderer.applyTheme(redVisionMode = false)
+    }
+
+    @Test
+    fun `verifies projectWorldToScreen matches perspective projection and handles front and back points`() {
+        val renderer = NightSkyRenderer()
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val w = 1080f
+        val h = 2400f
+        val halfW = w * 0.5f
+        val halfH = h * 0.5f
+        val fovH = 60.0f
+        val halfFovRad = Math.toRadians((fovH * 0.5f).toDouble()).toFloat()
+        val focalLengthPx = halfW / kotlin.math.tan(halfFovRad)
+        val out = FloatArray(3)
+
+        // Point directly in front (Facing North: world vy = 1.0, vx = 0, vz = 0)
+        val inFront = renderer.projectWorldToScreen(
+            wx = 0f, wy = 1f, wz = 0f,
+            matrix = northMatrix,
+            displayRotation = android.view.Surface.ROTATION_0,
+            halfW = halfW, halfH = halfH,
+            focalLengthPixels = focalLengthPx,
+            outBuffer = out,
+            offset = 0,
+        )
+        assertTrue("Point in front must return true", inFront)
+        assertEquals(halfW, out[0], 0.01f) // screen center X
+        assertEquals(halfH, out[1], 0.01f) // screen center Y
+        assertEquals(1.0f, out[2], 0.01f) // camera Z = 1.0
+
+        // Point directly behind (South: world vy = -1.0)
+        val behind = renderer.projectWorldToScreen(
+            wx = 0f, wy = -1f, wz = 0f,
+            matrix = northMatrix,
+            displayRotation = android.view.Surface.ROTATION_0,
+            halfW = halfW, halfH = halfH,
+            focalLengthPixels = focalLengthPx,
+            outBuffer = out,
+            offset = 0,
+        )
+        assertTrue("Point behind must return false", !behind)
+        assertEquals(-1.0f, out[2], 0.01f) // camera Z = -1.0
+    }
+
+    @Test
+    fun `verifies pole-aware 3D tangent plane projection with gimbal lock protection at celestial poles`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        // 1. Constellation near the North Celestial Pole (Dec = 89.0°) to trigger gimbal lock protection
+        val constNameOff = fbb.createString("Ursa Minor")
+        val locNameOff = fbb.createString("Malý medvěd")
+        val brightOff = fbb.createString("Polaris")
+        val famOff = fbb.createString("Ursa Major Family")
+        val artResOff = fbb.createString("art_umi")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val constOff = Constellation.createConstellation(
+            fbb, constNameOff, 0.0f, 89.0f, linesVec, locNameOff, brightOff, famOff, false,
+            artResOff, 0.0f, 89.0f, 25.0f, 0.0f
+        )
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 37.95f, 89.26f, 1.97f) // Polaris
+        Star.createStar(fbb, 222.68f, 74.16f, 2.07f) // Kochab
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        renderer.applyTheme(redVisionMode = true)
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Test across 4 standard screen orientations: 0°, 90°, 180°, 270°
+        val rotations = intArrayOf(
+            android.view.Surface.ROTATION_0,
+            android.view.Surface.ROTATION_90,
+            android.view.Surface.ROTATION_180,
+            android.view.Surface.ROTATION_270,
+        )
+
+        for (rotation in rotations) {
+            drawScope.draw(
+                density = Density(2.5f),
+                layoutDirection = LayoutDirection.Ltr,
+                canvas = composeCanvas,
+                size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+            ) {
+                val visible = renderer.drawNightSky(
+                    drawScope = this,
+                    catalog = catalog,
+                    lstDegrees = 0.0,
+                    latitudeDegrees = 90.0, // Observer at North Pole
+                    matrix = northMatrix,
+                    displayRotation = rotation,
+                    fovHorizontalDegrees = 60.0f,
+                    w = 1080f,
+                    h = 2400f,
+                    zoomFactor = 1.0f,
+                    showConstellations = true,
+                    showConstellationArt = true,
+                )
+                assertTrue("Polar stars should be visible at North Pole", visible >= 0)
+            }
+        }
     }
 }

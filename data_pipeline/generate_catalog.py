@@ -14,6 +14,7 @@ import io
 import csv
 import re
 import flatbuffers
+from PIL import Image
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUTPUT_RAW_BIN = os.path.join(PROJECT_ROOT, "app", "src", "main", "res", "raw", "catalog.bin")
@@ -54,6 +55,7 @@ def parse_stellarium_art(stars_by_hip):
         if len(parts) < 11:
             continue
         abbr = parts[0]
+        png_filename = parts[1]
         res_name = f"art_{abbr.lower()}"
         
         try:
@@ -80,10 +82,23 @@ def parse_stellarium_art(stars_by_hip):
             v2 = to_vec(s2["ra"], s2["dec"])
             v3 = to_vec(s3["ra"], s3["dec"])
             
-            w = 512.0
-            h = 512.0
-            if max(x1, x2, x3, y1, y2, y3) <= 256.0:
-                w, h = 256.0, 256.0
+            # Determine exact image dimensions from cached source PNG
+            png_path = os.path.join(CACHE_DIR, "art_pngs", png_filename)
+            w, h = None, None
+            if os.path.exists(png_path):
+                try:
+                    with Image.open(png_path) as img:
+                        w, h = float(img.width), float(img.height)
+                except Exception:
+                    pass
+            if w is None or h is None:
+                max_coord = max(x1, x2, x3, y1, y2, y3)
+                if max_coord <= 128.0:
+                    w, h = 128.0, 128.0
+                elif max_coord <= 256.0:
+                    w, h = 256.0, 256.0
+                else:
+                    w, h = 512.0, 512.0
                 
             A = [
                 [x1, x2, x3],
@@ -127,7 +142,8 @@ def parse_stellarium_art(stars_by_hip):
             avg_scale = sum(scales) / len(scales)
             width_deg = math.degrees(avg_scale * w)
             
-            b_up = [w / 2.0, h / 2.0 - 100.0, 1.0]
+            # Anchor point pointing towards image top (Up vector in tangent celestial plane)
+            b_up = [w / 2.0, h / 2.0 - (h * 0.2), 1.0]
             w_up = solve_3x3(A, b_up)
             v_up = [
                 w_up[0]*v1[0] + w_up[1]*v2[0] + w_up[2]*v3[0],

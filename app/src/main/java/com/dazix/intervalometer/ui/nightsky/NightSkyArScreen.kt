@@ -590,12 +590,13 @@ private fun NightSkyOverlayCanvas(
         val h = size.height
         val matrix = orientation.rotationMatrix
 
-        // Configure optical star halo/core stroke widths scaling by screen density and zoom
+        // Configure optical star halo/core stroke widths scaling by screen density, zoom, and artwork layer highlight
         renderer.updateOpticalPaints(
             zoomFactor = zoomRatio,
             density = density,
             redVisionMode = redVisionMode,
             constellationPx = 1.8.dp.toPx(),
+            boostStarAndLines = isConstellationArtVisible,
         )
 
         // Layer 0 & Layer 1: Opaque Sky Dome background and hardware-accelerated AGSL Milky Way & Atmosphere

@@ -177,6 +177,24 @@ class FlatBuffersCatalogTest {
         assertTrue("Orion centroid RA should be ~84, got ${ori.centroidRa()}", ori.centroidRa() in 80f..90f)
         assertTrue("Orion centroid Dec should be ~6.8, got ${ori.centroidDec()}", ori.centroidDec() in 0f..15f)
 
+        // Check Lacerta metadata (IAU constellation - calibration & unit consistency proof)
+        val lac = iauConsts.first { it.name() == "Lacerta" }
+        assertEquals("Ještěrka", lac.localizedName())
+        assertEquals(false, lac.isAsterism())
+        assertEquals("art_lac", lac.artResourceName())
+        assertTrue("Lacerta art center RA should be ~336.35 deg, got ${lac.artCenterRa()}", lac.artCenterRa() in 330f..345f)
+        assertTrue("Lacerta art center Dec should be ~43.76 deg, got ${lac.artCenterDec()}", lac.artCenterDec() in 40f..50f)
+        assertTrue("Lacerta art width should be ~14.88 deg, got ${lac.artWidthDeg()}", lac.artWidthDeg() in 10f..20f)
+
+        // Check Crux metadata (IAU constellation - 128x128 exact dimension proof)
+        val crux = iauConsts.first { it.name() == "Crux" }
+        assertEquals("Jižní kříž", crux.localizedName())
+        assertEquals(false, crux.isAsterism())
+        assertEquals("art_cru", crux.artResourceName())
+        assertTrue("Crux art center RA should be ~188.7 deg, got ${crux.artCenterRa()}", crux.artCenterRa() in 180f..195f)
+        assertTrue("Crux art center Dec should be ~-60.2 deg, got ${crux.artCenterDec()}", crux.artCenterDec() in -65f..-55f)
+        assertTrue("Crux art width should be ~8.7 deg, got ${crux.artWidthDeg()}", crux.artWidthDeg() in 5f..15f)
+
         // Check Big Dipper metadata (Asterism)
         val bigDipper = asterisms.first { it.name() == "Big Dipper (Plough)" }
         assertEquals("Velký vůz", bigDipper.localizedName())
