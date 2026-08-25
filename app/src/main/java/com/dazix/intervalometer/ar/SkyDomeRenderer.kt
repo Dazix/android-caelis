@@ -167,7 +167,7 @@ class SkyDomeRenderer {
         isAntiAlias = true
     }
 
-    var activePalette: NightVisionPalette = RedNightVisionPalette
+    var activePalette: NightVisionPalette = AmberNightVisionPalette
         private set
 
     fun applyTheme(state: com.dazix.intervalometer.domain.nightsky.NightVisionState) {
@@ -175,7 +175,7 @@ class SkyDomeRenderer {
     }
 
     fun applyTheme(
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
         isNightVision: Boolean,
     ) {
         activePalette = paletteForTheme(theme)
@@ -217,7 +217,7 @@ class SkyDomeRenderer {
     }
 
     fun applyTheme(redVisionMode: Boolean) {
-        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = redVisionMode)
+        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER, isNightVision = redVisionMode)
     }
 
     /**
@@ -231,7 +231,7 @@ class SkyDomeRenderer {
         redVisionMode: Boolean,
         w: Float,
         h: Float,
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
     ) {
         val palette = paletteForTheme(theme)
         val horizonColor = if (redVisionMode) palette.secondary else NormalHorizon

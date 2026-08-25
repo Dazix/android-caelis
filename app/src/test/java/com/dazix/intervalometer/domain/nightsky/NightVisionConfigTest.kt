@@ -80,6 +80,10 @@ class NightVisionConfigTest {
 
     @Test
     fun `NightVisionState holds isActive and theme state`() {
+        val stateDefault = NightVisionState()
+        assertTrue(stateDefault.isActive)
+        assertEquals(NightVisionTheme.AMBER, stateDefault.theme)
+
         val stateRed = NightVisionState(isActive = true, theme = NightVisionTheme.RED)
         assertTrue(stateRed.isActive)
         assertEquals(NightVisionTheme.RED, stateRed.theme)

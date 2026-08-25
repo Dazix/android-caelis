@@ -451,7 +451,7 @@ class NightSkyRenderer {
     }
 
     private fun setupStarPaints(
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
         isNightVision: Boolean,
     ) {
         if (isNightVision) {
@@ -489,7 +489,7 @@ class NightSkyRenderer {
     }
 
     fun applyTheme(
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
         isNightVision: Boolean,
     ) {
         skyDomeRenderer.applyTheme(theme = theme, isNightVision = isNightVision)
@@ -562,7 +562,7 @@ class NightSkyRenderer {
     }
 
     fun applyTheme(redVisionMode: Boolean) {
-        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = redVisionMode)
+        applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER, isNightVision = redVisionMode)
     }
 
     /**
@@ -665,7 +665,7 @@ class NightSkyRenderer {
         isMilkyWayVisible: Boolean,
         isAtmosphereVisible: Boolean,
         isRedVision: Boolean,
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
     ) {
         val palette = paletteForTheme(theme)
         shaderTintBuffer[0] = palette.shaderTintR
@@ -737,7 +737,7 @@ class NightSkyRenderer {
         h: Float,
         isLandscapeVisible: Boolean,
         isRedVision: Boolean,
-        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+        theme: com.dazix.intervalometer.domain.nightsky.NightVisionTheme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
     ) {
         if (isLandscapeVisible && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
             val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()

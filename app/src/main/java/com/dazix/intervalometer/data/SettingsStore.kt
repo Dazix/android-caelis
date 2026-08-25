@@ -634,8 +634,8 @@ internal object SettingsMapping {
     }
 
     fun readNightVisionTheme(prefs: Preferences): NightVisionTheme {
-        val name = prefs[NIGHT_VISION_THEME_KEY] ?: return NightVisionTheme.RED
-        return runCatching { NightVisionTheme.valueOf(name) }.getOrDefault(NightVisionTheme.RED)
+        val name = prefs[NIGHT_VISION_THEME_KEY] ?: return NightVisionTheme.AMBER
+        return runCatching { NightVisionTheme.valueOf(name) }.getOrDefault(NightVisionTheme.AMBER)
     }
 
     fun writeNightVisionTheme(prefs: MutablePreferences, theme: NightVisionTheme) {

@@ -520,9 +520,9 @@ class SettingsMappingTest {
     }
 
     @Test
-    fun `night vision theme defaults to RED and survives round trip`() {
+    fun `night vision theme defaults to AMBER and survives round trip`() {
         assertEquals(
-            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED,
+            com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER,
             SettingsMapping.readNightVisionTheme(emptyPreferences()),
         )
 

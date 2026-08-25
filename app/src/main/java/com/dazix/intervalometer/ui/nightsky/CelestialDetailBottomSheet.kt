@@ -48,7 +48,7 @@ fun CelestialDetailSheetContent(
     redVisionMode: Boolean,
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     if (selectedBody == null) {

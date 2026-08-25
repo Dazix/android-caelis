@@ -279,8 +279,8 @@
     <string name="sun_ar_cardinal_nw">SZ (315°)</string>
     <string name="sun_ar_keep_screen_on">Stále zapnutý displej</string>
     <string name="sun_ar_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení AR</string>
-    <string name="sun_ar_red_vision">Červený noční režim (Red Vision)</string>
-    <string name="sun_ar_red_vision_desc">Monochromatické červené rozhraní chránící noční vidění pro astrofotografii</string>
+    <string name="sun_ar_red_vision">Noční režim</string>
+    <string name="sun_ar_red_vision_desc">Monochromatické rozhraní chránící noční vidění pro astrofotografii</string>
     <string name="sun_ar_calib_offset">Korekce: %+.1f°</string>
     <string name="sun_ar_calib_active">Manuální 3D pohled</string>
     <string name="sun_ar_calib_hint">Tažením prstu libovolným směrem otáčíte 3D pohled</string>
@@ -320,7 +320,7 @@
     <string name="search_celestial_clear">Vymazat hledání</string>
     <string name="state_on">Zapnuto</string>
     <string name="state_off">Vypnuto</string>
-    <string name="calib_reset_toast">Kalibrace azimutu resetována</string>
+    <string name="calib_reset_toast">Živý pohled obnoven</string>
 
     <!-- Celestial Object Details -->
     <string name="celestial_type">Typ</string>
@@ -350,6 +350,8 @@
     <!-- Settings -->
     <string name="settings_title">Nastavení</string>
     <string name="settings_subtitle">Předvolby aplikace a noční vidění</string>
+    <string name="settings_section_display">Zobrazení</string>
+    <string name="settings_section_debug">Ladění</string>
     <string name="settings_theme_title">Barevný motiv nočního vidění</string>
     <string name="settings_theme_subtitle">Monochromatická paleta pro ochranu adaptace očí na tmu na AMOLED displeji</string>
     <string name="settings_theme_red">Červená</string>

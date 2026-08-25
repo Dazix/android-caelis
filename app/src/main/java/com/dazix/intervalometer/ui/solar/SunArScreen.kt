@@ -265,7 +265,7 @@ fun SunArScreen(
             onResetCalibration = {
                 toastHostState.showToast(
                     resId = R.string.calib_reset_toast,
-                    icon = AppIcons.ResetCalibration,
+                    icon = AppIcons.Compass,
                 )
                 viewModel.resetCalibration()
             },
@@ -301,7 +301,7 @@ fun SunArScreen(
                     onResetCalibration = {
                         toastHostState.showToast(
                             resId = R.string.calib_reset_toast,
-                            icon = AppIcons.ResetCalibration,
+                            icon = AppIcons.Compass,
                         )
                         viewModel.resetCalibration()
                     },
@@ -1327,9 +1327,10 @@ private fun SunArTopBar(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = AppIcons.ResetCalibration,
+                    imageVector = AppIcons.Compass,
                     contentDescription = stringResource(R.string.sun_ar_calib_reset),
                     tint = accentColor,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }

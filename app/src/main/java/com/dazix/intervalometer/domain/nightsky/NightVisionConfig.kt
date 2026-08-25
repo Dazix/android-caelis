@@ -17,7 +17,7 @@ enum class NightVisionActivationMode { OFF, AUTO_SOLAR, CUSTOM_TIME }
  */
 data class NightVisionState(
     val isActive: Boolean = true,
-    val theme: NightVisionTheme = NightVisionTheme.RED,
+    val theme: NightVisionTheme = NightVisionTheme.AMBER,
 )
 
 /**

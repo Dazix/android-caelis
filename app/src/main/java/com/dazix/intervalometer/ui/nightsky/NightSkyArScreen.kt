@@ -479,17 +479,17 @@ fun NightSkyArScreen(
                             onClick = {
                                 toastHostState.showToast(
                                     resId = R.string.calib_reset_toast,
-                                    icon = AppIcons.ResetCalibration,
+                                    icon = AppIcons.Compass,
                                 )
                                 viewModel.resumeSensorTracking()
                             },
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             Icon(
-                                imageVector = AppIcons.ResetCalibration,
+                                imageVector = AppIcons.Compass,
                                 contentDescription = stringResource(R.string.sun_ar_calib_reset),
                                 tint = if (uiState.redVisionMode) activePalette.primary else Color.White,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(26.dp),
                             )
                         }
                     }
@@ -744,7 +744,7 @@ private fun NightSkyTopBar(
     onOpenSearch: () -> Unit = {},
     onOpenLayers: () -> Unit,
     onResetZoom: () -> Unit,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
@@ -895,7 +895,7 @@ private fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
     redVisionMode: Boolean,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
@@ -958,7 +958,7 @@ private fun NightSkyPermissionPrompt(
     onRequestPermission: () -> Unit,
     onBack: () -> Unit,
     redVisionMode: Boolean,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
@@ -1026,7 +1026,7 @@ private fun CalibrationDebugOverlay(
     onRotationOffsetChange: (Float) -> Unit,
     onReset: () -> Unit,
     onClose: () -> Unit,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
@@ -1188,7 +1188,7 @@ private fun FocusRegionDebugOverlay(
     onDisplayThresholdChange: (Float) -> Unit,
     onReset: () -> Unit,
     onClose: () -> Unit,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)

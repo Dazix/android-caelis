@@ -1,6 +1,7 @@
 package com.dazix.intervalometer.ui
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -358,25 +359,22 @@ object AppIcons {
         }
     }
 
-    /** Compass: circular dial with orientation needle. */
-    val Compass: ImageVector by lazy {
-        icon("Compass") {
-            strokePath {
-                circle(centerX = 12f, centerY = 12f, radius = 8.6f)
-                moveTo(12f, 6.2f)
-                lineTo(14.8f, 12f)
-                lineTo(12f, 17.8f)
-                lineTo(9.2f, 12f)
+    /** Explore / Compass: Material Design 3 Explore (Filled) icon. */
+    val Explore: ImageVector by lazy {
+        icon("Explore") {
+            fillPath(pathFillType = PathFillType.EvenOdd) {
+                circle(centerX = 12f, centerY = 12f, radius = 10f)
+                moveTo(14.19f, 14.19f)
+                lineTo(6f, 18f)
+                lineTo(9.81f, 9.81f)
+                lineTo(18f, 6f)
                 close()
-            }
-            fillPath {
-                moveTo(12f, 6.2f)
-                lineTo(14.8f, 12f)
-                lineTo(12f, 12f)
-                close()
+                circle(centerX = 12f, centerY = 12f, radius = 1.1f)
             }
         }
     }
+
+    val Compass: ImageVector get() = Explore
 
     /** Calendar: date selector icon. */
     val Calendar: ImageVector by lazy {
@@ -719,8 +717,9 @@ object AppIcons {
         ).apply(paths).build()
 
     private fun ImageVector.Builder.fillPath(
+        pathFillType: PathFillType = PathFillType.NonZero,
         block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit,
-    ) = path(fill = SolidColor(Color.Black), pathBuilder = block)
+    ) = path(fill = SolidColor(Color.Black), pathFillType = pathFillType, pathBuilder = block)
 
     private fun ImageVector.Builder.strokePath(
         block: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit,

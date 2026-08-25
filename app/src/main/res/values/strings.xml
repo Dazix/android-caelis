@@ -273,8 +273,8 @@
     <string name="sun_ar_cardinal_nw">NW (315°)</string>
     <string name="sun_ar_keep_screen_on">Keep screen awake</string>
     <string name="sun_ar_keep_screen_on_desc">Prevent screen timeout while using Sun AR</string>
-    <string name="sun_ar_red_vision">Red Vision (Night Mode)</string>
-    <string name="sun_ar_red_vision_desc">Monochromatic dark red UI to protect night vision for astrophotography</string>
+    <string name="sun_ar_red_vision">Night Mode</string>
+    <string name="sun_ar_red_vision_desc">Monochromatic dark UI to protect night vision for astrophotography</string>
     <string name="sun_ar_calib_offset">Offset: %+.1f°</string>
     <string name="sun_ar_calib_active">Manual 3D view</string>
     <string name="sun_ar_calib_hint">Drag with finger in any direction to rotate 3D view</string>
@@ -314,7 +314,7 @@
     <string name="search_celestial_clear">Clear search</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>
-    <string name="calib_reset_toast">Azimuth calibration reset</string>
+    <string name="calib_reset_toast">Live view restored</string>
 
     <!-- Celestial Object Details -->
     <string name="celestial_type">Type</string>
@@ -343,6 +343,8 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_subtitle">App preferences and night vision</string>
+    <string name="settings_section_display">Display</string>
+    <string name="settings_section_debug">Debugging</string>
     <string name="settings_theme_title">Night Vision Theme</string>
     <string name="settings_theme_subtitle">Monochromatic color palette for scotopic eye adaptation on AMOLED displays</string>
     <string name="settings_theme_red">Red</string>

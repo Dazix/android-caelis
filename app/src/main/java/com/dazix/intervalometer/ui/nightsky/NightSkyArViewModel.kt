@@ -152,7 +152,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val nightVisionTheme: StateFlow<NightVisionTheme> = settingsStore.nightVisionTheme.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        NightVisionTheme.RED,
+        NightVisionTheme.AMBER,
     )
 
     val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settingsStore.nightVisionActivationMode.stateIn(

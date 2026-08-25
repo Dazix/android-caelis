@@ -77,7 +77,9 @@ fun SettingsScreen(
         subtitle = stringResource(R.string.settings_subtitle),
         onBack = onBack,
     ) {
-        // ---- Section 1: Night Vision Color Theme ----
+        // ---- Section 1: Display / Night Vision (Zobrazení) ----
+        SectionHeader(text = stringResource(R.string.settings_section_display))
+
         SectionCard(
             title = stringResource(R.string.settings_theme_title),
             subtitle = stringResource(R.string.settings_theme_subtitle),
@@ -173,7 +175,12 @@ fun SettingsScreen(
             }
         }
 
-        // ---- Section 4: Debug Options ----
+        // ---- Section 4: Debug Options (Ladění) ----
+        SectionHeader(
+            text = stringResource(R.string.settings_section_debug),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
         SectionCard(
             title = stringResource(R.string.settings_debug_title),
             subtitle = stringResource(R.string.settings_debug_subtitle),
@@ -295,3 +302,14 @@ private fun TimePickerSettingDialog(
         },
     )
 }
+
+@Composable
+private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
+    )
+}
+

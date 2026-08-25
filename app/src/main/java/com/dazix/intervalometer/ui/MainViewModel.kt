@@ -261,7 +261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val snapshot: StateFlow<SessionSnapshot> = SessionRepository.snapshot
 
     val nightVisionTheme: StateFlow<NightVisionTheme> = settings.nightVisionTheme
-        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionTheme.RED)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionTheme.AMBER)
 
     val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settings.nightVisionActivationMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionActivationMode.AUTO_SOLAR)

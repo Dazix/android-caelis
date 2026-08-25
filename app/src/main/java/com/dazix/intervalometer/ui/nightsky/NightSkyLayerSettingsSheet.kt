@@ -56,7 +56,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleKeepScreenOn: () -> Unit = {},
     onToggleDebugCalibration: () -> Unit = {},
     onToggleDebugFocusRegion: () -> Unit = {},
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)

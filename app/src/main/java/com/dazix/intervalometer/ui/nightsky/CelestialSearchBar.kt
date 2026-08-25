@@ -48,7 +48,7 @@ fun CelestialSearchBar(
     onActiveChange: (Boolean) -> Unit,
     onSelectItem: (SearchResultItem) -> Unit,
     redVisionMode: Boolean,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
