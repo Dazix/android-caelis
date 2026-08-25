@@ -202,8 +202,8 @@ class CameraFovCalculatorTest {
         assertEquals(28.0f, CameraFovCalculator.computeZoomedFov(baseFov, 2.0f), 0.001f)
         assertEquals(14.0f, CameraFovCalculator.computeZoomedFov(baseFov, 4.0f), 0.001f)
         assertEquals(5.6f, CameraFovCalculator.computeZoomedFov(baseFov, 10.0f), 0.001f)
-
-        // Extreme zoom clamping
-        assertEquals(2.0f, CameraFovCalculator.computeZoomedFov(baseFov, 50.0f), 0.001f)
+        assertEquals(1.12f, CameraFovCalculator.computeZoomedFov(baseFov, 50.0f), 0.001f)
+        assertEquals(0.56f, CameraFovCalculator.computeZoomedFov(baseFov, 100.0f), 0.001f)
+        assertEquals(0.28f, CameraFovCalculator.computeZoomedFov(baseFov, 200.0f), 0.001f)
     }
 }

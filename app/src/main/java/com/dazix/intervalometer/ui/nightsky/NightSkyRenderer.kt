@@ -352,6 +352,46 @@ class NightSkyRenderer {
     val artDstPoints = FloatArray(8) // [s0X, s0Y, s1X, s1Y, s2X, s2Y, s3X, s3Y] (TL, TR, BR, BL)
     val artCornerProjected = FloatArray(12) // [s0X, s0Y, z0, s1X, s1Y, z1, s2X, s2Y, z2, s3X, s3Y, z3]
 
+    // Pre-allocated buffers for Dynamic Solar System Ephemeris Rendering
+    val maxPlanets = 16
+    val planetScreenX = FloatArray(maxPlanets)
+    val planetScreenY = FloatArray(maxPlanets)
+    val planetRadiusPx = FloatArray(maxPlanets)
+    val planetInFront = BooleanArray(maxPlanets)
+    val planetIds = Array(maxPlanets) { "" }
+    var activePlanetsCount = 0
+
+    var selectedPlanetId: String? = null
+
+    val planetWorldVec = FloatArray(3)
+    val planetMatrix = Matrix()
+    val planetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
+        isDither = true
+    }
+    val planetCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    val planetHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    val planetLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isAntiAlias = true
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
+    }
+    val planetHighlightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isAntiAlias = true
+        textSize = 32f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
+    }
+
     // Pre-allocated debug focus region visualization paints & colors
     val debugFocusCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -529,6 +569,14 @@ class NightSkyRenderer {
             reticleTextPaint.color = primaryInt
             arrowPaint.color = primaryInt
 
+            planetPaint.colorFilter = when (theme) {
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED -> redVisionArtFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER -> amberVisionArtFilter
+                com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN -> greenVisionArtFilter
+            }
+            planetLabelPaint.color = primaryInt
+            planetHighlightLabelPaint.color = primaryInt
+
             debugFocusCirclePaint.color = AndroidColor.argb(190, pr, pg, pb)
             debugFocusFillPaint.color = AndroidColor.argb(25, pr, pg, pb)
             debugFocusLabelPaint.color = AndroidColor.argb(230, pr, pg, pb)
@@ -536,6 +584,9 @@ class NightSkyRenderer {
             debugCentroidOutOfFocusColor = AndroidColor.argb(100, sr, sg, sb)
         } else {
             artPaint.colorFilter = null
+            planetPaint.colorFilter = null
+            planetLabelPaint.color = AndroidColor.WHITE
+            planetHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
 
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
             constellationHaloPaint.color = AndroidColor.argb(45, 128, 222, 234)
@@ -595,6 +646,9 @@ class NightSkyRenderer {
         constellationCorePaint.strokeWidth = 2.16f * densityScale * lineArtScale
         constellationLabelPaint.textSize = 13f * densityScale
         constellationHighlightLabelPaint.textSize = 15f * densityScale
+
+        planetLabelPaint.textSize = 13f * densityScale
+        planetHighlightLabelPaint.textSize = 15f * densityScale
 
         asterismPaint.strokeWidth = 1.15f * densityScale * lineArtScale
         asterismHaloPaint.strokeWidth = 4.2f * densityScale * lineArtScale
@@ -768,11 +822,13 @@ class NightSkyRenderer {
     sealed interface HitTarget {
         data class ConstellationHit(val index: Int) : HitTarget
         data class StarHit(val index: Int) : HitTarget
+        data class PlanetHit(val planetId: String) : HitTarget
         data object Miss : HitTarget
     }
 
     /**
      * Performs prioritized 2D screen-space hit testing:
+     * 0. Dynamic Planets and Moon (Priority 0)
      * 1. In-focus constellation name text (progress > 0.3f)
      * 2. Visible stars within maxRadiusPx touch radius
      * 3. Miss
@@ -784,7 +840,21 @@ class NightSkyRenderer {
         maxStarRadiusPx: Float,
         density: Float,
         catalog: NightSkyCatalog?,
+        planets: List<com.dazix.intervalometer.domain.nightsky.PlanetState> = emptyList(),
     ): HitTarget {
+        // Priority 0: Dynamic Planets & Moon
+        for (pIdx in 0 until minOf(planets.size, activePlanetsCount, maxPlanets)) {
+            if (!planetInFront[pIdx]) continue
+            val px = planetScreenX[pIdx]
+            val py = planetScreenY[pIdx]
+            val hitRadius = maxOf(maxStarRadiusPx, planetRadiusPx[pIdx])
+            val dx = tapX - px
+            val dy = tapY - py
+            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                return HitTarget.PlanetHit(planets[pIdx].id)
+            }
+        }
+
         if (catalog == null) return HitTarget.Miss
 
         // Priority 1: Constellations (Only IAU constellations 0..87 render text labels)
@@ -873,6 +943,7 @@ class NightSkyRenderer {
         isDebugFocusRegionVisible: Boolean = false,
         debugFocusRadiusMultiplier: Float = 0.48f,
         debugFocusDisplayThreshold: Float = 0.0f,
+        planets: List<com.dazix.intervalometer.domain.nightsky.PlanetState> = emptyList(),
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
         val totalStars = minOf(catalog.starsLength(), maxStars)
@@ -1136,10 +1207,9 @@ class NightSkyRenderer {
 
                     // 5. Assemble Homography Matrix
                     artMatrix.reset()
-                    // setPolyToPoly with 4 points computes the complete 3D projective perspective homography
                     artMatrix.setPolyToPoly(artSrcPoints, 0, artDstPoints, 0, 4)
 
-                    // 6. Apply Debug Scale & Rotation (Optional, centered on the projected quad centroid)
+                    // 6. Apply Debug Scale & Rotation
                     if (debugScaleMultiplier != 1.0f || debugRotationOffset != 0f) {
                         val cx = (artDstPoints[0] + artDstPoints[2] + artDstPoints[4] + artDstPoints[6]) * 0.25f
                         val cy = (artDstPoints[1] + artDstPoints[3] + artDstPoints[5] + artDstPoints[7]) * 0.25f
@@ -1201,8 +1271,6 @@ class NightSkyRenderer {
                                     val endY = y2 - uy * gapPx
 
                                     if (effectiveP >= 0.99f) {
-                                        // ANIMATION FINISHED: Draw exactly ONE continuous segment
-                                        // Completely eliminates center overlapping dot artifact!
                                         if (lineCoordsCount + 4 <= constellationLinesBuffer.size) {
                                             constellationLinesBuffer[lineCoordsCount] = startX
                                             constellationLinesBuffer[lineCoordsCount + 1] = startY
@@ -1211,7 +1279,6 @@ class NightSkyRenderer {
                                             lineCoordsCount += 4
                                         }
                                     } else {
-                                        // ANIMATING: Draw two segments meeting in the middle
                                         if (lineCoordsCount + 8 <= constellationLinesBuffer.size) {
                                             val adjDx = endX - startX
                                             val adjDy = endY - startY
@@ -1271,6 +1338,127 @@ class NightSkyRenderer {
                             labelPaint.alpha = (baseLabelAlpha * effectiveP).toInt().coerceIn(0, 255)
                             nativeCanvas.drawText(label, cx, textY, labelPaint)
                         }
+                    }
+                }
+            }
+        }
+
+        // 7b. Dynamic Solar System Planetary Rendering (Dual-State: Point Light <-> High-Res Texture)
+        activePlanetsCount = 0
+        if (planets.isNotEmpty()) {
+            val density = drawScope.density
+            val transitionThresholdPx = 18f * density
+            val isCzech = java.util.Locale.getDefault().language == "cs"
+
+            for (pIdx in 0 until minOf(planets.size, maxPlanets)) {
+                val planet = planets[pIdx]
+                val ra = planet.raDegrees
+                val dec = planet.decDegrees
+
+                // Compute ENU world unit vector
+                EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, planetWorldVec, 0)
+                val vx = planetWorldVec[0]
+                val vy = planetWorldVec[1]
+                val vz = planetWorldVec[2]
+
+                // Transform World -> Device coordinates: V_dev = R^T * V_world
+                val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
+                val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
+                val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+
+                val xs: Float
+                val ys: Float
+                when (displayRotation) {
+                    Surface.ROTATION_0 -> { xs = xDev; ys = yDev }
+                    Surface.ROTATION_90 -> { xs = yDev; ys = -xDev }
+                    Surface.ROTATION_180 -> { xs = -xDev; ys = -yDev }
+                    Surface.ROTATION_270 -> { xs = -yDev; ys = xDev }
+                    else -> { xs = xDev; ys = yDev }
+                }
+                val zs = -zDev
+
+                if (zs <= 0.001f) {
+                    planetInFront[pIdx] = false
+                    continue
+                }
+
+                val pX = halfW + focalLengthPixels * (xs / zs)
+                val pY = halfH - focalLengthPixels * (ys / zs)
+
+                planetScreenX[pIdx] = pX
+                planetScreenY[pIdx] = pY
+                planetInFront[pIdx] = true
+                planetIds[pIdx] = planet.id
+                activePlanetsCount++
+
+                // Viewport culling with safety margin
+                val marginPlanet = 120.0f
+                if (pX !in -marginPlanet..(w + marginPlanet) || pY !in -marginPlanet..(h + marginPlanet)) {
+                    continue
+                }
+
+                // Calculate physical screen diameter in pixels from angular diameter and focal length
+                val angularSizeRad = Math.toRadians(planet.angularDiameterDeg.toDouble()).toFloat()
+                val perspectiveFocalLength = focalLengthPixels / zs
+                val diameterInPixels = angularSizeRad * perspectiveFocalLength
+                planetRadiusPx[pIdx] = maxOf(16f * density, diameterInPixels * 0.5f)
+
+                val isSelectedPlanet = (planet.id == selectedPlanetId)
+
+                // Dual-State Rendering Logic
+                if (diameterInPixels < transitionThresholdPx) {
+                    // --- STATE A: ZOOMED OUT (Optical Point Light with Core & Glowing Corona Halo) ---
+                    val baseColor = planet.colorRgb
+                    val pr = AndroidColor.red(baseColor)
+                    val pg = AndroidColor.green(baseColor)
+                    val pb = AndroidColor.blue(baseColor)
+
+                    val opticScale = StarOptics.computeOpticScale(zoomFactor)
+                    val coreRadius = 4.2f * density * opticScale
+                    val haloRadius = 16.0f * density * opticScale
+
+                    // Outer soft glow halo
+                    planetHaloPaint.color = AndroidColor.argb(85, pr, pg, pb)
+                    nativeCanvas.drawCircle(pX, pY, haloRadius, planetHaloPaint)
+
+                    // Primary colored core
+                    planetCorePaint.color = AndroidColor.argb(255, pr, pg, pb)
+                    nativeCanvas.drawCircle(pX, pY, coreRadius, planetCorePaint)
+
+                    // Brilliant nucleus
+                    planetCorePaint.color = AndroidColor.WHITE
+                    nativeCanvas.drawCircle(pX, pY, coreRadius * 0.55f, planetCorePaint)
+
+                    // Planet label when near center or selected
+                    val label = planet.localizedName(isCzech)
+                    val textY = pY + haloRadius + (14f * density)
+                    val labelPaint = if (isSelectedPlanet) planetHighlightLabelPaint else planetLabelPaint
+                    nativeCanvas.drawText(label, pX, textY, labelPaint)
+                } else {
+                    // --- STATE B: ZOOMED IN (Photorealistic High-Resolution Texture) ---
+                    val resName = "planet_${planet.id.lowercase()}"
+                    val bitmap = context?.let { getOrLoadArtwork(it, resName) }
+                    if (bitmap != null) {
+                        val scale = diameterInPixels / bitmap.width.toFloat()
+
+                        planetMatrix.reset()
+                        planetMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
+                        planetMatrix.postScale(scale, scale)
+                        planetMatrix.postTranslate(pX, pY)
+
+                        planetPaint.alpha = 255
+                        nativeCanvas.drawBitmap(bitmap, planetMatrix, planetPaint)
+
+                        // Render name label below zoomed body
+                        val label = planet.localizedName(isCzech)
+                        val textY = pY + (diameterInPixels * 0.5f) + (18f * density)
+                        val labelPaint = if (isSelectedPlanet) planetHighlightLabelPaint else planetLabelPaint
+                        nativeCanvas.drawText(label, pX, textY, labelPaint)
+                    } else {
+                        // Fallback if texture asset is loading
+                        val radius = diameterInPixels * 0.5f
+                        planetCorePaint.color = planet.colorRgb
+                        nativeCanvas.drawCircle(pX, pY, radius, planetCorePaint)
                     }
                 }
             }
@@ -1403,8 +1591,8 @@ class NightSkyRenderer {
             return
         }
 
-        // Only draw broken crosshair if a Star is selected (not a Constellation)
-        if (selectedStarIndex >= 0) {
+        // Only draw broken crosshair if a Star or Planet is selected (not a Constellation)
+        if (selectedStarIndex >= 0 || selectedPlanetId != null) {
             // Scaled to 75% of original radii (r1: 13dp -> 9.75dp, r2: 24dp -> 18dp):
             val r1 = 9.75f * density
             val r2 = 18.0f * density

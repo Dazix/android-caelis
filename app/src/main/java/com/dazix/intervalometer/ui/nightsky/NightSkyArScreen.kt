@@ -277,7 +277,7 @@ fun NightSkyArScreen(
                         }
                     )
                 }
-                .pointerInput(catalog, maxTouchRadiusPx, density) {
+                .pointerInput(catalog, uiState.planetStates, maxTouchRadiusPx, density) {
                     detectTapGestures(
                         onTap = { offset ->
                             val hitTarget = renderer.findHitAt(
@@ -286,21 +286,31 @@ fun NightSkyArScreen(
                                 maxStarRadiusPx = maxTouchRadiusPx,
                                 density = density.density,
                                 catalog = catalog,
+                                planets = uiState.planetStates,
                             )
                             when (hitTarget) {
                                 is NightSkyRenderer.HitTarget.ConstellationHit -> {
                                     renderer.selectedConstellationIndex = hitTarget.index
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedPlanetId = null
                                     viewModel.selectConstellationByIndex(hitTarget.index)
                                 }
                                 is NightSkyRenderer.HitTarget.StarHit -> {
                                     renderer.selectedStarIndex = hitTarget.index
                                     renderer.selectedConstellationIndex = -1
+                                    renderer.selectedPlanetId = null
                                     viewModel.selectStarByIndex(hitTarget.index)
+                                }
+                                is NightSkyRenderer.HitTarget.PlanetHit -> {
+                                    renderer.selectedStarIndex = -1
+                                    renderer.selectedConstellationIndex = -1
+                                    renderer.selectedPlanetId = hitTarget.planetId
+                                    viewModel.selectPlanetById(hitTarget.planetId)
                                 }
                                 is NightSkyRenderer.HitTarget.Miss -> {
                                     renderer.selectedConstellationIndex = -1
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedPlanetId = null
                                     viewModel.clearSelectedBody()
                                 }
                             }
@@ -339,6 +349,8 @@ fun NightSkyArScreen(
                     isConstellationsVisible = uiState.isConstellationsVisible,
                     isConstellationArtVisible = uiState.isConstellationArtVisible,
                     selectedBody = uiState.selectedBody,
+                    selectedPlanetId = uiState.selectedPlanetId,
+                    planets = uiState.planetStates,
                     debugArtOffsetX = uiState.debugArtOffsetX,
                     debugArtOffsetY = uiState.debugArtOffsetY,
                     debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
@@ -580,6 +592,8 @@ private fun NightSkyOverlayCanvas(
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     selectedBody: CelestialBodyDetails? = null,
+    selectedPlanetId: String? = null,
+    planets: List<com.dazix.intervalometer.domain.nightsky.PlanetState> = emptyList(),
     debugArtOffsetX: Float = 0f,
     debugArtOffsetY: Float = 0f,
     debugArtScaleMultiplier: Float = 1.0f,
@@ -622,6 +636,7 @@ private fun NightSkyOverlayCanvas(
 
     renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(nightVisionState)
+    renderer.selectedPlanetId = selectedPlanetId
 
     LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
         milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
@@ -684,6 +699,7 @@ private fun NightSkyOverlayCanvas(
             isDebugFocusRegionVisible = isDebugFocusRegionVisible,
             debugFocusRadiusMultiplier = debugFocusRadiusMultiplier,
             debugFocusDisplayThreshold = debugFocusDisplayThreshold,
+            planets = planets,
         )
 
         // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)

@@ -855,4 +855,160 @@ class NightSkyRendererZeroAllocTest {
         renderer.applyTheme(com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER, isNightVision = true)
         renderer.applyTheme(com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN, isNightVision = true)
     }
+
+    @Test
+    fun `verifies planetary rendering buffers, dual-state rendering, and hit testing priority`() {
+        val renderer = NightSkyRenderer()
+
+        // 1. Verify pre-allocated planetary buffers
+        assertEquals(16, renderer.maxPlanets)
+        assertEquals(16, renderer.planetScreenX.size)
+        assertEquals(16, renderer.planetScreenY.size)
+        assertEquals(16, renderer.planetRadiusPx.size)
+        assertEquals(16, renderer.planetInFront.size)
+        assertEquals(16, renderer.planetIds.size)
+        assertEquals(3, renderer.planetWorldVec.size)
+        assertNotNull(renderer.planetPaint)
+        assertNotNull(renderer.planetCorePaint)
+        assertNotNull(renderer.planetHaloPaint)
+        assertNotNull(renderer.planetLabelPaint)
+        assertNotNull(renderer.planetHighlightLabelPaint)
+
+        // 2. Mock catalog
+        val fbb = FlatBufferBuilder(1024)
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 1.8f) // North pole star
+        val starsVec = fbb.endVector()
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val testInstant = java.time.Instant.parse("2026-08-25T20:00:00Z")
+        val planets = com.dazix.intervalometer.domain.nightsky.PlanetaryEphemerisCalculator.computeAll(testInstant)
+        assertEquals(8, planets.size)
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        // 3. Render Pass at 1.0x Zoom (State A: Point Light)
+        renderer.applyTheme(redVisionMode = false)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+                planets = planets,
+            )
+        }
+
+        // 4. Render Pass at 100.0x Deep Zoom (State B: High-Res Texture)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 0.6f, // 100x magnification
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 100.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+                planets = planets,
+            )
+        }
+
+        // 5. Test Hit Testing Priority
+        // Find visible planet in front of camera
+        var visiblePlanetIdx = -1
+        for (i in 0 until renderer.activePlanetsCount) {
+            if (renderer.planetInFront[i]) {
+                visiblePlanetIdx = i
+                break
+            }
+        }
+
+        if (visiblePlanetIdx >= 0) {
+            val px = renderer.planetScreenX[visiblePlanetIdx]
+            val py = renderer.planetScreenY[visiblePlanetIdx]
+            val expectedPlanetId = renderer.planetIds[visiblePlanetIdx]
+
+            val hit = renderer.findHitAt(
+                tapX = px,
+                tapY = py,
+                maxStarRadiusPx = 48f,
+                density = 2.5f,
+                catalog = catalog,
+                planets = planets,
+            )
+
+            assertTrue("Hit must be PlanetHit", hit is NightSkyRenderer.HitTarget.PlanetHit)
+            assertEquals(expectedPlanetId, (hit as NightSkyRenderer.HitTarget.PlanetHit).planetId)
+        }
+
+        // 6. Test Selection Reticle for Planet
+        renderer.selectedStarIndex = -1
+        renderer.selectedPlanetId = "Jupiter"
+        val jupiterState = planets.first { it.id.equals("Jupiter", ignoreCase = true) }
+        val selectedPlanetDetails = CelestialBodyDetails(
+            name = "Jupiter",
+            subtitle = "Planeta",
+            property1 = Pair("Vzdálenost", "5.2 AU"),
+            property2 = Pair("Úhlový průměr", "45.2\""),
+            magnitude = -2.4f,
+            raDegrees = jupiterState.raDegrees,
+            decDegrees = jupiterState.decDegrees,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawSelectionReticle(
+                drawScope = this,
+                selectedBody = selectedPlanetDetails,
+                matrix = northMatrix,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                density = 2.5f,
+            )
+        }
+    }
 }

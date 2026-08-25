@@ -324,6 +324,10 @@
     <string name="celestial_constellation_subtitle">Constellation</string>
     <string name="celestial_asterism_subtitle">Asterism</string>
     <string name="celestial_star_subtitle">Star</string>
+    <string name="celestial_planet_subtitle">Planet</string>
+    <string name="celestial_moon_subtitle">Natural Satellite</string>
+    <string name="celestial_angular_diameter">Angular diameter</string>
+    <string name="celestial_illumination">Illumination</string>
     <string name="celestial_distance">Distance</string>
     <string name="celestial_magnitude">Magnitude</string>
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>

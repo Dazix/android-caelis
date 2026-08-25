@@ -330,6 +330,10 @@
     <string name="celestial_constellation_subtitle">Souhvězdí</string>
     <string name="celestial_asterism_subtitle">Asterismus</string>
     <string name="celestial_star_subtitle">Hvězda</string>
+    <string name="celestial_planet_subtitle">Planeta</string>
+    <string name="celestial_moon_subtitle">Přirozený satelit</string>
+    <string name="celestial_angular_diameter">Úhlový průměr</string>
+    <string name="celestial_illumination">Osvětlení</string>
     <string name="celestial_distance">Vzdálenost</string>
     <string name="celestial_magnitude">Magnituda</string>
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>

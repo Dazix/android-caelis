@@ -184,12 +184,14 @@ private fun CelestialSearchResultRow(
         CelestialType.STAR -> AppIcons.Star
         CelestialType.CONSTELLATION -> AppIcons.Constellation
         CelestialType.ASTERISM -> AppIcons.AutoAwesome
+        CelestialType.PLANET -> AppIcons.Planet
     }
 
     val typeLabel = when (item.type) {
         CelestialType.STAR -> stringResource(R.string.celestial_star_subtitle)
         CelestialType.CONSTELLATION -> stringResource(R.string.celestial_constellation_subtitle)
         CelestialType.ASTERISM -> stringResource(R.string.celestial_asterism_subtitle)
+        CelestialType.PLANET -> stringResource(R.string.celestial_planet_subtitle)
     }
 
     ListItem(

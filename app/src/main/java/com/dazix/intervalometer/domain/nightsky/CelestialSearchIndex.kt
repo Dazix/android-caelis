@@ -9,6 +9,7 @@ enum class CelestialType {
     STAR,
     CONSTELLATION,
     ASTERISM,
+    PLANET,
 }
 
 data class SearchResultItem(
@@ -19,20 +20,55 @@ data class SearchResultItem(
     val ra: Float,
     val dec: Float,
     val magnitude: Float? = null,
+    val planetId: String? = null,
 )
 
 object CelestialSearchIndex {
 
     /**
-     * Builds an in-memory search index of all named stars, constellations, and asterisms
-     * from the loaded FlatBuffers [NightSkyCatalog].
+     * Builds an in-memory search index of all named stars, constellations, asterisms, and dynamic planets.
      * Zero-allocation access during iteration via reusable FlatBuffers structs/tables.
      */
-    fun buildSearchIndex(catalog: NightSkyCatalog): List<SearchResultItem> {
+    fun buildSearchIndex(
+        catalog: NightSkyCatalog,
+        planets: List<PlanetState> = emptyList(),
+    ): List<SearchResultItem> {
         val result = mutableListOf<SearchResultItem>()
         val reusableConst = Constellation()
         val reusableMeta = StarMetadata()
         val reusableStar = Star()
+
+        // 0. Index Dynamic Planets and Moon
+        for ((idx, planet) in planets.withIndex()) {
+            val primary = planet.nameCs
+            val secondary = if (planet.nameCs != planet.nameEn) planet.nameEn else if (planet.isMoon) "Měsíc" else "Planeta"
+            result.add(
+                SearchResultItem(
+                    indexId = idx,
+                    primaryName = primary,
+                    secondaryName = secondary,
+                    type = CelestialType.PLANET,
+                    ra = planet.raDegrees.toFloat(),
+                    dec = planet.decDegrees.toFloat(),
+                    magnitude = planet.magnitude,
+                    planetId = planet.id,
+                )
+            )
+            if (planet.nameCs != planet.nameEn) {
+                result.add(
+                    SearchResultItem(
+                        indexId = idx,
+                        primaryName = planet.nameEn,
+                        secondaryName = planet.nameCs,
+                        type = CelestialType.PLANET,
+                        ra = planet.raDegrees.toFloat(),
+                        dec = planet.decDegrees.toFloat(),
+                        magnitude = planet.magnitude,
+                        planetId = planet.id,
+                    )
+                )
+            }
+        }
 
         // 1. Index Constellations and Asterisms
         val constCount = catalog.constellationsLength()

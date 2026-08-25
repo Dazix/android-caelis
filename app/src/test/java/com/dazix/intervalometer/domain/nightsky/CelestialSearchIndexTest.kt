@@ -111,4 +111,45 @@ class CelestialSearchIndexTest {
         val orionResults = CelestialSearchIndex.filter(searchIndex, "orion")
         assertTrue("Should find Orion constellation and stars", orionResults.size >= 2)
     }
+
+    @Test
+    fun `buildSearchIndex includes dynamic planets and Moon with bilingual search entries`() {
+        val binFile = File("src/main/res/raw/catalog.bin")
+        val targetFile = if (binFile.exists()) binFile else File("app/src/main/res/raw/catalog.bin")
+        val catalog = FileInputStream(targetFile).use { stream ->
+            NightSkyCatalogLoader.loadFromStream(stream)
+        }
+
+        val testInstant = java.time.Instant.parse("2026-08-25T20:00:00Z")
+        val planets = PlanetaryEphemerisCalculator.computeAll(testInstant)
+        assertEquals(8, planets.size)
+
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, planets)
+
+        // Verify Moon / Měsíc
+        val moonResultsCs = CelestialSearchIndex.filter(searchIndex, "měsíc")
+        assertTrue("Should find Moon with Czech query 'měsíc'", moonResultsCs.any { it.type == CelestialType.PLANET && it.planetId.equals("Moon", ignoreCase = true) })
+
+        val moonResultsEn = CelestialSearchIndex.filter(searchIndex, "moon")
+        assertTrue("Should find Moon with English query 'moon'", moonResultsEn.any { it.type == CelestialType.PLANET && it.planetId.equals("Moon", ignoreCase = true) })
+
+        // Verify Jupiter / Jupiter
+        val jupiterResults = CelestialSearchIndex.filter(searchIndex, "jupiter")
+        assertTrue("Should find Jupiter", jupiterResults.any { it.type == CelestialType.PLANET && it.planetId.equals("Jupiter", ignoreCase = true) })
+
+        // Verify Mars / Mars
+        val marsResults = CelestialSearchIndex.filter(searchIndex, "mars")
+        assertTrue("Should find Mars", marsResults.any { it.type == CelestialType.PLANET && it.planetId.equals("Mars", ignoreCase = true) })
+
+        // Verify Saturn / Saturn
+        val saturnResults = CelestialSearchIndex.filter(searchIndex, "saturn")
+        assertTrue("Should find Saturn", saturnResults.any { it.type == CelestialType.PLANET && it.planetId.equals("Saturn", ignoreCase = true) })
+
+        // Verify Mercury / Merkur
+        val mercuryResultsCs = CelestialSearchIndex.filter(searchIndex, "merkur")
+        assertTrue("Should find Mercury with Czech query 'merkur'", mercuryResultsCs.any { it.type == CelestialType.PLANET && it.planetId.equals("Mercury", ignoreCase = true) })
+
+        val mercuryResultsEn = CelestialSearchIndex.filter(searchIndex, "mercury")
+        assertTrue("Should find Mercury with English query 'mercury'", mercuryResultsEn.any { it.type == CelestialType.PLANET && it.planetId.equals("Mercury", ignoreCase = true) })
+    }
 }

@@ -493,6 +493,19 @@ object AppIcons {
         }
     }
 
+    /** Planet: celestial sphere with ring. */
+    val Planet: ImageVector by lazy {
+        icon("Planet") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 6.2f)
+                moveTo(2.4f, 13.6f)
+                curveTo(5.2f, 17.2f, 18.8f, 17.2f, 21.6f, 13.6f)
+                moveTo(21.6f, 10.4f)
+                curveTo(18.8f, 6.8f, 5.2f, 6.8f, 2.4f, 10.4f)
+            }
+        }
+    }
+
     /** Planetarium: opaque celestial dome / sky vault. */
     val Planetarium: ImageVector by lazy {
         icon("Planetarium") {

@@ -125,7 +125,8 @@ object CameraFovCalculator {
         baseEffectiveFovDegrees: Float,
         zoomFactor: Float,
     ): Float {
-        val safeZoom = zoomFactor.coerceAtLeast(0.1f)
-        return (baseEffectiveFovDegrees / safeZoom).coerceIn(2.0f, 150.0f)
+        val safeZoom = zoomFactor.coerceAtLeast(0.01f)
+        val safeBaseFov = baseEffectiveFovDegrees.coerceIn(0.1f, 160.0f)
+        return (safeBaseFov / safeZoom).coerceIn(0.01f, 150.0f)
     }
 }
