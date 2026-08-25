@@ -257,11 +257,7 @@ fun SunArScreen(
             keepScreenOn = uiState.keepScreenOn,
             onBack = onBack,
             onToggleInfo = { showInfoSheet = !showInfoSheet },
-            onToggleKeepScreenOn = {
-                val nextState = !uiState.keepScreenOn
-                showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
-                viewModel.toggleKeepScreenOn()
-            },
+            onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
             onResetCalibration = {
                 showResetToast(context)
                 viewModel.resetCalibration()
@@ -294,11 +290,7 @@ fun SunArScreen(
                     lunarTrajectory = uiState.lunarTrajectory,
                     keepScreenOn = uiState.keepScreenOn,
                     isCalibrated = uiState.isCalibrated,
-                    onToggleKeepScreenOn = {
-                        val nextState = !uiState.keepScreenOn
-                        showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
-                        viewModel.toggleKeepScreenOn()
-                    },
+                    onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
                     onResetCalibration = {
                         showResetToast(context)
                         viewModel.resetCalibration()
@@ -1685,12 +1677,6 @@ private fun CameraPermissionPrompt(
             }
         }
     }
-}
-
-private fun showToggleToast(context: Context, @androidx.annotation.StringRes labelRes: Int, enabled: Boolean) {
-    val label = context.getString(labelRes)
-    val state = context.getString(if (enabled) R.string.state_on else R.string.state_off)
-    Toast.makeText(context, "$label: $state", Toast.LENGTH_SHORT).show()
 }
 
 private fun showResetToast(context: Context) {

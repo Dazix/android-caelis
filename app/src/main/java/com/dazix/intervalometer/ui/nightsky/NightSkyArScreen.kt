@@ -491,60 +491,17 @@ fun NightSkyArScreen(
                 isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
                 isKeepScreenOn = uiState.keepScreenOn,
                 isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
-                onToggleLandscapeVisible = {
-                    val nextState = !uiState.isLandscapeVisible
-                    showToggleToast(context, R.string.night_sky_landscape, nextState)
-                    viewModel.toggleLandscapeVisible()
-                },
-                onToggleAtmosphereVisible = {
-                    val nextState = !uiState.isAtmosphereVisible
-                    showToggleToast(context, R.string.night_sky_atmosphere, nextState)
-                    viewModel.toggleAtmosphereVisible()
-                },
-                onToggleMilkyWayVisible = {
-                    val nextState = !uiState.isMilkyWayVisible
-                    showToggleToast(context, R.string.night_sky_milky_way, nextState)
-                    viewModel.toggleMilkyWayVisible()
-                },
-                onToggleConstellationsVisible = {
-                    val nextState = !uiState.isConstellationsVisible
-                    showToggleToast(context, R.string.night_sky_constellations, nextState)
-                    viewModel.toggleConstellationsVisible()
-                },
-                onToggleConstellationArtVisible = {
-                    val nextState = !uiState.isConstellationArtVisible
-                    showToggleToast(context, R.string.night_sky_constellation_art, nextState)
-                    viewModel.toggleConstellationArtVisible()
-                },
-                onToggleGridVisible = {
-                    val nextState = !uiState.isGridVisible
-                    showToggleToast(context, R.string.night_sky_grid, nextState)
-                    viewModel.toggleGridVisible()
-                },
-                onToggleSkyBackgroundOpaque = {
-                    val nextState = !uiState.isSkyBackgroundOpaque
-                    showToggleToast(context, R.string.night_sky_opaque_bg, nextState)
-                    viewModel.toggleSkyBackgroundOpaque()
-                },
-                onToggleRedVisionMode = {
-                    val nextState = !uiState.redVisionMode
-                    showToggleToast(context, R.string.sun_ar_red_vision, nextState)
-                    viewModel.toggleRedVisionMode()
-                },
-                onToggleSensorTracking = {
-                    val next = !uiState.isSensorTrackingEnabled
-                    val toastRes = if (next) R.string.night_sky_sensor_mode_active else R.string.night_sky_manual_mode_active
-                    Toast.makeText(context, toastRes, Toast.LENGTH_SHORT).show()
-                    viewModel.toggleSensorTracking()
-                },
-                onToggleKeepScreenOn = {
-                    val nextState = !uiState.keepScreenOn
-                    showToggleToast(context, R.string.night_sky_keep_screen_on, nextState)
-                    viewModel.toggleKeepScreenOn()
-                },
-                onToggleDebugCalibration = {
-                    viewModel.toggleDebugCalibration()
-                },
+                onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
+                onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
+                onToggleMilkyWayVisible = viewModel::toggleMilkyWayVisible,
+                onToggleConstellationsVisible = viewModel::toggleConstellationsVisible,
+                onToggleConstellationArtVisible = viewModel::toggleConstellationArtVisible,
+                onToggleGridVisible = viewModel::toggleGridVisible,
+                onToggleSkyBackgroundOpaque = viewModel::toggleSkyBackgroundOpaque,
+                onToggleRedVisionMode = viewModel::toggleRedVisionMode,
+                onToggleSensorTracking = viewModel::toggleSensorTracking,
+                onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
+                onToggleDebugCalibration = viewModel::toggleDebugCalibration,
                 nightVisionTheme = uiState.nightVisionState.theme,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -997,12 +954,6 @@ private fun NightSkyPermissionPrompt(
             }
         }
     }
-}
-
-private fun showToggleToast(context: Context, @androidx.annotation.StringRes actionLabelRes: Int, nextState: Boolean) {
-    val actionLabel = context.getString(actionLabelRes)
-    val stateText = context.getString(if (nextState) R.string.state_on else R.string.state_off)
-    Toast.makeText(context, "$actionLabel: $stateText", Toast.LENGTH_SHORT).show()
 }
 
 private fun showResetToast(context: Context) {
