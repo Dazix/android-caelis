@@ -260,10 +260,8 @@ fun SunArScreen(
             cameraFovHorizontal = uiState.cameraFovHorizontal,
             zoomRatio = uiState.zoomRatio,
             isCalibrated = uiState.isCalibrated,
-            keepScreenOn = uiState.keepScreenOn,
             onBack = onBack,
             onToggleInfo = { showInfoSheet = !showInfoSheet },
-            onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
             onResetCalibration = {
                 toastHostState.showToast(
                     resId = R.string.calib_reset_toast,
@@ -1222,10 +1220,8 @@ private fun SunArTopBar(
     cameraFovHorizontal: Float,
     zoomRatio: Float,
     isCalibrated: Boolean,
-    keepScreenOn: Boolean,
     onBack: () -> Unit,
     onToggleInfo: () -> Unit,
-    onToggleKeepScreenOn: () -> Unit,
     onResetCalibration: () -> Unit,
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1336,17 +1332,6 @@ private fun SunArTopBar(
                     tint = accentColor,
                 )
             }
-        }
-
-        IconButton(
-            onClick = onToggleKeepScreenOn,
-            modifier = Modifier.size(38.dp)
-        ) {
-            Icon(
-                imageVector = AppIcons.ScreenAwake,
-                contentDescription = stringResource(R.string.sun_ar_keep_screen_on),
-                tint = if (keepScreenOn) accentColor else Color.White.copy(alpha = 0.4f),
-            )
         }
 
         IconButton(
