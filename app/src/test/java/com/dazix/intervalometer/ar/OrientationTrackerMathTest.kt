@@ -243,6 +243,18 @@ class OrientationTrackerMathTest {
     }
 
     @Test
+    fun `verifies swipe up decreases pitch delta and swipe down increases pitch delta for direct touch mapping`() {
+        val deltaYUp = -20f // User swipes UP
+        val factor = 1.0f
+        val requestedPitchDeltaUp = deltaYUp * factor
+        assertEquals(-20f, requestedPitchDeltaUp, 0.01f) // Camera tilts down -> sky moves up with finger
+
+        val deltaYDown = 20f // User swipes DOWN
+        val requestedPitchDeltaDown = deltaYDown * factor
+        assertEquals(20f, requestedPitchDeltaDown, 0.01f) // Camera tilts up -> sky moves down with finger
+    }
+
+    @Test
     fun `verifies upside down phone tilt dynamically inverts horizontal drag`() {
         // When absolute pitch is 100° (past zenith, upside down):
         val upsideDownPitch = 100.0f

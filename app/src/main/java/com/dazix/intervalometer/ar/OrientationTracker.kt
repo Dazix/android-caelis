@@ -137,7 +137,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         panAzimuthOffsetDeg = (panAzimuthOffsetDeg % 360f + 360f) % 360f
 
         // --- 2. PITCH (Vertical Pan) ---
-        val requestedPitchDelta = -(deltaY * pixelsToDegreesFactor)
+        // Direct mapping: Swipe UP (negative deltaY) -> Camera tilts DOWN -> Sky follows finger UP
+        val requestedPitchDelta = deltaY * pixelsToDegreesFactor
 
         // --- 3. DYNAMIC CLAMPING ---
         // Ensure the drag gesture never pushes the virtual pitch past 85 degrees (Gimbal Lock zone)
