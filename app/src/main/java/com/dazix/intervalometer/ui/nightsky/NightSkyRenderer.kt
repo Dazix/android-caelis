@@ -1148,7 +1148,7 @@ class NightSkyRenderer {
                     }
 
                     // 7. Paint Setup & Draw
-                    artPaint.alpha = (150f * effectiveP).toInt().coerceIn(0, 255)
+                    artPaint.alpha = (90f * effectiveP).toInt().coerceIn(0, 255)
                     nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)
                 }
             }

@@ -5,9 +5,12 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -178,11 +181,22 @@ fun HomeScreen(
                 ),
                 granted = calibrated,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { onNavigate(Screen.APP_PICKER) }) {
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { onNavigate(Screen.APP_PICKER) },
+                    modifier = Modifier.fillMaxHeight(),
+                ) {
                     Text(stringResource(R.string.nav_app_picker))
                 }
-                Button(onClick = onCalibrate, enabled = !active) {
+                Button(
+                    onClick = onCalibrate,
+                    enabled = !active,
+                    modifier = Modifier.fillMaxHeight(),
+                ) {
                     Text(
                         stringResource(
                             if (calibrated) R.string.home_recalibrate else R.string.home_calibrate
