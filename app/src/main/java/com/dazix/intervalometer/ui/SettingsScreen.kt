@@ -61,10 +61,12 @@ fun SettingsScreen(
     activationMode: NightVisionActivationMode,
     startTime: LocalTime,
     endTime: LocalTime,
+    debugModeEnabled: Boolean = false,
     onThemeChange: (NightVisionTheme) -> Unit,
     onActivationModeChange: (NightVisionActivationMode) -> Unit,
     onStartTimeChange: (LocalTime) -> Unit,
     onEndTimeChange: (LocalTime) -> Unit,
+    onDebugModeEnabledChange: (Boolean) -> Unit = {},
     onBack: () -> Unit,
 ) {
     var showStartTimeDialog by remember { mutableStateOf(false) }
@@ -169,6 +171,19 @@ fun SettingsScreen(
                     onClick = { showEndTimeDialog = true },
                 )
             }
+        }
+
+        // ---- Section 4: Debug Options ----
+        SectionCard(
+            title = stringResource(R.string.settings_debug_title),
+            subtitle = stringResource(R.string.settings_debug_subtitle),
+        ) {
+            SwitchRow(
+                title = stringResource(R.string.settings_debug_enable),
+                description = stringResource(R.string.settings_debug_enable_desc),
+                checked = debugModeEnabled,
+                onCheckedChange = onDebugModeEnabledChange,
+            )
         }
     }
 

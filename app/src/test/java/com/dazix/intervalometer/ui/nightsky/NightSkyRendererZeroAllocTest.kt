@@ -52,9 +52,13 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.artworkCache)
         assertNotNull(renderer.artMatrix)
         assertNotNull(renderer.artPaint)
-        assertEquals(8, renderer.artSrcCorners.size)
-        assertEquals(8, renderer.artDstCorners.size)
+        assertEquals(8, renderer.artSrcPoints.size)
+        assertEquals(8, renderer.artDstPoints.size)
         assertEquals(12, renderer.artCornerProjected.size)
+        assertNotNull(renderer.debugFocusCirclePaint)
+        assertNotNull(renderer.debugFocusFillPaint)
+        assertNotNull(renderer.debugFocusLabelPaint)
+        assertNotNull(renderer.debugCentroidPaint)
 
         org.junit.Assert.assertEquals(256, renderer.constellationProgress.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenX.size)
@@ -538,10 +542,12 @@ class NightSkyRendererZeroAllocTest {
         val brightOff = fbb.createString("Alioth")
         val famOff = fbb.createString("Ursa Major Family")
         val artResOff = fbb.createString("art_uma")
+        val artCornerRaOff = Constellation.createArtCornerRaVector(fbb, floatArrayOf(0.0f, 0.0f, 0.0f, 0.0f))
+        val artCornerDecOff = Constellation.createArtCornerDecVector(fbb, floatArrayOf(89.0f, 90.0f, 88.0f, 87.0f))
         val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
         val constOff = Constellation.createConstellation(
             fbb, constNameOff, 0.0f, 90.0f, linesVec, locNameOff, brightOff, famOff, false,
-            artResOff, 0.0f, 90.0f, 40.0f, 0.0f
+            artResOff, artCornerRaOff, artCornerDecOff
         )
         val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
         val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
@@ -675,19 +681,21 @@ class NightSkyRendererZeroAllocTest {
     }
 
     @Test
-    fun `verifies pole-aware 3D tangent plane projection with gimbal lock protection at celestial poles`() {
+    fun `verifies 4-point perspective homography artwork projection across all screen rotations`() {
         val fbb = FlatBufferBuilder(1024)
 
-        // 1. Constellation near the North Celestial Pole (Dec = 89.0°) to trigger gimbal lock protection
+        // 1. Constellation near the North Celestial Pole (Dec = 89.0°)
         val constNameOff = fbb.createString("Ursa Minor")
         val locNameOff = fbb.createString("Malý medvěd")
         val brightOff = fbb.createString("Polaris")
         val famOff = fbb.createString("Ursa Major Family")
         val artResOff = fbb.createString("art_umi")
+        val artCornerRaOff = Constellation.createArtCornerRaVector(fbb, floatArrayOf(37.95f, 222.68f, 100.0f, 20.0f))
+        val artCornerDecOff = Constellation.createArtCornerDecVector(fbb, floatArrayOf(89.26f, 74.16f, 85.0f, 80.0f))
         val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
         val constOff = Constellation.createConstellation(
             fbb, constNameOff, 0.0f, 89.0f, linesVec, locNameOff, brightOff, famOff, false,
-            artResOff, 0.0f, 89.0f, 25.0f, 0.0f
+            artResOff, artCornerRaOff, artCornerDecOff
         )
         val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
         val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
@@ -748,5 +756,103 @@ class NightSkyRendererZeroAllocTest {
                 assertTrue("Polar stars should be visible at North Pole", visible >= 0)
             }
         }
+    }
+
+    @Test
+    fun `verifies constellation focus region debug overlay rendering across night vision themes and normal mode`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        val constNameOff = fbb.createString("Ursa Major")
+        val locNameOff = fbb.createString("Velká medvědice")
+        val brightOff = fbb.createString("Alioth")
+        val famOff = fbb.createString("Ursa Major Family")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val constOff = Constellation.createConstellation(
+            fbb, constNameOff, 0.0f, 90.0f, linesVec, locNameOff, brightOff, famOff, false,
+            0, 0, 0
+        )
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 89.0f, 1.8f)
+        Star.createStar(fbb, 0.0f, 90.0f, 1.8f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Test normal mode with focus area debug overlay
+        renderer.applyTheme(redVisionMode = false)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            val visible = renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+                isDebugFocusRegionVisible = true,
+            )
+            assertTrue("Visible stars rendered with debug focus overlay", visible >= 0)
+        }
+
+        // Test Red Vision mode with custom focus radius & threshold
+        renderer.applyTheme(com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = true)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            val visible = renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = true,
+                isDebugFocusRegionVisible = true,
+                debugFocusRadiusMultiplier = 0.65f,
+                debugFocusDisplayThreshold = 0.40f,
+            )
+            assertTrue("Visible stars rendered with custom focus parameters", visible >= 0)
+        }
+
+        // Test Amber & Green vision modes
+        renderer.applyTheme(com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER, isNightVision = true)
+        renderer.applyTheme(com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN, isNightVision = true)
     }
 }

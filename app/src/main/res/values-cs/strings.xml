@@ -338,6 +338,9 @@
 
     <!-- Calibration Debugger -->
     <string name="night_sky_debug_calibration">Ladění zarovnání ilustrací</string>
+    <string name="night_sky_debug_focus_region">Oblast aktivace souhvězdí</string>
+    <string name="night_sky_debug_focus_radius">Poloměr oblasti: %1$.0f %%</string>
+    <string name="night_sky_debug_focus_threshold">Práh zobrazení: %1$.0f %%</string>
     <string name="night_sky_debug_offset_x">Posun X: %1$.1f px</string>
     <string name="night_sky_debug_offset_y">Posun Y: %1$.1f px</string>
     <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
@@ -368,4 +371,8 @@
     <string name="settings_dialog_title_end">Nastavit čas konce</string>
     <string name="settings_confirm">OK</string>
     <string name="settings_cancel">Zrušit</string>
+    <string name="settings_debug_title">Možnosti ladění</string>
+    <string name="settings_debug_subtitle">Diagnostické a experimentální kalibrační nástroje</string>
+    <string name="settings_debug_enable">Zobrazit možnosti ladění</string>
+    <string name="settings_debug_enable_desc">Povolí zobrazení přepínačů pro ladění a kalibraci v noční obloze a dalších obrazovkách</string>
 </resources>

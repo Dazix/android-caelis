@@ -689,6 +689,26 @@ object AppIcons {
         }
     }
 
+    /** Focus Area / Region: circle with center crosshair / target. */
+    val FocusArea: ImageVector by lazy {
+        icon("FocusArea") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 8.5f)
+                moveTo(12f, 2f)
+                lineTo(12f, 5.5f)
+                moveTo(12f, 18.5f)
+                lineTo(12f, 22f)
+                moveTo(2f, 12f)
+                lineTo(5.5f, 12f)
+                moveTo(18.5f, 12f)
+                lineTo(22f, 12f)
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 12f, radius = 2f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Color as AndroidColor
+import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -347,10 +348,39 @@ class NightSkyRenderer {
     private val redVisionArtFilter = PorterDuffColorFilter(AndroidColor.RED, PorterDuff.Mode.MULTIPLY)
     private val amberVisionArtFilter = PorterDuffColorFilter(AndroidColor.rgb(255, 179, 0), PorterDuff.Mode.MULTIPLY)
     private val greenVisionArtFilter = PorterDuffColorFilter(AndroidColor.rgb(0, 230, 118), PorterDuff.Mode.MULTIPLY)
-    val artSrcCorners = FloatArray(8)
-    val artDstCorners = FloatArray(8)
-    val artCornerProjected = FloatArray(12)
-    private val tempVector3D = FloatArray(3)
+    val artSrcPoints = FloatArray(8) // [x0, y0, x1, y1, x2, y2, x3, y3] (TL, TR, BR, BL)
+    val artDstPoints = FloatArray(8) // [s0X, s0Y, s1X, s1Y, s2X, s2Y, s3X, s3Y] (TL, TR, BR, BL)
+    val artCornerProjected = FloatArray(12) // [s0X, s0Y, z0, s1X, s1Y, z1, s2X, s2Y, z2, s3X, s3Y, z3]
+
+    // Pre-allocated debug focus region visualization paints & colors
+    val debugFocusCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3.5f
+        pathEffect = DashPathEffect(floatArrayOf(24f, 16f), 0f)
+        color = AndroidColor.argb(190, 0, 230, 118)
+    }
+
+    val debugFocusFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.argb(20, 0, 230, 118)
+    }
+
+    val debugFocusLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 30f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
+        color = AndroidColor.argb(230, 0, 230, 118)
+    }
+
+    val debugCentroidPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+
+    var debugCentroidInFocusColor = AndroidColor.argb(220, 0, 230, 118)
+        private set
+    var debugCentroidOutOfFocusColor = AndroidColor.argb(120, 255, 82, 82)
+        private set
 
     /**
      * Projects a 3D World (ENU) vector directly into screen pixel coordinates and camera Z.
@@ -498,6 +528,12 @@ class NightSkyRenderer {
             reticlePaint.color = primaryInt
             reticleTextPaint.color = primaryInt
             arrowPaint.color = primaryInt
+
+            debugFocusCirclePaint.color = AndroidColor.argb(190, pr, pg, pb)
+            debugFocusFillPaint.color = AndroidColor.argb(25, pr, pg, pb)
+            debugFocusLabelPaint.color = AndroidColor.argb(230, pr, pg, pb)
+            debugCentroidInFocusColor = AndroidColor.argb(230, pr, pg, pb)
+            debugCentroidOutOfFocusColor = AndroidColor.argb(100, sr, sg, sb)
         } else {
             artPaint.colorFilter = null
 
@@ -516,6 +552,12 @@ class NightSkyRenderer {
             reticlePaint.color = AndroidColor.WHITE
             reticleTextPaint.color = AndroidColor.WHITE
             arrowPaint.color = 0xFFFFD700.toInt()
+
+            debugFocusCirclePaint.color = AndroidColor.argb(190, 0, 230, 118)
+            debugFocusFillPaint.color = AndroidColor.argb(20, 0, 230, 118)
+            debugFocusLabelPaint.color = AndroidColor.argb(230, 0, 230, 118)
+            debugCentroidInFocusColor = AndroidColor.argb(220, 0, 230, 118)
+            debugCentroidOutOfFocusColor = AndroidColor.argb(120, 255, 82, 82)
         }
     }
 
@@ -828,6 +870,9 @@ class NightSkyRenderer {
         debugOffsetY: Float = 0f,
         debugScaleMultiplier: Float = 1.0f,
         debugRotationOffset: Float = 0f,
+        isDebugFocusRegionVisible: Boolean = false,
+        debugFocusRadiusMultiplier: Float = 0.48f,
+        debugFocusDisplayThreshold: Float = 0.0f,
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
         val totalStars = minOf(catalog.starsLength(), maxStars)
@@ -869,7 +914,7 @@ class NightSkyRenderer {
 
         // 4. Constellation Centroid Focus & Animation Progress Update
         val constCount = minOf(catalog.constellationsLength(), maxConstellations)
-        val focusRadius = w * 0.48f
+        val focusRadius = w * debugFocusRadiusMultiplier
         val focusRadiusSq = focusRadius * focusRadius
 
         for (c in 0 until constCount) {
@@ -1028,130 +1073,82 @@ class NightSkyRenderer {
         }
 
         // 6b. Batch Render Artistic Constellation Overlays (Behind constellation lines and stars)
+        val minDisplayThreshold = maxOf(0.001f, debugFocusDisplayThreshold)
         if (showConstellations && showConstellationArt && context != null) {
             for (c in 0 until constCount) {
                 val p = constellationProgress[c]
-                if (p <= 0.001f) continue
+                if (p <= minDisplayThreshold) continue
+                val effectiveP = if (debugFocusDisplayThreshold > 0f) {
+                    ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
+                } else {
+                    p
+                }
 
                 catalog.constellations(reusableConstellation, c)
+                if (reusableConstellation.artCornerRaLength() != 4) continue
+
                 val artName = reusableConstellation.artResourceName()
                 if (artName.isNullOrEmpty()) continue
 
                 val bitmap = getOrLoadArtwork(context, artName) ?: continue
 
-                // Catalog RA/Dec/Width/Rotation are stored in Degrees [0.0..360.0), [-90.0..+90.0]
-                val artCenterRa = reusableConstellation.artCenterRa().toDouble()
-                val artCenterDec = reusableConstellation.artCenterDec().toDouble()
-                val artWidthDeg = reusableConstellation.artWidthDeg()
-                val artRotDeg = reusableConstellation.artRotationDeg()
-
-                // --- 1. GET WORLD VECTORS FOR CENTER AND NORTH ANCHOR ---
-                EquatorialCoordinates.computeWorldVector(artCenterRa, artCenterDec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
-                val cx = tempWorldVec[0]
-                val cy = tempWorldVec[1]
-                val cz = tempWorldVec[2]
-
-                val isNearNorthPole = artCenterDec > 88.0
-                val northDec = if (isNearNorthPole) artCenterDec - 1.0 else artCenterDec + 1.0
-                val northSign = if (isNearNorthPole) -1.0f else 1.0f
-
-                EquatorialCoordinates.computeWorldVector(artCenterRa, northDec, lstDegrees, latitudeDegrees, tempVector3D, 0)
-                val nx = tempVector3D[0]
-                val ny = tempVector3D[1]
-                val nz = tempVector3D[2]
-
-                // --- 2. COMPUTE ORTHONORMAL BASIS FOR LOCAL TANGENT PLANE (UP & RIGHT) ---
-                val dot = cx * nx + cy * ny + cz * nz
-                var ux = (nx - cx * dot) * northSign
-                var uy = (ny - cy * dot) * northSign
-                var uz = (nz - cz * dot) * northSign
-                val uLen = kotlin.math.sqrt(ux * ux + uy * uy + uz * uz)
-                if (uLen > 1e-6f) {
-                    ux /= uLen
-                    uy /= uLen
-                    uz /= uLen
+                // 1. Project the 4 Image Corners (TL, TR, BR, BL) from catalog celestial coordinates to Screen Space
+                var allInFront = true
+                for (i in 0 until 4) {
+                    val aRa = reusableConstellation.artCornerRa(i).toDouble()
+                    val aDec = reusableConstellation.artCornerDec(i).toDouble()
+                    EquatorialCoordinates.computeWorldVector(aRa, aDec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+                    val inFront = projectWorldToScreen(
+                        tempWorldVec[0], tempWorldVec[1], tempWorldVec[2],
+                        matrix, displayRotation, halfW, halfH, focalLengthPixels,
+                        artCornerProjected, i * 3
+                    )
+                    if (!inFront) {
+                        allInFront = false
+                    }
                 }
 
-                // Right vector (East) on celestial tangent plane: C x U
-                val rx = cy * uz - cz * uy
-                val ry = cz * ux - cx * uz
-                val rz = cx * uy - cy * ux
+                val z0 = artCornerProjected[2]
+                val z1 = artCornerProjected[5]
+                val z2 = artCornerProjected[8]
+                val z3 = artCornerProjected[11]
 
-                // --- 3. APPLY ROTATION (STELLARIUM + DEBUG) ---
-                val rotRad = Math.toRadians((-artRotDeg + debugRotationOffset).toDouble()).toFloat()
-                val cosR = kotlin.math.cos(rotRad)
-                val sinR = kotlin.math.sin(rotRad)
+                // 2. Culling: Only draw if all 4 corners are in front of the camera plane (Z > 0)
+                if (allInFront && z0 > 0.001f && z1 > 0.001f && z2 > 0.001f && z3 > 0.001f) {
+                    val bw = bitmap.width.toFloat()
+                    val bh = bitmap.height.toFloat()
 
-                val rRotX = rx * cosR - ux * sinR
-                val rRotY = ry * cosR - uy * sinR
-                val rRotZ = rz * cosR - uz * sinR
+                    // 3. Setup Source Points (Flat 2D Bitmap Corners: TL, TR, BR, BL)
+                    artSrcPoints[0] = 0f;  artSrcPoints[1] = 0f  // Top-Left
+                    artSrcPoints[2] = bw;  artSrcPoints[3] = 0f  // Top-Right
+                    artSrcPoints[4] = bw;  artSrcPoints[5] = bh  // Bottom-Right
+                    artSrcPoints[6] = 0f;  artSrcPoints[7] = bh  // Bottom-Left
 
-                val uRotX = rx * sinR + ux * cosR
-                val uRotY = ry * sinR + uy * cosR
-                val uRotZ = rz * sinR + uz * cosR
+                    // 4. Setup Destination Points (Projected 3D Perspective Corners + User Debug Offset)
+                    artDstPoints[0] = artCornerProjected[0] + debugOffsetX  // TL
+                    artDstPoints[1] = artCornerProjected[1] + debugOffsetY
+                    artDstPoints[2] = artCornerProjected[3] + debugOffsetX  // TR
+                    artDstPoints[3] = artCornerProjected[4] + debugOffsetY
+                    artDstPoints[4] = artCornerProjected[6] + debugOffsetX  // BR
+                    artDstPoints[5] = artCornerProjected[7] + debugOffsetY
+                    artDstPoints[6] = artCornerProjected[9] + debugOffsetX  // BL
+                    artDstPoints[7] = artCornerProjected[10] + debugOffsetY
 
-                // --- 4. CALCULATE PHYSICAL CORNERS ON THE SPHERE TANGENT PLANE ---
-                val wRad = Math.toRadians(artWidthDeg.toDouble()).toFloat()
-                val physW = 2.0f * kotlin.math.tan(wRad / 2.0f) * debugScaleMultiplier
-                val physH = physW * (bitmap.height.toFloat() / bitmap.width.toFloat())
-                val hw = physW / 2f
-                val hh = physH / 2f
-
-                // Top-Left (TL: -Right, +Up)
-                val tlX = cx - rRotX * hw + uRotX * hh
-                val tlY = cy - rRotY * hw + uRotY * hh
-                val tlZ = cz - rRotZ * hw + uRotZ * hh
-
-                // Top-Right (TR: +Right, +Up)
-                val trX = cx + rRotX * hw + uRotX * hh
-                val trY = cy + rRotY * hw + uRotY * hh
-                val trZ = cz + rRotZ * hw + uRotZ * hh
-
-                // Bottom-Right (BR: +Right, -Up)
-                val brX = cx + rRotX * hw - uRotX * hh
-                val brY = cy + rRotY * hw - uRotY * hh
-                val brZ = cz + rRotZ * hw - uRotZ * hh
-
-                // Bottom-Left (BL: -Right, -Up)
-                val blX = cx - rRotX * hw - uRotX * hh
-                val blY = cy - rRotY * hw - uRotY * hh
-                val blZ = cz - rRotZ * hw - uRotZ * hh
-
-                // --- 5. PROJECT CORNERS TO 2D SCREEN SPACE ---
-                val inFrontTl = projectWorldToScreen(tlX, tlY, tlZ, matrix, displayRotation, halfW, halfH, focalLengthPixels, artCornerProjected, 0)
-                val inFrontTr = projectWorldToScreen(trX, trY, trZ, matrix, displayRotation, halfW, halfH, focalLengthPixels, artCornerProjected, 3)
-                val inFrontBr = projectWorldToScreen(brX, brY, brZ, matrix, displayRotation, halfW, halfH, focalLengthPixels, artCornerProjected, 6)
-                val inFrontBl = projectWorldToScreen(blX, blY, blZ, matrix, displayRotation, halfW, halfH, focalLengthPixels, artCornerProjected, 9)
-
-                // Ensure all 4 corners are in front of the camera plane (Z > 0) to avoid perspective inversion / clipping
-                if (inFrontTl && inFrontTr && inFrontBr && inFrontBl) {
-                    // --- 6. ASSEMBLE HOMOGRAPHY MATRIX USING POLY-TO-POLY ---
-                    val bmpW = bitmap.width.toFloat()
-                    val bmpH = bitmap.height.toFloat()
-
-                    // Source coordinates (flat 2D bitmap)
-                    artSrcCorners[0] = 0f;    artSrcCorners[1] = 0f    // Top-Left
-                    artSrcCorners[2] = bmpW;  artSrcCorners[3] = 0f    // Top-Right
-                    artSrcCorners[4] = bmpW;  artSrcCorners[5] = bmpH  // Bottom-Right
-                    artSrcCorners[6] = 0f;    artSrcCorners[7] = bmpH  // Bottom-Left
-
-                    // Destination coordinates (gnomonic perspective screen projection)
-                    artDstCorners[0] = artCornerProjected[0] + debugOffsetX
-                    artDstCorners[1] = artCornerProjected[1] + debugOffsetY
-                    artDstCorners[2] = artCornerProjected[3] + debugOffsetX
-                    artDstCorners[3] = artCornerProjected[4] + debugOffsetY
-                    artDstCorners[4] = artCornerProjected[6] + debugOffsetX
-                    artDstCorners[5] = artCornerProjected[7] + debugOffsetY
-                    artDstCorners[6] = artCornerProjected[9] + debugOffsetX
-                    artDstCorners[7] = artCornerProjected[10] + debugOffsetY
-
+                    // 5. Assemble Homography Matrix
                     artMatrix.reset()
-                    // Natively builds a true 4-corner perspective warp matrix (homography) in Android Canvas
-                    artMatrix.setPolyToPoly(artSrcCorners, 0, artDstCorners, 0, 4)
+                    // setPolyToPoly with 4 points computes the complete 3D projective perspective homography
+                    artMatrix.setPolyToPoly(artSrcPoints, 0, artDstPoints, 0, 4)
 
-                    // --- 7. DRAW ---
-                    // Max opacity is 25% (64/255) when constellation is in focus (p = 1.0)
-                    artPaint.alpha = (64f * p).toInt().coerceIn(0, 255)
+                    // 6. Apply Debug Scale & Rotation (Optional, centered on the projected quad centroid)
+                    if (debugScaleMultiplier != 1.0f || debugRotationOffset != 0f) {
+                        val cx = (artDstPoints[0] + artDstPoints[2] + artDstPoints[4] + artDstPoints[6]) * 0.25f
+                        val cy = (artDstPoints[1] + artDstPoints[3] + artDstPoints[5] + artDstPoints[7]) * 0.25f
+                        artMatrix.postScale(debugScaleMultiplier, debugScaleMultiplier, cx, cy)
+                        artMatrix.postRotate(debugRotationOffset, cx, cy)
+                    }
+
+                    // 7. Paint Setup & Draw
+                    artPaint.alpha = (150f * effectiveP).toInt().coerceIn(0, 255)
                     nativeCanvas.drawBitmap(bitmap, artMatrix, artPaint)
                 }
             }
@@ -1165,7 +1162,12 @@ class NightSkyRenderer {
 
             for (c in 0 until constCount) {
                 val p = constellationProgress[c]
-                if (p <= 0.001f) continue
+                if (p <= minDisplayThreshold) continue
+                val effectiveP = if (debugFocusDisplayThreshold > 0f) {
+                    ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
+                } else {
+                    p
+                }
 
                 catalog.constellations(reusableConstellation, c)
                 val linesLen = reusableConstellation.linesLength()
@@ -1198,7 +1200,7 @@ class NightSkyRenderer {
                                     val endX = x2 - ux * gapPx
                                     val endY = y2 - uy * gapPx
 
-                                    if (p >= 0.99f) {
+                                    if (effectiveP >= 0.99f) {
                                         // ANIMATION FINISHED: Draw exactly ONE continuous segment
                                         // Completely eliminates center overlapping dot artifact!
                                         if (lineCoordsCount + 4 <= constellationLinesBuffer.size) {
@@ -1213,7 +1215,7 @@ class NightSkyRenderer {
                                         if (lineCoordsCount + 8 <= constellationLinesBuffer.size) {
                                             val adjDx = endX - startX
                                             val adjDy = endY - startY
-                                            val pHalf = p * 0.5f
+                                            val pHalf = effectiveP * 0.5f
 
                                             constellationLinesBuffer[lineCoordsCount] = startX
                                             constellationLinesBuffer[lineCoordsCount + 1] = startY
@@ -1239,33 +1241,34 @@ class NightSkyRenderer {
                     if (isSelected) {
                         val haloPaint = if (isAsterism) asterismHaloPaint else constellationHaloPaint
                         val corePaint = if (isAsterism) asterismCorePaint else constellationCorePaint
-                        haloPaint.alpha = (42f * artLineBoost * p).toInt().coerceIn(0, 255)
+                        haloPaint.alpha = (42f * artLineBoost * effectiveP).toInt().coerceIn(0, 255)
                         nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, haloPaint)
-                        corePaint.alpha = (240f * artLineBoost * p).toInt().coerceIn(0, 255)
+                        corePaint.alpha = (240f * artLineBoost * effectiveP).toInt().coerceIn(0, 255)
                         nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, corePaint)
                     } else {
                         val linePaint = if (isAsterism) asterismPaint else constellationPaint
                         val baseAlpha = if (isAsterism) 32f else 48f
-                        linePaint.alpha = (baseAlpha * artLineBoost * p).toInt().coerceIn(0, 255)
+                        linePaint.alpha = (baseAlpha * artLineBoost * effectiveP).toInt().coerceIn(0, 255)
                         nativeCanvas.drawLines(constellationLinesBuffer, 0, lineCoordsCount, linePaint)
                     }
                 }
 
                 // Render Animated Constellation Name Label with vertical slide (Skip asterisms)
-                if (!isAsterism && constellationCentroidInFront[c] && p > 0.05f) {
+                val labelMinThreshold = maxOf(0.05f, debugFocusDisplayThreshold)
+                if (!isAsterism && constellationCentroidInFront[c] && p > labelMinThreshold) {
                     val cx = constellationCentroidScreenX[c]
                     val cy = constellationCentroidScreenY[c]
-                    val textY = cy - (40f * (1f - p))
+                    val textY = cy - (40f * (1f - effectiveP))
                     val label = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: ""
                     if (label.isNotEmpty() && cx in -margin..(w + margin) && textY in -margin..(h + margin)) {
                         if (isSelected) {
                             val highlightLabelPaint = constellationHighlightLabelPaint
-                            highlightLabelPaint.alpha = (255f * p).toInt().coerceIn(0, 255)
+                            highlightLabelPaint.alpha = (255f * effectiveP).toInt().coerceIn(0, 255)
                             nativeCanvas.drawText(label, cx, textY, highlightLabelPaint)
                         } else {
                             val labelPaint = constellationLabelPaint
                             val baseLabelAlpha = 200f
-                            labelPaint.alpha = (baseLabelAlpha * p).toInt().coerceIn(0, 255)
+                            labelPaint.alpha = (baseLabelAlpha * effectiveP).toInt().coerceIn(0, 255)
                             nativeCanvas.drawText(label, cx, textY, labelPaint)
                         }
                     }
@@ -1303,6 +1306,30 @@ class NightSkyRenderer {
             val count = bucketCounts[b]
             if (count > 0) {
                 nativeCanvas.drawPoints(bucketPoints[b], 0, count * 2, corePaints[b])
+            }
+        }
+
+        // 9. Debug Focus Area Overlay: Circle & Centroid Indicators
+        if (isDebugFocusRegionVisible) {
+            nativeCanvas.drawCircle(halfW, halfH, focusRadius, debugFocusFillPaint)
+            nativeCanvas.drawCircle(halfW, halfH, focusRadius, debugFocusCirclePaint)
+            val pct = (debugFocusRadiusMultiplier * 100f).toInt()
+            val threshPct = (debugFocusDisplayThreshold * 100f).toInt()
+            nativeCanvas.drawText("FOCUS AREA (r = $pct% W, thresh = $threshPct%)", halfW, halfH - focusRadius - 16f, debugFocusLabelPaint)
+
+            // Draw centroid indicators for constellations in front of the camera
+            for (c in 0 until constCount) {
+                if (!constellationCentroidInFront[c]) continue
+                val cxScreen = constellationCentroidScreenX[c]
+                val cyScreen = constellationCentroidScreenY[c]
+                if (cxScreen < -margin || cxScreen > w + margin || cyScreen < -margin || cyScreen > h + margin) continue
+
+                val cdx = cxScreen - halfW
+                val cdy = cyScreen - halfH
+                val isSelectedConstellation = (c == selectedConstellationIndex)
+                val inFocus = ((cdx * cdx + cdy * cdy) <= focusRadiusSq) || isSelectedConstellation
+                debugCentroidPaint.color = if (inFocus) debugCentroidInFocusColor else debugCentroidOutOfFocusColor
+                nativeCanvas.drawCircle(cxScreen, cyScreen, 6f, debugCentroidPaint)
             }
         }
 

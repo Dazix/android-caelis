@@ -580,6 +580,21 @@ class SettingsMappingTest {
         assertEquals(java.time.LocalTime.of(4, 15), SettingsMapping.readCustomEndTime(prefs))
     }
 
+    @Test
+    fun `debug mode enabled defaults to false on empty preferences`() {
+        assertFalse(SettingsMapping.readDebugModeEnabled(emptyPreferences()))
+    }
+
+    @Test
+    fun `debug mode enabled survives round trip when true and false`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeDebugModeEnabled(prefs, true)
+        assertEquals(true, SettingsMapping.readDebugModeEnabled(prefs))
+
+        SettingsMapping.writeDebugModeEnabled(prefs, false)
+        assertEquals(false, SettingsMapping.readDebugModeEnabled(prefs))
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

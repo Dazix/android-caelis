@@ -343,6 +343,9 @@ fun NightSkyArScreen(
                     debugArtOffsetY = uiState.debugArtOffsetY,
                     debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
                     debugArtRotationOffset = uiState.debugArtRotationOffset,
+                    isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
+                    debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                    debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
                     onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -359,7 +362,7 @@ fun NightSkyArScreen(
 
             // In-App Calibration Debugger Overlay
             androidx.compose.animation.AnimatedVisibility(
-                visible = uiState.isDebugCalibrationVisible,
+                visible = uiState.isDebugOptionsEnabled && uiState.isDebugCalibrationVisible,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 },
                 modifier = Modifier
@@ -378,6 +381,27 @@ fun NightSkyArScreen(
                     onRotationOffsetChange = viewModel::setDebugArtRotationOffset,
                     onReset = viewModel::resetDebugCalibration,
                     onClose = { viewModel.setDebugCalibrationVisible(false) },
+                    nightVisionTheme = uiState.nightVisionState.theme,
+                )
+            }
+
+            // In-App Focus Area Debugger Overlay
+            androidx.compose.animation.AnimatedVisibility(
+                visible = uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 16.dp, top = 80.dp, bottom = 80.dp),
+            ) {
+                FocusRegionDebugOverlay(
+                    radiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                    displayThreshold = uiState.debugFocusDisplayThreshold,
+                    redVisionMode = uiState.redVisionMode,
+                    onRadiusMultiplierChange = viewModel::setDebugFocusRadiusMultiplier,
+                    onDisplayThresholdChange = viewModel::setDebugFocusDisplayThreshold,
+                    onReset = viewModel::resetDebugFocusRegion,
+                    onClose = { viewModel.setDebugFocusRegionVisible(false) },
                     nightVisionTheme = uiState.nightVisionState.theme,
                 )
             }
@@ -514,6 +538,8 @@ fun NightSkyArScreen(
                 isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
                 isKeepScreenOn = uiState.keepScreenOn,
                 isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
+                isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
+                isDebugOptionsEnabled = uiState.isDebugOptionsEnabled,
                 onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
                 onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
                 onToggleMilkyWayVisible = viewModel::toggleMilkyWayVisible,
@@ -525,6 +551,7 @@ fun NightSkyArScreen(
                 onToggleSensorTracking = viewModel::toggleSensorTracking,
                 onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
                 onToggleDebugCalibration = viewModel::toggleDebugCalibration,
+                onToggleDebugFocusRegion = viewModel::toggleDebugFocusRegion,
                 nightVisionTheme = uiState.nightVisionState.theme,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -557,6 +584,9 @@ private fun NightSkyOverlayCanvas(
     debugArtOffsetY: Float = 0f,
     debugArtScaleMultiplier: Float = 1.0f,
     debugArtRotationOffset: Float = 0f,
+    isDebugFocusRegionVisible: Boolean = false,
+    debugFocusRadiusMultiplier: Float = 0.48f,
+    debugFocusDisplayThreshold: Float = 0.0f,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -651,6 +681,9 @@ private fun NightSkyOverlayCanvas(
             debugOffsetY = debugArtOffsetY,
             debugScaleMultiplier = debugArtScaleMultiplier,
             debugRotationOffset = debugArtRotationOffset,
+            isDebugFocusRegionVisible = isDebugFocusRegionVisible,
+            debugFocusRadiusMultiplier = debugFocusRadiusMultiplier,
+            debugFocusDisplayThreshold = debugFocusDisplayThreshold,
         )
 
         // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)
@@ -1138,6 +1171,134 @@ private fun CalibrationDebugOverlay(
                     value = rotationOffset,
                     onValueChange = onRotationOffsetChange,
                     valueRange = -90f..90f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FocusRegionDebugOverlay(
+    radiusMultiplier: Float,
+    displayThreshold: Float,
+    redVisionMode: Boolean,
+    onRadiusMultiplierChange: (Float) -> Unit,
+    onDisplayThresholdChange: (Float) -> Unit,
+    onReset: () -> Unit,
+    onClose: () -> Unit,
+    nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
+    modifier: Modifier = Modifier,
+) {
+    val palette = paletteForTheme(nightVisionTheme)
+    val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xEE121824)
+    val borderColor = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0x444DD0E1)
+    val textColor = if (redVisionMode) palette.primary else Color(0xFFE2E8F0)
+    val labelColor = if (redVisionMode) palette.secondary else Color(0xFF94A3B8)
+    val sliderColors = if (redVisionMode) {
+        SliderDefaults.colors(
+            thumbColor = palette.primary,
+            activeTrackColor = palette.primary,
+            inactiveTrackColor = Color(0xFF3B0000),
+        )
+    } else {
+        SliderDefaults.colors(
+            thumbColor = Color(0xFF4DD0E1),
+            activeTrackColor = Color(0xFF00ACC1),
+            inactiveTrackColor = Color(0xFF1E293B),
+        )
+    }
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = containerBg,
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier.widthIn(max = 300.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.FocusArea,
+                        contentDescription = null,
+                        tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.night_sky_debug_focus_region),
+                        color = textColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    IconButton(
+                        onClick = onReset,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.ResetCalibration,
+                            contentDescription = stringResource(R.string.night_sky_debug_reset),
+                            tint = labelColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Clear,
+                            contentDescription = stringResource(R.string.celestial_close),
+                            tint = labelColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+
+            // Radius Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_focus_radius, radiusMultiplier * 100f),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = radiusMultiplier,
+                    onValueChange = onRadiusMultiplierChange,
+                    valueRange = 0.10f..1.20f,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+
+            // Display Threshold Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_focus_threshold, displayThreshold * 100f),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = displayThreshold,
+                    onValueChange = onDisplayThresholdChange,
+                    valueRange = 0.0f..1.0f,
                     colors = sliderColors,
                     modifier = Modifier.height(24.dp),
                 )

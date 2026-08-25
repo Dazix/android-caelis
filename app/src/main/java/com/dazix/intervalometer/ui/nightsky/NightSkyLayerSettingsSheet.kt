@@ -42,6 +42,8 @@ fun NightSkyLayerSettingsSheet(
     isSensorTrackingEnabled: Boolean = true,
     isKeepScreenOn: Boolean = false,
     isDebugCalibrationVisible: Boolean = false,
+    isDebugFocusRegionVisible: Boolean = false,
+    isDebugOptionsEnabled: Boolean = false,
     onToggleLandscapeVisible: () -> Unit,
     onToggleAtmosphereVisible: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
@@ -53,6 +55,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleSensorTracking: () -> Unit = {},
     onToggleKeepScreenOn: () -> Unit = {},
     onToggleDebugCalibration: () -> Unit = {},
+    onToggleDebugFocusRegion: () -> Unit = {},
     nightVisionTheme: NightVisionTheme = NightVisionTheme.RED,
     modifier: Modifier = Modifier,
 ) {
@@ -193,15 +196,27 @@ fun NightSkyLayerSettingsSheet(
             onCheckedChange = { onToggleKeepScreenOn() },
         )
 
-        LayerToggleRow(
-            label = stringResource(R.string.night_sky_debug_calibration),
-            icon = AppIcons.Setup,
-            isChecked = isDebugCalibrationVisible,
-            headlineColor = headlineColor,
-            iconColor = iconColor,
-            switchColors = switchColors,
-            onCheckedChange = { onToggleDebugCalibration() },
-        )
+        if (isDebugOptionsEnabled) {
+            LayerToggleRow(
+                label = stringResource(R.string.night_sky_debug_calibration),
+                icon = AppIcons.Setup,
+                isChecked = isDebugCalibrationVisible,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleDebugCalibration() },
+            )
+
+            LayerToggleRow(
+                label = stringResource(R.string.night_sky_debug_focus_region),
+                icon = AppIcons.FocusArea,
+                isChecked = isDebugFocusRegionVisible,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleDebugFocusRegion() },
+            )
+        }
     }
 }
 

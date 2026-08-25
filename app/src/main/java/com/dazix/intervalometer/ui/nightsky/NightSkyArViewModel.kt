@@ -81,6 +81,10 @@ data class NightSkyArUiState(
     val debugArtScaleMultiplier: Float = 1.0f,
     val debugArtRotationOffset: Float = 0f,
     val isDebugCalibrationVisible: Boolean = false,
+    val isDebugFocusRegionVisible: Boolean = false,
+    val debugFocusRadiusMultiplier: Float = 0.48f,
+    val debugFocusDisplayThreshold: Float = 0.0f,
+    val isDebugOptionsEnabled: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -273,6 +277,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val debugArtScaleMultiplier = MutableStateFlow(1.0f)
     val debugArtRotationOffset = MutableStateFlow(0f)
     val isDebugCalibrationVisible = MutableStateFlow(false)
+    val isDebugFocusRegionVisible = MutableStateFlow(false)
+    val debugFocusRadiusMultiplier = MutableStateFlow(0.48f)
+    val debugFocusDisplayThreshold = MutableStateFlow(0.0f)
+    val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugModeEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false,
+    )
 
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
@@ -311,6 +323,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             debugArtScaleMultiplier,
             debugArtRotationOffset,
             isDebugCalibrationVisible,
+            isDebugFocusRegionVisible,
+            debugFocusRadiusMultiplier,
+            debugFocusDisplayThreshold,
+            isDebugOptionsEnabled,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -346,6 +362,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val dbgScale = args[29] as Float
         val dbgRot = args[30] as Float
         val dbgVis = args[31] as Boolean
+        val dbgFocus = args[32] as Boolean
+        val dbgRadius = args[33] as Float
+        val dbgThresh = args[34] as Float
+        val dbgOptions = args[35] as Boolean
 
         NightSkyArUiState(
             location = loc,
@@ -382,6 +402,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             debugArtScaleMultiplier = dbgScale,
             debugArtRotationOffset = dbgRot,
             isDebugCalibrationVisible = dbgVis,
+            isDebugFocusRegionVisible = dbgFocus,
+            debugFocusRadiusMultiplier = dbgRadius,
+            debugFocusDisplayThreshold = dbgThresh,
+            isDebugOptionsEnabled = dbgOptions,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -926,6 +950,27 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setDebugCalibrationVisible(visible: Boolean) {
         isDebugCalibrationVisible.value = visible
+    }
+
+    fun toggleDebugFocusRegion() {
+        isDebugFocusRegionVisible.value = !isDebugFocusRegionVisible.value
+    }
+
+    fun setDebugFocusRegionVisible(visible: Boolean) {
+        isDebugFocusRegionVisible.value = visible
+    }
+
+    fun setDebugFocusRadiusMultiplier(v: Float) {
+        debugFocusRadiusMultiplier.value = v.coerceIn(0.10f, 1.50f)
+    }
+
+    fun setDebugFocusDisplayThreshold(v: Float) {
+        debugFocusDisplayThreshold.value = v.coerceIn(0.0f, 1.0f)
+    }
+
+    fun resetDebugFocusRegion() {
+        debugFocusRadiusMultiplier.value = 0.48f
+        debugFocusDisplayThreshold.value = 0.0f
     }
 
     fun resetDebugCalibration() {

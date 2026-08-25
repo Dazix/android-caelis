@@ -272,6 +272,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val customEndTime: StateFlow<LocalTime> = settings.customEndTime
         .stateIn(viewModelScope, SharingStarted.Eagerly, LocalTime.of(6, 0))
 
+    val debugModeEnabled: StateFlow<Boolean> = settings.debugModeEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     fun setNightVisionTheme(theme: NightVisionTheme) {
         viewModelScope.launch { settings.saveNightVisionTheme(theme) }
     }
@@ -286,6 +289,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCustomEndTime(time: LocalTime) {
         viewModelScope.launch { settings.saveCustomEndTime(time) }
+    }
+
+    fun setDebugModeEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.saveDebugModeEnabled(enabled) }
     }
 
     /** The shortest interval the chosen camera app can sustain, straight from its profile. */

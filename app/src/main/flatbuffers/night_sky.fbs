@@ -27,12 +27,10 @@ table Constellation {
   brightest_star: string;
   family: string;
   is_asterism: bool;
-  // New Illustration Fields
   art_resource_name: string; // e.g., "art_uma"
-  art_center_ra: float;
-  art_center_dec: float;
-  art_width_deg: float;
-  art_rotation_deg: float;
+  // Celestial coordinates for the 4 image corners (TL, TR, BR, BL) in degrees
+  art_corner_ra: [float];
+  art_corner_dec: [float];
 }
 
 table NightSkyCatalog {

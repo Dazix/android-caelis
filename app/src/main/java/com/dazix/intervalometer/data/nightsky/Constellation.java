@@ -2,13 +2,15 @@ package com.dazix.intervalometer.data.nightsky;
 
 import com.google.flatbuffers.Constants;
 import com.google.flatbuffers.FlatBufferBuilder;
+import com.google.flatbuffers.FloatVector;
 import com.google.flatbuffers.IntVector;
 import com.google.flatbuffers.Table;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * FlatBuffers table storing constellation data, outline line networks, centroid, and astronomy metadata.
+ * FlatBuffers table storing constellation data, outline line networks, centroid, astronomy metadata,
+ * and 3-point affine artwork anchors.
  */
 @SuppressWarnings("unused")
 public final class Constellation extends Table {
@@ -42,10 +44,18 @@ public final class Constellation extends Table {
     public String artResourceName() { int o = __offset(20); return o != 0 ? __string(o + bb_pos) : null; }
     public ByteBuffer artResourceNameAsByteBuffer() { return __vector_as_bytebuffer(20, 1); }
     public ByteBuffer artResourceNameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 20, 1); }
-    public float artCenterRa() { int o = __offset(22); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
-    public float artCenterDec() { int o = __offset(24); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
-    public float artWidthDeg() { int o = __offset(26); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
-    public float artRotationDeg() { int o = __offset(28); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
+    public float artCornerRa(int j) { int o = __offset(22); return o != 0 ? bb.getFloat(__vector(o) + j * 4) : 0.0f; }
+    public int artCornerRaLength() { int o = __offset(22); return o != 0 ? __vector_len(o) : 0; }
+    public FloatVector artCornerRaVector() { return artCornerRaVector(new FloatVector()); }
+    public FloatVector artCornerRaVector(FloatVector obj) { int o = __offset(22); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
+    public ByteBuffer artCornerRaAsByteBuffer() { return __vector_as_bytebuffer(22, 4); }
+    public ByteBuffer artCornerRaInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 22, 4); }
+    public float artCornerDec(int j) { int o = __offset(24); return o != 0 ? bb.getFloat(__vector(o) + j * 4) : 0.0f; }
+    public int artCornerDecLength() { int o = __offset(24); return o != 0 ? __vector_len(o) : 0; }
+    public FloatVector artCornerDecVector() { return artCornerDecVector(new FloatVector()); }
+    public FloatVector artCornerDecVector(FloatVector obj) { int o = __offset(24); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
+    public ByteBuffer artCornerDecAsByteBuffer() { return __vector_as_bytebuffer(24, 4); }
+    public ByteBuffer artCornerDecInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 24, 4); }
 
     public static int createConstellation(FlatBufferBuilder builder,
         int nameOffset,
@@ -57,15 +67,11 @@ public final class Constellation extends Table {
         int familyOffset,
         boolean isAsterism,
         int artResourceNameOffset,
-        float artCenterRa,
-        float artCenterDec,
-        float artWidthDeg,
-        float artRotationDeg) {
-        builder.startTable(13);
-        Constellation.addArtRotationDeg(builder, artRotationDeg);
-        Constellation.addArtWidthDeg(builder, artWidthDeg);
-        Constellation.addArtCenterDec(builder, artCenterDec);
-        Constellation.addArtCenterRa(builder, artCenterRa);
+        int artCornerRaOffset,
+        int artCornerDecOffset) {
+        builder.startTable(11);
+        Constellation.addArtCornerDec(builder, artCornerDecOffset);
+        Constellation.addArtCornerRa(builder, artCornerRaOffset);
         Constellation.addArtResourceName(builder, artResourceNameOffset);
         Constellation.addFamily(builder, familyOffset);
         Constellation.addBrightestStar(builder, brightestStarOffset);
@@ -87,7 +93,7 @@ public final class Constellation extends Table {
         int brightestStarOffset,
         int familyOffset,
         boolean isAsterism) {
-        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, isAsterism, 0, 0.0f, 0.0f, 0.0f, 0.0f);
+        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, isAsterism, 0, 0, 0);
     }
 
     public static int createConstellation(FlatBufferBuilder builder,
@@ -98,16 +104,16 @@ public final class Constellation extends Table {
         int localizedNameOffset,
         int brightestStarOffset,
         int familyOffset) {
-        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, false, 0, 0.0f, 0.0f, 0.0f, 0.0f);
+        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, false, 0, 0, 0);
     }
 
     public static int createConstellation(FlatBufferBuilder builder,
         int nameOffset,
         int linesOffset) {
-        return createConstellation(builder, nameOffset, 0.0f, 0.0f, linesOffset, 0, 0, 0, false, 0, 0.0f, 0.0f, 0.0f, 0.0f);
+        return createConstellation(builder, nameOffset, 0.0f, 0.0f, linesOffset, 0, 0, 0, false, 0, 0, 0);
     }
 
-    public static void startConstellation(FlatBufferBuilder builder) { builder.startTable(13); }
+    public static void startConstellation(FlatBufferBuilder builder) { builder.startTable(11); }
     public static void addName(FlatBufferBuilder builder, int nameOffset) { builder.addOffset(0, nameOffset, 0); }
     public static void addCentroidRa(FlatBufferBuilder builder, float centroidRa) { builder.addFloat(1, centroidRa, 0.0f); }
     public static void addCentroidDec(FlatBufferBuilder builder, float centroidDec) { builder.addFloat(2, centroidDec, 0.0f); }
@@ -117,12 +123,18 @@ public final class Constellation extends Table {
     public static void addFamily(FlatBufferBuilder builder, int familyOffset) { builder.addOffset(6, familyOffset, 0); }
     public static void addIsAsterism(FlatBufferBuilder builder, boolean isAsterism) { builder.addBoolean(7, isAsterism, false); }
     public static void addArtResourceName(FlatBufferBuilder builder, int artResourceNameOffset) { builder.addOffset(8, artResourceNameOffset, 0); }
-    public static void addArtCenterRa(FlatBufferBuilder builder, float artCenterRa) { builder.addFloat(9, artCenterRa, 0.0f); }
-    public static void addArtCenterDec(FlatBufferBuilder builder, float artCenterDec) { builder.addFloat(10, artCenterDec, 0.0f); }
-    public static void addArtWidthDeg(FlatBufferBuilder builder, float artWidthDeg) { builder.addFloat(11, artWidthDeg, 0.0f); }
-    public static void addArtRotationDeg(FlatBufferBuilder builder, float artRotationDeg) { builder.addFloat(12, artRotationDeg, 0.0f); }
+    public static void addArtCornerRa(FlatBufferBuilder builder, int artCornerRaOffset) { builder.addOffset(9, artCornerRaOffset, 0); }
+    public static void addArtCornerDec(FlatBufferBuilder builder, int artCornerDecOffset) { builder.addOffset(10, artCornerDecOffset, 0); }
+
     public static int createLinesVector(FlatBufferBuilder builder, int[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addInt(data[i]); return builder.endVector(); }
     public static void startLinesVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
+
+    public static int createArtCornerRaVector(FlatBufferBuilder builder, float[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addFloat(data[i]); return builder.endVector(); }
+    public static void startArtCornerRaVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
+
+    public static int createArtCornerDecVector(FlatBufferBuilder builder, float[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addFloat(data[i]); return builder.endVector(); }
+    public static void startArtCornerDecVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
+
     public static int endConstellation(FlatBufferBuilder builder) {
         int o = builder.endTable();
         return o;

@@ -28,21 +28,8 @@ STELLARIUM_ASTERISM_LINES_URL = "https://raw.githubusercontent.com/Stellarium/st
 STELLARIUM_ASTERISM_NAMES_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/asterism_names.eng.fab"
 STELLARIUM_ART_URL = "https://raw.githubusercontent.com/Stellarium/stellarium/v24.1/skycultures/modern/constellationsart.fab"
 
-def solve_3x3(A, b):
-    def det3(m):
-        return (m[0][0]*(m[1][1]*m[2][2] - m[1][2]*m[2][1])
-              - m[0][1]*(m[1][0]*m[2][2] - m[1][2]*m[2][0])
-              + m[0][2]*(m[1][0]*m[2][1] - m[1][1]*m[2][0]))
-    d = det3(A)
-    if abs(d) < 1e-9:
-        return [1.0/3, 1.0/3, 1.0/3]
-    A0 = [[b[0], A[0][1], A[0][2]], [b[1], A[1][1], A[1][2]], [b[2], A[2][1], A[2][2]]]
-    A1 = [[A[0][0], b[0], A[0][2]], [A[1][0], b[1], A[1][2]], [A[2][0], b[2], A[2][2]]]
-    A2 = [[A[0][0], A[0][1], b[0]], [A[1][0], A[1][1], b[1]], [A[2][0], A[2][1], b[2]]]
-    return [det3(A0)/d, det3(A1)/d, det3(A2)/d]
-
 def parse_stellarium_art(stars_by_hip):
-    """Parses constellationsart.fab and computes celestial placement for each constellation artwork."""
+    """Parses constellationsart.fab and calculates exact RA/Dec coordinates for all 4 image corners via 3D Barycentric Inversion."""
     art_bytes = download_or_read_cache(STELLARIUM_ART_URL, "constellationsart.fab")
     art_text = art_bytes.decode("utf-8")
     
@@ -68,107 +55,79 @@ def parse_stellarium_art(stars_by_hip):
             s3 = stars_by_hip.get(hip3)
             if not s1 or not s2 or not s3:
                 continue
-                
-            def to_vec(ra_deg, dec_deg):
-                r_ra = math.radians(ra_deg)
-                r_dec = math.radians(dec_deg)
-                return [
-                    math.cos(r_dec) * math.cos(r_ra),
-                    math.cos(r_dec) * math.sin(r_ra),
-                    math.sin(r_dec)
-                ]
-            
-            v1 = to_vec(s1["ra"], s1["dec"])
-            v2 = to_vec(s2["ra"], s2["dec"])
-            v3 = to_vec(s3["ra"], s3["dec"])
             
             # Determine exact image dimensions from cached source PNG
             png_path = os.path.join(CACHE_DIR, "art_pngs", png_filename)
-            w, h = None, None
+            img_width, img_height = None, None
             if os.path.exists(png_path):
                 try:
                     with Image.open(png_path) as img:
-                        w, h = float(img.width), float(img.height)
+                        img_width, img_height = float(img.width), float(img.height)
                 except Exception:
                     pass
-            if w is None or h is None:
+            if img_width is None or img_height is None:
                 max_coord = max(x1, x2, x3, y1, y2, y3)
                 if max_coord <= 128.0:
-                    w, h = 128.0, 128.0
+                    img_width, img_height = 128.0, 128.0
                 elif max_coord <= 256.0:
-                    w, h = 256.0, 256.0
+                    img_width, img_height = 256.0, 256.0
                 else:
-                    w, h = 512.0, 512.0
-                
-            A = [
-                [x1, x2, x3],
-                [y1, y2, y3],
-                [1.0, 1.0, 1.0]
-            ]
-            
-            b_center = [w / 2.0, h / 2.0, 1.0]
-            weights = solve_3x3(A, b_center)
-            
-            vc = [
-                weights[0]*v1[0] + weights[1]*v2[0] + weights[2]*v3[0],
-                weights[0]*v1[1] + weights[1]*v2[1] + weights[2]*v3[1],
-                weights[0]*v1[2] + weights[1]*v2[2] + weights[2]*v3[2]
-            ]
-            vlen = math.sqrt(vc[0]*vc[0] + vc[1]*vc[1] + vc[2]*vc[2])
-            if vlen < 1e-6:
+                    img_width, img_height = 512.0, 512.0
+
+            # 1. Compute 3D unit vectors for the 3 anchor stars
+            stars_ra_dec = [(s1["ra"], s1["dec"]), (s2["ra"], s2["dec"]), (s3["ra"], s3["dec"])]
+            star_vectors = []
+            for r_deg, d_deg in stars_ra_dec:
+                r_rad = math.radians(r_deg)
+                d_rad = math.radians(d_deg)
+                vx = math.cos(d_rad) * math.cos(r_rad)
+                vy = math.cos(d_rad) * math.sin(r_rad)
+                vz = math.sin(d_rad)
+                star_vectors.append((vx, vy, vz))
+
+            # 2. 2D Affine / Barycentric Inversion for the 3 Anchor Pixels
+            # Matrix A = [[x1, x2, x3], [y1, y2, y3], [1, 1, 1]]
+            det = x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)
+            if abs(det) < 1e-6:
+                print(f"Warning: Degenerate anchor triangle for {abbr}")
                 continue
-            vc = [x / vlen for x in vc]
-            
-            center_ra = math.degrees(math.atan2(vc[1], vc[0])) % 360.0
-            center_dec = math.degrees(math.asin(max(-1.0, min(1.0, vc[2]))))
-            
-            def dot3(a, b):
-                return sum(x*y for x, y in zip(a, b))
-            
-            d12_px = math.hypot(x2 - x1, y2 - y1)
-            d13_px = math.hypot(x3 - x1, y3 - y1)
-            d23_px = math.hypot(x3 - x2, y3 - y2)
-            
-            th12 = math.acos(max(-1.0, min(1.0, dot3(v1, v2))))
-            th13 = math.acos(max(-1.0, min(1.0, dot3(v1, v3))))
-            th23 = math.acos(max(-1.0, min(1.0, dot3(v2, v3))))
-            
-            scales = []
-            if d12_px > 1.0: scales.append(th12 / d12_px)
-            if d13_px > 1.0: scales.append(th13 / d13_px)
-            if d23_px > 1.0: scales.append(th23 / d23_px)
-            if not scales:
-                continue
-            avg_scale = sum(scales) / len(scales)
-            width_deg = math.degrees(avg_scale * w)
-            
-            # Anchor point pointing towards image top (Up vector in tangent celestial plane)
-            b_up = [w / 2.0, h / 2.0 - (h * 0.2), 1.0]
-            w_up = solve_3x3(A, b_up)
-            v_up = [
-                w_up[0]*v1[0] + w_up[1]*v2[0] + w_up[2]*v3[0],
-                w_up[0]*v1[1] + w_up[1]*v2[1] + w_up[2]*v3[1],
-                w_up[0]*v1[2] + w_up[1]*v2[2] + w_up[2]*v3[2]
-            ]
-            v_up_len = math.sqrt(v_up[0]*v_up[0] + v_up[1]*v_up[1] + v_up[2]*v_up[2])
-            if v_up_len > 1e-6:
-                v_up = [x / v_up_len for x in v_up]
-            
-            r_ra = math.radians(center_ra)
-            r_dec = math.radians(center_dec)
-            u_east = [-math.sin(r_ra), math.cos(r_ra), 0.0]
-            u_north = [-math.sin(r_dec)*math.cos(r_ra), -math.sin(r_dec)*math.sin(r_ra), math.cos(r_dec)]
-            
-            proj_east = dot3(v_up, u_east)
-            proj_north = dot3(v_up, u_north)
-            rot_deg = math.degrees(math.atan2(proj_east, proj_north))
-            
-            art_data[abbr] = (res_name, center_ra, center_dec, width_deg, rot_deg)
+
+            c11 = y2 - y3; c12 = y3 - y1; c13 = y1 - y2
+            c21 = x3 - x2; c22 = x1 - x3; c23 = x2 - x1
+            c31 = x2 * y3 - x3 * y2; c32 = x3 * y1 - x1 * y3; c33 = x1 * y2 - x2 * y1
+
+            # 3. Solve for 4 Image Corners: TL (0,0), TR (W,0), BR (W,H), BL (0,H)
+            corners = [(0.0, 0.0), (img_width, 0.0), (img_width, img_height), (0.0, img_height)]
+            corner_ra = []
+            corner_dec = []
+
+            for px, py in corners:
+                w1 = (c11 * px + c21 * py + c31) / det
+                w2 = (c12 * px + c22 * py + c32) / det
+                w3 = (c13 * px + c23 * py + c33) / det
+
+                cvx = w1 * star_vectors[0][0] + w2 * star_vectors[1][0] + w3 * star_vectors[2][0]
+                cvy = w1 * star_vectors[0][1] + w2 * star_vectors[1][1] + w3 * star_vectors[2][1]
+                cvz = w1 * star_vectors[0][2] + w2 * star_vectors[1][2] + w3 * star_vectors[2][2]
+
+                v_len = math.sqrt(cvx * cvx + cvy * cvy + cvz * cvz)
+                if v_len < 1e-9:
+                    cvx, cvy, cvz = 1.0, 0.0, 0.0
+                else:
+                    cvx /= v_len; cvy /= v_len; cvz /= v_len
+
+                c_dec = math.degrees(math.asin(max(-1.0, min(1.0, cvz))))
+                c_ra = (math.degrees(math.atan2(cvy, cvx))) % 360.0
+
+                corner_ra.append(c_ra)
+                corner_dec.append(c_dec)
+
+            art_data[abbr] = (res_name, corner_ra, corner_dec)
         except Exception as e:
-            print(f"Failed to calibrate art for {abbr}: {e}")
+            print(f"Failed to process art for {abbr}: {e}")
             continue
             
-    print(f"Parsed and calibrated {len(art_data)} constellation artworks.")
+    print(f"Computed 4-corner perspective coordinates for {len(art_data)} constellation artworks.")
     return art_data
 
 # FlatBuffers Python Schema Serialization
@@ -179,13 +138,13 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
     
     stars_data: list of (ra_deg, dec_deg, mag)
     star_names: list of (star_index, name_str, body_type, constel, dist_ly)
-    constellations_data: list of (constellation_name, centroid_ra, centroid_dec, [line_index_pairs], localized_name, brightest_star, family, is_asterism)
+    constellations_data: list of (name, c_ra, c_dec, lines, loc_name, bright, fam, is_ast, art_res, art_corner_ra, art_corner_dec)
     """
     builder = flatbuffers.Builder(1024 * 1024)
 
     # 1. Serialize Constellations and Asterisms
     constellation_offsets = []
-    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast, art_res, art_c_ra, art_c_dec, art_w_deg, art_rot_deg in constellations_data:
+    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast, art_res, art_corner_ra, art_corner_dec in constellations_data:
         name_off = builder.CreateString(name)
         loc_name_off = builder.CreateString(loc_name) if loc_name else 0
         bright_off = builder.CreateString(bright_star) if bright_star else 0
@@ -197,9 +156,26 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
         for idx in reversed(line_indices):
             builder.PrependInt32(idx)
         lines_vec = builder.EndVector()
+
+        # Create art corner vectors: [float]
+        if art_corner_ra:
+            builder.StartVector(4, len(art_corner_ra), 4)
+            for r in reversed(art_corner_ra):
+                builder.PrependFloat32(r)
+            art_corner_ra_vec = builder.EndVector()
+        else:
+            art_corner_ra_vec = 0
+
+        if art_corner_dec:
+            builder.StartVector(4, len(art_corner_dec), 4)
+            for d in reversed(art_corner_dec):
+                builder.PrependFloat32(d)
+            art_corner_dec_vec = builder.EndVector()
+        else:
+            art_corner_dec_vec = 0
         
-        # Start Constellation table (13 fields)
-        builder.StartObject(13)
+        # Start Constellation table (11 fields)
+        builder.StartObject(11)
         builder.PrependUOffsetTRelativeSlot(0, name_off, 0)
         builder.PrependFloat32Slot(1, float(c_ra), 0.0)
         builder.PrependFloat32Slot(2, float(c_dec), 0.0)
@@ -213,10 +189,10 @@ def pack_catalog(stars_data, star_names, constellations_data, output_path):
         builder.PrependBoolSlot(7, bool(is_ast), False)
         if art_res_off:
             builder.PrependUOffsetTRelativeSlot(8, art_res_off, 0)
-        builder.PrependFloat32Slot(9, float(art_c_ra), 0.0)
-        builder.PrependFloat32Slot(10, float(art_c_dec), 0.0)
-        builder.PrependFloat32Slot(11, float(art_w_deg), 0.0)
-        builder.PrependFloat32Slot(12, float(art_rot_deg), 0.0)
+        if art_corner_ra_vec:
+            builder.PrependUOffsetTRelativeSlot(9, art_corner_ra_vec, 0)
+        if art_corner_dec_vec:
+            builder.PrependUOffsetTRelativeSlot(10, art_corner_dec_vec, 0)
         const_off = builder.EndObject()
         constellation_offsets.append(const_off)
 
@@ -905,13 +881,10 @@ def build_astronomical_catalog():
         # Artwork placement
         art_info = art_data.get(abbr)
         if art_info:
-            art_res_name, art_c_ra, art_c_dec, art_w_deg, art_rot_deg = art_info
+            art_res_name, art_corner_ra, art_corner_dec = art_info
         else:
             art_res_name = ""
-            art_c_ra = 0.0
-            art_c_dec = 0.0
-            art_w_deg = 0.0
-            art_rot_deg = 0.0
+            art_corner_ra, art_corner_dec = [], []
 
         constellations_data.append((
             eng_name,
@@ -923,10 +896,8 @@ def build_astronomical_catalog():
             family,
             False, # is_asterism = False
             art_res_name,
-            art_c_ra,
-            art_c_dec,
-            art_w_deg,
-            art_rot_deg
+            art_corner_ra,
+            art_corner_dec
         ))
 
     print(f"Processed {len(constellations_data)} IAU constellations.")
@@ -984,10 +955,8 @@ def build_astronomical_catalog():
             family,
             True, # is_asterism = True
             "",   # Asterisms have no separate artwork illustration
-            0.0,
-            0.0,
-            0.0,
-            0.0
+            [],
+            []
         ))
 
     print(f"Processed {len(asterisms_data)} Asterisms.")

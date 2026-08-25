@@ -100,6 +100,8 @@ class SettingsStore(context: Context) {
 
     val customEndTime: Flow<LocalTime> = preferences.map { SettingsMapping.readCustomEndTime(it) }
 
+    val debugModeEnabled: Flow<Boolean> = preferences.map { SettingsMapping.readDebugModeEnabled(it) }
+
     suspend fun saveNightVisionTheme(theme: NightVisionTheme) {
         dataStore.edit { SettingsMapping.writeNightVisionTheme(it, theme) }
     }
@@ -114,6 +116,10 @@ class SettingsStore(context: Context) {
 
     suspend fun saveCustomEndTime(time: LocalTime) {
         dataStore.edit { SettingsMapping.writeCustomEndTime(it, time) }
+    }
+
+    suspend fun saveDebugModeEnabled(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeDebugModeEnabled(it, enabled) }
     }
 
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
@@ -295,6 +301,7 @@ internal object SettingsMapping {
     private val NIGHT_VISION_MODE_KEY = stringPreferencesKey("night_vision_mode")
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
     private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
+    private val DEBUG_MODE_ENABLED = booleanPreferencesKey("debug_mode_enabled")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -664,6 +671,13 @@ internal object SettingsMapping {
 
     fun writeCustomEndTime(prefs: MutablePreferences, time: LocalTime) {
         prefs[CUSTOM_END_MINUTES_KEY] = time.hour * 60 + time.minute
+    }
+
+    fun readDebugModeEnabled(prefs: Preferences): Boolean =
+        prefs[DEBUG_MODE_ENABLED] ?: false
+
+    fun writeDebugModeEnabled(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[DEBUG_MODE_ENABLED] = enabled
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

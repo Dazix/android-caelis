@@ -82,6 +82,7 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
     val nightVisionActivationMode by viewModel.nightVisionActivationMode.collectAsStateWithLifecycle()
     val customStartTime by viewModel.customStartTime.collectAsStateWithLifecycle()
     val customEndTime by viewModel.customEndTime.collectAsStateWithLifecycle()
+    val debugModeEnabled by viewModel.debugModeEnabled.collectAsStateWithLifecycle()
 
     // Every one of these is granted outside the app, so the state is re-read on each resume.
     LifecycleResumeEffect(Unit) {
@@ -181,6 +182,7 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
                             nightVisionActivationMode = nightVisionActivationMode,
                             customStartTime = customStartTime,
                             customEndTime = customEndTime,
+                            debugModeEnabled = debugModeEnabled,
                             homeScrollState = homeScrollState,
                             startCalibration = startCalibration,
                             onRequestNotifications = {
@@ -229,6 +231,7 @@ private fun IntervalometerScreen(
     nightVisionActivationMode: com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode,
     customStartTime: java.time.LocalTime,
     customEndTime: java.time.LocalTime,
+    debugModeEnabled: Boolean,
     homeScrollState: ScrollState,
     startCalibration: () -> Unit,
     onRequestNotifications: () -> Unit,
@@ -323,10 +326,12 @@ private fun IntervalometerScreen(
             activationMode = nightVisionActivationMode,
             startTime = customStartTime,
             endTime = customEndTime,
+            debugModeEnabled = debugModeEnabled,
             onThemeChange = viewModel::setNightVisionTheme,
             onActivationModeChange = viewModel::setNightVisionActivationMode,
             onStartTimeChange = viewModel::setCustomStartTime,
             onEndTimeChange = viewModel::setCustomEndTime,
+            onDebugModeEnabledChange = viewModel::setDebugModeEnabled,
             onBack = viewModel::back,
         )
     }
