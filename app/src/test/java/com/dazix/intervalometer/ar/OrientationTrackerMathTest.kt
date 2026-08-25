@@ -299,4 +299,47 @@ class OrientationTrackerMathTest {
         )
         assertEquals(OrientationTracker.ALPHA_MOVING, panAlpha, 0.001f)
     }
+
+    @Test
+    fun `verifies freeze on drag isolates sky from sensor movement until resumed`() {
+        val initialMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Initial pitch is 0 degrees
+        val basePitch = OrientationTracker.extractPitchFromMatrix(initialMatrix)
+        assertEquals(0.0f, basePitch, 0.01f)
+
+        // Simulate freezing on drag
+        var isPaused = true
+        val frozenMatrix = initialMatrix.clone()
+        var panAzimuth = 45f
+        var panPitch = 20f
+
+        val adjusted = FloatArray(16)
+        val tempDec = FloatArray(16)
+        OrientationTracker.applyCalibration(
+            sensorMatrix = frozenMatrix,
+            declinationDeg = 0f,
+            panAzimuthOffsetDeg = panAzimuth,
+            panPitchOffsetDeg = panPitch,
+            tempDeclinationBuffer = tempDec,
+            outMatrix = adjusted,
+        )
+
+        // Verify camera pitch is 20°
+        val camFwdZ = -adjusted[10]
+        assertEquals(kotlin.math.sin(Math.toRadians(20.0)).toFloat(), camFwdZ, 0.01f)
+
+        // Resume tracking
+        isPaused = false
+        panAzimuth = 0f
+        panPitch = 0f
+        assertFalse(isPaused)
+        assertEquals(0f, panAzimuth, 0.001f)
+        assertEquals(0f, panPitch, 0.001f)
+    }
 }

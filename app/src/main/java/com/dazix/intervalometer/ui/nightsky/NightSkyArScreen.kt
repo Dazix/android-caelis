@@ -445,12 +445,12 @@ fun NightSkyArScreen(
                     modifier = Modifier.align(Alignment.Center),
                 )
 
-                // Contextual Reset View / Calibration Button (Decoupled on the start side, 0 layout shifting)
+                // Contextual Reset View / Calibration Button (Decoupled on the end side, 0 layout shifting)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = uiState.isCalibrated,
                     enter = fadeIn() + scaleIn(),
                     exit = fadeOut() + scaleOut(),
-                    modifier = Modifier.align(Alignment.CenterStart),
+                    modifier = Modifier.align(Alignment.CenterEnd),
                 ) {
                     Surface(
                         shape = CircleShape,
@@ -461,7 +461,7 @@ fun NightSkyArScreen(
                         IconButton(
                             onClick = {
                                 showResetToast(context)
-                                viewModel.resetCalibration()
+                                viewModel.resumeSensorTracking()
                             },
                             modifier = Modifier.fillMaxSize(),
                         ) {

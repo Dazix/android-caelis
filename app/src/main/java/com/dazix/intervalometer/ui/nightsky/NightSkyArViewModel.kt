@@ -217,10 +217,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         false,
     )
 
+    val isSensorTrackingPaused: StateFlow<Boolean> = orientationTracker.isSensorTrackingPaused.asStateFlow()
+
     val panAzimuthOffset = MutableStateFlow(0f)
     val panPitchOffset = MutableStateFlow(0f)
-    val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
-        az != 0f || pitch != 0f
+    val isCalibrated: StateFlow<Boolean> = combine(isSensorTrackingPaused, panAzimuthOffset, panPitchOffset) { paused, az, pitch ->
+        paused || az != 0f || pitch != 0f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val isSkyBackgroundOpaque: StateFlow<Boolean> = settingsStore.nightSkyOpaqueBackground.stateIn(
@@ -740,14 +742,18 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         resetCalibration()
     }
 
-    fun resetCalibration() {
-        orientationTracker.resetUserRotation()
+    fun resumeSensorTracking() {
+        orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
         viewModelScope.launch {
             settingsStore.saveNightSkyAzimuthOffset(0f)
             settingsStore.saveNightSkyPitchOffset(0f)
         }
+    }
+
+    fun resetCalibration() {
+        resumeSensorTracking()
     }
 
     fun toggleSensorTracking() {

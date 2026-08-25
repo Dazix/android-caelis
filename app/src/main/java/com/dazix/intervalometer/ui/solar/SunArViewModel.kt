@@ -99,10 +99,12 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
+    val isSensorTrackingPaused: StateFlow<Boolean> = orientationTracker.isSensorTrackingPaused.asStateFlow()
+
     val panAzimuthOffset = MutableStateFlow(0f)
     val panPitchOffset = MutableStateFlow(0f)
-    val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
-        az != 0f || pitch != 0f
+    val isCalibrated: StateFlow<Boolean> = combine(isSensorTrackingPaused, panAzimuthOffset, panPitchOffset) { paused, az, pitch ->
+        paused || az != 0f || pitch != 0f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
@@ -265,14 +267,18 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         resetCalibration()
     }
 
-    fun resetCalibration() {
-        orientationTracker.resetUserRotation()
+    fun resumeSensorTracking() {
+        orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
         viewModelScope.launch {
             settingsStore.saveSunArAzimuthOffset(0f)
             settingsStore.saveSunArPitchOffset(0f)
         }
+    }
+
+    fun resetCalibration() {
+        resumeSensorTracking()
     }
 
     fun adjustZoomBy(factor: Float) {
