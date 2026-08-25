@@ -399,21 +399,8 @@ fun NightSkyArScreen(
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
                     zoomRatio = uiState.zoomRatio,
                     isCalibrated = uiState.isCalibrated,
-                    keepScreenOn = uiState.keepScreenOn,
                     redVisionMode = uiState.redVisionMode,
-                    isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
                     onBack = onBack,
-                    onToggleKeepScreenOn = {
-                        val nextState = !uiState.keepScreenOn
-                        showToggleToast(context, R.string.sun_ar_keep_screen_on, nextState)
-                        viewModel.toggleKeepScreenOn()
-                    },
-                    onToggleSensorTracking = {
-                        val next = !uiState.isSensorTrackingEnabled
-                        val toastRes = if (next) R.string.night_sky_sensor_mode_active else R.string.night_sky_manual_mode_active
-                        Toast.makeText(context, toastRes, Toast.LENGTH_SHORT).show()
-                        viewModel.toggleSensorTracking()
-                    },
                     onOpenSearch = {
                         viewModel.setSearchActive(true)
                     },
@@ -739,12 +726,8 @@ private fun NightSkyTopBar(
     cameraFovHorizontal: Float,
     zoomRatio: Float,
     isCalibrated: Boolean,
-    keepScreenOn: Boolean,
     redVisionMode: Boolean,
-    isSensorTrackingEnabled: Boolean = true,
     onBack: () -> Unit,
-    onToggleKeepScreenOn: () -> Unit,
-    onToggleSensorTracking: () -> Unit = {},
     onOpenSearch: () -> Unit = {},
     onOpenLayers: () -> Unit,
     onResetZoom: () -> Unit,
@@ -877,28 +860,6 @@ private fun NightSkyTopBar(
                     imageVector = AppIcons.Search,
                     contentDescription = stringResource(R.string.search_celestial_placeholder),
                     tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
-                )
-            }
-
-            IconButton(
-                onClick = onToggleSensorTracking,
-                modifier = Modifier.size(38.dp),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Sensors,
-                    contentDescription = stringResource(R.string.night_sky_sensor_tracking),
-                    tint = if (isSensorTrackingEnabled) accentColor else (if (redVisionMode) palette.secondary else Color.White.copy(alpha = 0.4f)),
-                )
-            }
-
-            IconButton(
-                onClick = onToggleKeepScreenOn,
-                modifier = Modifier.size(38.dp),
-            ) {
-                Icon(
-                    imageVector = AppIcons.ScreenAwake,
-                    contentDescription = stringResource(R.string.sun_ar_keep_screen_on),
-                    tint = if (keepScreenOn) accentColor else (if (redVisionMode) palette.secondary else Color.White.copy(alpha = 0.4f)),
                 )
             }
 
