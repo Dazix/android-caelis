@@ -16,13 +16,23 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -91,6 +101,9 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshSystemState() }
 
+    val coroutineScope = rememberCoroutineScope()
+    val toastHostState = remember(coroutineScope) { AppToastHostState(coroutineScope) }
+
     // Calibration is not an activity result any more: the capture surface is an overlay window put up
     // over the *real* camera app, so it outlives this activity going to the background and reports
     // back through CalibrationOverlay.lastResult, which the view model collects. Starting it from this
@@ -100,10 +113,10 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
         if (!CalibrationOverlay.start(context, setup.targetPackage)) {
             if (permissions.canDrawOverlays) {
                 // Permission is there, so the surface itself refused to come up.
-                Toast.makeText(context, R.string.ovl_calib_unavailable, Toast.LENGTH_LONG).show()
+                toastHostState.showToast(R.string.ovl_calib_unavailable)
             } else {
-                Toast.makeText(context, overlayMissingMessage, Toast.LENGTH_LONG).show()
-                context.launchSafely(Permissions.overlaySettings(context))
+                toastHostState.showToast(overlayMissingMessage)
+                context.launchSafely(Permissions.overlaySettings(context), toastHostState)
             }
         }
     }
@@ -121,60 +134,73 @@ private fun IntervalometerApp(viewModel: MainViewModel = viewModel()) {
     val homeScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
     val saveableStateHolder = rememberSaveableStateHolder()
 
-    AppNavigationShell(
-        current = screen,
-        onNavigate = viewModel::navigate,
-        // Top-level navigation bar is shown on home and settings; sub-screens and standalone tools leave by Back.
-        enabled = screen == Screen.HOME || screen == Screen.SETTINGS,
-    ) {
-        // Screens arrive on the expressive springs: a small scale-up under a cross-fade, which is the
-        // expressive "container transform without a shared element" and reads as one surface being
-        // replaced rather than two sliding past each other.
-        // Read off the theme here rather than inside `transitionSpec`, which is not a composable scope.
-        val spatial = ExpressiveMotion.spatial<Float>()
-        val effects = ExpressiveMotion.effects<Float>()
-        AnimatedContent(
-            targetState = screen,
-            transitionSpec = {
-                (scaleIn(initialScale = 0.94f, animationSpec = spatial) +
-                    fadeIn(animationSpec = effects))
-                    .togetherWith(fadeOut(animationSpec = effects))
-                    // Every screen fills the window, so there is no size to animate — and nothing to
-                    // clip an app bar or a floating toolbar against while the two overlap.
-                    .using(SizeTransform(clip = false))
-            },
-            label = "screen",
-        ) { visible ->
-            saveableStateHolder.SaveableStateProvider(key = visible) {
-                IntervalometerScreen(
-                    screen = visible,
-                    viewModel = viewModel,
-                    setup = setup,
-                    advanced = advanced,
-                    permissions = permissions,
-                    snapshot = snapshot,
-                    blockers = blockers,
-                    calibration = calibration,
-                    floorMs = floorMs,
-                    serviceUnavailable = serviceUnavailable,
-                    apps = apps,
-                    appsLoading = appsLoading,
-                    query = query,
-                    profile = profile,
-                    nightVisionTheme = nightVisionTheme,
-                    nightVisionActivationMode = nightVisionActivationMode,
-                    customStartTime = customStartTime,
-                    customEndTime = customEndTime,
-                    homeScrollState = homeScrollState,
-                    startCalibration = startCalibration,
-                    onRequestNotifications = {
-                        notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    androidx.compose.runtime.CompositionLocalProvider(LocalToastHostState provides toastHostState) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+            AppNavigationShell(
+                current = screen,
+                onNavigate = viewModel::navigate,
+                // Top-level navigation bar is shown on home and settings; sub-screens and standalone tools leave by Back.
+                enabled = screen == Screen.HOME || screen == Screen.SETTINGS,
+            ) {
+                // Screens arrive on the expressive springs: a small scale-up under a cross-fade, which is the
+                // expressive "container transform without a shared element" and reads as one surface being
+                // replaced rather than two sliding past each other.
+                // Read off the theme here rather than inside `transitionSpec`, which is not a composable scope.
+                val spatial = ExpressiveMotion.spatial<Float>()
+                val effects = ExpressiveMotion.effects<Float>()
+                AnimatedContent(
+                    targetState = screen,
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.94f, animationSpec = spatial) +
+                            fadeIn(animationSpec = effects))
+                            .togetherWith(
+                                scaleOut(targetScale = 0.94f, animationSpec = spatial) +
+                                    fadeOut(animationSpec = effects)
+                            )
+                            .using(SizeTransform(clip = false))
                     },
-                    onRequestMediaPermission = {
-                        mediaLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
-                    },
-                )
+                    label = "screen",
+                ) { visible ->
+                    saveableStateHolder.SaveableStateProvider(key = visible) {
+                        IntervalometerScreen(
+                            screen = visible,
+                            viewModel = viewModel,
+                            setup = setup,
+                            advanced = advanced,
+                            permissions = permissions,
+                            snapshot = snapshot,
+                            blockers = blockers,
+                            calibration = calibration,
+                            floorMs = floorMs,
+                            serviceUnavailable = serviceUnavailable,
+                            apps = apps,
+                            appsLoading = appsLoading,
+                            query = query,
+                            profile = profile,
+                            nightVisionTheme = nightVisionTheme,
+                            nightVisionActivationMode = nightVisionActivationMode,
+                            customStartTime = customStartTime,
+                            customEndTime = customEndTime,
+                            homeScrollState = homeScrollState,
+                            startCalibration = startCalibration,
+                            onRequestNotifications = {
+                                notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            },
+                            onRequestMediaPermission = {
+                                mediaLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                            },
+                        )
+                    }
+                }
             }
+
+            AppToastHost(
+                hostState = toastHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp)
+                    .navigationBarsPadding(),
+            )
         }
     }
 }
@@ -306,13 +332,10 @@ private fun IntervalometerScreen(
     }
 }
 
-/**
- * Settings deep links are not guaranteed to exist on every OEM build, so a missing one degrades to
- * a message instead of crashing the app.
- */
-private fun Context.launchSafely(intent: Intent) {
+private fun Context.launchSafely(intent: Intent, toastHostState: AppToastHostState? = null) {
     val result = runCatching { startActivity(intent) }
     if (result.isFailure) {
-        Toast.makeText(this, R.string.common_unsupported, Toast.LENGTH_LONG).show()
+        toastHostState?.showToast(R.string.common_unsupported)
+            ?: runCatching { Toast.makeText(this, R.string.common_unsupported, Toast.LENGTH_LONG).show() }
     }
 }

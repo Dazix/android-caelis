@@ -56,8 +56,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import com.dazix.intervalometer.ui.AppToastHost
+import com.dazix.intervalometer.ui.AppToastHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -182,6 +185,9 @@ fun NightSkyArScreen(
             )
         }
     }
+
+    val coroutineScope = rememberCoroutineScope()
+    val toastHostState = remember(coroutineScope) { AppToastHostState(coroutineScope) }
 
     val displayRotation = DisplayGeometry.currentRotation(context)
     val isPortrait = displayRotation == android.view.Surface.ROTATION_0 ||
@@ -447,7 +453,10 @@ fun NightSkyArScreen(
                     ) {
                         IconButton(
                             onClick = {
-                                showResetToast(context)
+                                toastHostState.showToast(
+                                    resId = R.string.calib_reset_toast,
+                                    icon = AppIcons.ResetCalibration,
+                                )
                                 viewModel.resumeSensorTracking()
                             },
                             modifier = Modifier.fillMaxSize(),
@@ -462,6 +471,20 @@ fun NightSkyArScreen(
                     }
                 }
             }
+
+            // Theme-Aware Floating Toast
+            val toastContainerColor = if (uiState.redVisionMode) Color(0xFF140505) else Color(0xEE1E1E1E)
+            val toastContentColor = if (uiState.redVisionMode) activePalette.primary else Color.White
+            val toastBorderColor = if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.4f) else Color(0x33FFFFFF)
+            AppToastHost(
+                hostState = toastHostState,
+                containerColor = toastContainerColor,
+                contentColor = toastContentColor,
+                borderColor = toastBorderColor,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = animatedBottomPadding + 64.dp),
+            )
         }
     }
 
@@ -956,9 +979,6 @@ private fun NightSkyPermissionPrompt(
     }
 }
 
-private fun showResetToast(context: Context) {
-    Toast.makeText(context, context.getString(R.string.calib_reset_toast), Toast.LENGTH_SHORT).show()
-}
 
 @Composable
 private fun CalibrationDebugOverlay(

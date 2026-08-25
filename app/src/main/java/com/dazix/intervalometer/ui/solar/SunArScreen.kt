@@ -62,7 +62,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.dazix.intervalometer.ui.AppToastHost
+import com.dazix.intervalometer.ui.AppToastHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,6 +140,9 @@ fun SunArScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
+
+    val coroutineScope = rememberCoroutineScope()
+    val toastHostState = remember(coroutineScope) { AppToastHostState(coroutineScope) }
 
     var hasCameraPermission by remember {
         mutableStateOf(Permissions.granted(context, Manifest.permission.CAMERA))
@@ -259,7 +265,10 @@ fun SunArScreen(
             onToggleInfo = { showInfoSheet = !showInfoSheet },
             onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
             onResetCalibration = {
-                showResetToast(context)
+                toastHostState.showToast(
+                    resId = R.string.calib_reset_toast,
+                    icon = AppIcons.ResetCalibration,
+                )
                 viewModel.resetCalibration()
             },
             onResetZoom = {
@@ -292,7 +301,10 @@ fun SunArScreen(
                     isCalibrated = uiState.isCalibrated,
                     onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
                     onResetCalibration = {
-                        showResetToast(context)
+                        toastHostState.showToast(
+                            resId = R.string.calib_reset_toast,
+                            icon = AppIcons.ResetCalibration,
+                        )
                         viewModel.resetCalibration()
                     },
                     onClose = { showInfoSheet = false },
@@ -319,6 +331,17 @@ fun SunArScreen(
                 interval.formatLabel()
             }
         }
+
+        // Theme-Aware Floating Toast
+        AppToastHost(
+            hostState = toastHostState,
+            containerColor = Color(0xEE1E1E1E),
+            contentColor = NormalGoldSolar,
+            borderColor = NormalGoldSolar.copy(alpha = 0.35f),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 120.dp),
+        )
 
         // Date Picker Dialog
         if (showDatePicker) {
@@ -1677,8 +1700,4 @@ private fun CameraPermissionPrompt(
             }
         }
     }
-}
-
-private fun showResetToast(context: Context) {
-    Toast.makeText(context, context.getString(R.string.calib_reset_toast), Toast.LENGTH_SHORT).show()
 }
