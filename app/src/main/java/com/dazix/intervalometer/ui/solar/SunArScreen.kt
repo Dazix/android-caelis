@@ -196,10 +196,12 @@ fun SunArScreen(
                     onGesture = { _, pan, zoom, _ ->
                         val viewWidth = size.width.toFloat().coerceAtLeast(1f)
                         if (pan.x != 0f || pan.y != 0f) {
-                            val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
-                            val pitchRad = (pan.y / viewWidth) * fovRad
-                            val yawRad = (pan.x / viewWidth) * fovRad
-                            viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+                            viewModel.onPanGesture(
+                                deltaX = pan.x,
+                                deltaY = pan.y,
+                                viewWidth = viewWidth,
+                                fovDeg = uiState.cameraFovHorizontal,
+                            )
                         }
                         if (zoom != 1.0f) {
                             viewModel.adjustZoomBy(zoom)

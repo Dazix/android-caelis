@@ -217,9 +217,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         false,
     )
 
-    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
-    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
-        !OrientationTracker.isIdentityQuaternion(q)
+    val panAzimuthOffset = MutableStateFlow(0f)
+    val panPitchOffset = MutableStateFlow(0f)
+    val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
+        az != 0f || pitch != 0f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val isSkyBackgroundOpaque: StateFlow<Boolean> = settingsStore.nightSkyOpaqueBackground.stateIn(
@@ -410,20 +411,23 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 }
         }
 
-        // Initialize user rotation quaternion from settings store
+        // Initialize user Alt-Azimuth offsets from settings store
         viewModelScope.launch {
-            val initialQuat = settingsStore.nightSkyQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
-            userQuatState.value = initialQuat
-            orientationTracker.setUserQuaternion(initialQuat)
+            val initialAz = settingsStore.nightSkyAzimuthOffset.firstOrNull() ?: 0f
+            val initialPitch = settingsStore.nightSkyElevationOffset.firstOrNull() ?: 0f
+            panAzimuthOffset.value = initialAz
+            panPitchOffset.value = initialPitch
+            orientationTracker.setPanOffsets(initialAz, initialPitch)
         }
 
-        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
+        // Debounce saving rotation offsets changes to eliminate disk I/O lag during continuous drag gestures
         viewModelScope.launch {
-            userQuatState
+            combine(panAzimuthOffset, panPitchOffset) { az, pitch -> Pair(az, pitch) }
                 .drop(1)
                 .debounce(300L)
-                .collect { quat ->
-                    settingsStore.saveNightSkyQuaternion(quat)
+                .collect { (az, pitch) ->
+                    settingsStore.saveNightSkyAzimuthOffset(az)
+                    settingsStore.saveNightSkyPitchOffset(pitch)
                 }
         }
 
@@ -662,13 +666,23 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedBodyState.value = null
     }
 
-    fun rotatePan(pitchRad: Float, yawRad: Float, rollRad: Float = 0.0f) {
+    /**
+     * Bulletproof drag pan gesture handling for both AR Sensor Mode and Manual Pan Mode.
+     *
+     * In AR Sensor Mode: applies Alt-Azimuth kinematics (horizontal = World Z, vertical = Camera X)
+     * with dynamic 85° pitch clamping and upside-down drag inversion.
+     *
+     * In Manual Pan Mode: adjusts virtual camera Right Ascension and Declination.
+     */
+    fun onPanGesture(deltaX: Float, deltaY: Float, viewWidth: Float, fovDeg: Float) {
+        val factor = fovDeg / viewWidth.coerceAtLeast(1f)
         if (isSensorTrackingEnabled.value) {
-            orientationTracker.rotateUser(pitchRad, yawRad, rollRad)
-            userQuatState.value = orientationTracker.getUserQuaternion()
+            orientationTracker.onPanGesture(deltaX, deltaY, factor)
+            panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
+            panPitchOffset.value = orientationTracker.panPitchOffsetDeg
         } else {
-            val deltaAzDeg = Math.toDegrees(yawRad.toDouble()).toFloat()
-            val deltaElDeg = Math.toDegrees(pitchRad.toDouble()).toFloat()
+            val deltaAzDeg = deltaX * factor
+            val deltaElDeg = -deltaY * factor
 
             val lst = lstDegreesState.value
             val lat = locationProvider.location.value.latitude
@@ -690,9 +704,28 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
-        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
-        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+        if (isSensorTrackingEnabled.value) {
+            orientationTracker.onPanGesture(-deltaAzimuthDeg, -deltaElevationDeg, 1f)
+            panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
+            panPitchOffset.value = orientationTracker.panPitchOffsetDeg
+        } else {
+            val lst = lstDegreesState.value
+            val lat = locationProvider.location.value.latitude
+            val (currentAz, currentEl) = EquatorialCoordinates.equatorialToHorizontal(
+                manualPanRa.value.toDouble(),
+                manualPanDec.value.toDouble(),
+                lst,
+                lat,
+            )
+
+            val newAz = (currentAz + deltaAzimuthDeg + 360.0) % 360.0
+            val newEl = (currentEl + deltaElevationDeg).coerceIn(-89.9, 89.9)
+
+            val (newRa, newDec) = EquatorialCoordinates.horizontalToEquatorial(newAz, newEl, lst, lat)
+            manualPanRa.value = newRa.toFloat()
+            manualPanDec.value = newDec.toFloat()
+            updateManualOrientation()
+        }
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
@@ -709,9 +742,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun resetCalibration() {
         orientationTracker.resetUserRotation()
-        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+        panAzimuthOffset.value = 0f
+        panPitchOffset.value = 0f
         viewModelScope.launch {
-            settingsStore.saveNightSkyQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+            settingsStore.saveNightSkyAzimuthOffset(0f)
+            settingsStore.saveNightSkyPitchOffset(0f)
         }
     }
 

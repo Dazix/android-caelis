@@ -254,16 +254,16 @@ fun NightSkyArScreen(
                 .pointerInput(Unit) {
                     detectTransformGestures(
                         panZoomLock = false,
-                        onGesture = { _, pan, zoom, rotation ->
+                        onGesture = { _, pan, zoom, _ ->
                             val viewWidth = size.width.toFloat().coerceAtLeast(1f)
                             val hasPan = pan.x != 0f || pan.y != 0f
-                            val hasRotation = rotation != 0f
-                            if (hasPan || hasRotation) {
-                                val fovRad = Math.toRadians(uiState.cameraFovHorizontal.toDouble()).toFloat()
-                                val pitchRad = if (hasPan) (pan.y / viewWidth) * fovRad else 0f
-                                val yawRad = if (hasPan) (pan.x / viewWidth) * fovRad else 0f
-                                val rollRad = if (hasRotation) Math.toRadians(rotation.toDouble()).toFloat() else 0f
-                                viewModel.rotatePan(pitchRad = pitchRad, yawRad = yawRad, rollRad = rollRad)
+                            if (hasPan) {
+                                viewModel.onPanGesture(
+                                    deltaX = pan.x,
+                                    deltaY = pan.y,
+                                    viewWidth = viewWidth,
+                                    fovDeg = uiState.cameraFovHorizontal,
+                                )
                             }
                             if (zoom != 1.0f) {
                                 viewModel.adjustZoomBy(zoom)
@@ -429,19 +429,28 @@ fun NightSkyArScreen(
                 )
             }
 
-            // Bottom Controls Layer: Contextual Reset View & HUD Indicator Pill
-            Row(
+            // Bottom Controls Layer: Absolute Centered HUD + Decoupled Contextual Reset View
+            Box(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .padding(bottom = animatedBottomPadding, start = 16.dp, end = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Contextual Reset View / Calibration Button
+                // Main Bottom HUD (LST & Visible Stars) — Strictly centered on screen, never moves
+                NightSkyBottomHud(
+                    lstFormatted = uiState.lstFormatted,
+                    visibleStarCount = uiState.visibleStarCount,
+                    redVisionMode = uiState.redVisionMode,
+                    nightVisionTheme = uiState.nightVisionState.theme,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+
+                // Contextual Reset View / Calibration Button (Decoupled on the start side, 0 layout shifting)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = uiState.isCalibrated,
                     enter = fadeIn() + scaleIn(),
                     exit = fadeOut() + scaleOut(),
+                    modifier = Modifier.align(Alignment.CenterStart),
                 ) {
                     Surface(
                         shape = CircleShape,
@@ -465,14 +474,6 @@ fun NightSkyArScreen(
                         }
                     }
                 }
-
-                // Bottom HUD (LST & Visible Stars)
-                NightSkyBottomHud(
-                    lstFormatted = uiState.lstFormatted,
-                    visibleStarCount = uiState.visibleStarCount,
-                    redVisionMode = uiState.redVisionMode,
-                    nightVisionTheme = uiState.nightVisionState.theme,
-                )
             }
         }
     }

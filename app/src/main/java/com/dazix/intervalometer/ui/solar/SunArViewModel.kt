@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -42,10 +41,6 @@ data class SunArUiState(
     val bubbleInterval: BubbleInterval = BubbleInterval.ONE_HOUR,
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
-    val keepScreenOn: Boolean = false,
-    val isCalibrated: Boolean = false,
-    val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
-    val zoomRatio: Float = 1.0f,
     val trajectory: SolarTrajectory = SolarTrajectoryPlanner.planTrajectory(
         LocalDate.now(),
         GeoLocation.DEFAULT,
@@ -56,14 +51,20 @@ data class SunArUiState(
         GeoLocation.DEFAULT,
         BubbleInterval.ONE_HOUR,
     ),
-    val currentSunPosition: SolarCoordinates = SolarPositionCalculator.computePosition(
-        Instant.now(),
-        GeoLocation.DEFAULT,
+    val currentSunPosition: SolarCoordinates = SolarCoordinates(
+        azimuthDegrees = 0.0,
+        elevationDegrees = 0.0,
     ),
-    val currentMoonPosition: LunarCoordinates = LunarPositionCalculator.computePosition(
-        Instant.now(),
-        GeoLocation.DEFAULT,
+    val currentMoonPosition: LunarCoordinates = LunarCoordinates(
+        azimuthDegrees = 0.0,
+        elevationDegrees = 0.0,
+        distanceKm = 384400.0,
+        illuminationFraction = 0.5,
     ),
+    val keepScreenOn: Boolean = false,
+    val isCalibrated: Boolean = false,
+    val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    val zoomRatio: Float = 1.0f,
 )
 
 @OptIn(FlowPreview::class)
@@ -85,7 +86,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     // Dynamic effective FOV factoring in pinch-to-zoom
     val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 120.0f)
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 140.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
@@ -98,9 +99,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         false,
     )
 
-    private val userQuatState = MutableStateFlow(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
-    val isCalibrated: StateFlow<Boolean> = userQuatState.map { q ->
-        !OrientationTracker.isIdentityQuaternion(q)
+    val panAzimuthOffset = MutableStateFlow(0f)
+    val panPitchOffset = MutableStateFlow(0f)
+    val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
+        az != 0f || pitch != 0f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
@@ -163,38 +165,42 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val calib = args[9] as Boolean
         val fov = args[10] as Float
         val zoom = args[11] as Float
+
         SunArUiState(
             selectedDate = date,
             isToday = date == LocalDate.now(),
             bubbleInterval = interval,
             location = loc,
             hasGpsFix = gps,
-            keepScreenOn = keepOn,
-            isCalibrated = calib,
-            cameraFovHorizontal = fov,
-            zoomRatio = zoom,
             trajectory = traj,
             lunarTrajectory = lTraj,
             currentSunPosition = sunPos,
             currentMoonPosition = moonPos,
+            keepScreenOn = keepOn,
+            isCalibrated = calib,
+            cameraFovHorizontal = fov,
+            zoomRatio = zoom,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
     init {
-        // Initialize user rotation quaternion from settings store
+        // Initialize user Alt-Azimuth offsets from settings store
         viewModelScope.launch {
-            val initialQuat = settingsStore.sunArQuaternion.firstOrNull() ?: floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
-            userQuatState.value = initialQuat
-            orientationTracker.setUserQuaternion(initialQuat)
+            val initialAz = settingsStore.sunArAzimuthOffset.firstOrNull() ?: 0f
+            val initialPitch = settingsStore.sunArElevationOffset.firstOrNull() ?: 0f
+            panAzimuthOffset.value = initialAz
+            panPitchOffset.value = initialPitch
+            orientationTracker.setPanOffsets(initialAz, initialPitch)
         }
 
-        // Debounce saving rotation quaternion changes to eliminate disk I/O lag during continuous drag gestures
+        // Debounce saving pan offsets to eliminate disk I/O lag during continuous drag gestures
         viewModelScope.launch {
-            userQuatState
+            combine(panAzimuthOffset, panPitchOffset) { az, pitch -> Pair(az, pitch) }
                 .drop(1)
                 .debounce(300L)
-                .collect { quat ->
-                    settingsStore.saveSunArQuaternion(quat)
+                .collect { (az, pitch) ->
+                    settingsStore.saveSunArAzimuthOffset(az)
+                    settingsStore.saveSunArPitchOffset(pitch)
                 }
         }
 
@@ -226,15 +232,25 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun onPanGesture(deltaX: Float, deltaY: Float, viewWidth: Float, fovDeg: Float) {
+        val factor = fovDeg / viewWidth.coerceAtLeast(1f)
+        orientationTracker.onPanGesture(deltaX, deltaY, factor)
+        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
+    }
+
     fun rotatePan(pitchRad: Float, yawRad: Float) {
-        orientationTracker.rotateUser(pitchRad, yawRad)
-        userQuatState.value = orientationTracker.getUserQuaternion()
+        val deltaAzDeg = Math.toDegrees(yawRad.toDouble()).toFloat()
+        val deltaElDeg = Math.toDegrees(pitchRad.toDouble()).toFloat()
+        orientationTracker.onPanGesture(-deltaAzDeg, -deltaElDeg, 1f)
+        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        val pitchRad = Math.toRadians(deltaElevationDeg.toDouble()).toFloat()
-        val yawRad = Math.toRadians(deltaAzimuthDeg.toDouble()).toFloat()
-        rotatePan(pitchRad = pitchRad, yawRad = yawRad)
+        orientationTracker.onPanGesture(-deltaAzimuthDeg, -deltaElevationDeg, 1f)
+        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
@@ -251,9 +267,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetCalibration() {
         orientationTracker.resetUserRotation()
-        userQuatState.value = floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f)
+        panAzimuthOffset.value = 0f
+        panPitchOffset.value = 0f
         viewModelScope.launch {
-            settingsStore.saveSunArQuaternion(floatArrayOf(0.0f, 0.0f, 0.0f, 1.0f))
+            settingsStore.saveSunArAzimuthOffset(0f)
+            settingsStore.saveSunArPitchOffset(0f)
         }
     }
 
@@ -307,14 +325,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         bubbleIntervalState.value = interval
     }
 
+    fun toggleKeepScreenOn() {
+        setKeepScreenOn(!keepScreenOn.value)
+    }
+
     fun setKeepScreenOn(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveSunArKeepScreenOn(enabled)
         }
-    }
-
-    fun toggleKeepScreenOn() {
-        setKeepScreenOn(!keepScreenOn.value)
     }
 
     override fun onCleared() {

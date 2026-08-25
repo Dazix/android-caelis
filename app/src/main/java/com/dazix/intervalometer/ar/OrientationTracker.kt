@@ -47,6 +47,12 @@ data class DeviceOrientation(
  *
  * Employs Quaternion Spherical Linear Interpolation (SLERP / normalized LERP) to prevent
  * matrix degeneration, ensuring a guaranteed 100% orthonormal rotation matrix at all times.
+ *
+ * Implements a decoupled Alt-Azimuth panning model for touch gestures:
+ * - Horizontal swipe: rotates about World Z-axis (Up), keeping the horizon line perfectly level.
+ * - Vertical swipe: rotates about Camera X-axis (Right), adjusting optical pitch.
+ * - Dynamic clamping at 85° prevents virtual camera gimbal lock while physical sensors cross zenith.
+ * - Upside-down physical tilt (> 90° or < -90°) dynamically inverts horizontal drag for natural UX.
  */
 class OrientationTracker(private val context: Context) : SensorEventListener {
 
@@ -62,14 +68,14 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private val tempDeclinationMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
-    private val tempUserMatrix = FloatArray(16).apply {
-        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
-    }
     private val adjustedMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
 
-    private val userQuat = FloatArray(4).apply { this[3] = 1f }
+    var panAzimuthOffsetDeg: Float = 0f
+        private set
+    var panPitchOffsetDeg: Float = 0f
+        private set
 
     private val stateFlow = MutableStateFlow<DeviceOrientation?>(null)
     val orientation: StateFlow<DeviceOrientation?> = stateFlow.asStateFlow()
@@ -92,34 +98,55 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
     }
 
-    fun setUserQuaternion(quat: FloatArray) {
-        if (quat.size >= 4) {
-            val norm = kotlin.math.sqrt(quat[0] * quat[0] + quat[1] * quat[1] + quat[2] * quat[2] + quat[3] * quat[3])
-            if (norm > 1e-6f) {
-                userQuat[0] = quat[0] / norm
-                userQuat[1] = quat[1] / norm
-                userQuat[2] = quat[2] / norm
-                userQuat[3] = quat[3] / norm
-            } else {
-                resetUserRotation()
-            }
-        }
-    }
-
-    fun getUserQuaternion(): FloatArray = userQuat.clone()
-
-    fun rotateUser(pitchRad: Float, yawRad: Float, rollRad: Float = 0.0f) {
-        rotateQuaternion(userQuat, pitchRad, yawRad, rollRad, userQuat)
+    fun setPanOffsets(azimuthDeg: Float, pitchDeg: Float) {
+        panAzimuthOffsetDeg = (azimuthDeg % 360f + 360f) % 360f
+        panPitchOffsetDeg = pitchDeg.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
     }
 
     fun resetUserRotation() {
-        userQuat[0] = 0.0f
-        userQuat[1] = 0.0f
-        userQuat[2] = 0.0f
-        userQuat[3] = 1.0f
+        panAzimuthOffsetDeg = 0f
+        panPitchOffsetDeg = 0f
     }
 
-    fun isUserRotated(): Boolean = !isIdentityQuaternion(userQuat)
+    fun isUserRotated(): Boolean = (panAzimuthOffsetDeg != 0f || panPitchOffsetDeg != 0f)
+
+    /**
+     * Bulletproof drag gesture handler for Alt-Azimuth panning.
+     *
+     * @param deltaX Horizontal pan in pixels (+X = dragging right).
+     * @param deltaY Vertical pan in pixels (+Y = dragging down).
+     * @param pixelsToDegreesFactor Scaling factor converting pixels to degrees (e.g. fovDegrees / viewWidth).
+     * @param currentSensorMatrix 4x4 raw sensor rotation matrix (defaults to [rawMatrix]).
+     */
+    fun onPanGesture(
+        deltaX: Float,
+        deltaY: Float,
+        pixelsToDegreesFactor: Float,
+        currentSensorMatrix: FloatArray = rawMatrix,
+    ) {
+        val liveSensorPitch = extractPitchFromMatrix(currentSensorMatrix)
+        val currentAbsolutePitch = liveSensorPitch + panPitchOffsetDeg
+
+        // --- 1. AZIMUTH (Horizontal Pan) ---
+        // If the physical phone is tilted past the zenith (> 90 or < -90),
+        // the camera is upside down relative to the global grid. We invert the X drag.
+        val isUpsideDown = currentAbsolutePitch > 90f || currentAbsolutePitch < -90f
+        val effectiveDeltaX = if (isUpsideDown) -deltaX else deltaX
+
+        panAzimuthOffsetDeg -= effectiveDeltaX * pixelsToDegreesFactor
+        panAzimuthOffsetDeg = (panAzimuthOffsetDeg % 360f + 360f) % 360f
+
+        // --- 2. PITCH (Vertical Pan) ---
+        val requestedPitchDelta = -(deltaY * pixelsToDegreesFactor)
+
+        // --- 3. DYNAMIC CLAMPING ---
+        // Ensure the drag gesture never pushes the virtual pitch past 85 degrees (Gimbal Lock zone)
+        val prospectiveAbsolutePitch = currentAbsolutePitch + requestedPitchDelta
+        val clampedAbsolutePitch = prospectiveAbsolutePitch.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
+
+        // Reverse-calculate the allowed local offset
+        panPitchOffsetDeg = clampedAbsolutePitch - liveSensorPitch
+    }
 
     fun start() {
         if (isListening || sensorManager == null || rotationSensor == null) return
@@ -188,13 +215,13 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // Convert unit quaternion to a guaranteed 100% orthonormal rotation matrix (sensor ENU)
         SensorManager.getRotationMatrixFromVector(rawMatrix, smoothedQuat)
 
-        // Apply true-north magnetic declination + continuous 3D user rotation quaternion
+        // Apply True-North magnetic declination (World Z) + Azimuth Offset (World Z) + Pitch Offset (Camera X)
         applyCalibration(
             sensorMatrix = rawMatrix,
             declinationDeg = magneticDeclinationDeg,
-            userQuat = userQuat,
+            panAzimuthOffsetDeg = panAzimuthOffsetDeg,
+            panPitchOffsetDeg = panPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
-            tempUserMatrixBuffer = tempUserMatrix,
             outMatrix = adjustedMatrix,
         )
 
@@ -223,8 +250,20 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     companion object {
+        const val MAX_GESTURE_PITCH = 85f
+        const val ALPHA_STATIONARY = 0.30f
+        const val ALPHA_MOVING = 0.85f
+
         /**
-         * Rotates a $4 \times 4$ rotation matrix about the world Z (Up) axis by [declinationDeg]
+         * Extracts camera optical pitch / elevation in degrees [-90.0, +90.0] from a 4x4 or 3x3 rotation matrix.
+         */
+        fun extractPitchFromMatrix(matrix: FloatArray): Float {
+            val fwdZ = if (matrix.size >= 16) -matrix[10] else if (matrix.size >= 9) -matrix[8] else 0f
+            return Math.toDegrees(asin(fwdZ.coerceIn(-1f, 1f).toDouble())).toFloat()
+        }
+
+        /**
+         * Rotates a 4x4 rotation matrix about the world Z (Up) axis by [declinationDeg]
          * so that the frame aligns with True North instead of Magnetic North.
          *
          * World frame rotation: R_true = R_z(declination) * R_sensor
@@ -245,8 +284,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             val sinD = kotlin.math.sin(decRad).toFloat()
 
             // Pre-multiply R_z(D) * sensorMatrix (4x4) to rotate frame from Magnetic ENU to True ENU
-            // Row 0 = cosD * Row 0 + sinD * Row 1
-            // Row 1 = -sinD * Row 0 + cosD * Row 1
             val r0 = cosD * sensorMatrix[0] + sinD * sensorMatrix[4]
             val r1 = cosD * sensorMatrix[1] + sinD * sensorMatrix[5]
             val r2 = cosD * sensorMatrix[2] + sinD * sensorMatrix[6]
@@ -279,149 +316,62 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
 
         /**
-         * Converts a unit quaternion [q] = (qx, qy, qz, qw) into a 100% orthonormal 4x4 rotation matrix [out].
-         */
-        fun quaternionToMatrix(q: FloatArray, out: FloatArray) {
-            val q1 = q[0] // x
-            val q2 = q[1] // y
-            val q3 = q[2] // z
-            val q0 = q[3] // w
-
-            out[0] = 1f - 2f * (q2 * q2 + q3 * q3)
-            out[1] = 2f * (q1 * q2 - q0 * q3)
-            out[2] = 2f * (q1 * q3 + q0 * q2)
-            out[3] = 0f
-
-            out[4] = 2f * (q1 * q2 + q0 * q3)
-            out[5] = 1f - 2f * (q1 * q1 + q3 * q3)
-            out[6] = 2f * (q2 * q3 - q0 * q1)
-            out[7] = 0f
-
-            out[8] = 2f * (q1 * q3 - q0 * q2)
-            out[9] = 2f * (q2 * q3 + q0 * q1)
-            out[10] = 1f - 2f * (q1 * q1 + q2 * q2)
-            out[11] = 0f
-
-            out[12] = 0f
-            out[13] = 0f
-            out[14] = 0f
-            out[15] = 1f
-        }
-
-        /**
-         * Multiplies two 4x4 matrices [a] and [b] and stores the result in [out] with zero allocations.
-         * $out = a \cdot b$
-         */
-        fun multiplyMatrices(a: FloatArray, b: FloatArray, out: FloatArray) {
-            for (i in 0..3) {
-                val i4 = i * 4
-                val a0 = a[i4 + 0]
-                val a1 = a[i4 + 1]
-                val a2 = a[i4 + 2]
-                val a3 = a[i4 + 3]
-                for (j in 0..3) {
-                    out[i4 + j] = a0 * b[0 * 4 + j] +
-                                  a1 * b[1 * 4 + j] +
-                                  a2 * b[2 * 4 + j] +
-                                  a3 * b[3 * 4 + j]
-                }
-            }
-        }
-
-        /**
-         * Increments a rotation quaternion [currentQuat] by pitch ([pitchRad] around device X),
-         * yaw ([yawRad] around device Y), and roll ([rollRad] around device Z) without any gimbal lock, singularity, or pole lock.
+         * Applies True-North declination (World Z), user azimuth offset (World Z),
+         * and user local pitch offset (Camera X) with zero heap allocations on the 60 FPS loop.
          *
-         * Allows continuous, seamless 360-degree rotation across Zenith, Nadir, and roll in any direction.
+         * 1. Global Azimuth: R' = R_z(declination + panAzimuthOffsetDeg) * R_sensor
+         * 2. Local Pitch: R_adjusted = R' * R_x,local(panPitchOffsetDeg)
          */
-        fun rotateQuaternion(
-            currentQuat: FloatArray,
-            pitchRad: Float,
-            yawRad: Float,
-            rollRad: Float = 0.0f,
-            outQuat: FloatArray,
+        fun applyCalibration(
+            sensorMatrix: FloatArray,
+            declinationDeg: Float,
+            panAzimuthOffsetDeg: Float,
+            panPitchOffsetDeg: Float,
+            tempDeclinationBuffer: FloatArray,
+            outMatrix: FloatArray,
         ) {
-            if (kotlin.math.abs(pitchRad) < 1e-7f && kotlin.math.abs(yawRad) < 1e-7f && kotlin.math.abs(rollRad) < 1e-7f) {
-                System.arraycopy(currentQuat, 0, outQuat, 0, minOf(currentQuat.size, outQuat.size))
+            // 1. Total world Z rotation (Magnetic declination + user azimuth offset)
+            val totalAzimuthOffset = declinationDeg + panAzimuthOffsetDeg
+            applyMagneticDeclination(sensorMatrix, totalAzimuthOffset, tempDeclinationBuffer)
+
+            // 2. If no pitch offset, copy result directly
+            if (kotlin.math.abs(panPitchOffsetDeg) < 1e-4f) {
+                System.arraycopy(tempDeclinationBuffer, 0, outMatrix, 0, minOf(tempDeclinationBuffer.size, outMatrix.size))
                 return
             }
 
-            val halfP = pitchRad * 0.5f
-            val sinP = kotlin.math.sin(halfP)
-            val cosP = kotlin.math.cos(halfP)
+            // 3. Apply Local Pitch around Camera +X_dev (Col 1 and Col 2 rotation)
+            val pitchRad = Math.toRadians(panPitchOffsetDeg.toDouble())
+            val cosP = kotlin.math.cos(pitchRad).toFloat()
+            val sinP = kotlin.math.sin(pitchRad).toFloat()
 
-            val halfY = yawRad * 0.5f
-            val sinY = kotlin.math.sin(halfY)
-            val cosY = kotlin.math.cos(halfY)
+            // Col 0 (+X_dev) remains unchanged
+            outMatrix[0] = tempDeclinationBuffer[0]
+            outMatrix[4] = tempDeclinationBuffer[4]
+            outMatrix[8] = tempDeclinationBuffer[8]
+            outMatrix[12] = tempDeclinationBuffer[12]
 
-            val halfR = rollRad * 0.5f
-            val sinR = kotlin.math.sin(halfR)
-            val cosR = kotlin.math.cos(halfR)
+            // Col 1 (+Y_dev) = cosP * Col 1 + sinP * Col 2
+            outMatrix[1] = cosP * tempDeclinationBuffer[1] + sinP * tempDeclinationBuffer[2]
+            outMatrix[5] = cosP * tempDeclinationBuffer[5] + sinP * tempDeclinationBuffer[6]
+            outMatrix[9] = cosP * tempDeclinationBuffer[9] + sinP * tempDeclinationBuffer[10]
+            outMatrix[13] = cosP * tempDeclinationBuffer[13] + sinP * tempDeclinationBuffer[14]
 
-            // dq_py = dq_pitch * dq_yaw (pitch around +X_dev, yaw around +Y_dev)
-            val pyX = sinP * cosY
-            val pyY = cosP * sinY
-            val pyZ = -sinP * sinY
-            val pyW = cosP * cosY
+            // Col 2 (+Z_dev) = -sinP * Col 1 + cosP * Col 2
+            outMatrix[2] = -sinP * tempDeclinationBuffer[1] + cosP * tempDeclinationBuffer[2]
+            outMatrix[6] = -sinP * tempDeclinationBuffer[5] + cosP * tempDeclinationBuffer[6]
+            outMatrix[10] = -sinP * tempDeclinationBuffer[9] + cosP * tempDeclinationBuffer[10]
+            outMatrix[14] = -sinP * tempDeclinationBuffer[13] + cosP * tempDeclinationBuffer[14]
 
-            // dq = dq_py * dq_roll (roll around +Z_dev)
-            val dqX = pyX * cosR + pyY * sinR
-            val dqY = pyY * cosR - pyX * sinR
-            val dqZ = pyW * sinR + pyZ * cosR
-            val dqW = pyW * cosR - pyZ * sinR
-
-            // out = currentQuat * dq (post-multiplication in camera frame)
-            val x1 = currentQuat[0]
-            val y1 = currentQuat[1]
-            val z1 = currentQuat[2]
-            val w1 = currentQuat[3]
-
-            val ox = w1 * dqX + x1 * dqW + y1 * dqZ - z1 * dqY
-            val oy = w1 * dqY - x1 * dqZ + y1 * dqW + z1 * dqX
-            val oz = w1 * dqZ + x1 * dqY - y1 * dqX + z1 * dqW
-            val ow = w1 * dqW - x1 * dqX - y1 * dqY - z1 * dqZ
-
-            val norm = kotlin.math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
-            if (norm > 1e-6f) {
-                outQuat[0] = ox / norm
-                outQuat[1] = oy / norm
-                outQuat[2] = oz / norm
-                outQuat[3] = ow / norm
-            } else {
-                outQuat[0] = 0f
-                outQuat[1] = 0f
-                outQuat[2] = 0f
-                outQuat[3] = 1f
-            }
+            // Col 3 = [0, 0, 0, 1]
+            outMatrix[3] = 0f
+            outMatrix[7] = 0f
+            outMatrix[11] = 0f
+            outMatrix[15] = 1f
         }
-
-        /**
-         * Backward-compatible overload for pitch and yaw only.
-         */
-        fun rotateQuaternion(
-            currentQuat: FloatArray,
-            pitchRad: Float,
-            yawRad: Float,
-            outQuat: FloatArray,
-        ) {
-            rotateQuaternion(currentQuat, pitchRad, yawRad, 0.0f, outQuat)
-        }
-
-        fun isIdentityQuaternion(q: FloatArray): Boolean {
-            if (q.size < 4) return true
-            return kotlin.math.abs(q[0]) < 1e-4f &&
-                   kotlin.math.abs(q[1]) < 1e-4f &&
-                   kotlin.math.abs(q[2]) < 1e-4f &&
-                   kotlin.math.abs(q[3] - 1.0f) < 1e-4f
-        }
-
-        const val ALPHA_STATIONARY = 0.30f
-        const val ALPHA_MOVING = 0.85f
 
         /**
          * Computes the dynamic adaptive SLERP alpha based on the angular distance between quaternions.
-         * Returns high alpha (up to [maxAlpha]) during fast movement to eliminate lag,
-         * and low alpha (down to [minAlpha]) when stationary to filter micro-jitters.
          */
         fun computeAdaptiveAlpha(
             currentQuat: FloatArray,
@@ -438,34 +388,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             val deltaAngleRad = 2.0 * kotlin.math.acos(absDot.toDouble())
             val t = ((deltaAngleRad - 0.002) / (0.025 - 0.002)).toFloat().coerceIn(0f, 1f)
             return minAlpha + t * (maxAlpha - minAlpha)
-        }
-
-        /**
-         * Applies True-North declination and continuous 3D user rotation quaternion
-         * to produce a 100% orthonormal adjusted rotation matrix with zero allocations.
-         *
-         * $R_{\text{adjusted}} = R_{\text{true}} \cdot R_{\text{user}}$
-         */
-        fun applyCalibration(
-            sensorMatrix: FloatArray,
-            declinationDeg: Float,
-            userQuat: FloatArray,
-            tempDeclinationBuffer: FloatArray,
-            tempUserMatrixBuffer: FloatArray,
-            outMatrix: FloatArray,
-        ) {
-            // 1. Apply magnetic declination to sensor matrix
-            applyMagneticDeclination(sensorMatrix, declinationDeg, tempDeclinationBuffer)
-
-            // 2. If user quaternion is identity, no further adjustment needed
-            if (isIdentityQuaternion(userQuat)) {
-                System.arraycopy(tempDeclinationBuffer, 0, outMatrix, 0, minOf(tempDeclinationBuffer.size, outMatrix.size))
-                return
-            }
-
-            // 3. Convert user quaternion to matrix and multiply
-            quaternionToMatrix(userQuat, tempUserMatrixBuffer)
-            multiplyMatrices(tempDeclinationBuffer, tempUserMatrixBuffer, outMatrix)
         }
     }
 
