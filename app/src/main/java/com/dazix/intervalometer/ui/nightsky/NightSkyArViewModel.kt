@@ -1,6 +1,7 @@
 package com.dazix.intervalometer.ui.nightsky
 
 import android.app.Application
+import android.view.Surface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.intervalometer.R
@@ -132,8 +133,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val manualPanDec = MutableStateFlow(0f)
     private val manualMatrixBuffer = FloatArray(16)
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
-
-    private var cameraAnimationJob: Job? = null
 
     private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
     private val zoomRatioState = MutableStateFlow(1.0f)
@@ -471,25 +470,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 }
         }
 
-        // Initialize user Alt-Azimuth offsets from settings store
-        viewModelScope.launch {
-            val initialAz = settingsStore.nightSkyAzimuthOffset.firstOrNull() ?: 0f
-            val initialPitch = settingsStore.nightSkyElevationOffset.firstOrNull() ?: 0f
-            panAzimuthOffset.value = initialAz
-            panPitchOffset.value = initialPitch
-            orientationTracker.setPanOffsets(initialAz, initialPitch)
-        }
-
-        // Debounce saving rotation offsets changes to eliminate disk I/O lag during continuous drag gestures
-        viewModelScope.launch {
-            combine(panAzimuthOffset, panPitchOffset) { az, pitch -> Pair(az, pitch) }
-                .drop(1)
-                .debounce(300L)
-                .collect { (az, pitch) ->
-                    settingsStore.saveNightSkyAzimuthOffset(az)
-                    settingsStore.saveNightSkyPitchOffset(pitch)
-                }
-        }
+        // Ensure Night Sky AR always starts with pure live sensor tracking (0 offsets)
+        panAzimuthOffset.value = 0f
+        panPitchOffset.value = 0f
+        orientationTracker.resumeSensorTracking()
 
         // Update magnetic declination on location updates
         viewModelScope.launch {
@@ -669,7 +653,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Selects a celestial body from search results, updates selection state,
      * and smoothly pans the camera to the target's coordinates.
      */
-    fun selectCelestialBody(item: SearchResultItem) {
+    fun selectCelestialBody(item: SearchResultItem, displayRotation: Int = Surface.ROTATION_0) {
         when (item.type) {
             CelestialType.STAR -> selectStarByIndex(item.indexId)
             CelestialType.CONSTELLATION, CelestialType.ASTERISM -> selectConstellationByIndex(item.indexId)
@@ -682,7 +666,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             settingsStore.addNightSkySearchHistory(item)
         }
 
-        routeCameraToCoordinates(item.ra.toDouble(), item.dec.toDouble())
+        routeCameraToCoordinates(item.ra.toDouble(), item.dec.toDouble(), displayRotation)
     }
 
     fun removeSearchHistoryItem(item: SearchResultItem) {
@@ -700,30 +684,31 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     /**
      * Centers the virtual camera on the currently selected celestial object.
      */
-    fun routeCameraToSelection() {
+    fun routeCameraToSelection(displayRotation: Int = Surface.ROTATION_0) {
         val body = selectedBodyState.value ?: return
         val ra = body.raDegrees ?: return
         val dec = body.decDegrees ?: return
-        routeCameraToCoordinates(ra, dec)
+        routeCameraToCoordinates(ra, dec, displayRotation)
     }
 
     /**
      * Smoothly rotates/animates the camera to [raDegrees] and [decDegrees]
-     * in both AR Sensor / Hybrid mode and Manual Pan mode.
+     * using unified Alt-Azimuth kinematics on the frozen matrix with [displayRotation] correction.
      */
-    fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double) {
+    fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double, displayRotation: Int = Surface.ROTATION_0) {
         val lst = lstDegreesState.value
         val lat = locationProvider.location.value.latitude
 
-        if (isSensorTrackingEnabled.value) {
-            val targetWorld = FloatArray(3)
-            EquatorialCoordinates.computeWorldVector(raDegrees, decDegrees, lst, lat, targetWorld, 0)
-            orientationTracker.animateToTarget(targetWorld[0], targetWorld[1], targetWorld[2]) { az, pitch ->
-                panAzimuthOffset.value = az
-                panPitchOffset.value = pitch
-            }
-        } else {
-            animateCameraToCoordinates(targetRa = raDegrees.toFloat(), targetDec = decDegrees.toFloat())
+        val targetWorld = FloatArray(3)
+        EquatorialCoordinates.computeWorldVector(raDegrees, decDegrees, lst, lat, targetWorld, 0)
+        orientationTracker.animateToTarget(
+            targetWorldX = targetWorld[0],
+            targetWorldY = targetWorld[1],
+            targetWorldZ = targetWorld[2],
+            displayRotation = displayRotation,
+        ) { az, pitch ->
+            panAzimuthOffset.value = az
+            panPitchOffset.value = pitch
         }
     }
 
@@ -758,44 +743,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             raDegrees = planet.raDegrees,
             decDegrees = planet.decDegrees,
         )
-    }
-
-    /**
-     * Smoothly animates the virtual camera to [targetRa] and [targetDec] over 800ms
-     * using the shortest spherical angular path.
-     */
-    fun animateCameraToCoordinates(targetRa: Float, targetDec: Float) {
-        cameraAnimationJob?.cancel()
-        cameraAnimationJob = viewModelScope.launch {
-            val currentRa = manualPanRa.value
-            val currentDec = manualPanDec.value
-
-            val raDiff = CelestialSearchIndex.getShortestAngularDistance(currentRa, targetRa)
-            val startRa = currentRa
-            val endRa = currentRa + raDiff
-            val startDec = currentDec
-            val endDec = targetDec.coerceIn(-89.9f, 89.9f)
-
-            val durationMs = 800L
-            val startTime = System.currentTimeMillis()
-
-            while (isActive) {
-                val elapsed = System.currentTimeMillis() - startTime
-                val fraction = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
-                // FastOutSlowIn easing curve: 3*t^2 - 2*t^3 (smooth cubic S-curve)
-                val t = fraction * fraction * (3f - 2f * fraction)
-
-                val interpolatedRa = startRa + (endRa - startRa) * t
-                val interpolatedDec = startDec + (endDec - startDec) * t
-
-                manualPanRa.value = (interpolatedRa % 360f + 360f) % 360f
-                manualPanDec.value = interpolatedDec
-                updateManualOrientation()
-
-                if (fraction >= 1.0f) break
-                delay(16L)
-            }
-        }
     }
 
     /**
@@ -1107,13 +1054,15 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startSensors() {
-        if (isSensorTrackingEnabled.value) {
+        orientationTracker.resumeSensorTracking()
+        panAzimuthOffset.value = 0f
+        panPitchOffset.value = 0f
+        if (!isSensorTrackingEnabled.value) {
+            setSensorTrackingEnabled(true)
+        } else {
             orientationTracker.start()
         }
         locationProvider.startUpdates()
-        if (!isSensorTrackingEnabled.value) {
-            updateManualOrientation()
-        }
     }
 
     fun stopSensors() {
@@ -1127,7 +1076,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     override fun onCleared() {
         super.onCleared()
-        cameraAnimationJob?.cancel()
         stopSensors()
     }
 }

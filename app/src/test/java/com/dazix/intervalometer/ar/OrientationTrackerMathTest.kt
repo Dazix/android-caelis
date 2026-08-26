@@ -1,5 +1,6 @@
 package com.dazix.intervalometer.ar
 
+import android.view.Surface
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -430,5 +431,60 @@ class OrientationTrackerMathTest {
 
         assertEquals(90f, deltaAz, 0.001f)
         assertEquals(45f, deltaPitch, 0.001f)
+    }
+
+    @Test
+    fun `verifies target routing offsets with portrait and landscape display rotations`() {
+        // Base frozen matrix facing North at the horizon (Az = 0°, El = 0°)
+        // Col 0 (+X_dev = East): [1, 0, 0, 0]
+        // Col 1 (+Y_dev = Up):   [0, 0, 1, 0]
+        // Col 2 (+Z_dev = South):[0, -1, 0, 0] (so -Z_dev points North)
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // 1. Target is East: [1, 0, 0] (World Az = 90°, El = 0°)
+        val targetEast = floatArrayOf(1f, 0f, 0f)
+
+        // Portrait (ROTATION_0): Target is to the right (+X_screen) -> deltaAz = +90°, deltaPitch = 0°
+        val (az0, pitch0) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_0)
+        assertEquals(90f, az0, 0.001f)
+        assertEquals(0f, pitch0, 0.001f)
+
+        // Landscape Left (ROTATION_90): Device rotated 90° CCW -> East is bottom of screen (-Y_screen) -> pitch down -85°
+        val (az90, pitch90) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_90)
+        assertEquals(0f, az90, 0.001f)
+        assertEquals(-85f, pitch90, 0.001f)
+
+        // Inverted Portrait (ROTATION_180): Device upside down -> East is to the left (-X_screen) -> deltaAz = -90°, deltaPitch = 0°
+        val (az180, pitch180) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_180)
+        assertEquals(-90f, az180, 0.001f)
+        assertEquals(0f, pitch180, 0.001f)
+
+        // Landscape Right (ROTATION_270): Device rotated 90° CW -> East is top of screen (+Y_screen) -> pitch up +85°
+        val (az270, pitch270) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_270)
+        assertEquals(0f, az270, 0.001f)
+        assertEquals(85f, pitch270, 0.001f)
+
+        // 2. Target is Zenith (Up): [0, 0, 1] (World El = 90°)
+        val targetZenith = floatArrayOf(0f, 0f, 1f)
+
+        // Portrait (ROTATION_0): Zenith is top of screen (+Y_screen) -> deltaPitch = +85°
+        val (azZenith0, pitchZenith0) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_0)
+        assertEquals(0f, azZenith0, 0.001f)
+        assertEquals(85f, pitchZenith0, 0.001f)
+
+        // Landscape Left (ROTATION_90): Zenith is right side of screen (+X_screen) -> deltaAz = +90°, deltaPitch = 0°
+        val (azZenith90, pitchZenith90) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_90)
+        assertEquals(90f, azZenith90, 0.001f)
+        assertEquals(0f, pitchZenith90, 0.001f)
+
+        // Landscape Right (ROTATION_270): Zenith is left side of screen (-X_screen) -> deltaAz = -90°, deltaPitch = 0°
+        val (azZenith270, pitchZenith270) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_270)
+        assertEquals(-90f, azZenith270, 0.001f)
+        assertEquals(0f, pitchZenith270, 0.001f)
     }
 }

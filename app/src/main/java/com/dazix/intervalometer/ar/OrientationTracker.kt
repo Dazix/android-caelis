@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.view.Surface
 import com.dazix.intervalometer.domain.solar.GeoLocation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -143,13 +144,15 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     /**
      * Smoothly rotates the virtual camera in Hybrid Alt-Azimuth mode to center on the target vector [targetWorldX, targetWorldY, targetWorldZ]
-     * (World ENU coordinates) over 800ms using local space transformation that mathematically cancels physical device roll.
+     * (World ENU coordinates) over 800ms using local space transformation that mathematically cancels physical device roll
+     * and maps hardware axes to screen visual axes according to [displayRotation].
      */
     fun animateToTarget(
         targetWorldX: Float,
         targetWorldY: Float,
         targetWorldZ: Float,
         currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
+        displayRotation: Int = Surface.ROTATION_0,
         onUpdate: ((Float, Float) -> Unit)? = null,
     ) {
         targetAnimator?.cancel()
@@ -160,29 +163,25 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             System.arraycopy(currentFrozenMatrix, 0, frozenMatrix, 0, minOf(currentFrozenMatrix.size, 16))
         }
 
-        // 2. TRANSFORM TARGET WORLD ENU VECTOR INTO FROZEN CAMERA LOCAL SPACE: V_dev = R_frozen^T * V_world
-        // (This mathematically bypasses and cancels any physical device roll or slant)
-        val tx = frozenMatrix[0] * targetWorldX + frozenMatrix[4] * targetWorldY + frozenMatrix[8] * targetWorldZ
-        val ty = frozenMatrix[1] * targetWorldX + frozenMatrix[5] * targetWorldY + frozenMatrix[9] * targetWorldZ
-        val tz = frozenMatrix[2] * targetWorldX + frozenMatrix[6] * targetWorldY + frozenMatrix[10] * targetWorldZ
-
-        // 3. EXTRACT EXACT LOCAL OFFSETS REQUIRED TO CENTER THE TARGET IN VIEWPORT
-        val exactDeltaAz = Math.toDegrees(kotlin.math.atan2(tx.toDouble(), -tz.toDouble())).toFloat()
-        val exactDeltaPitch = Math.toDegrees(kotlin.math.asin(ty.coerceIn(-1f, 1f).toDouble())).toFloat()
+        // 2. EXTRACT EXACT LOCAL OFFSETS REQUIRED TO CENTER THE TARGET IN VIEWPORT WITH DISPLAY ROTATION
+        val (targetOffsetAz, targetOffsetPitch) = computeTargetOffsets(
+            targetWorldX = targetWorldX,
+            targetWorldY = targetWorldY,
+            targetWorldZ = targetWorldZ,
+            frozenMatrix = frozenMatrix,
+            displayRotation = displayRotation,
+        )
 
         val startAzOffset = panAzimuthOffsetDeg
         val startPitchOffset = panPitchOffsetDeg
 
-        val targetOffsetAz = exactDeltaAz
-        val targetOffsetPitch = exactDeltaPitch.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
-
-        // 4. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
+        // 3. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
         var diffAz = targetOffsetAz - startAzOffset
         if (diffAz > 180f) diffAz -= 360f
         if (diffAz < -180f) diffAz += 360f
         val diffPitch = targetOffsetPitch - startPitchOffset
 
-        // 5. ANIMATE VIA VALUEANIMATOR OVER 800MS
+        // 4. ANIMATE VIA VALUEANIMATOR OVER 800MS
         val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 800L
             interpolator = android.view.animation.AccelerateDecelerateInterpolator()
@@ -215,6 +214,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         targetAzimuthDeg: Float,
         targetElevationDeg: Float,
         currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
+        displayRotation: Int = Surface.ROTATION_0,
         onUpdate: ((Float, Float) -> Unit)? = null,
     ) {
         val azRad = Math.toRadians(targetAzimuthDeg.toDouble())
@@ -223,7 +223,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         val vx = cosEl * kotlin.math.sin(azRad).toFloat() // East
         val vy = cosEl * kotlin.math.cos(azRad).toFloat() // North
         val vz = kotlin.math.sin(elRad).toFloat() // Up
-        animateToTarget(vx, vy, vz, currentFrozenMatrix, onUpdate)
+        animateToTarget(vx, vy, vz, currentFrozenMatrix, displayRotation, onUpdate)
     }
 
     fun isUserRotated(): Boolean = isSensorTrackingPaused.value || (panAzimuthOffsetDeg != 0f || panPitchOffsetDeg != 0f)
@@ -384,6 +384,46 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         const val MAX_GESTURE_PITCH = 85f
         const val ALPHA_STATIONARY = 0.30f
         const val ALPHA_MOVING = 0.85f
+
+        /**
+         * Extracts local delta azimuth and pitch from frozen camera matrix and world target vector,
+         * correcting for Android display rotation.
+         * Pure function, zero allocation.
+         *
+         * @param targetWorldX World ENU vector X (East)
+         * @param targetWorldY World ENU vector Y (North)
+         * @param targetWorldZ World ENU vector Z (Up)
+         * @param frozenMatrix 4x4 orthonormal rotation matrix of the camera
+         * @param displayRotation Android Surface rotation (Surface.ROTATION_0, ROTATION_90, ROTATION_180, ROTATION_270)
+         * @return Pair of (deltaAzimuthDegrees, deltaPitchDegrees)
+         */
+        fun computeTargetOffsets(
+            targetWorldX: Float,
+            targetWorldY: Float,
+            targetWorldZ: Float,
+            frozenMatrix: FloatArray,
+            displayRotation: Int = Surface.ROTATION_0,
+        ): Pair<Float, Float> {
+            val tx = frozenMatrix[0] * targetWorldX + frozenMatrix[4] * targetWorldY + frozenMatrix[8] * targetWorldZ
+            val ty = frozenMatrix[1] * targetWorldX + frozenMatrix[5] * targetWorldY + frozenMatrix[9] * targetWorldZ
+            val tz = frozenMatrix[2] * targetWorldX + frozenMatrix[6] * targetWorldY + frozenMatrix[10] * targetWorldZ
+
+            val screenX: Float
+            val screenY: Float
+            when (displayRotation) {
+                Surface.ROTATION_90 -> { screenX = ty; screenY = -tx }
+                Surface.ROTATION_180 -> { screenX = -tx; screenY = -ty }
+                Surface.ROTATION_270 -> { screenX = -ty; screenY = tx }
+                else -> { screenX = tx; screenY = ty }
+            }
+
+            val screenXd = screenX.toDouble().let { if (it == -0.0) 0.0 else it }
+            val forwardZd = (-tz.toDouble()).let { if (it == -0.0) 0.0 else it }
+
+            val exactDeltaAz = Math.toDegrees(atan2(screenXd, forwardZd)).toFloat()
+            val exactDeltaPitch = Math.toDegrees(asin(screenY.coerceIn(-1f, 1f).toDouble())).toFloat()
+            return Pair(exactDeltaAz, exactDeltaPitch.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH))
+        }
 
         /**
          * Extracts camera optical pitch / elevation in degrees [-90.0, +90.0] from a rotation matrix.

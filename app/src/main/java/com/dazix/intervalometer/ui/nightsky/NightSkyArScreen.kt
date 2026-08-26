@@ -251,7 +251,7 @@ fun NightSkyArScreen(
                         fullHeightPx = height
                     }
                 },
-                onRouteToTarget = viewModel::routeCameraToSelection,
+                onRouteToTarget = { viewModel.routeCameraToSelection(displayRotation) },
                 onClose = viewModel::clearSelectedBody,
                 nightVisionTheme = uiState.nightVisionState.theme,
             )
@@ -433,7 +433,7 @@ fun NightSkyArScreen(
                     active = uiState.isSearchActive,
                     onQueryChange = viewModel::setSearchQuery,
                     onActiveChange = viewModel::setSearchActive,
-                    onSelectItem = { item -> viewModel.selectCelestialBody(item) },
+                    onSelectItem = { item -> viewModel.selectCelestialBody(item, displayRotation) },
                     onClearHistory = viewModel::clearSearchHistory,
                     onRemoveHistoryItem = viewModel::removeSearchHistoryItem,
                     redVisionMode = uiState.redVisionMode,
