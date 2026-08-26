@@ -66,6 +66,9 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenY.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidInFront.size)
         org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.forceRenderStar.size)
+        org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldX.size)
+        org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldY.size)
+        org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldZ.size)
 
         // Apply Red Vision mode
         renderer.applyTheme(redVisionMode = true)

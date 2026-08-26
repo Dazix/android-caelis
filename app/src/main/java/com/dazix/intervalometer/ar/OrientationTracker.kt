@@ -87,8 +87,11 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
 
+    @Volatile
     var panAzimuthOffsetDeg: Float = 0f
         private set
+
+    @Volatile
     var panPitchOffsetDeg: Float = 0f
         private set
 

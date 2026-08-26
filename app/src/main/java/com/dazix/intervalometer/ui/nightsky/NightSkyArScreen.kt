@@ -339,6 +339,7 @@ fun NightSkyArScreen(
                 NightSkyOverlayCanvas(
                     renderer = renderer,
                     orientation = orientation,
+                    onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
                     displayRotation = displayRotation,
                     fovHorizontalDegrees = uiState.cameraFovHorizontal,
                     zoomRatio = uiState.zoomRatio,
@@ -588,6 +589,7 @@ fun NightSkyArScreen(
 private fun NightSkyOverlayCanvas(
     renderer: NightSkyRenderer,
     orientation: DeviceOrientation?,
+    onGetRenderMatrix: (FloatArray) -> Boolean = { false },
     displayRotation: Int,
     fovHorizontalDegrees: Float,
     zoomRatio: Float,
@@ -646,6 +648,12 @@ private fun NightSkyOverlayCanvas(
         }
     }
 
+    val renderMatrix = remember {
+        FloatArray(16).apply {
+            this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+        }
+    }
+
     renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(nightVisionState)
     renderer.selectedPlanetId = selectedPlanetId
@@ -670,11 +678,11 @@ private fun NightSkyOverlayCanvas(
         @Suppress("UNUSED_VARIABLE")
         val currentTimeNanos = frameTicker
 
-        if (orientation == null) return@Canvas
+        val hasMatrix = onGetRenderMatrix(renderMatrix)
+        val matrix = if (hasMatrix) renderMatrix else (orientation?.rotationMatrix ?: return@Canvas)
 
         val w = size.width
         val h = size.height
-        val matrix = orientation.rotationMatrix
 
         // Configure optical star halo/core stroke widths scaling by screen density, zoom, and artwork layer highlight
         renderer.updateOpticalPaints(

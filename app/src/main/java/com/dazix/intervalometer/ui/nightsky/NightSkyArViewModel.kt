@@ -129,11 +129,35 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
-    val manualPanRa = MutableStateFlow(0f)
-    val manualPanDec = MutableStateFlow(0f)
-    private val manualMatrixBuffer = FloatArray(16)
-    private val publishedManualMatrix = FloatArray(16)
+    @Volatile
+    var manualPanRa: Float = 0f
+        private set
+
+    @Volatile
+    var manualPanDec: Float = 0f
+        private set
+
+    private val manualMatrixBuffer = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
+    private val publishedManualMatrix = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
+
+    /**
+     * Fast zero-allocation accessor for the active camera rotation matrix on the 60 FPS hardware vsync loop.
+     * Bypasses Compose StateFlow recomposition for ultra-smooth 60/120 FPS panning.
+     */
+    fun getCurrentRenderMatrix(outMatrix: FloatArray): Boolean {
+        if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
+            orientationTracker.getLiveMatrix(outMatrix)
+            return true
+        } else {
+            System.arraycopy(manualMatrixBuffer, 0, outMatrix, 0, minOf(manualMatrixBuffer.size, outMatrix.size))
+            return true
+        }
+    }
 
     private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
     private val zoomRatioState = MutableStateFlow(1.0f)
@@ -513,8 +537,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun updateManualOrientation() {
-        val ra = manualPanRa.value.toDouble()
-        val dec = manualPanDec.value.toDouble()
+        val ra = manualPanRa.toDouble()
+        val dec = manualPanDec.toDouble()
         val lst = lstDegreesState.value
         val lat = locationProvider.location.value.latitude
 
@@ -713,12 +737,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
             currentRa = liveRa
             currentDec = liveDec
-            manualPanRa.value = currentRa.toFloat()
-            manualPanDec.value = currentDec.toFloat()
+            manualPanRa = currentRa.toFloat()
+            manualPanDec = currentDec.toFloat()
             orientationTracker.isSensorTrackingPaused.value = true
         } else {
-            currentRa = manualPanRa.value.toDouble()
-            currentDec = manualPanDec.value.toDouble()
+            currentRa = manualPanRa.toDouble()
+            currentDec = manualPanDec.toDouble()
         }
 
         // 2. Launch smooth spherical S-curve animation
@@ -746,8 +770,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 val normalizedRa = if (interpolatedRa < 0.0) interpolatedRa + 360.0 else interpolatedRa
                 val interpolatedDec = (startDec + (endDec - startDec) * t).coerceIn(-89.9, 89.9)
 
-                manualPanRa.value = normalizedRa.toFloat()
-                manualPanDec.value = interpolatedDec.toFloat()
+                manualPanRa = normalizedRa.toFloat()
+                manualPanDec = interpolatedDec.toFloat()
                 updateManualOrientation()
 
                 if (fraction >= 1f) break
@@ -818,8 +842,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             // State Injection on first touch drag: freeze live sensor orientation into manual pan state
             val liveMatrix = orientationTracker.getLiveMatrix()
             val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa.value = liveRa.toFloat()
-            manualPanDec.value = liveDec.toFloat()
+            manualPanRa = liveRa.toFloat()
+            manualPanDec = liveDec.toFloat()
             orientationTracker.isSensorTrackingPaused.value = true
         }
 
@@ -827,8 +851,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val deltaElDeg = deltaY * factor
 
         val (currentAz, currentEl) = EquatorialCoordinates.equatorialToHorizontal(
-            manualPanRa.value.toDouble(),
-            manualPanDec.value.toDouble(),
+            manualPanRa.toDouble(),
+            manualPanDec.toDouble(),
             lst,
             lat,
         )
@@ -837,9 +861,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val newEl = (currentEl + deltaElDeg).coerceIn(-89.9, 89.9)
 
         val (newRa, newDec) = EquatorialCoordinates.horizontalToEquatorial(newAz, newEl, lst, lat)
-        manualPanRa.value = newRa.toFloat()
-        manualPanDec.value = newDec.toFloat()
-        updateManualOrientation()
+        manualPanRa = newRa.toFloat()
+        manualPanDec = newDec.toFloat()
+
+        // In-place matrix update for zero-recomposition hardware vsync render loop
+        CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
@@ -852,14 +878,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
             val liveMatrix = orientationTracker.getLiveMatrix()
             val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa.value = liveRa.toFloat()
-            manualPanDec.value = liveDec.toFloat()
+            manualPanRa = liveRa.toFloat()
+            manualPanDec = liveDec.toFloat()
             orientationTracker.isSensorTrackingPaused.value = true
         }
 
         val (currentAz, currentEl) = EquatorialCoordinates.equatorialToHorizontal(
-            manualPanRa.value.toDouble(),
-            manualPanDec.value.toDouble(),
+            manualPanRa.toDouble(),
+            manualPanDec.toDouble(),
             lst,
             lat,
         )
@@ -868,9 +894,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val newEl = (currentEl + deltaElevationDeg).coerceIn(-89.9, 89.9)
 
         val (newRa, newDec) = EquatorialCoordinates.horizontalToEquatorial(newAz, newEl, lst, lat)
-        manualPanRa.value = newRa.toFloat()
-        manualPanDec.value = newDec.toFloat()
-        updateManualOrientation()
+        manualPanRa = newRa.toFloat()
+        manualPanDec = newDec.toFloat()
+
+        // In-place matrix update for zero-recomposition hardware vsync render loop
+        CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
@@ -914,8 +942,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             val lat = locationProvider.location.value.latitude
             val liveMatrix = orientationTracker.getLiveMatrix()
             val (ra, dec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa.value = ra.toFloat()
-            manualPanDec.value = dec.toFloat()
+            manualPanRa = ra.toFloat()
+            manualPanDec = dec.toFloat()
             updateManualOrientation()
             viewModelScope.launch(Dispatchers.Default) {
                 orientationTracker.stop()
