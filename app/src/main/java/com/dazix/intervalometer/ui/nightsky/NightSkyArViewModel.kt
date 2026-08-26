@@ -132,6 +132,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val manualPanRa = MutableStateFlow(0f)
     val manualPanDec = MutableStateFlow(0f)
     private val manualMatrixBuffer = FloatArray(16)
+    private val publishedManualMatrix = FloatArray(16)
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
 
     private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
@@ -520,8 +521,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val (az, el) = EquatorialCoordinates.equatorialToHorizontal(ra, dec, lst, lat)
         CelestialMatrixCalculator.computeManualRotationMatrix(az, el, manualMatrixBuffer)
 
+        System.arraycopy(manualMatrixBuffer, 0, publishedManualMatrix, 0, 16)
+
         manualOrientationState.value = DeviceOrientation(
-            rotationMatrix = manualMatrixBuffer.clone(),
+            rotationMatrix = publishedManualMatrix,
             cameraAzimuthDegrees = az.toFloat(),
             cameraElevationDegrees = el.toFloat(),
             cameraRollDegrees = 0f,
@@ -914,10 +917,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             manualPanRa.value = ra.toFloat()
             manualPanDec.value = dec.toFloat()
             updateManualOrientation()
-            orientationTracker.stop()
+            viewModelScope.launch(Dispatchers.Default) {
+                orientationTracker.stop()
+            }
         } else if (enabled && !isSensorTrackingEnabled.value) {
             orientationTracker.resumeSensorTracking()
-            orientationTracker.start()
+            viewModelScope.launch(Dispatchers.Default) {
+                orientationTracker.start()
+            }
         }
         viewModelScope.launch {
             settingsStore.saveNightSkySensorTracking(enabled)

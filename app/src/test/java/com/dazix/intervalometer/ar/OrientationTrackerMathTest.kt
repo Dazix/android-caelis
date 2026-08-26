@@ -368,6 +368,38 @@ class OrientationTrackerMathTest {
             assertEquals(1.0f, sqrt(lenSq), 1e-4f)
         }
     }
+
+    @Test
+    fun `verifies applyCalibration handles combined declination and pan pitch zero allocation`() {
+        val rawMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val tempBuffer = FloatArray(16)
+        val outMatrix = FloatArray(16)
+
+        OrientationTracker.applyCalibration(
+            sensorMatrix = rawMatrix,
+            declinationDeg = 10f,
+            panAzimuthOffsetDeg = 30f,
+            panPitchOffsetDeg = 15f,
+            tempDeclinationBuffer = tempBuffer,
+            outMatrix = outMatrix,
+        )
+
+        assertEquals(16, outMatrix.size)
+        assertEquals(1f, outMatrix[15], 1e-4f)
+
+        // Orthonormality check
+        for (col in 0..2) {
+            val lenSq = outMatrix[col] * outMatrix[col] +
+                outMatrix[col + 4] * outMatrix[col + 4] +
+                outMatrix[col + 8] * outMatrix[col + 8]
+            assertEquals(1.0f, sqrt(lenSq), 1e-4f)
+        }
+    }
 }
 
 

@@ -80,6 +80,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private val adjustedMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
+    private val tempAdjustedMatrix = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
+    private val publishedMatrix = FloatArray(16).apply {
+        this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
+    }
 
     var panAzimuthOffsetDeg: Float = 0f
         private set
@@ -97,9 +103,36 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private var magneticDeclinationDeg = 0.0f
 
     /**
-     * Returns a copy of the live True-North corrected sensor rotation matrix (World ENU space).
+     * Returns the live True-North corrected sensor rotation matrix (World ENU space)
+     * without heap allocation.
      */
-    fun getLiveMatrix(): FloatArray = liveTrueMatrix.clone()
+    fun getLiveMatrix(): FloatArray = liveTrueMatrix
+
+    fun getLiveMatrix(out: FloatArray): FloatArray {
+        System.arraycopy(liveTrueMatrix, 0, out, 0, minOf(liveTrueMatrix.size, out.size))
+        return out
+    }
+
+    /**
+     * Computes the adjusted rotation matrix incorporating manual pan offsets or live sensor state
+     * with 100% zero heap allocations.
+     */
+    fun getAdjustedMatrix(liveMatrix: FloatArray = liveTrueMatrix): FloatArray {
+        if (isSensorTrackingPaused.value) {
+            System.arraycopy(frozenMatrix, 0, tempAdjustedMatrix, 0, 16)
+            applyCalibration(
+                sensorMatrix = frozenMatrix,
+                declinationDeg = 0.0f,
+                panAzimuthOffsetDeg = panAzimuthOffsetDeg,
+                panPitchOffsetDeg = panPitchOffsetDeg,
+                tempDeclinationBuffer = tempDeclinationMatrix,
+                outMatrix = tempAdjustedMatrix,
+            )
+            return tempAdjustedMatrix
+        } else {
+            return liveMatrix
+        }
+    }
 
     fun updateLocation(location: GeoLocation) {
         try {
@@ -287,8 +320,10 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         val camElDeg = (Math.toDegrees(asin(camFwdZ.coerceIn(-1f, 1f).toDouble()))).toFloat()
         val rollDeg = (Math.toDegrees(atan2(adjustedMatrix[1].toDouble(), adjustedMatrix[5].toDouble()))).toFloat()
 
+        System.arraycopy(adjustedMatrix, 0, publishedMatrix, 0, 16)
+
         stateFlow.value = DeviceOrientation(
-            rotationMatrix = adjustedMatrix.clone(),
+            rotationMatrix = publishedMatrix,
             cameraAzimuthDegrees = camAzDeg,
             cameraElevationDegrees = camElDeg,
             cameraRollDegrees = rollDeg,
