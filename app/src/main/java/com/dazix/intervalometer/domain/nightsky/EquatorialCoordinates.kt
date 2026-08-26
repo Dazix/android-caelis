@@ -138,5 +138,36 @@ object EquatorialCoordinates {
 
         return Pair(raDeg, decDeg)
     }
+
+    /**
+     * Extracts the optical look direction (-Z_dev) from a 4x4 or 3x3 ENU rotation matrix
+     * and converts it to absolute Equatorial coordinates (RA, Dec).
+     *
+     * In Android ENU space, the camera optical axis (device -Z) transforms to:
+     * fwdX = -matrix[2] (East), fwdY = -matrix[6] (North), fwdZ = -matrix[10] (Up).
+     *
+     * @param matrix 4x4 or 3x3 rotation matrix (transforms device vectors to ENU world vectors).
+     * @param lstDegrees Local Sidereal Time in degrees [0.0, 360.0).
+     * @param latitudeDegrees Observer latitude in degrees [-90.0, +90.0].
+     * @return Pair of (RightAscensionDegrees [0.0, 360.0), DeclinationDegrees [-90.0, +90.0]).
+     */
+    fun getCurrentCameraRaDec(
+        matrix: FloatArray,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+    ): Pair<Double, Double> {
+        val fwdX = if (matrix.size >= 16) -matrix[2] else if (matrix.size >= 9) -matrix[2] else 0f
+        val fwdY = if (matrix.size >= 16) -matrix[6] else if (matrix.size >= 9) -matrix[5] else 1f
+        val fwdZ = if (matrix.size >= 16) -matrix[10] else if (matrix.size >= 9) -matrix[8] else 0f
+
+        var az = Math.toDegrees(atan2(fwdX.toDouble(), fwdY.toDouble()))
+        if (az < 0.0) az += 360.0
+        if (az >= 360.0) az -= 360.0
+
+        val el = Math.toDegrees(asin(fwdZ.toDouble().coerceIn(-1.0, 1.0)))
+
+        return horizontalToEquatorial(az, el, lstDegrees, latitudeDegrees)
+    }
 }
+
 

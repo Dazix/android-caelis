@@ -345,146 +345,29 @@ class OrientationTrackerMathTest {
     }
 
     @Test
-    fun `verifies target routing delta azimuth and elevation calculations across 360 wrap and zenith limits`() {
-        // Base frozen matrix facing North (Azimuth = 0°, Elevation = 0°)
-        val northMatrix = floatArrayOf(
+    fun `verifies applyMagneticDeclination computes true north rotation with zero distortion`() {
+        val rawMatrix = floatArrayOf(
             1f, 0f, 0f, 0f,
-            0f, 0f, -1f, 0f,
             0f, 1f, 0f, 0f,
+            0f, 0f, 1f, 0f,
             0f, 0f, 0f, 1f,
         )
+        val trueNorth = FloatArray(16)
+        OrientationTracker.applyMagneticDeclination(rawMatrix, 15.0f, trueNorth)
 
-        // Case 1: Target to East (Az = 90°, El = 0°) -> World vector [1, 0, 0]
-        val targetWorldEast = floatArrayOf(1f, 0f, 0f)
-        val tx1 = northMatrix[0] * targetWorldEast[0] + northMatrix[4] * targetWorldEast[1] + northMatrix[8] * targetWorldEast[2]
-        val ty1 = northMatrix[1] * targetWorldEast[0] + northMatrix[5] * targetWorldEast[1] + northMatrix[9] * targetWorldEast[2]
-        val tz1 = northMatrix[2] * targetWorldEast[0] + northMatrix[6] * targetWorldEast[1] + northMatrix[10] * targetWorldEast[2]
+        // Matrix size must be 16
+        assertEquals(16, trueNorth.size)
+        // Diagonal element 15 is 1f (affine homogeneous)
+        assertEquals(1f, trueNorth[15], 1e-4f)
 
-        val deltaAz1 = Math.toDegrees(kotlin.math.atan2(tx1.toDouble(), -tz1.toDouble())).toFloat()
-        val deltaPitch1 = Math.toDegrees(kotlin.math.asin(ty1.coerceIn(-1f, 1f).toDouble())).toFloat()
-        assertEquals(90f, deltaAz1, 0.001f)
-        assertEquals(0f, deltaPitch1, 0.001f)
-
-        // Case 2: Target to North-West (Az = 315° -> shortest path is -45°)
-        val targetWorldNw = floatArrayOf(-kotlin.math.sin(Math.toRadians(45.0)).toFloat(), kotlin.math.cos(Math.toRadians(45.0)).toFloat(), 0f)
-        val tx2 = northMatrix[0] * targetWorldNw[0] + northMatrix[4] * targetWorldNw[1] + northMatrix[8] * targetWorldNw[2]
-        val ty2 = northMatrix[1] * targetWorldNw[0] + northMatrix[5] * targetWorldNw[1] + northMatrix[9] * targetWorldNw[2]
-        val tz2 = northMatrix[2] * targetWorldNw[0] + northMatrix[6] * targetWorldNw[1] + northMatrix[10] * targetWorldNw[2]
-
-        val deltaAz2 = Math.toDegrees(kotlin.math.atan2(tx2.toDouble(), -tz2.toDouble())).toFloat()
-        assertEquals(-45f, deltaAz2, 0.001f)
-
-        // Case 3: Target near Zenith (El = 89° -> clamped to 85°)
-        val targetWorldZenith = floatArrayOf(0f, 0f, 1f)
-        val ty3 = northMatrix[1] * targetWorldZenith[0] + northMatrix[5] * targetWorldZenith[1] + northMatrix[9] * targetWorldZenith[2]
-        val deltaPitch3 = Math.toDegrees(kotlin.math.asin(ty3.coerceIn(-1f, 1f).toDouble())).toFloat().coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
-        assertEquals(85f, deltaPitch3, 0.001f)
-    }
-
-    @Test
-    fun `verifies target routing local transformation cancels physical device roll and computes exact local offsets`() {
-        // Base matrix facing North with 0° Pitch and 0° Roll
-        val northMatrix = floatArrayOf(
-            1f, 0f, 0f, 0f,
-            0f, 0f, -1f, 0f,
-            0f, 1f, 0f, 0f,
-            0f, 0f, 0f, 1f,
-        )
-
-        // Target World ENU Vector: East (Az = 90°, El = 0°) -> [1, 0, 0]
-        val targetWorldEast = floatArrayOf(1f, 0f, 0f)
-
-        // Base matrix with 45° device roll around camera optical axis (-Z_dev)
-        val rollAngle = Math.toRadians(45.0)
-        val cosR = kotlin.math.cos(rollAngle).toFloat()
-        val sinR = kotlin.math.sin(rollAngle).toFloat()
-
-        // Rotating device X & Y by 45°:
-        val rolledMatrix = floatArrayOf(
-            cosR * northMatrix[0] - sinR * northMatrix[1],
-            sinR * northMatrix[0] + cosR * northMatrix[1],
-            northMatrix[2], 0f,
-
-            cosR * northMatrix[4] - sinR * northMatrix[5],
-            sinR * northMatrix[4] + cosR * northMatrix[5],
-            northMatrix[6], 0f,
-
-            cosR * northMatrix[8] - sinR * northMatrix[9],
-            sinR * northMatrix[8] + cosR * northMatrix[9],
-            northMatrix[10], 0f,
-
-            0f, 0f, 0f, 1f,
-        )
-
-        // Project East target into rolled device space: V_dev = R_rolled^T * V_world
-        val tx = rolledMatrix[0] * targetWorldEast[0] + rolledMatrix[4] * targetWorldEast[1] + rolledMatrix[8] * targetWorldEast[2]
-        val ty = rolledMatrix[1] * targetWorldEast[0] + rolledMatrix[5] * targetWorldEast[1] + rolledMatrix[9] * targetWorldEast[2]
-        val tz = rolledMatrix[2] * targetWorldEast[0] + rolledMatrix[6] * targetWorldEast[1] + rolledMatrix[10] * targetWorldEast[2]
-
-        // Verify local device X and Y receive the 45° rotated projection of the target
-        assertEquals(cosR, tx, 0.001f)
-        assertEquals(sinR, ty, 0.001f)
-        assertEquals(0f, tz, 0.001f)
-
-        val deltaAz = Math.toDegrees(kotlin.math.atan2(tx.toDouble(), -tz.toDouble())).toFloat()
-        val deltaPitch = Math.toDegrees(kotlin.math.asin(ty.coerceIn(-1f, 1f).toDouble())).toFloat()
-
-        assertEquals(90f, deltaAz, 0.001f)
-        assertEquals(45f, deltaPitch, 0.001f)
-    }
-
-    @Test
-    fun `verifies target routing offsets with portrait and landscape display rotations`() {
-        // Base frozen matrix facing North at the horizon (Az = 0°, El = 0°)
-        // Col 0 (+X_dev = East): [1, 0, 0, 0]
-        // Col 1 (+Y_dev = Up):   [0, 0, 1, 0]
-        // Col 2 (+Z_dev = South):[0, -1, 0, 0] (so -Z_dev points North)
-        val northMatrix = floatArrayOf(
-            1f, 0f, 0f, 0f,
-            0f, 0f, -1f, 0f,
-            0f, 1f, 0f, 0f,
-            0f, 0f, 0f, 1f,
-        )
-
-        // 1. Target is East: [1, 0, 0] (World Az = 90°, El = 0°)
-        val targetEast = floatArrayOf(1f, 0f, 0f)
-
-        // Portrait (ROTATION_0): Target is to the right (+X_screen) -> deltaAz = +90°, deltaPitch = 0°
-        val (az0, pitch0) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_0)
-        assertEquals(90f, az0, 0.001f)
-        assertEquals(0f, pitch0, 0.001f)
-
-        // Landscape Left (ROTATION_90): Device rotated 90° CCW -> East is bottom of screen (-Y_screen) -> pitch down -85°
-        val (az90, pitch90) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_90)
-        assertEquals(0f, az90, 0.001f)
-        assertEquals(-85f, pitch90, 0.001f)
-
-        // Inverted Portrait (ROTATION_180): Device upside down -> East is to the left (-X_screen) -> deltaAz = -90°, deltaPitch = 0°
-        val (az180, pitch180) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_180)
-        assertEquals(-90f, az180, 0.001f)
-        assertEquals(0f, pitch180, 0.001f)
-
-        // Landscape Right (ROTATION_270): Device rotated 90° CW -> East is top of screen (+Y_screen) -> pitch up +85°
-        val (az270, pitch270) = OrientationTracker.computeTargetOffsets(targetEast[0], targetEast[1], targetEast[2], northMatrix, Surface.ROTATION_270)
-        assertEquals(0f, az270, 0.001f)
-        assertEquals(85f, pitch270, 0.001f)
-
-        // 2. Target is Zenith (Up): [0, 0, 1] (World El = 90°)
-        val targetZenith = floatArrayOf(0f, 0f, 1f)
-
-        // Portrait (ROTATION_0): Zenith is top of screen (+Y_screen) -> deltaPitch = +85°
-        val (azZenith0, pitchZenith0) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_0)
-        assertEquals(0f, azZenith0, 0.001f)
-        assertEquals(85f, pitchZenith0, 0.001f)
-
-        // Landscape Left (ROTATION_90): Zenith is right side of screen (+X_screen) -> deltaAz = +90°, deltaPitch = 0°
-        val (azZenith90, pitchZenith90) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_90)
-        assertEquals(90f, azZenith90, 0.001f)
-        assertEquals(0f, pitchZenith90, 0.001f)
-
-        // Landscape Right (ROTATION_270): Zenith is left side of screen (-X_screen) -> deltaAz = -90°, deltaPitch = 0°
-        val (azZenith270, pitchZenith270) = OrientationTracker.computeTargetOffsets(targetZenith[0], targetZenith[1], targetZenith[2], northMatrix, Surface.ROTATION_270)
-        assertEquals(-90f, azZenith270, 0.001f)
-        assertEquals(0f, pitchZenith270, 0.001f)
+        // Column norms must remain 1.0
+        for (col in 0..2) {
+            val lenSq = trueNorth[col] * trueNorth[col] +
+                trueNorth[col + 4] * trueNorth[col + 4] +
+                trueNorth[col + 8] * trueNorth[col + 8]
+            assertEquals(1.0f, sqrt(lenSq), 1e-4f)
+        }
     }
 }
+
+

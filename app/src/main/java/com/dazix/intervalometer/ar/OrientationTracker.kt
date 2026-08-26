@@ -96,7 +96,10 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     private var magneticDeclinationDeg = 0.0f
 
-    private var targetAnimator: android.animation.ValueAnimator? = null
+    /**
+     * Returns a copy of the live True-North corrected sensor rotation matrix (World ENU space).
+     */
+    fun getLiveMatrix(): FloatArray = liveTrueMatrix.clone()
 
     fun updateLocation(location: GeoLocation) {
         try {
@@ -124,8 +127,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     fun resumeSensorTracking() {
-        targetAnimator?.cancel()
-        targetAnimator = null
         panAzimuthOffsetDeg = 0f
         panPitchOffsetDeg = 0f
         isSensorTrackingPaused.value = false
@@ -142,91 +143,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         publishOrientation(accuracy = 3)
     }
 
-    /**
-     * Smoothly rotates the virtual camera in Hybrid Alt-Azimuth mode to center on the target vector [targetWorldX, targetWorldY, targetWorldZ]
-     * (World ENU coordinates) over 800ms using local space transformation that mathematically cancels physical device roll
-     * and maps hardware axes to screen visual axes according to [displayRotation].
-     */
-    fun animateToTarget(
-        targetWorldX: Float,
-        targetWorldY: Float,
-        targetWorldZ: Float,
-        currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
-        displayRotation: Int = Surface.ROTATION_0,
-        onUpdate: ((Float, Float) -> Unit)? = null,
-    ) {
-        targetAnimator?.cancel()
-
-        // 1. FREEZE SENSORS IF NOT PAUSED
-        if (!isSensorTrackingPaused.value) {
-            isSensorTrackingPaused.value = true
-            System.arraycopy(currentFrozenMatrix, 0, frozenMatrix, 0, minOf(currentFrozenMatrix.size, 16))
-        }
-
-        // 2. EXTRACT EXACT LOCAL OFFSETS REQUIRED TO CENTER THE TARGET IN VIEWPORT WITH DISPLAY ROTATION
-        val (targetOffsetAz, targetOffsetPitch) = computeTargetOffsets(
-            targetWorldX = targetWorldX,
-            targetWorldY = targetWorldY,
-            targetWorldZ = targetWorldZ,
-            frozenMatrix = frozenMatrix,
-            displayRotation = displayRotation,
-        )
-
-        val startAzOffset = panAzimuthOffsetDeg
-        val startPitchOffset = panPitchOffsetDeg
-
-        // 3. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
-        var diffAz = targetOffsetAz - startAzOffset
-        if (diffAz > 180f) diffAz -= 360f
-        if (diffAz < -180f) diffAz += 360f
-        val diffPitch = targetOffsetPitch - startPitchOffset
-
-        // 4. ANIMATE VIA VALUEANIMATOR OVER 800MS
-        val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 800L
-            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
-            addUpdateListener { anim ->
-                val fraction = anim.animatedValue as Float
-                val newAz = startAzOffset + diffAz * fraction
-                panAzimuthOffsetDeg = (newAz % 360f + 360f) % 360f
-                panPitchOffsetDeg = (startPitchOffset + diffPitch * fraction).coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
-
-                applyCalibration(
-                    sensorMatrix = frozenMatrix,
-                    declinationDeg = 0.0f,
-                    panAzimuthOffsetDeg = panAzimuthOffsetDeg,
-                    panPitchOffsetDeg = panPitchOffsetDeg,
-                    tempDeclinationBuffer = tempDeclinationMatrix,
-                    outMatrix = adjustedMatrix,
-                )
-                publishOrientation(accuracy = 3)
-                onUpdate?.invoke(panAzimuthOffsetDeg, panPitchOffsetDeg)
-            }
-        }
-        targetAnimator = animator
-        animator.start()
-    }
-
-    /**
-     * Overload for [animateToTarget] accepting spherical [targetAzimuthDeg] and [targetElevationDeg].
-     */
-    fun animateToTarget(
-        targetAzimuthDeg: Float,
-        targetElevationDeg: Float,
-        currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
-        displayRotation: Int = Surface.ROTATION_0,
-        onUpdate: ((Float, Float) -> Unit)? = null,
-    ) {
-        val azRad = Math.toRadians(targetAzimuthDeg.toDouble())
-        val elRad = Math.toRadians(targetElevationDeg.toDouble())
-        val cosEl = kotlin.math.cos(elRad).toFloat()
-        val vx = cosEl * kotlin.math.sin(azRad).toFloat() // East
-        val vy = cosEl * kotlin.math.cos(azRad).toFloat() // North
-        val vz = kotlin.math.sin(elRad).toFloat() // Up
-        animateToTarget(vx, vy, vz, currentFrozenMatrix, displayRotation, onUpdate)
-    }
-
     fun isUserRotated(): Boolean = isSensorTrackingPaused.value || (panAzimuthOffsetDeg != 0f || panPitchOffsetDeg != 0f)
+
 
     /**
      * Bulletproof drag gesture handler for Alt-Azimuth panning with sensor freezing.
@@ -289,8 +207,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     fun stop() {
-        targetAnimator?.cancel()
-        targetAnimator = null
         if (!isListening || sensorManager == null) return
         sensorManager.unregisterListener(this)
         isListening = false
@@ -384,46 +300,6 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         const val MAX_GESTURE_PITCH = 85f
         const val ALPHA_STATIONARY = 0.30f
         const val ALPHA_MOVING = 0.85f
-
-        /**
-         * Extracts local delta azimuth and pitch from frozen camera matrix and world target vector,
-         * correcting for Android display rotation.
-         * Pure function, zero allocation.
-         *
-         * @param targetWorldX World ENU vector X (East)
-         * @param targetWorldY World ENU vector Y (North)
-         * @param targetWorldZ World ENU vector Z (Up)
-         * @param frozenMatrix 4x4 orthonormal rotation matrix of the camera
-         * @param displayRotation Android Surface rotation (Surface.ROTATION_0, ROTATION_90, ROTATION_180, ROTATION_270)
-         * @return Pair of (deltaAzimuthDegrees, deltaPitchDegrees)
-         */
-        fun computeTargetOffsets(
-            targetWorldX: Float,
-            targetWorldY: Float,
-            targetWorldZ: Float,
-            frozenMatrix: FloatArray,
-            displayRotation: Int = Surface.ROTATION_0,
-        ): Pair<Float, Float> {
-            val tx = frozenMatrix[0] * targetWorldX + frozenMatrix[4] * targetWorldY + frozenMatrix[8] * targetWorldZ
-            val ty = frozenMatrix[1] * targetWorldX + frozenMatrix[5] * targetWorldY + frozenMatrix[9] * targetWorldZ
-            val tz = frozenMatrix[2] * targetWorldX + frozenMatrix[6] * targetWorldY + frozenMatrix[10] * targetWorldZ
-
-            val screenX: Float
-            val screenY: Float
-            when (displayRotation) {
-                Surface.ROTATION_90 -> { screenX = ty; screenY = -tx }
-                Surface.ROTATION_180 -> { screenX = -tx; screenY = -ty }
-                Surface.ROTATION_270 -> { screenX = -ty; screenY = tx }
-                else -> { screenX = tx; screenY = ty }
-            }
-
-            val screenXd = screenX.toDouble().let { if (it == -0.0) 0.0 else it }
-            val forwardZd = (-tz.toDouble()).let { if (it == -0.0) 0.0 else it }
-
-            val exactDeltaAz = Math.toDegrees(atan2(screenXd, forwardZd)).toFloat()
-            val exactDeltaPitch = Math.toDegrees(asin(screenY.coerceIn(-1f, 1f).toDouble())).toFloat()
-            return Pair(exactDeltaAz, exactDeltaPitch.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH))
-        }
 
         /**
          * Extracts camera optical pitch / elevation in degrees [-90.0, +90.0] from a rotation matrix.
