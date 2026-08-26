@@ -34,6 +34,7 @@ fun NightSkyLayerSettingsSheet(
     isLandscapeVisible: Boolean,
     isAtmosphereVisible: Boolean,
     isMilkyWayVisible: Boolean,
+    isPlanetsVisible: Boolean,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     isGridVisible: Boolean,
@@ -47,6 +48,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleLandscapeVisible: () -> Unit,
     onToggleAtmosphereVisible: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
+    onTogglePlanetsVisible: () -> Unit,
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
     onToggleGridVisible: () -> Unit,
@@ -124,6 +126,16 @@ fun NightSkyLayerSettingsSheet(
             iconColor = iconColor,
             switchColors = switchColors,
             onCheckedChange = { onToggleMilkyWayVisible() },
+        )
+
+        LayerToggleRow(
+            label = stringResource(R.string.night_sky_planets),
+            icon = AppIcons.Planet,
+            isChecked = isPlanetsVisible,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onTogglePlanetsVisible() },
         )
 
         LayerToggleRow(

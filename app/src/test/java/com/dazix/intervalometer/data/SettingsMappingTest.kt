@@ -400,6 +400,18 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky planets visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyPlanetsVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyPlanetsVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyPlanetsVisible(prefs))
+
+        SettingsMapping.writeNightSkyPlanetsVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyPlanetsVisible(prefs))
+    }
+
+    @Test
     fun `sun ar elevation offset defaults to zero and survives round trip`() {
         assertEquals(0.0f, SettingsMapping.readSunArElevationOffset(emptyPreferences()))
 
@@ -593,6 +605,16 @@ class SettingsMappingTest {
 
         SettingsMapping.writeDebugModeEnabled(prefs, false)
         assertEquals(false, SettingsMapping.readDebugModeEnabled(prefs))
+    }
+
+    @Test
+    fun `night sky search history defaults to empty string and survives round trip`() {
+        assertEquals("", SettingsMapping.readNightSkySearchHistory(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        val raw = "STAR\t42\tSirius\tCanis Major\t101.28\t-16.71\t-1.46\t"
+        SettingsMapping.writeNightSkySearchHistory(prefs, raw)
+        assertEquals(raw, SettingsMapping.readNightSkySearchHistory(prefs))
     }
 
     /** Simulates a record written by a build that did not have these keys yet. */

@@ -279,7 +279,7 @@ fun NightSkyArScreen(
                         }
                     )
                 }
-                .pointerInput(catalog, uiState.planetStates, maxTouchRadiusPx, density) {
+                .pointerInput(catalog, uiState.planetStates, uiState.isPlanetsVisible, maxTouchRadiusPx, density) {
                     detectTapGestures(
                         onTap = { offset ->
                             val hitTarget = renderer.findHitAt(
@@ -288,7 +288,7 @@ fun NightSkyArScreen(
                                 maxStarRadiusPx = maxTouchRadiusPx,
                                 density = density.density,
                                 catalog = catalog,
-                                planets = uiState.planetStates,
+                                planets = if (uiState.isPlanetsVisible) uiState.planetStates else emptyList(),
                             )
                             when (hitTarget) {
                                 is NightSkyRenderer.HitTarget.ConstellationHit -> {
@@ -348,6 +348,7 @@ fun NightSkyArScreen(
                     isAtmosphereVisible = uiState.isAtmosphereVisible,
                     isLandscapeVisible = uiState.isLandscapeVisible,
                     isGridVisible = uiState.isGridVisible,
+                    isPlanetsVisible = uiState.isPlanetsVisible,
                     isConstellationsVisible = uiState.isConstellationsVisible,
                     isConstellationArtVisible = uiState.isConstellationArtVisible,
                     selectedBody = uiState.selectedBody,
@@ -425,10 +426,13 @@ fun NightSkyArScreen(
                 CelestialSearchBar(
                     query = uiState.searchQuery,
                     results = uiState.searchResults,
+                    history = uiState.searchHistory,
                     active = uiState.isSearchActive,
                     onQueryChange = viewModel::setSearchQuery,
                     onActiveChange = viewModel::setSearchActive,
                     onSelectItem = { item -> viewModel.selectCelestialBody(item) },
+                    onClearHistory = viewModel::clearSearchHistory,
+                    onRemoveHistoryItem = viewModel::removeSearchHistoryItem,
                     redVisionMode = uiState.redVisionMode,
                     nightVisionTheme = uiState.nightVisionState.theme,
                     modifier = Modifier
@@ -544,6 +548,7 @@ fun NightSkyArScreen(
                 isLandscapeVisible = uiState.isLandscapeVisible,
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isPlanetsVisible = uiState.isPlanetsVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 isConstellationArtVisible = uiState.isConstellationArtVisible,
                 isGridVisible = uiState.isGridVisible,
@@ -557,6 +562,7 @@ fun NightSkyArScreen(
                 onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
                 onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
                 onToggleMilkyWayVisible = viewModel::toggleMilkyWayVisible,
+                onTogglePlanetsVisible = viewModel::togglePlanetsVisible,
                 onToggleConstellationsVisible = viewModel::toggleConstellationsVisible,
                 onToggleConstellationArtVisible = viewModel::toggleConstellationArtVisible,
                 onToggleGridVisible = viewModel::toggleGridVisible,
@@ -591,6 +597,7 @@ private fun NightSkyOverlayCanvas(
     isAtmosphereVisible: Boolean,
     isLandscapeVisible: Boolean,
     isGridVisible: Boolean,
+    isPlanetsVisible: Boolean = true,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     selectedBody: CelestialBodyDetails? = null,
@@ -692,6 +699,7 @@ private fun NightSkyOverlayCanvas(
             zoomFactor = zoomRatio,
             showConstellations = isConstellationsVisible,
             showConstellationArt = isConstellationArtVisible,
+            showPlanets = isPlanetsVisible,
             isAtmosphereVisible = isAtmosphereVisible,
             context = context,
             debugOffsetX = debugArtOffsetX,

@@ -69,11 +69,13 @@ data class NightSkyArUiState(
     val isAtmosphereVisible: Boolean = true,
     val isLandscapeVisible: Boolean = true,
     val isGridVisible: Boolean = true,
+    val isPlanetsVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
     val isConstellationArtVisible: Boolean = true,
     val isSensorTrackingEnabled: Boolean = true,
     val searchQuery: String = "",
     val searchResults: List<SearchResultItem> = emptyList(),
+    val searchHistory: List<SearchResultItem> = emptyList(),
     val isSearchActive: Boolean = false,
     val selectedStarIndex: Int = -1,
     val selectedConstellationIndex: Int = -1,
@@ -106,6 +108,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val searchQuery = MutableStateFlow("")
     private val _searchResults = MutableStateFlow<List<SearchResultItem>>(emptyList())
     val searchResults: StateFlow<List<SearchResultItem>> = _searchResults.asStateFlow()
+
+    val searchHistory: StateFlow<List<SearchResultItem>> = settingsStore.nightSkySearchHistory.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        emptyList(),
+    )
 
     val isSearchActive = MutableStateFlow(false)
 
@@ -265,6 +273,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    val isPlanetsVisible: StateFlow<Boolean> = settingsStore.nightSkyPlanetsVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     val isConstellationsVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationsVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -315,12 +329,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isAtmosphereVisible,
             isLandscapeVisible,
             isGridVisible,
+            isPlanetsVisible,
             isConstellationsVisible,
             isConstellationArtVisible,
             selectedBodyState,
             isSensorTrackingEnabled,
             searchQuery,
             searchResults,
+            searchHistory,
             isSearchActive,
             selectedStarIndex,
             selectedConstellationIndex,
@@ -355,28 +371,31 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val atmosphere = args[15] as Boolean
         val landscape = args[16] as Boolean
         val grid = args[17] as Boolean
-        val constellations = args[18] as Boolean
-        val constellationArt = args[19] as Boolean
-        val selected = args[20] as CelestialBodyDetails?
-        val sensorTracking = args[21] as Boolean
-        val query = args[22] as String
+        val planetsVisible = args[18] as Boolean
+        val constellations = args[19] as Boolean
+        val constellationArt = args[20] as Boolean
+        val selected = args[21] as CelestialBodyDetails?
+        val sensorTracking = args[22] as Boolean
+        val query = args[23] as String
         @Suppress("UNCHECKED_CAST")
-        val results = args[23] as List<SearchResultItem>
-        val searchActive = args[24] as Boolean
-        val starIdx = args[25] as Int
-        val constIdx = args[26] as Int
-        val dbgOffsetX = args[27] as Float
-        val dbgOffsetY = args[28] as Float
-        val dbgScale = args[29] as Float
-        val dbgRot = args[30] as Float
-        val dbgVis = args[31] as Boolean
-        val dbgFocus = args[32] as Boolean
-        val dbgRadius = args[33] as Float
-        val dbgThresh = args[34] as Float
-        val dbgOptions = args[35] as Boolean
+        val results = args[24] as List<SearchResultItem>
         @Suppress("UNCHECKED_CAST")
-        val planetsList = args[36] as List<PlanetState>
-        val planetId = args[37] as String?
+        val history = args[25] as List<SearchResultItem>
+        val searchActive = args[26] as Boolean
+        val starIdx = args[27] as Int
+        val constIdx = args[28] as Int
+        val dbgOffsetX = args[29] as Float
+        val dbgOffsetY = args[30] as Float
+        val dbgScale = args[31] as Float
+        val dbgRot = args[32] as Float
+        val dbgVis = args[33] as Boolean
+        val dbgFocus = args[34] as Boolean
+        val dbgRadius = args[35] as Float
+        val dbgThresh = args[36] as Float
+        val dbgOptions = args[37] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val planetsList = args[38] as List<PlanetState>
+        val planetId = args[39] as String?
 
         NightSkyArUiState(
             location = loc,
@@ -399,11 +418,13 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isAtmosphereVisible = atmosphere,
             isLandscapeVisible = landscape,
             isGridVisible = grid,
+            isPlanetsVisible = planetsVisible,
             isConstellationsVisible = constellations,
             isConstellationArtVisible = constellationArt,
             isSensorTrackingEnabled = sensorTracking,
             searchQuery = query,
             searchResults = results,
+            searchHistory = history,
             isSearchActive = searchActive,
             selectedStarIndex = starIdx,
             selectedConstellationIndex = constIdx,
@@ -657,7 +678,23 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isSearchActive.value = false
         searchQuery.value = ""
 
+        viewModelScope.launch {
+            settingsStore.addNightSkySearchHistory(item)
+        }
+
         routeCameraToCoordinates(item.ra.toDouble(), item.dec.toDouble())
+    }
+
+    fun removeSearchHistoryItem(item: SearchResultItem) {
+        viewModelScope.launch {
+            settingsStore.removeNightSkySearchHistory(item)
+        }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch {
+            settingsStore.clearNightSkySearchHistory()
+        }
     }
 
     /**
@@ -677,10 +714,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double) {
         val lst = lstDegreesState.value
         val lat = locationProvider.location.value.latitude
-        val (targetAz, targetEl) = EquatorialCoordinates.equatorialToHorizontal(raDegrees, decDegrees, lst, lat)
 
         if (isSensorTrackingEnabled.value) {
-            orientationTracker.animateToTarget(targetAz.toFloat(), targetEl.toFloat()) { az, pitch ->
+            val targetWorld = FloatArray(3)
+            EquatorialCoordinates.computeWorldVector(raDegrees, decDegrees, lst, lat, targetWorld, 0)
+            orientationTracker.animateToTarget(targetWorld[0], targetWorld[1], targetWorld[2]) { az, pitch ->
                 panAzimuthOffset.value = az
                 panPitchOffset.value = pitch
             }
@@ -982,6 +1020,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setGridVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyGridVisible(enabled)
+        }
+    }
+
+    fun togglePlanetsVisible() {
+        setPlanetsVisible(!isPlanetsVisible.value)
+    }
+
+    fun setPlanetsVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyPlanetsVisible(enabled)
         }
     }
 

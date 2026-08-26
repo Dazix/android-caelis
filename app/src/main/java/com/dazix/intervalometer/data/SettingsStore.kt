@@ -20,6 +20,8 @@ import com.dazix.intervalometer.domain.TapTarget
 import com.dazix.intervalometer.domain.TriggerMode
 import com.dazix.intervalometer.domain.nightsky.NightVisionActivationMode
 import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
+import com.dazix.intervalometer.domain.nightsky.SearchHistoryCodec
+import com.dazix.intervalometer.domain.nightsky.SearchResultItem
 import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -87,10 +89,16 @@ class SettingsStore(context: Context) {
 
     val nightSkyGridVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyGridVisible(it) }
 
+    val nightSkyPlanetsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyPlanetsVisible(it) }
+
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
 
     val nightSkySensorTracking: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkySensorTracking(it) }
+
+    val nightSkySearchHistory: Flow<List<SearchResultItem>> = preferences.map {
+        SearchHistoryCodec.decode(SettingsMapping.readNightSkySearchHistory(it))
+    }
 
     val nightVisionTheme: Flow<NightVisionTheme> = preferences.map { SettingsMapping.readNightVisionTheme(it) }
 
@@ -170,6 +178,26 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyQuaternion(it, quat) }
     }
 
+    suspend fun addNightSkySearchHistory(item: SearchResultItem) {
+        dataStore.edit { prefs ->
+            val current = SearchHistoryCodec.decode(SettingsMapping.readNightSkySearchHistory(prefs))
+            val updated = SearchHistoryCodec.addToHistory(current, item)
+            SettingsMapping.writeNightSkySearchHistory(prefs, SearchHistoryCodec.encode(updated))
+        }
+    }
+
+    suspend fun removeNightSkySearchHistory(item: SearchResultItem) {
+        dataStore.edit { prefs ->
+            val current = SearchHistoryCodec.decode(SettingsMapping.readNightSkySearchHistory(prefs))
+            val updated = SearchHistoryCodec.removeFromHistory(current, item)
+            SettingsMapping.writeNightSkySearchHistory(prefs, SearchHistoryCodec.encode(updated))
+        }
+    }
+
+    suspend fun clearNightSkySearchHistory() {
+        dataStore.edit { SettingsMapping.writeNightSkySearchHistory(it, "") }
+    }
+
     suspend fun saveNightSkyOpaqueBackground(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyOpaqueBackground(it, enabled) }
     }
@@ -188,6 +216,10 @@ class SettingsStore(context: Context) {
 
     suspend fun saveNightSkyGridVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyGridVisible(it, enabled) }
+    }
+
+    suspend fun saveNightSkyPlanetsVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyPlanetsVisible(it, enabled) }
     }
 
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
@@ -294,9 +326,11 @@ internal object SettingsMapping {
     private val NIGHT_SKY_ATMOSPHERE_VISIBLE = booleanPreferencesKey("night_sky_atmosphere_visible")
     private val NIGHT_SKY_LANDSCAPE_VISIBLE = booleanPreferencesKey("night_sky_landscape_visible")
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
+    private val NIGHT_SKY_PLANETS_VISIBLE = booleanPreferencesKey("night_sky_planets_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
     private val NIGHT_SKY_SENSOR_TRACKING = booleanPreferencesKey("night_sky_sensor_tracking")
+    private val NIGHT_SKY_SEARCH_HISTORY = stringPreferencesKey("night_sky_search_history")
     private val NIGHT_VISION_THEME_KEY = stringPreferencesKey("night_vision_theme")
     private val NIGHT_VISION_MODE_KEY = stringPreferencesKey("night_vision_mode")
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
@@ -612,6 +646,13 @@ internal object SettingsMapping {
         prefs[NIGHT_SKY_GRID_VISIBLE] = enabled
     }
 
+    fun readNightSkyPlanetsVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_PLANETS_VISIBLE] ?: true
+
+    fun writeNightSkyPlanetsVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_PLANETS_VISIBLE] = enabled
+    }
+
     fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =
         prefs[NIGHT_SKY_CONSTELLATIONS_VISIBLE] ?: true
 
@@ -631,6 +672,13 @@ internal object SettingsMapping {
 
     fun writeNightSkySensorTracking(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_SENSOR_TRACKING] = enabled
+    }
+
+    fun readNightSkySearchHistory(prefs: Preferences): String =
+        prefs[NIGHT_SKY_SEARCH_HISTORY] ?: ""
+
+    fun writeNightSkySearchHistory(prefs: MutablePreferences, history: String) {
+        prefs[NIGHT_SKY_SEARCH_HISTORY] = history
     }
 
     fun readNightVisionTheme(prefs: Preferences): NightVisionTheme {

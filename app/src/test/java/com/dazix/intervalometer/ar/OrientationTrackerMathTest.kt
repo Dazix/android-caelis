@@ -353,34 +353,82 @@ class OrientationTrackerMathTest {
             0f, 0f, 0f, 1f,
         )
 
-        val camFwdX = -northMatrix[2]
-        val camFwdY = -northMatrix[6]
-        val camFwdZ = -northMatrix[10]
+        // Case 1: Target to East (Az = 90°, El = 0°) -> World vector [1, 0, 0]
+        val targetWorldEast = floatArrayOf(1f, 0f, 0f)
+        val tx1 = northMatrix[0] * targetWorldEast[0] + northMatrix[4] * targetWorldEast[1] + northMatrix[8] * targetWorldEast[2]
+        val ty1 = northMatrix[1] * targetWorldEast[0] + northMatrix[5] * targetWorldEast[1] + northMatrix[9] * targetWorldEast[2]
+        val tz1 = northMatrix[2] * targetWorldEast[0] + northMatrix[6] * targetWorldEast[1] + northMatrix[10] * targetWorldEast[2]
 
-        val camAzRad = kotlin.math.atan2(camFwdX.toDouble(), camFwdY.toDouble())
-        var camAzDeg = Math.toDegrees(camAzRad).toFloat()
-        if (camAzDeg < 0f) camAzDeg += 360f
-        val camElDeg = Math.toDegrees(kotlin.math.asin(camFwdZ.coerceIn(-1f, 1f).toDouble())).toFloat()
-
-        assertEquals(0f, camAzDeg, 0.001f)
-        assertEquals(0f, camElDeg, 0.001f)
-
-        // Case 1: Target to North-East (Az = 45°, El = 30°)
-        var deltaAz1 = 45f - camAzDeg
-        if (deltaAz1 > 180f) deltaAz1 -= 360f
-        if (deltaAz1 < -180f) deltaAz1 += 360f
-        val deltaEl1 = (30f - camElDeg).coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
-        assertEquals(45f, deltaAz1, 0.001f)
-        assertEquals(30f, deltaEl1, 0.001f)
+        val deltaAz1 = Math.toDegrees(kotlin.math.atan2(tx1.toDouble(), -tz1.toDouble())).toFloat()
+        val deltaPitch1 = Math.toDegrees(kotlin.math.asin(ty1.coerceIn(-1f, 1f).toDouble())).toFloat()
+        assertEquals(90f, deltaAz1, 0.001f)
+        assertEquals(0f, deltaPitch1, 0.001f)
 
         // Case 2: Target to North-West (Az = 315° -> shortest path is -45°)
-        var deltaAz2 = 315f - camAzDeg
-        if (deltaAz2 > 180f) deltaAz2 -= 360f
-        if (deltaAz2 < -180f) deltaAz2 += 360f
+        val targetWorldNw = floatArrayOf(-kotlin.math.sin(Math.toRadians(45.0)).toFloat(), kotlin.math.cos(Math.toRadians(45.0)).toFloat(), 0f)
+        val tx2 = northMatrix[0] * targetWorldNw[0] + northMatrix[4] * targetWorldNw[1] + northMatrix[8] * targetWorldNw[2]
+        val ty2 = northMatrix[1] * targetWorldNw[0] + northMatrix[5] * targetWorldNw[1] + northMatrix[9] * targetWorldNw[2]
+        val tz2 = northMatrix[2] * targetWorldNw[0] + northMatrix[6] * targetWorldNw[1] + northMatrix[10] * targetWorldNw[2]
+
+        val deltaAz2 = Math.toDegrees(kotlin.math.atan2(tx2.toDouble(), -tz2.toDouble())).toFloat()
         assertEquals(-45f, deltaAz2, 0.001f)
 
         // Case 3: Target near Zenith (El = 89° -> clamped to 85°)
-        val deltaEl3 = (89f - camElDeg).coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
-        assertEquals(85f, deltaEl3, 0.001f)
+        val targetWorldZenith = floatArrayOf(0f, 0f, 1f)
+        val ty3 = northMatrix[1] * targetWorldZenith[0] + northMatrix[5] * targetWorldZenith[1] + northMatrix[9] * targetWorldZenith[2]
+        val deltaPitch3 = Math.toDegrees(kotlin.math.asin(ty3.coerceIn(-1f, 1f).toDouble())).toFloat().coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
+        assertEquals(85f, deltaPitch3, 0.001f)
+    }
+
+    @Test
+    fun `verifies target routing local transformation cancels physical device roll and computes exact local offsets`() {
+        // Base matrix facing North with 0° Pitch and 0° Roll
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Target World ENU Vector: East (Az = 90°, El = 0°) -> [1, 0, 0]
+        val targetWorldEast = floatArrayOf(1f, 0f, 0f)
+
+        // Base matrix with 45° device roll around camera optical axis (-Z_dev)
+        val rollAngle = Math.toRadians(45.0)
+        val cosR = kotlin.math.cos(rollAngle).toFloat()
+        val sinR = kotlin.math.sin(rollAngle).toFloat()
+
+        // Rotating device X & Y by 45°:
+        val rolledMatrix = floatArrayOf(
+            cosR * northMatrix[0] - sinR * northMatrix[1],
+            sinR * northMatrix[0] + cosR * northMatrix[1],
+            northMatrix[2], 0f,
+
+            cosR * northMatrix[4] - sinR * northMatrix[5],
+            sinR * northMatrix[4] + cosR * northMatrix[5],
+            northMatrix[6], 0f,
+
+            cosR * northMatrix[8] - sinR * northMatrix[9],
+            sinR * northMatrix[8] + cosR * northMatrix[9],
+            northMatrix[10], 0f,
+
+            0f, 0f, 0f, 1f,
+        )
+
+        // Project East target into rolled device space: V_dev = R_rolled^T * V_world
+        val tx = rolledMatrix[0] * targetWorldEast[0] + rolledMatrix[4] * targetWorldEast[1] + rolledMatrix[8] * targetWorldEast[2]
+        val ty = rolledMatrix[1] * targetWorldEast[0] + rolledMatrix[5] * targetWorldEast[1] + rolledMatrix[9] * targetWorldEast[2]
+        val tz = rolledMatrix[2] * targetWorldEast[0] + rolledMatrix[6] * targetWorldEast[1] + rolledMatrix[10] * targetWorldEast[2]
+
+        // Verify local device X and Y receive the 45° rotated projection of the target
+        assertEquals(cosR, tx, 0.001f)
+        assertEquals(sinR, ty, 0.001f)
+        assertEquals(0f, tz, 0.001f)
+
+        val deltaAz = Math.toDegrees(kotlin.math.atan2(tx.toDouble(), -tz.toDouble())).toFloat()
+        val deltaPitch = Math.toDegrees(kotlin.math.asin(ty.coerceIn(-1f, 1f).toDouble())).toFloat()
+
+        assertEquals(90f, deltaAz, 0.001f)
+        assertEquals(45f, deltaPitch, 0.001f)
     }
 }

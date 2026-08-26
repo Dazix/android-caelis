@@ -21,9 +21,14 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,10 +48,13 @@ import java.util.Locale
 fun CelestialSearchBar(
     query: String,
     results: List<SearchResultItem>,
+    history: List<SearchResultItem> = emptyList(),
     active: Boolean,
     onQueryChange: (String) -> Unit,
     onActiveChange: (Boolean) -> Unit,
     onSelectItem: (SearchResultItem) -> Unit,
+    onClearHistory: () -> Unit = {},
+    onRemoveHistoryItem: (SearchResultItem) -> Unit = {},
     redVisionMode: Boolean,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
@@ -74,6 +82,19 @@ fun CelestialSearchBar(
         ),
     )
 
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(active) {
+        if (active) {
+            kotlinx.coroutines.delay(100L)
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+        }
+    }
+
     SearchBar(
         inputField = {
             SearchBarDefaults.InputField(
@@ -82,6 +103,7 @@ fun CelestialSearchBar(
                 onSearch = { /* Handled via tapping suggestion */ },
                 expanded = active,
                 onExpandedChange = onActiveChange,
+                modifier = Modifier.focusRequester(focusRequester),
                 placeholder = {
                     Text(
                         text = stringResource(R.string.search_celestial_placeholder),
@@ -134,33 +156,104 @@ fun CelestialSearchBar(
             .fillMaxWidth()
             .padding(horizontal = if (active) 0.dp else 16.dp),
     ) {
-        if (query.isNotBlank() && results.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_celestial_empty),
-                    color = subTextColor,
-                    fontSize = 15.sp,
-                    textAlign = TextAlign.Center,
-                )
+        if (query.isNotBlank()) {
+            if (results.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_celestial_empty),
+                        color = subTextColor,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(results, key = { "${it.type}_${it.indexId}_${it.primaryName}" }) { item ->
+                        CelestialSearchResultRow(
+                            item = item,
+                            textColor = textColor,
+                            subTextColor = subTextColor,
+                            accentColor = iconColor,
+                            redVisionMode = redVisionMode,
+                            nightVisionTheme = nightVisionTheme,
+                            onClick = { onSelectItem(item) },
+                        )
+                    }
+                }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(results, key = { "${it.type}_${it.indexId}_${it.primaryName}" }) { item ->
-                    CelestialSearchResultRow(
-                        item = item,
-                        textColor = textColor,
-                        subTextColor = subTextColor,
-                        accentColor = iconColor,
-                        redVisionMode = redVisionMode,
-                        nightVisionTheme = nightVisionTheme,
-                        onClick = { onSelectItem(item) },
+            // Query is blank -> Display search history (last 20 items)
+            if (history.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item(key = "history_header") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.History,
+                                contentDescription = null,
+                                tint = subTextColor,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.search_history_title),
+                                color = subTextColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 8.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.search_history_clear),
+                                color = iconColor,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clickable(onClick = onClearHistory)
+                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                            )
+                        }
+                    }
+
+                    items(history, key = { "hist_${it.type}_${it.indexId}_${it.primaryName}" }) { item ->
+                        CelestialSearchResultRow(
+                            item = item,
+                            textColor = textColor,
+                            subTextColor = subTextColor,
+                            accentColor = iconColor,
+                            redVisionMode = redVisionMode,
+                            nightVisionTheme = nightVisionTheme,
+                            isHistoryItem = true,
+                            onRemove = { onRemoveHistoryItem(item) },
+                            onClick = { onSelectItem(item) },
+                        )
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_history_empty),
+                        color = subTextColor,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
@@ -176,6 +269,8 @@ private fun CelestialSearchResultRow(
     accentColor: Color,
     redVisionMode: Boolean,
     nightVisionTheme: NightVisionTheme,
+    isHistoryItem: Boolean = false,
+    onRemove: (() -> Unit)? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -234,6 +329,21 @@ private fun CelestialSearchResultRow(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
+                }
+                if (isHistoryItem && onRemove != null) {
+                    IconButton(
+                        onClick = onRemove,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Clear,
+                            contentDescription = stringResource(R.string.search_celestial_clear),
+                            tint = subTextColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
             }
         },

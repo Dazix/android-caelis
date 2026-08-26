@@ -142,12 +142,13 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     /**
-     * Smoothly rotates the virtual camera in Hybrid Alt-Azimuth mode to center on [targetAzimuthDeg]
-     * and [targetElevationDeg] over 800ms using shortest spherical angular interpolation.
+     * Smoothly rotates the virtual camera in Hybrid Alt-Azimuth mode to center on the target vector [targetWorldX, targetWorldY, targetWorldZ]
+     * (World ENU coordinates) over 800ms using local space transformation that mathematically cancels physical device roll.
      */
     fun animateToTarget(
-        targetAzimuthDeg: Float,
-        targetElevationDeg: Float,
+        targetWorldX: Float,
+        targetWorldY: Float,
+        targetWorldZ: Float,
         currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
         onUpdate: ((Float, Float) -> Unit)? = null,
     ) {
@@ -159,33 +160,29 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             System.arraycopy(currentFrozenMatrix, 0, frozenMatrix, 0, minOf(currentFrozenMatrix.size, 16))
         }
 
-        // 2. EXTRACT CAMERA FORWARD VECTOR FROM FROZEN MATRIX
-        val camFwdX = -frozenMatrix[2]
-        val camFwdY = -frozenMatrix[6]
-        val camFwdZ = -frozenMatrix[10]
+        // 2. TRANSFORM TARGET WORLD ENU VECTOR INTO FROZEN CAMERA LOCAL SPACE: V_dev = R_frozen^T * V_world
+        // (This mathematically bypasses and cancels any physical device roll or slant)
+        val tx = frozenMatrix[0] * targetWorldX + frozenMatrix[4] * targetWorldY + frozenMatrix[8] * targetWorldZ
+        val ty = frozenMatrix[1] * targetWorldX + frozenMatrix[5] * targetWorldY + frozenMatrix[9] * targetWorldZ
+        val tz = frozenMatrix[2] * targetWorldX + frozenMatrix[6] * targetWorldY + frozenMatrix[10] * targetWorldZ
 
-        // 3. CONVERT TO BASE AZIMUTH & ELEVATION
-        val camAzRad = kotlin.math.atan2(camFwdX.toDouble(), camFwdY.toDouble())
-        var camAzDeg = Math.toDegrees(camAzRad).toFloat()
-        if (camAzDeg < 0f) camAzDeg += 360f
-        val camElDeg = Math.toDegrees(kotlin.math.asin(camFwdZ.coerceIn(-1f, 1f).toDouble())).toFloat()
+        // 3. EXTRACT EXACT LOCAL OFFSETS REQUIRED TO CENTER THE TARGET IN VIEWPORT
+        val exactDeltaAz = Math.toDegrees(kotlin.math.atan2(tx.toDouble(), -tz.toDouble())).toFloat()
+        val exactDeltaPitch = Math.toDegrees(kotlin.math.asin(ty.coerceIn(-1f, 1f).toDouble())).toFloat()
 
-        // 4. CALCULATE TARGET OFFSETS RELATIVE TO FROZEN BASE MATRIX
-        var targetOffsetAz = targetAzimuthDeg - camAzDeg
-        if (targetOffsetAz > 180f) targetOffsetAz -= 360f
-        if (targetOffsetAz < -180f) targetOffsetAz += 360f
-        val targetOffsetPitch = (targetElevationDeg - camElDeg).coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
-
-        // 5. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
         val startAzOffset = panAzimuthOffsetDeg
         val startPitchOffset = panPitchOffsetDeg
 
+        val targetOffsetAz = exactDeltaAz
+        val targetOffsetPitch = exactDeltaPitch.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
+
+        // 4. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
         var diffAz = targetOffsetAz - startAzOffset
         if (diffAz > 180f) diffAz -= 360f
         if (diffAz < -180f) diffAz += 360f
         val diffPitch = targetOffsetPitch - startPitchOffset
 
-        // 6. ANIMATE VIA VALUEANIMATOR OVER 800MS
+        // 5. ANIMATE VIA VALUEANIMATOR OVER 800MS
         val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
             duration = 800L
             interpolator = android.view.animation.AccelerateDecelerateInterpolator()
@@ -209,6 +206,24 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
         targetAnimator = animator
         animator.start()
+    }
+
+    /**
+     * Overload for [animateToTarget] accepting spherical [targetAzimuthDeg] and [targetElevationDeg].
+     */
+    fun animateToTarget(
+        targetAzimuthDeg: Float,
+        targetElevationDeg: Float,
+        currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
+        onUpdate: ((Float, Float) -> Unit)? = null,
+    ) {
+        val azRad = Math.toRadians(targetAzimuthDeg.toDouble())
+        val elRad = Math.toRadians(targetElevationDeg.toDouble())
+        val cosEl = kotlin.math.cos(elRad).toFloat()
+        val vx = cosEl * kotlin.math.sin(azRad).toFloat() // East
+        val vy = cosEl * kotlin.math.cos(azRad).toFloat() // North
+        val vz = kotlin.math.sin(elRad).toFloat() // Up
+        animateToTarget(vx, vy, vz, currentFrozenMatrix, onUpdate)
     }
 
     fun isUserRotated(): Boolean = isSensorTrackingPaused.value || (panAzimuthOffsetDeg != 0f || panPitchOffsetDeg != 0f)

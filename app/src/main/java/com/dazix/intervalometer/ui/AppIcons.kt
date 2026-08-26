@@ -506,6 +506,18 @@ object AppIcons {
         }
     }
 
+    /** History: clock circle with clock hands. */
+    val History: ImageVector by lazy {
+        icon("History") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 8.4f)
+                moveTo(12f, 7.5f)
+                lineTo(12f, 12f)
+                lineTo(15.2f, 14.2f)
+            }
+        }
+    }
+
     /** Planetarium: opaque celestial dome / sky vault. */
     val Planetarium: ImageVector by lazy {
         icon("Planetarium") {

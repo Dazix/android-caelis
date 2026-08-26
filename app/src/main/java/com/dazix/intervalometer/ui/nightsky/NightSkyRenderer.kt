@@ -97,6 +97,7 @@ class NightSkyRenderer {
     val constellationCentroidScreenX = FloatArray(maxConstellations)
     val constellationCentroidScreenY = FloatArray(maxConstellations)
     val constellationCentroidInFront = BooleanArray(maxConstellations)
+    val constellationIsFocused = BooleanArray(maxConstellations)
     private val tempCentroidWorldVec = FloatArray(3)
     private var lastFrameTimeMs: Long = 0L
 
@@ -934,6 +935,7 @@ class NightSkyRenderer {
         zoomFactor: Float = 1.0f,
         showConstellations: Boolean = true,
         showConstellationArt: Boolean = true,
+        showPlanets: Boolean = true,
         isAtmosphereVisible: Boolean = true,
         context: Context? = null,
         debugOffsetX: Float = 0f,
@@ -983,10 +985,12 @@ class NightSkyRenderer {
         val faintestVisibleMag = StarOptics.computeFaintestVisibleMagnitude(zoomFactor)
         var totalVisibleStars = 0
 
-        // 4. Constellation Centroid Focus & Animation Progress Update
+        // 4. Constellation Centroid Focus & Animation Progress Update (Spatial Hysteresis)
         val constCount = minOf(catalog.constellationsLength(), maxConstellations)
-        val focusRadius = w * debugFocusRadiusMultiplier
-        val focusRadiusSq = focusRadius * focusRadius
+        val focusRadiusIn = w * (debugFocusRadiusMultiplier * (45f / 48f))
+        val focusRadiusOut = w * (debugFocusRadiusMultiplier * (55f / 48f))
+        val focusRadiusInSq = focusRadiusIn * focusRadiusIn
+        val focusRadiusOutSq = focusRadiusOut * focusRadiusOut
 
         for (c in 0 until constCount) {
             catalog.constellations(reusableConstellation, c)
@@ -1013,6 +1017,9 @@ class NightSkyRenderer {
             }
             val czs = -czDev
 
+            val wasFocused = constellationIsFocused[c]
+            val isSelectedConstellation = (c == selectedConstellationIndex)
+
             if (czs > 0.001f) {
                 val cxScreen = halfW + focalLengthPixels * (cxs / czs)
                 val cyScreen = halfH - focalLengthPixels * (cys / czs)
@@ -1022,21 +1029,36 @@ class NightSkyRenderer {
 
                 val cdx = cxScreen - halfW
                 val cdy = cyScreen - halfH
-                val isSelectedConstellation = (c == selectedConstellationIndex)
-                val inFocus = showConstellations && (((cdx * cdx + cdy * cdy) <= focusRadiusSq) || isSelectedConstellation)
-                if (inFocus) {
-                    constellationProgress[c] = minOf(1.0f, constellationProgress[c] + dt * 2.0f)
+                val distSq = cdx * cdx + cdy * cdy
+
+                if (isSelectedConstellation) {
+                    constellationIsFocused[c] = true
+                } else if (!showConstellations) {
+                    constellationIsFocused[c] = false
                 } else {
-                    constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
+                    // Spatial Hysteresis State Machine: absorbs micro-tremor sensor jitter
+                    if (!wasFocused && distSq <= focusRadiusInSq) {
+                        constellationIsFocused[c] = true // Cross inner boundary -> Lock ON
+                    } else if (wasFocused && distSq > focusRadiusOutSq) {
+                        constellationIsFocused[c] = false // Cross outer boundary -> Lock OFF
+                    }
+                    // If between focusRadiusInSq and focusRadiusOutSq, state remains unchanged!
                 }
             } else {
                 constellationCentroidInFront[c] = false
-                if (c == selectedConstellationIndex) {
-                    constellationProgress[c] = 1.0f
-                } else {
-                    constellationProgress[c] = maxOf(0.0f, constellationProgress[c] - dt * 2.0f)
-                }
+                constellationIsFocused[c] = isSelectedConstellation
             }
+
+            // Smooth Delta-Time Integration with Asymmetric Dissolve
+            var p = constellationProgress[c]
+            val targetSpeed = dt * 2.0f
+
+            if (constellationIsFocused[c]) {
+                p += targetSpeed
+            } else {
+                p -= targetSpeed * 1.5f // Dissolve slightly faster than build-up
+            }
+            constellationProgress[c] = p.coerceIn(0f, 1f)
         }
 
         // 5. Fast Dynamic Override Table: force render stars of visible constellations
@@ -1147,6 +1169,7 @@ class NightSkyRenderer {
         val minDisplayThreshold = maxOf(0.001f, debugFocusDisplayThreshold)
         if (showConstellations && showConstellationArt && context != null) {
             for (c in 0 until constCount) {
+                if (!constellationCentroidInFront[c]) continue
                 val p = constellationProgress[c]
                 if (p <= minDisplayThreshold) continue
                 val effectiveP = if (debugFocusDisplayThreshold > 0f) {
@@ -1231,6 +1254,8 @@ class NightSkyRenderer {
             val artLineBoost = if (showConstellationArt) 1.25f else 1.0f
 
             for (c in 0 until constCount) {
+                val isSelected = (c == selectedConstellationIndex)
+                if (!constellationCentroidInFront[c] && !isSelected) continue
                 val p = constellationProgress[c]
                 if (p <= minDisplayThreshold) continue
                 val effectiveP = if (debugFocusDisplayThreshold > 0f) {
@@ -1242,7 +1267,6 @@ class NightSkyRenderer {
                 catalog.constellations(reusableConstellation, c)
                 val linesLen = reusableConstellation.linesLength()
                 var lineCoordsCount = 0
-                val isSelected = (c == selectedConstellationIndex)
 
                 for (k in 0 until linesLen - 1 step 2) {
                     val i1 = reusableConstellation.lines(k)
@@ -1345,7 +1369,7 @@ class NightSkyRenderer {
 
         // 7b. Dynamic Solar System Planetary Rendering (Dual-State: Point Light <-> High-Res Texture)
         activePlanetsCount = 0
-        if (planets.isNotEmpty()) {
+        if (showPlanets && planets.isNotEmpty()) {
             val density = drawScope.density
 
             for (pIdx in 0 until minOf(planets.size, maxPlanets)) {
@@ -1403,9 +1427,9 @@ class NightSkyRenderer {
                     val pColor = planet.colorRgb
                     val transparentColor = (pColor and 0x00FFFFFF)
                     val opticScale = StarOptics.computeOpticScale(zoomFactor)
-                    val coreRadius = 3.5f * density * opticScale
-                    val haloRadius = 18.0f * density * opticScale
-                    planetRadiusPx[pIdx] = maxOf(18f * density, haloRadius)
+                    val coreRadius = 2.5f * density * opticScale
+                    val haloRadius = 10.0f * density * opticScale
+                    planetRadiusPx[pIdx] = maxOf(12f * density, haloRadius)
 
                     // 1. Draw solid core
                     planetPaint.shader = null
@@ -1413,11 +1437,11 @@ class NightSkyRenderer {
                     planetPaint.alpha = 255
                     nativeCanvas.drawCircle(pX, pY, coreRadius, planetPaint)
 
-                    // 2. Draw soft optical halo using RadialGradient
+                    // 2. Draw soft optical halo with rapid falloff using RadialGradient
                     planetPaint.shader = RadialGradient(
                         pX, pY, haloRadius,
                         intArrayOf(pColor, transparentColor),
-                        floatArrayOf(0.1f, 1.0f),
+                        floatArrayOf(0.0f, 0.6f),
                         Shader.TileMode.CLAMP,
                     )
                     nativeCanvas.drawCircle(pX, pY, haloRadius, planetPaint)
@@ -1429,8 +1453,8 @@ class NightSkyRenderer {
                     if (bitmap != null) {
                         val trueAngularSizeRad = Math.toRadians(planet.angularDiameterDeg.toDouble()).toFloat()
                         val baseDiameterPx = trueAngularSizeRad * (focalLengthPixels / zs)
-                        val renderDiameterPx = maxOf(baseDiameterPx * 40f, 30f * density)
-                        planetRadiusPx[pIdx] = maxOf(18f * density, renderDiameterPx * 0.5f)
+                        val renderDiameterPx = maxOf(baseDiameterPx * 20f, 15f * density)
+                        planetRadiusPx[pIdx] = maxOf(12f * density, renderDiameterPx * 0.5f)
 
                         val scale = renderDiameterPx / bitmap.width.toFloat()
 
@@ -1444,13 +1468,17 @@ class NightSkyRenderer {
                         nativeCanvas.drawBitmap(bitmap, planetMatrix, planetPaint)
                     } else {
                         // Fallback if texture asset is loading
-                        val radius = 15f * density
+                        val radius = 10f * density
                         planetRadiusPx[pIdx] = radius
                         planetPaint.shader = null
                         planetPaint.color = planet.colorRgb
                         nativeCanvas.drawCircle(pX, pY, radius, planetPaint)
                     }
                 }
+            }
+        } else {
+            for (pIdx in 0 until maxPlanets) {
+                planetInFront[pIdx] = false
             }
         }
 
@@ -1489,11 +1517,13 @@ class NightSkyRenderer {
 
         // 9. Debug Focus Area Overlay: Circle & Centroid Indicators
         if (isDebugFocusRegionVisible) {
-            nativeCanvas.drawCircle(halfW, halfH, focusRadius, debugFocusFillPaint)
-            nativeCanvas.drawCircle(halfW, halfH, focusRadius, debugFocusCirclePaint)
-            val pct = (debugFocusRadiusMultiplier * 100f).toInt()
+            nativeCanvas.drawCircle(halfW, halfH, focusRadiusOut, debugFocusFillPaint)
+            nativeCanvas.drawCircle(halfW, halfH, focusRadiusIn, debugFocusCirclePaint)
+            nativeCanvas.drawCircle(halfW, halfH, focusRadiusOut, debugFocusCirclePaint)
+            val pctIn = ((focusRadiusIn / w) * 100f).toInt()
+            val pctOut = ((focusRadiusOut / w) * 100f).toInt()
             val threshPct = (debugFocusDisplayThreshold * 100f).toInt()
-            nativeCanvas.drawText("FOCUS AREA (r = $pct% W, thresh = $threshPct%)", halfW, halfH - focusRadius - 16f, debugFocusLabelPaint)
+            nativeCanvas.drawText("FOCUS AREA (In=$pctIn% W, Out=$pctOut% W, thresh=$threshPct%)", halfW, halfH - focusRadiusOut - 16f, debugFocusLabelPaint)
 
             // Draw centroid indicators for constellations in front of the camera
             for (c in 0 until constCount) {
@@ -1502,10 +1532,7 @@ class NightSkyRenderer {
                 val cyScreen = constellationCentroidScreenY[c]
                 if (cxScreen < -margin || cxScreen > w + margin || cyScreen < -margin || cyScreen > h + margin) continue
 
-                val cdx = cxScreen - halfW
-                val cdy = cyScreen - halfH
-                val isSelectedConstellation = (c == selectedConstellationIndex)
-                val inFocus = ((cdx * cdx + cdy * cdy) <= focusRadiusSq) || isSelectedConstellation
+                val inFocus = constellationIsFocused[c]
                 debugCentroidPaint.color = if (inFocus) debugCentroidInFocusColor else debugCentroidOutOfFocusColor
                 nativeCanvas.drawCircle(cxScreen, cyScreen, 6f, debugCentroidPaint)
             }

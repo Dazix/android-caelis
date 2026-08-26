@@ -14,6 +14,7 @@ import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.NightSkyCatalogLoader
 import com.google.flatbuffers.FlatBufferBuilder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -857,6 +858,188 @@ class NightSkyRendererZeroAllocTest {
     }
 
     @Test
+    fun `verifies constellations behind observer have centroid in front set to false and do not activate focus or artwork`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        val constNameOff = fbb.createString("Crux")
+        val locNameOff = fbb.createString("Jižní kříž")
+        val brightOff = fbb.createString("Acrux")
+        val famOff = fbb.createString("Crux Family")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        // Centroid at South Pole: Dec = -90.0
+        val constOff = Constellation.createConstellation(
+            fbb, constNameOff, 0.0f, -90.0f, linesVec, locNameOff, brightOff, famOff, false,
+            0, 0, 0
+        )
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, -89.0f, 1.8f)
+        Star.createStar(fbb, 0.0f, -90.0f, 1.8f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+        val renderer = NightSkyRenderer()
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        // Camera pointing strictly North at Lat = 90° (North Pole looking forward)
+        // South pole is behind the camera (Z_dev <= 0)
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = true,
+            )
+        }
+
+        // Verify that Crux (behind camera) is marked NOT in front
+        assertFalse("Constellation behind observer must have centroidInFront = false", renderer.constellationCentroidInFront[0])
+    }
+
+    @Test
+    fun `verifies constellation spatial hysteresis state machine absorbs boundary jitter`() {
+        val renderer = NightSkyRenderer()
+
+        // 1. Verify pre-allocated buffer
+        assertEquals(256, renderer.constellationIsFocused.size)
+        assertFalse(renderer.constellationIsFocused[0])
+
+        // 2. Mock catalog with 1 constellation
+        val fbb = FlatBufferBuilder(1024)
+        val constNameOff = fbb.createString("Ursa Major")
+        val locNameOff = fbb.createString("Velká medvědice")
+        val brightOff = fbb.createString("Alioth")
+        val famOff = fbb.createString("Ursa Major Family")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+
+        val constOff = Constellation.createConstellation(
+            fbb, constNameOff, 0.0f, 90.0f, linesVec, locNameOff, brightOff, famOff, false,
+            0, 0, 0
+        )
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 89.0f, 1.8f)
+        Star.createStar(fbb, 0.0f, 90.0f, 1.8f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val w = 1000f
+        val h = 2000f
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Render Frame 1: At Latitude = 0.0°, Dec = 90.0° is due North on horizon -> Centroid dead center (d = 0 <= 450) -> Locks ON
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(w, h),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = w,
+                h = h,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+            )
+        }
+        assertTrue("Centroid at center must acquire focus", renderer.constellationIsFocused[0])
+        assertTrue("Progress must increase", renderer.constellationProgress[0] > 0f)
+
+        // 3. Test Pure Spatial Hysteresis Deadzone State Transitions:
+        val focusRadiusIn = w * (0.48f * (45f / 48f)) // 450px
+        val focusRadiusOut = w * (0.48f * (55f / 48f)) // 550px
+        val rInSq = focusRadiusIn * focusRadiusIn // 202500
+        val rOutSq = focusRadiusOut * focusRadiusOut // 302500
+
+        var isFocused = false
+
+        // Transition A: Centroid in Deadzone (d = 500px, d^2 = 250000) starting from false -> stays false
+        val distDeadzoneSq = 500f * 500f
+        if (!isFocused && distDeadzoneSq <= rInSq) {
+            isFocused = true
+        } else if (isFocused && distDeadzoneSq > rOutSq) {
+            isFocused = false
+        }
+        assertFalse("Deadzone starting from unfocused must remain unfocused", isFocused)
+
+        // Transition B: Centroid enters Inner Radius (d = 400px, d^2 = 160000 <= 202500) -> locks ON
+        val distInSq = 400f * 400f
+        if (!isFocused && distInSq <= rInSq) {
+            isFocused = true
+        } else if (isFocused && distInSq > rOutSq) {
+            isFocused = false
+        }
+        assertTrue("Crossing inner boundary must lock focus ON", isFocused)
+
+        // Transition C: Centroid jitter moves back to Deadzone (d = 500px) -> remains locked ON (absorbs jitter!)
+        if (!isFocused && distDeadzoneSq <= rInSq) {
+            isFocused = true
+        } else if (isFocused && distDeadzoneSq > rOutSq) {
+            isFocused = false
+        }
+        assertTrue("Deadzone starting from focused must remain locked ON (absorbing micro-tremors)", isFocused)
+
+        // Transition D: Centroid exits Outer Radius (d = 600px, d^2 = 360000 > 302500) -> locks OFF
+        val distOutSq = 600f * 600f
+        if (!isFocused && distOutSq <= rInSq) {
+            isFocused = true
+        } else if (isFocused && distOutSq > rOutSq) {
+            isFocused = false
+        }
+        assertFalse("Crossing outer boundary must lock focus OFF", isFocused)
+    }
+
+    @Test
     fun `verifies planetary rendering buffers, dual-state rendering, and hit testing priority`() {
         val renderer = NightSkyRenderer()
 
@@ -945,11 +1128,71 @@ class NightSkyRendererZeroAllocTest {
                 zoomFactor = 100.0f,
                 showConstellations = true,
                 showConstellationArt = false,
+                showPlanets = true,
                 planets = planets,
             )
         }
 
-        // 5. Test Hit Testing Priority
+        // Verify planets are active when showPlanets = true
+        assertTrue("Active planets count must be > 0 when showPlanets is true", renderer.activePlanetsCount > 0)
+
+        // 5. Render Pass with showPlanets = false (Layer Toggled OFF)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+                showPlanets = false,
+                planets = planets,
+            )
+        }
+
+        // Verify active planets count is 0 and all planetInFront flags are false
+        assertEquals("Active planets count must be 0 when showPlanets is false", 0, renderer.activePlanetsCount)
+        for (i in 0 until renderer.maxPlanets) {
+            assertFalse("planetInFront[$i] must be false when showPlanets is false", renderer.planetInFront[i])
+        }
+
+        // Re-enable showPlanets for hit-testing and reticle tests
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 90.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                showConstellations = true,
+                showConstellationArt = false,
+                showPlanets = true,
+                planets = planets,
+            )
+        }
+
+        // 6. Test Hit Testing Priority
         // Find visible planet in front of camera
         var visiblePlanetIdx = -1
         for (i in 0 until renderer.activePlanetsCount) {
@@ -975,9 +1218,20 @@ class NightSkyRendererZeroAllocTest {
 
             assertTrue("Hit must be PlanetHit", hit is NightSkyRenderer.HitTarget.PlanetHit)
             assertEquals(expectedPlanetId, (hit as NightSkyRenderer.HitTarget.PlanetHit).planetId)
+
+            // When planets list is empty (e.g. layer toggled off), hit testing on the same spot should NOT return PlanetHit
+            val hitOff = renderer.findHitAt(
+                tapX = px,
+                tapY = py,
+                maxStarRadiusPx = 48f,
+                density = 2.5f,
+                catalog = catalog,
+                planets = emptyList(),
+            )
+            assertFalse("Hit must not be PlanetHit when planets are empty/disabled", hitOff is NightSkyRenderer.HitTarget.PlanetHit)
         }
 
-        // 6. Test Selection Reticle for Planet
+        // 7. Test Selection Reticle for Planet
         renderer.selectedStarIndex = -1
         renderer.selectedPlanetId = "Jupiter"
         val jupiterState = planets.first { it.id.equals("Jupiter", ignoreCase = true) }
