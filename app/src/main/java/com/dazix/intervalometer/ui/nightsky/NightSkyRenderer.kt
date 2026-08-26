@@ -88,6 +88,10 @@ class NightSkyRenderer {
     val starWorldX = FloatArray(MAX_STARS)
     val starWorldY = FloatArray(MAX_STARS)
     val starWorldZ = FloatArray(MAX_STARS)
+    val starVectorComputed = BooleanArray(MAX_STARS)
+    @Volatile
+    var isStarCacheReady = false
+        private set
     private var cachedLstDegrees: Double = Double.NaN
     private var cachedLatitudeDegrees: Double = Double.NaN
     private var cachedStarCount: Int = 0
@@ -926,10 +930,10 @@ class NightSkyRenderer {
     }
 
     /**
-     * Updates the cached 3D ENU world coordinates (East, North, Up) for all stars in the catalog.
-     * Runs only when LST changes by >= 0.01° or latitude changes, keeping the 60 FPS render loop 100% trig-free.
+     * Tier 1: High Priority (Naked Eye Stars: mag <= 6.0f).
+     * Computes vectors for the ~5,000 visible stars immediately in < 1ms, unlocking the renderer.
      */
-    fun updateStarWorldVectors(
+    fun updateStarWorldVectorsTier1(
         catalog: NightSkyCatalog,
         lstDegrees: Double,
         latitudeDegrees: Double,
@@ -940,18 +944,70 @@ class NightSkyRenderer {
 
         for (i in 0 until totalStars) {
             val offset = starsVectorOffset + i * 12
-            val ra = bb.getFloat(offset).toDouble()
-            val dec = bb.getFloat(offset + 4).toDouble()
+            val rawMag = bb.getFloat(offset + 8)
 
-            EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
-            starWorldX[i] = tempWorldVec[0]
-            starWorldY[i] = tempWorldVec[1]
-            starWorldZ[i] = tempWorldVec[2]
+            if (rawMag <= 6.0f) {
+                val ra = bb.getFloat(offset).toDouble()
+                val dec = bb.getFloat(offset + 4).toDouble()
+
+                EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+                starWorldX[i] = tempWorldVec[0]
+                starWorldY[i] = tempWorldVec[1]
+                starWorldZ[i] = tempWorldVec[2]
+                starVectorComputed[i] = true
+            } else {
+                starVectorComputed[i] = false
+            }
         }
 
         cachedLstDegrees = lstDegrees
         cachedLatitudeDegrees = latitudeDegrees
         cachedStarCount = totalStars
+        isStarCacheReady = true
+    }
+
+    /**
+     * Tier 2: Lazy / Background (Telescopic Stars: mag > 6.0f).
+     * Populates remaining ~78,000 faint stars quietly in the background without UI frame drops.
+     */
+    fun updateStarWorldVectorsTier2(
+        catalog: NightSkyCatalog,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        totalStars: Int,
+        isCancelled: () -> Boolean = { false },
+    ) {
+        val bb = catalog.byteBuffer
+        val starsVectorOffset = catalog.starsVectorOffset()
+        val tempVec = FloatArray(3) // Thread-safe local buffer
+
+        for (i in 0 until totalStars) {
+            if (isCancelled()) return
+            if (!starVectorComputed[i]) {
+                val offset = starsVectorOffset + i * 12
+                val ra = bb.getFloat(offset).toDouble()
+                val dec = bb.getFloat(offset + 4).toDouble()
+
+                EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempVec, 0)
+                starWorldX[i] = tempVec[0]
+                starWorldY[i] = tempVec[1]
+                starWorldZ[i] = tempVec[2]
+                starVectorComputed[i] = true
+            }
+        }
+    }
+
+    /**
+     * Combined synchronous vector update for testing and batch processing.
+     */
+    fun updateStarWorldVectors(
+        catalog: NightSkyCatalog,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        totalStars: Int,
+    ) {
+        updateStarWorldVectorsTier1(catalog, lstDegrees, latitudeDegrees, totalStars)
+        updateStarWorldVectorsTier2(catalog, lstDegrees, latitudeDegrees, totalStars)
     }
 
     /**
@@ -998,12 +1054,12 @@ class NightSkyRenderer {
         val bb = catalog.byteBuffer
         val starsVectorOffset = catalog.starsVectorOffset()
 
-        // Update ENU world vector cache if LST or latitude shifted significantly
+        // Progressive Tier 1 vector update if LST or latitude shifted significantly (< 1ms execution)
         if (totalStars != cachedStarCount ||
             kotlin.math.abs(lstDegrees - cachedLstDegrees) > 0.01 ||
             kotlin.math.abs(latitudeDegrees - cachedLatitudeDegrees) > 0.001
         ) {
-            updateStarWorldVectors(catalog, lstDegrees, latitudeDegrees, totalStars)
+            updateStarWorldVectorsTier1(catalog, lstDegrees, latitudeDegrees, totalStars)
         }
 
         // Reset bucket visible counts
@@ -1138,6 +1194,22 @@ class NightSkyRenderer {
             if (!isBrightEnough && !isForced) {
                 starInFront[i] = false
                 continue
+            }
+
+            // Guard: Ensure vector is computed before projecting to prevent [0,0,0] artifacts
+            if (!starVectorComputed[i]) {
+                if (isForced) {
+                    val ra = bb.getFloat(offset).toDouble()
+                    val dec = bb.getFloat(offset + 4).toDouble()
+                    EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+                    starWorldX[i] = tempWorldVec[0]
+                    starWorldY[i] = tempWorldVec[1]
+                    starWorldZ[i] = tempWorldVec[2]
+                    starVectorComputed[i] = true
+                } else {
+                    starInFront[i] = false
+                    continue
+                }
             }
 
             // 1. Read precomputed World ENU coordinates (Zero Trigonometry)

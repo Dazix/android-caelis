@@ -69,6 +69,7 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldX.size)
         org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldY.size)
         org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starWorldZ.size)
+        org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.starVectorComputed.size)
 
         // Apply Red Vision mode
         renderer.applyTheme(redVisionMode = true)
@@ -1267,5 +1268,41 @@ class NightSkyRendererZeroAllocTest {
                 density = 2.5f,
             )
         }
+    }
+
+    @Test
+    fun testTwoTierProgressiveVectorCalculation() {
+        val renderer = NightSkyRenderer()
+        val fbb = FlatBufferBuilder(1024)
+
+        // Star 0: Bright naked-eye star (mag = 1.2f)
+        // Star 1: Faint telescopic star (mag = 8.5f)
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 45.0f, 8.5f) // Star 1
+        Star.createStar(fbb, 0.0f, 45.0f, 1.2f) // Star 0
+        val starsVec = fbb.endVector()
+
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+        assertNotNull(catalog)
+
+        assertFalse(renderer.isStarCacheReady)
+
+        // Step 1: Execute Tier 1 (High Priority - Naked Eye mag <= 6.0)
+        renderer.updateStarWorldVectorsTier1(catalog, lstDegrees = 0.0, latitudeDegrees = 90.0, totalStars = 2)
+
+        assertTrue("Tier 1 must immediately mark cache as ready", renderer.isStarCacheReady)
+        assertTrue("Bright star (mag 1.2 <= 6.0) must be computed in Tier 1", renderer.starVectorComputed[0])
+        assertFalse("Faint star (mag 8.5 > 6.0) must NOT be computed in Tier 1", renderer.starVectorComputed[1])
+
+        // Step 2: Execute Tier 2 (Background - Telescopic mag > 6.0)
+        renderer.updateStarWorldVectorsTier2(catalog, lstDegrees = 0.0, latitudeDegrees = 90.0, totalStars = 2)
+
+        assertTrue("Bright star must remain computed", renderer.starVectorComputed[0])
+        assertTrue("Faint star must now be computed in Tier 2", renderer.starVectorComputed[1])
     }
 }

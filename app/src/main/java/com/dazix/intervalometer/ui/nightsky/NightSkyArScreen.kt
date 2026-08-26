@@ -61,7 +61,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import com.dazix.intervalometer.ui.AppToastHost
 import com.dazix.intervalometer.ui.AppToastHostState
 import androidx.compose.ui.Alignment
@@ -661,6 +663,18 @@ private fun NightSkyOverlayCanvas(
     LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
         milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
         landscapeBitmap?.let { renderer.setLandscapeBitmap(it) }
+    }
+
+    // Lazy background population of remaining ~78,000 telescopic stars (Tier 2) on Dispatchers.Default
+    LaunchedEffect(catalog, lstDegrees, latitudeDegrees) {
+        if (catalog != null) {
+            val totalStars = minOf(catalog.starsLength(), NightSkyRenderer.MAX_STARS)
+            withContext(Dispatchers.Default) {
+                renderer.updateStarWorldVectorsTier2(catalog, lstDegrees, latitudeDegrees, totalStars) {
+                    !isActive
+                }
+            }
+        }
     }
 
     // Continuous frame ticker driving hardware vsync (60/120 Hz) draw invalidations
