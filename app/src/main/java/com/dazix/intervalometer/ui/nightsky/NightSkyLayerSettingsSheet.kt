@@ -3,9 +3,13 @@ package com.dazix.intervalometer.ui.nightsky
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -86,8 +90,10 @@ fun NightSkyLayerSettingsSheet(
         )
     }
 
+    val scrollState = rememberScrollState()
+
     Column(
-        modifier = modifier,
+        modifier = modifier.verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
@@ -229,6 +235,8 @@ fun NightSkyLayerSettingsSheet(
                 onCheckedChange = { onToggleDebugFocusRegion() },
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
