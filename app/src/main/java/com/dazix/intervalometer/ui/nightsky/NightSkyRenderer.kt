@@ -79,18 +79,17 @@ class NightSkyRenderer {
     private var landscapeTextureHeight = 1024f
     private var hasLandscapeTexture = false
 
-    private val maxStars = 10240
     val numBuckets = StarOptics.NUM_BUCKETS
-    val bucketPoints = Array(numBuckets) { FloatArray(maxStars * 2) }
+    val bucketPoints = Array(numBuckets) { FloatArray(MAX_STARS * 2) }
     val bucketCounts = IntArray(numBuckets)
 
     // Cached screen projection coordinates for constellation line resolution
-    private val starScreenX = FloatArray(maxStars)
-    private val starScreenY = FloatArray(maxStars)
-    private val starInFront = BooleanArray(maxStars)
+    private val starScreenX = FloatArray(MAX_STARS)
+    private val starScreenY = FloatArray(MAX_STARS)
+    private val starInFront = BooleanArray(MAX_STARS)
 
     // Fast O(1) zero-allocation lookup table to force render constituent stars of visible constellations
-    val forceRenderStar = BooleanArray(maxStars)
+    val forceRenderStar = BooleanArray(MAX_STARS)
 
     private val maxConstellations = 256
     val constellationProgress = FloatArray(maxConstellations) { 0f }
@@ -112,6 +111,8 @@ class NightSkyRenderer {
     private val reusableConstellation = Constellation()
 
     companion object {
+        const val MAX_STARS = 100_000
+
         data class IndicatorTransform(
             val arrowX: Float,
             val arrowY: Float,
@@ -219,7 +220,7 @@ class NightSkyRenderer {
     private val spriteDiameterPx = FloatArray(3)
 
     // Pinpoint core stroke width in DP for all 6 buckets (0..5)
-    private val baseCoreDp = floatArrayOf(3.2f, 2.5f, 2.0f, 1.6f, 1.2f, 1.0f)
+    private val baseCoreDp = floatArrayOf(3.2f, 2.5f, 2.0f, 1.6f, 1.2f, 0.75f)
 
     // Pinpoint core paints for central nucleus across all 6 buckets
     val corePaints = Array(numBuckets) {
@@ -948,7 +949,7 @@ class NightSkyRenderer {
         planets: List<com.dazix.intervalometer.domain.nightsky.PlanetState> = emptyList(),
     ): Int {
         if (catalog == null || matrix.size < 16) return 0
-        val totalStars = minOf(catalog.starsLength(), maxStars)
+        val totalStars = minOf(catalog.starsLength(), MAX_STARS)
         if (totalStars == 0) return 0
 
         // Delta-time calculation for smooth 60 FPS animation progress
@@ -1156,7 +1157,7 @@ class NightSkyRenderer {
             // Map apparent magnitude into one of the 6 fixed pre-allocated rendering buckets
             val bucketIndex = StarOptics.computeBucketIndex(effectiveMag)
             val count = bucketCounts[bucketIndex]
-            if (count < maxStars) {
+            if (count < MAX_STARS) {
                 val idx = count * 2
                 bucketPoints[bucketIndex][idx] = screenX
                 bucketPoints[bucketIndex][idx + 1] = screenY

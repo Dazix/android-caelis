@@ -23,13 +23,13 @@ object StarOptics {
 
     /**
      * Computes the limiting visible stellar magnitude for a given optical zoom factor.
-     * Simulates physical telescope aperture gain ($M(z) = M_0 + 3.5 \log_{10}(z)$).
+     * Simulates physical telescope aperture gain ($M(z) = M_0 + 2.5 \log_{10}(z)$).
      *
-     * @param zoomFactor Optical zoom factor (clamped between 1.0x and 10.0x).
+     * @param zoomFactor Optical zoom factor (clamped between 0.2x and 150.0x).
      * @return Maximum visible apparent magnitude (fainter stars have higher magnitude numbers).
      */
     fun computeFaintestVisibleMagnitude(zoomFactor: Float): Float {
-        val clampedZoom = zoomFactor.coerceIn(0.2f, 10.0f)
+        val clampedZoom = zoomFactor.coerceIn(0.2f, 150.0f)
         return (BASE_MAGNITUDE_LIMIT + (MAGNITUDE_SLOPE * log10(clampedZoom.toDouble())).toFloat()).coerceAtLeast(3.0f)
     }
 

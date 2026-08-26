@@ -793,13 +793,13 @@ def build_astronomical_catalog():
             
     print(f"Found {len(mandatory_hip_ids)} unique stars referenced across all 88 IAU constellations and {len(asterism_lines)} asterisms.")
 
-    # Select stars: mag <= 6.5 OR mandatory constellation/asterism star
+    # Select stars: mag <= 9.0 OR mandatory constellation/asterism star
     selected_stars = []
     selected_hips = set()
     
     for star in all_hyg_stars:
         hip_id = star["hip"]
-        if (star["mag"] <= 6.5) or (hip_id is not None and hip_id in mandatory_hip_ids):
+        if (star["mag"] <= 9.0) or (hip_id is not None and hip_id in mandatory_hip_ids):
             selected_stars.append(star)
             if hip_id is not None:
                 selected_hips.add(hip_id)

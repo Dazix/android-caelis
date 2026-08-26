@@ -32,7 +32,7 @@ class NightSkyRendererZeroAllocTest {
 
         for (b in 0 until 6) {
             assertNotNull(renderer.corePaints[b])
-            org.junit.Assert.assertEquals(10240 * 2, renderer.bucketPoints[b].size)
+            org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS * 2, renderer.bucketPoints[b].size)
         }
 
         assertNotNull(renderer.spriteMatrix)
@@ -65,7 +65,7 @@ class NightSkyRendererZeroAllocTest {
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenX.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidScreenY.size)
         org.junit.Assert.assertEquals(256, renderer.constellationCentroidInFront.size)
-        org.junit.Assert.assertEquals(10240, renderer.forceRenderStar.size)
+        org.junit.Assert.assertEquals(NightSkyRenderer.MAX_STARS, renderer.forceRenderStar.size)
 
         // Apply Red Vision mode
         renderer.applyTheme(redVisionMode = true)

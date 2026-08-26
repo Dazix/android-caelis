@@ -133,8 +133,8 @@ class FlatBuffersCatalogTest {
             NightSkyCatalogLoader.loadFromStream(stream)
         }
 
-        assertTrue("Star count should be >= 8000, got ${catalog.starsLength()}", catalog.starsLength() >= 8000)
-        assertTrue("Metadata count should be >= 400, got ${catalog.metadataLength()}", catalog.metadataLength() >= 400)
+        assertTrue("Star count should be >= 80000, got ${catalog.starsLength()}", catalog.starsLength() >= 80000)
+        assertTrue("Metadata count should be >= 500, got ${catalog.metadataLength()}", catalog.metadataLength() >= 500)
         assertEquals("Constellations count must be 151 (88 IAU + 63 asterisms)", 151, catalog.constellationsLength())
 
         // Check Sirius (brightest star at index 0)

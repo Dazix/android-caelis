@@ -13,18 +13,24 @@ class StarOpticsTest {
         val mag2x = StarOptics.computeFaintestVisibleMagnitude(2.0f)
         val mag4x = StarOptics.computeFaintestVisibleMagnitude(4.0f)
         val mag10x = StarOptics.computeFaintestVisibleMagnitude(10.0f)
+        val mag19x = StarOptics.computeFaintestVisibleMagnitude(19.0f)
+        val mag150x = StarOptics.computeFaintestVisibleMagnitude(150.0f)
 
         assertEquals(4.81f, mag04x, 0.02f)
         assertEquals(5.8f, mag1x, 0.01f)
         assertEquals(6.55f, mag2x, 0.05f)
         assertEquals(7.30f, mag4x, 0.05f)
         assertEquals(8.30f, mag10x, 0.01f)
+        assertEquals(9.00f, mag19x, 0.05f)
+        assertEquals(11.24f, mag150x, 0.05f)
 
         // Monotonic progression
         assertTrue(mag04x < mag1x)
         assertTrue(mag1x < mag2x)
         assertTrue(mag2x < mag4x)
         assertTrue(mag4x < mag10x)
+        assertTrue(mag10x < mag19x)
+        assertTrue(mag19x < mag150x)
     }
 
     @Test
@@ -64,9 +70,12 @@ class StarOpticsTest {
         assertEquals(4, StarOptics.computeBucketIndex(4.0f))
         assertEquals(4, StarOptics.computeBucketIndex(4.8f))
 
-        // Bucket 5: Mag >= 5.0
+        // Bucket 5: Mag >= 5.0 (Telescopic background stars up to mag 10.0+)
         assertEquals(5, StarOptics.computeBucketIndex(5.0f))
         assertEquals(5, StarOptics.computeBucketIndex(7.5f))
+        assertEquals(5, StarOptics.computeBucketIndex(9.0f))
+        assertEquals(5, StarOptics.computeBucketIndex(10.0f))
+        assertEquals(5, StarOptics.computeBucketIndex(12.0f))
     }
 
     @Test
