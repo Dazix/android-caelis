@@ -6,11 +6,17 @@ import subprocess
 import io
 from PIL import Image
 
-ADB = "/home/dazix/Android/Sdk/platform-tools/adb"
-USER_ID = "11"
-PROJECT_DIR = "/home/dazix/projects/intervalometer"
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "screenshots")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+def get_env():
+    project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    cmd = "source scripts/env.sh && echo \"$ADB\" && echo \"$ANDROID_USER_ID\""
+    res = subprocess.run(["bash", "-c", cmd], cwd=project_dir, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(res.stderr, file=sys.stderr)
+        raise RuntimeError("Failed to resolve environment from scripts/env.sh")
+    lines = res.stdout.strip().splitlines()
+    adb = lines[0]
+    user_id = lines[1]
+    return project_dir, adb, user_id
 
 def run(cmd):
     res = subprocess.run(cmd, capture_output=True, text=True)
@@ -21,25 +27,29 @@ def run(cmd):
     return res
 
 def main():
-    print("Building debug APK...")
-    subprocess.run(["bash", "-c", "source scripts/env.local.sh && JAVA_HOME=\"$JAVA_HOME\" ./gradlew :app:assembleDebug"], cwd=PROJECT_DIR, check=True)
+    project_dir, adb, user_id = get_env()
+    output_dir = os.path.join(project_dir, "screenshots")
+    os.makedirs(output_dir, exist_ok=True)
 
-    apk = os.path.join(PROJECT_DIR, "app/build/outputs/apk/debug/app-debug.apk")
-    print(f"Installing {apk} for user {USER_ID}...")
-    run([ADB, "install", "-r", "--user", USER_ID, apk])
+    print("Building debug APK...")
+    subprocess.run(["bash", "-c", "source scripts/env.sh && JAVA_HOME=\"$JAVA_HOME\" ./gradlew :app:assembleDebug"], cwd=project_dir, check=True)
+
+    apk = os.path.join(project_dir, "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+    print(f"Installing {apk} for user {user_id}...")
+    run([adb, "install", "-r", "--user", user_id, apk])
 
     print("Granting Camera and Location permissions...")
-    run([ADB, "shell", "pm", "grant", "--user", USER_ID, "com.dazix.intervalometer", "android.permission.CAMERA"])
-    run([ADB, "shell", "pm", "grant", "--user", USER_ID, "com.dazix.intervalometer", "android.permission.ACCESS_FINE_LOCATION"])
-    run([ADB, "shell", "pm", "grant", "--user", USER_ID, "com.dazix.intervalometer", "android.permission.ACCESS_COARSE_LOCATION"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.CAMERA"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_FINE_LOCATION"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_COARSE_LOCATION"])
 
     print("Waking device...")
-    subprocess.run([os.path.join(PROJECT_DIR, "scripts/wake_device.sh")])
+    subprocess.run([os.path.join(project_dir, "scripts", "wake_device.sh")])
 
     print("Stopping previous instance and launching updated MainActivity...")
-    run([ADB, "shell", "am", "force-stop", "--user", USER_ID, "com.dazix.intervalometer"])
+    run([adb, "shell", "am", "force-stop", "--user", user_id, "com.dazix.intervalometer"])
     time.sleep(0.5)
-    run([ADB, "shell", "am", "start", "--user", USER_ID, "-n", "com.dazix.intervalometer/.ui.MainActivity"])
+    run([adb, "shell", "am", "start", "--user", user_id, "-n", "com.dazix.intervalometer/.ui.MainActivity"])
     time.sleep(1.5)
 
     # Click on "Night Sky" tab in navigation (3rd item in bottom bar or navigation rail)

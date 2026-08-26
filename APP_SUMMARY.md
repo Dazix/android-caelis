@@ -183,7 +183,7 @@ Tím se časová osa re-ukotví přesně jednou a zamezí se vzniku nechtěné s
 
 ### 4.2. Astronomické výpočty pozice Slunce (Solar Ephemeris)
 
-Implementováno v [`SolarPositionCalculator.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/domain/solar/SolarPositionCalculator.kt) na základě standardu NOAA Solar Position a algoritmů Jeana Meeuse (přesnost $< 0.01^\circ$).
+Implementováno v [`SolarPositionCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarPositionCalculator.kt) na základě standardu NOAA Solar Position a algoritmů Jeana Meeuse (přesnost $< 0.01^\circ$).
 
 ```mermaid
 flowchart LR
@@ -240,7 +240,7 @@ $$R_{\text{arcmin}} = \frac{1.02}{\tan\left(\left(h + \frac{10.3}{h + 5.11}\righ
 $$h_{\text{apparent}} = h + \frac{R_{\text{arcmin}}}{60}$$
 
 #### 5. Vyhledávání solárních událostí (Východ, Západ, Zlatá hodinka)
-V [`SolarDayTimes.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/domain/solar/SolarDayTimes.kt):
+V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarDayTimes.kt):
 - **Pravé poledne (Meridian Transit):** Hrubé vzorkování po 5 minutách $\pm 2$ hodiny kolem aproximovaného poledne, následované ternárním vyhledáváním s přesností na 1 sekundu.
 - **Východ a západ slunce:** Detekce průchodu výšky $h_{\text{target}} = -0.8333^\circ$ (zohledňuje $34'$ refrakci a $16'$ poloměr disku) pomocí 5minutového scanu a binárního vyhledávání (bisekce) s přesností na 1 sekundu.
 - **Zlatá hodinka (Golden Hour):** Průchod elevacemi od $-4.0^\circ$ do $+6.0^\circ$.
@@ -249,7 +249,7 @@ V [`SolarDayTimes.kt`](file:///home/dazix/projects/intervalometer/app/src/main/j
 
 ### 4.3. Rovníková astronomie a Noční obloha (Night Sky AR)
 
-Implementováno v [`EquatorialCoordinates.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/domain/nightsky/EquatorialCoordinates.kt) a [`StarFrustumCulling.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarFrustumCulling.kt).
+Implementováno v [`EquatorialCoordinates.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/EquatorialCoordinates.kt) a [`StarFrustumCulling.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarFrustumCulling.kt).
 
 #### 1. Převod rovníkových souřadnic (RA $\alpha$, Dec $\delta$) na 3D ENU vektor
 Přímo bez mezikroků v sférických úhlech pro nulové alokace:
@@ -273,7 +273,7 @@ $$\mathbf{V}_{\text{cam}} \cdot \mathbf{V}_{\text{star}} = (V_{\text{cam},x} V_{
 
 ### 4.4. 3D projekce rozšířené reality (AR Camera Projection)
 
-Implementováno v [`CameraProjection.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/ar/CameraProjection.kt) a [`CameraFovCalculator.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/intervalometer/ar/CameraFovCalculator.kt).
+Implementováno v [`CameraProjection.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraProjection.kt) a [`CameraFovCalculator.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraFovCalculator.kt).
 
 #### 1. Transformace souřadnic Svět $\to$ Zařízení ($R^T$)
 Matice $R$ ze systémového `SensorManager` mapuje vektory ze souřadnic zařízení do světových ENU souřadnic ($\mathbf{V}_{\text{world}} = R \cdot \mathbf{V}_{\text{dev}}$).
