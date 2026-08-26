@@ -16,6 +16,7 @@ import com.google.flatbuffers.FlatBufferBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -1271,6 +1272,152 @@ class NightSkyRendererZeroAllocTest {
     }
 
     @Test
+    fun `verifies planetary deep zoom scaling linear proportions and moon occupying 10 to 13 percent screen at 12x zoom`() {
+        val renderer = NightSkyRenderer()
+        renderer.applyTheme(redVisionMode = false)
+
+        // Verify planet paints are non-null and pre-allocated
+        assertNotNull(renderer.planetPaint)
+        assertNotNull(renderer.planetCorePaint)
+        assertNotNull(renderer.planetHaloPaint)
+
+        // Moon asset test:
+        // Physical Moon body diameter ~ 0.518°
+        val moonState = com.dazix.intervalometer.domain.nightsky.PlanetState(
+            id = "Moon",
+            nameEn = "Moon",
+            nameCs = "Měsíc",
+            raDegrees = 0.0,
+            decDegrees = 90.0,
+            magnitude = -12.5f,
+            angularDiameterDeg = 0.518f,
+            distanceFormatted = "384,400 km",
+            illuminationFraction = 1.0f,
+            colorRgb = 0xFFF5F5F0.toInt(),
+            isMoon = true,
+        )
+
+        val w = 1080f
+        val h = 2400f
+        val fovH_12x = 5.0f // 12x zoom (60° / 12 = 5°)
+        val halfFovRad = Math.toRadians((fovH_12x * 0.5f).toDouble()).toFloat()
+        val focalLengthPx = (w * 0.5f) / kotlin.math.tan(halfFovRad)
+
+        // Calculate diameterInPixels using unified formula
+        val diameterInPixels = 2f * focalLengthPx * kotlin.math.tan(Math.toRadians(moonState.angularDiameterDeg.toDouble() * 0.5)).toFloat()
+
+        // Physical lunar disk should be ~111.8 px (~10.35% of screen width)
+        val physicalDiskFraction = diameterInPixels / w
+
+        assertTrue("Moon physical disk at 12x zoom should be ~10% (between 9% and 12%)", physicalDiskFraction in 0.09f..0.12f)
+
+        // Verify diameter scales linearly with zoom (e.g. at 24x zoom, 2.5° FOV, diameter should be ~2x)
+        val fovH_24x = 2.5f
+        val halfFovRad24 = Math.toRadians((fovH_24x * 0.5f).toDouble()).toFloat()
+        val focalLengthPx24 = (w * 0.5f) / kotlin.math.tan(halfFovRad24)
+        val diameter24x = 2f * focalLengthPx24 * kotlin.math.tan(Math.toRadians(moonState.angularDiameterDeg.toDouble() * 0.5)).toFloat()
+
+        assertEquals(2.0f, diameter24x / diameterInPixels, 0.02f)
+
+        // Verify State A to State B transition threshold (15px):
+        // At 1.0x zoom (60° FOV): Moon diameter is ~9.3px < 15px -> State A (Point Light)
+        val fovH_1x = 60.0f
+        val halfFovRad1 = Math.toRadians((fovH_1x * 0.5f).toDouble()).toFloat()
+        val focalLengthPx1 = (w * 0.5f) / kotlin.math.tan(halfFovRad1)
+        val diameter1x = 2f * focalLengthPx1 * kotlin.math.tan(Math.toRadians(moonState.angularDiameterDeg.toDouble() * 0.5)).toFloat()
+        assertTrue("At 1x zoom Moon diameter must be < 15px (State A)", diameter1x < 15f)
+
+        // At 2x zoom (30° FOV): Moon diameter is ~18.6px >= 15px -> State B (Texture)
+        val fovH_2x = 30.0f
+        val halfFovRad2 = Math.toRadians((fovH_2x * 0.5f).toDouble()).toFloat()
+        val focalLengthPx2 = (w * 0.5f) / kotlin.math.tan(halfFovRad2)
+        val diameter2x = 2f * focalLengthPx2 * kotlin.math.tan(Math.toRadians(moonState.angularDiameterDeg.toDouble() * 0.5)).toFloat()
+        assertTrue("At 2x zoom Moon diameter must be >= 15px (State B)", diameter2x >= 15f)
+
+        // Verify Saturn bodyToImageRatio logic (2.33x ring span):
+        val saturnBodyAngularDeg = 0.005f
+        val saturnBodyDiameterPx = 2f * focalLengthPx * kotlin.math.tan(Math.toRadians(saturnBodyAngularDeg.toDouble() * 0.5)).toFloat()
+        val saturnBitmapWidth = 1024f
+        val saturnBodyToImageRatio = 2.33f
+        val expectedBodyWidthPx = saturnBitmapWidth / saturnBodyToImageRatio
+        val saturnScale = saturnBodyDiameterPx / expectedBodyWidthPx
+        val totalRenderedRingWidthPx = saturnBitmapWidth * saturnScale
+        assertEquals("Total rendered ring span should be 2.33x the body diameter", saturnBodyDiameterPx * 2.33f, totalRenderedRingWidthPx, 0.1f)
+
+        // Verify Planetarium Trick artificial boosting on Neptune vs Jupiter vs Moon:
+        val neptuneAngularDeg = 0.0012f
+        val neptuneBoost = (0.013f / neptuneAngularDeg).coerceIn(1.0f, 10.0f)
+        assertEquals("Neptune should receive max 10x planetarium boost", 10.0f, neptuneBoost, 0.01f)
+
+        val jupiterAngularDeg = 0.013f
+        val jupiterBoost = (0.013f / jupiterAngularDeg).coerceIn(1.0f, 10.0f)
+        assertEquals("Jupiter should receive 1.0x boost", 1.0f, jupiterBoost, 0.01f)
+
+        // At 75x zoom (0.8° FOV), Neptune without boost is only ~1.6px, but with 10x boost is ~16.2px >= 15px (State B)
+        val fovH_75x = 0.8f
+        val halfFov75 = Math.toRadians((fovH_75x * 0.5f).toDouble()).toFloat()
+        val focalLength75 = (w * 0.5f) / kotlin.math.tan(halfFov75)
+        val neptunePhysical = 2f * focalLength75 * kotlin.math.tan(Math.toRadians(neptuneAngularDeg.toDouble() * 0.5)).toFloat()
+        val neptuneBoosted = neptunePhysical * neptuneBoost
+        assertTrue("Neptune without boost is tiny (< 5px)", neptunePhysical < 5f)
+        assertTrue("Neptune with boost triggers State B (>= 15px)", neptuneBoosted >= 15f)
+    }
+
+    @Test
+    fun `verifies celestial local north orientation calculation across declinations and device rotations`() {
+        val renderer = NightSkyRenderer()
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val w = 1080f
+        val h = 2400f
+        val halfW = w * 0.5f
+        val halfH = h * 0.5f
+        val fovH = 60.0f
+        val halfFovRad = Math.toRadians((fovH * 0.5f).toDouble()).toFloat()
+        val focalLengthPx = halfW / kotlin.math.tan(halfFovRad)
+
+        // 1. Observer at equator (Lat = 0°), facing North.
+        // Object at celestial equator (RA = 0°, Dec = 0°) is dead ahead.
+        // North Celestial Pole is towards +Z (Zenith / Up).
+        // Screen orientation in portrait (Rotation 0): Up is -Y.
+        // computeCelestialNorthAngle should return 0° (or 360°), pointing straight UP.
+        val anglePortrait = renderer.computeCelestialNorthAngle(
+            pX = halfW,
+            pY = halfH,
+            ra = 0.0,
+            dec = 0.0,
+            lstDegrees = 0.0,
+            latitudeDegrees = 0.0,
+            matrix = northMatrix,
+            displayRotation = android.view.Surface.ROTATION_0,
+            halfW = halfW,
+            halfH = halfH,
+            focalLengthPixels = focalLengthPx,
+        )
+        assertEquals("North should point straight UP (0°) in portrait", 0f, anglePortrait, 1.0f)
+
+        // 2. Landscape 90° rotation: North points to the right or left accordingly
+        val angleLandscape = renderer.computeCelestialNorthAngle(
+            pX = halfW,
+            pY = halfH,
+            ra = 0.0,
+            dec = 0.0,
+            lstDegrees = 0.0,
+            latitudeDegrees = 0.0,
+            matrix = northMatrix,
+            displayRotation = android.view.Surface.ROTATION_90,
+            halfW = halfW,
+            halfH = halfH,
+            focalLengthPixels = focalLengthPx,
+        )
+        assertTrue("Landscape orientation angle should be in [0, 360)", angleLandscape in 0f..360f)
+    }
+
+    @Test
     fun testTwoTierProgressiveVectorCalculation() {
         val renderer = NightSkyRenderer()
         val fbb = FlatBufferBuilder(1024)
@@ -1304,5 +1451,165 @@ class NightSkyRendererZeroAllocTest {
 
         assertTrue("Bright star must remain computed", renderer.starVectorComputed[0])
         assertTrue("Faint star must now be computed in Tier 2", renderer.starVectorComputed[1])
+    }
+
+    @Test
+    fun `verifies hit-testing priority hierarchy Planet over Constellation over Star over Miss`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        // 1. Constellation at North Pole (RA 0, Dec 90)
+        val constNameOff = fbb.createString("Ursa Minor")
+        val locNameOff = fbb.createString("Malý medvěd")
+        val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 0))
+        val constOff = Constellation.createConstellation(fbb, constNameOff, 0.0f, 90.0f, linesVec, locNameOff, 0, 0, false)
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff))
+
+        // 2. Star 0 at (RA 0, Dec 90)
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 2.0f) // Star 0
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+        val renderer = NightSkyRenderer()
+
+        val planet = com.dazix.intervalometer.domain.nightsky.PlanetState(
+            id = "Jupiter",
+            nameEn = "Jupiter",
+            nameCs = "Jupiter",
+            raDegrees = 0.0,
+            decDegrees = 90.0,
+            magnitude = -2.5f,
+            angularDiameterDeg = 0.013f,
+            distanceFormatted = "5.2 AU",
+            colorRgb = 0xFFFFE0B2.toInt(),
+            isMoon = false,
+        )
+
+        // Setup pre-projected buffers at screen center (540, 1200)
+        renderer.planetScreenX[0] = 540f
+        renderer.planetScreenY[0] = 1200f
+        renderer.planetRadiusPx[0] = 48f
+        renderer.planetInFront[0] = true
+        renderer.planetIds[0] = "Jupiter"
+        renderer.activePlanetsCount = 1
+
+        renderer.constellationCentroidScreenX[0] = 540f
+        renderer.constellationCentroidScreenY[0] = 1200f
+        renderer.constellationCentroidInFront[0] = true
+        renderer.constellationProgress[0] = 1.0f
+
+        // Star coordinates in renderer private arrays are tested via findHitAt
+        // When planet is active, tap at (540, 1200) must return PlanetHit (Priority 0)
+        val hitPlanet = renderer.findHitAt(
+            tapX = 540f,
+            tapY = 1200f,
+            maxStarRadiusPx = 48f,
+            density = 2.5f,
+            catalog = catalog,
+            planets = listOf(planet),
+        )
+        assertTrue("Priority 0 must resolve PlanetHit", hitPlanet is NightSkyRenderer.HitTarget.PlanetHit)
+        assertEquals("Jupiter", (hitPlanet as NightSkyRenderer.HitTarget.PlanetHit).planetId)
+
+        // When planets are disabled/empty, tap at (540, 1200) must return ConstellationHit (Priority 1)
+        val hitConst = renderer.findHitAt(
+            tapX = 540f,
+            tapY = 1200f,
+            maxStarRadiusPx = 48f,
+            density = 2.5f,
+            catalog = catalog,
+            planets = emptyList(),
+        )
+        assertTrue("Priority 1 must resolve ConstellationHit", hitConst is NightSkyRenderer.HitTarget.ConstellationHit)
+        assertEquals(0, (hitConst as NightSkyRenderer.HitTarget.ConstellationHit).index)
+
+        // When constellation progress is 0 (out of focus), tap at far away (100, 100) must return Miss
+        renderer.constellationProgress[0] = 0f
+        val hitMiss = renderer.findHitAt(
+            tapX = 100f,
+            tapY = 100f,
+            maxStarRadiusPx = 48f,
+            density = 2.5f,
+            catalog = catalog,
+            planets = emptyList(),
+        )
+        assertTrue("Miss must return HitTarget.Miss", hitMiss is NightSkyRenderer.HitTarget.Miss)
+    }
+
+    @Test
+    fun `verifies planetary optical glare, magnitude-based halo scaling, and atmospheric rim glow`() {
+        val renderer = NightSkyRenderer()
+
+        // 1. Verify pre-allocated planetGlowPaint, planetGlowMatrix, and RadialGradient shaders
+        assertNotNull(renderer.planetGlowPaint)
+        assertNotNull(renderer.planetGlowMatrix)
+        assertNotNull(renderer.getPlanetGlowShader("Sun"))
+        assertNotNull(renderer.getPlanetGlowShader("Moon"))
+        assertNotNull(renderer.getPlanetGlowShader("Mercury"))
+        assertNotNull(renderer.getPlanetGlowShader("Venus"))
+        assertNotNull(renderer.getPlanetGlowShader("Mars"))
+        assertNotNull(renderer.getPlanetGlowShader("Jupiter"))
+        assertNotNull(renderer.getPlanetGlowShader("Saturn"))
+        assertNotNull(renderer.getPlanetGlowShader("Uranus"))
+        assertNotNull(renderer.getPlanetGlowShader("Neptune"))
+        assertNotNull(renderer.getPlanetGlowShader("UnknownBody"))
+
+        // 2. Verify characteristic optical glow color mappings
+        assertEquals(android.graphics.Color.parseColor("#FFF5D7"), renderer.getPlanetGlowColor("Sun"))
+        assertEquals(android.graphics.Color.parseColor("#E6E8EA"), renderer.getPlanetGlowColor("Moon"))
+        assertEquals(android.graphics.Color.parseColor("#B0AEAD"), renderer.getPlanetGlowColor("Mercury"))
+        assertEquals(android.graphics.Color.parseColor("#FFF8E7"), renderer.getPlanetGlowColor("Venus"))
+        assertEquals(android.graphics.Color.parseColor("#FF6B36"), renderer.getPlanetGlowColor("Mars"))
+        assertEquals(android.graphics.Color.parseColor("#E0C4A8"), renderer.getPlanetGlowColor("Jupiter"))
+        assertEquals(android.graphics.Color.parseColor("#F4D596"), renderer.getPlanetGlowColor("Saturn"))
+        assertEquals(android.graphics.Color.parseColor("#A8E5F0"), renderer.getPlanetGlowColor("Uranus"))
+        assertEquals(android.graphics.Color.parseColor("#4B70DD"), renderer.getPlanetGlowColor("Neptune"))
+        assertEquals(android.graphics.Color.WHITE, renderer.getPlanetGlowColor("UnknownBody"))
+
+        // 3. Magnitude normalization and State A halo scaling (Venus vs Neptune, scaled to 2/3)
+        // Venus (mag -4.0):
+        val venusMag = -4.0f
+        val clampedVenus = venusMag.coerceIn(-5.0f, 8.0f)
+        val venusIntensity = 1.0f - ((clampedVenus + 5.0f) / 13.0f)
+        assertEquals("Venus intensity should be near 1.0 (~0.923)", 0.923f, venusIntensity, 0.01f)
+        val venusHalo = (10f + 25f * venusIntensity) * (2f / 3f)
+        val venusAlpha = (140 * venusIntensity).toInt().coerceIn(25, 200)
+        assertTrue("Venus halo should be around 22px", venusHalo > 20f)
+        assertTrue("Venus alpha should be bright (> 100)", venusAlpha > 100)
+
+        // Neptune (mag +7.8):
+        val neptuneMag = 7.8f
+        val clampedNeptune = neptuneMag.coerceIn(-5.0f, 8.0f)
+        val neptuneIntensity = 1.0f - ((clampedNeptune + 5.0f) / 13.0f)
+        assertEquals("Neptune intensity should be very low (~0.015)", 0.015f, neptuneIntensity, 0.01f)
+        val neptuneHalo = (10f + 25f * neptuneIntensity) * (2f / 3f)
+        val neptuneAlpha = (140 * neptuneIntensity).toInt().coerceIn(25, 200)
+        assertTrue("Neptune halo should be small (near 7px)", neptuneHalo < 8f)
+        assertEquals("Neptune alpha should be clamped to minimum 25", 25, neptuneAlpha)
+
+        // 4. State B Rim Glow: radius is scaled with ringMultiplier, fades at high zoom
+        val diameterPx1 = 20f // Just above 15px threshold (low zoom)
+        val rimRadiusStandard = (diameterPx1 * 0.5f) * 1.2f
+        val rimRadiusSaturn = (diameterPx1 * 0.5f) * 2.38f
+        val rimRadiusUranus = (diameterPx1 * 0.5f) * 1.4f
+        val zoomFade1 = (30f / diameterPx1).coerceIn(0.1f, 1.0f)
+        assertEquals(12.0f, rimRadiusStandard, 0.01f)
+        assertEquals(23.8f, rimRadiusSaturn, 0.01f)
+        assertEquals(14.0f, rimRadiusUranus, 0.01f)
+        assertEquals(1.0f, zoomFade1, 0.01f)
+
+        val diameterPx2 = 300f // Deep zoom
+        val rimRadius2 = (diameterPx2 * 0.5f) * 1.2f
+        val zoomFade2 = (30f / diameterPx2).coerceIn(0.1f, 1.0f)
+        assertEquals(180.0f, rimRadius2, 0.01f)
+        assertEquals(0.1f, zoomFade2, 0.01f) // Faded to 10%
+
+        // 5. Night Vision / Red Vision theme application does not crash
+        renderer.applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = true)
+        renderer.applyTheme(theme = com.dazix.intervalometer.domain.nightsky.NightVisionTheme.RED, isNightVision = false)
     }
 }

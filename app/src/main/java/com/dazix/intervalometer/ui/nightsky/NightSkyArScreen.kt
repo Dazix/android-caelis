@@ -124,9 +124,10 @@ fun NightSkyArScreen(
     val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
 
     // Synchronize ViewModel State with UI State
-    LaunchedEffect(uiState.selectedBody, uiState.selectedStarIndex, uiState.selectedConstellationIndex) {
+    LaunchedEffect(uiState.selectedBody, uiState.selectedPlanetId, uiState.selectedStarIndex, uiState.selectedConstellationIndex) {
         renderer.selectedStarIndex = uiState.selectedStarIndex
         renderer.selectedConstellationIndex = uiState.selectedConstellationIndex
+        renderer.selectedPlanetId = uiState.selectedPlanetId
         if (uiState.selectedBody != null) {
             sheetState.partialExpand()
         } else {

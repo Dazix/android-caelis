@@ -379,8 +379,10 @@ class NightSkyRenderer {
     var selectedPlanetId: String? = null
 
     val planetWorldVec = FloatArray(3)
+    private val tempNorthWorldVec = FloatArray(3)
+    private val tempNorthScreenVec = FloatArray(3)
     val planetMatrix = Matrix()
-    val planetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val planetPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
         isFilterBitmap = true
         isDither = true
     }
@@ -391,6 +393,60 @@ class NightSkyRenderer {
     val planetHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         isAntiAlias = true
         style = Paint.Style.FILL
+    }
+    val planetGlowMatrix = Matrix()
+    val planetGlowPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+        isAntiAlias = true
+        isDither = true
+        style = Paint.Style.FILL
+    }
+
+    private fun createUnitGlowShader(hexColor: String): RadialGradient {
+        val color = AndroidColor.parseColor(hexColor)
+        return RadialGradient(
+            0f, 0f, 1f,
+            intArrayOf(color, AndroidColor.TRANSPARENT),
+            floatArrayOf(0.0f, 1.0f),
+            Shader.TileMode.CLAMP
+        )
+    }
+
+    private val planetGlowShaders: Map<String, RadialGradient> = mapOf(
+        "Sun" to createUnitGlowShader("#FFF5D7"),
+        "Moon" to createUnitGlowShader("#E6E8EA"),
+        "Mercury" to createUnitGlowShader("#B0AEAD"),
+        "Venus" to createUnitGlowShader("#FFF8E7"),
+        "Mars" to createUnitGlowShader("#FF6B36"),
+        "Jupiter" to createUnitGlowShader("#E0C4A8"),
+        "Saturn" to createUnitGlowShader("#F4D596"),
+        "Uranus" to createUnitGlowShader("#A8E5F0"),
+        "Neptune" to createUnitGlowShader("#4B70DD"),
+    )
+    private val defaultGlowShader: RadialGradient = createUnitGlowShader("#FFFFFF")
+
+    /**
+     * Retrieves the pre-allocated unit RadialGradient glow shader for a given celestial body.
+     */
+    fun getPlanetGlowShader(planetId: String): RadialGradient {
+        return planetGlowShaders[planetId]
+            ?: planetGlowShaders.entries.firstOrNull { it.key.equals(planetId, ignoreCase = true) }?.value
+            ?: defaultGlowShader
+    }
+
+    /**
+     * Maps a planet/body ID to its characteristic optical glow color.
+     */
+    fun getPlanetGlowColor(planetId: String): Int = when {
+        planetId.equals("Sun", ignoreCase = true) -> AndroidColor.parseColor("#FFF5D7")
+        planetId.equals("Moon", ignoreCase = true) -> AndroidColor.parseColor("#E6E8EA")
+        planetId.equals("Mercury", ignoreCase = true) -> AndroidColor.parseColor("#B0AEAD")
+        planetId.equals("Venus", ignoreCase = true) -> AndroidColor.parseColor("#FFF8E7")
+        planetId.equals("Mars", ignoreCase = true) -> AndroidColor.parseColor("#FF6B36")
+        planetId.equals("Jupiter", ignoreCase = true) -> AndroidColor.parseColor("#E0C4A8")
+        planetId.equals("Saturn", ignoreCase = true) -> AndroidColor.parseColor("#F4D596")
+        planetId.equals("Uranus", ignoreCase = true) -> AndroidColor.parseColor("#A8E5F0")
+        planetId.equals("Neptune", ignoreCase = true) -> AndroidColor.parseColor("#4B70DD")
+        else -> AndroidColor.WHITE
     }
     val planetLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         isAntiAlias = true
@@ -484,6 +540,43 @@ class NightSkyRenderer {
         }
         outBuffer[offset + 2] = zs
         return isInFront
+    }
+
+    /**
+     * Calculates the screen orientation angle (in degrees clockwise, where 0° points up towards -Y)
+     * pointing towards the North Celestial Pole at the projected position ([pX], [pY]) for celestial
+     * coordinates ([ra], [dec]).
+     *
+     * Zero heap allocations.
+     */
+    fun computeCelestialNorthAngle(
+        pX: Float,
+        pY: Float,
+        ra: Double,
+        dec: Double,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        matrix: FloatArray,
+        displayRotation: Int,
+        halfW: Float,
+        halfH: Float,
+        focalLengthPixels: Float,
+    ): Float {
+        val targetDec = if (dec < 89.0) dec + 0.1 else dec - 0.1
+        EquatorialCoordinates.computeWorldVector(ra, targetDec, lstDegrees, latitudeDegrees, tempNorthWorldVec, 0)
+        val inFront = projectWorldToScreen(
+            tempNorthWorldVec[0], tempNorthWorldVec[1], tempNorthWorldVec[2],
+            matrix, displayRotation, halfW, halfH, focalLengthPixels,
+            tempNorthScreenVec, 0
+        )
+        if (!inFront) return 0f
+
+        val dx = if (dec < 89.0) (tempNorthScreenVec[0] - pX) else (pX - tempNorthScreenVec[0])
+        val dy = if (dec < 89.0) (tempNorthScreenVec[1] - pY) else (pY - tempNorthScreenVec[1])
+        if (kotlin.math.abs(dx) < 1e-4f && kotlin.math.abs(dy) < 1e-4f) return 0f
+
+        val angleRad = kotlin.math.atan2(dy.toDouble(), dx.toDouble()).toFloat()
+        return (Math.toDegrees(angleRad.toDouble()).toFloat() + 90f) % 360f
     }
 
     fun getOrLoadArtwork(context: Context, resourceName: String): Bitmap? {
@@ -589,6 +682,7 @@ class NightSkyRenderer {
                 com.dazix.intervalometer.domain.nightsky.NightVisionTheme.AMBER -> amberVisionArtFilter
                 com.dazix.intervalometer.domain.nightsky.NightVisionTheme.GREEN -> greenVisionArtFilter
             }
+            planetGlowPaint.colorFilter = planetPaint.colorFilter
             planetLabelPaint.color = primaryInt
             planetHighlightLabelPaint.color = primaryInt
 
@@ -600,6 +694,7 @@ class NightSkyRenderer {
         } else {
             artPaint.colorFilter = null
             planetPaint.colorFilter = null
+            planetGlowPaint.colorFilter = null
             planetLabelPaint.color = AndroidColor.WHITE
             planetHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
 
@@ -858,16 +953,40 @@ class NightSkyRenderer {
         planets: List<com.dazix.intervalometer.domain.nightsky.PlanetState> = emptyList(),
     ): HitTarget {
         // Priority 0: Dynamic Planets & Moon
-        for (pIdx in 0 until minOf(planets.size, activePlanetsCount, maxPlanets)) {
-            if (!planetInFront[pIdx]) continue
-            val px = planetScreenX[pIdx]
-            val py = planetScreenY[pIdx]
-            val hitRadius = maxOf(maxStarRadiusPx, planetRadiusPx[pIdx])
-            val dx = tapX - px
-            val dy = tapY - py
-            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
-                return HitTarget.PlanetHit(planets[pIdx].id)
+        val totalPlanetsToCheck = minOf(planets.size, maxPlanets)
+        val minRadiusPx = maxOf(120f, maxStarRadiusPx)
+
+        // Debug logging for planet hit testing
+        for (i in 0 until minOf(totalPlanetsToCheck, planetInFront.size, planets.size)) {
+            if (planetInFront[i]) {
+                val pX = planetScreenX[i]
+                val pY = planetScreenY[i]
+                val pRad = maxOf(minRadiusPx, planetRadiusPx[i])
+                val dx = tapX - pX
+                val dy = tapY - pY
+                val distSq = dx * dx + dy * dy
+                val radSq = pRad * pRad
+                android.util.Log.d(
+                    "HitTest",
+                    "Planet: ${planets[i].id}, Screen(X:$pX, Y:$pY), Touch(X:$tapX, Y:$tapY), DistSq:$distSq, AllowedRadSq:$radSq, Hit:${distSq <= radSq}"
+                )
             }
+        }
+
+        val hitPlanet = StarHitTester.findPlanetHit(
+            tapX = tapX,
+            tapY = tapY,
+            planetScreenX = planetScreenX,
+            planetScreenY = planetScreenY,
+            planetRadiusPx = planetRadiusPx,
+            planetInFront = planetInFront,
+            totalPlanets = totalPlanetsToCheck,
+            planets = planets,
+            minTouchRadiusPx = minRadiusPx,
+        )
+        if (hitPlanet != null) {
+            android.util.Log.i("HitTest", "Selected planet: ${hitPlanet.id}")
+            return HitTarget.PlanetHit(hitPlanet.id)
         }
 
         if (catalog == null) return HitTarget.Miss
@@ -1535,53 +1654,121 @@ class NightSkyRenderer {
                 activePlanetsCount++
 
                 // Viewport culling with safety margin
-                val marginPlanet = 120.0f
+                val marginPlanet = 150.0f
                 if (pX !in -marginPlanet..(w + marginPlanet) || pY !in -marginPlanet..(h + marginPlanet)) {
                     continue
                 }
 
-                // Determine rendering state based on ZOOM RATIO, not physical pixels (planets are too small)
-                val isZoomedIn = zoomFactor > 12.0f
+                // 1. Safe angular diameter fallback (physical body diameter in degrees)
+                val safeAngularDiameterDeg = when {
+                    planet.isMoon || planet.id.equals("moon", ignoreCase = true) -> {
+                        if (planet.angularDiameterDeg in 0.3f..1.5f) planet.angularDiameterDeg else 0.518f
+                    }
+                    planet.angularDiameterDeg > 0f -> planet.angularDiameterDeg
+                    else -> 0.01f
+                }
 
-                if (!isZoomedIn) {
-                    // --- STATE A: ZOOMED OUT (Optical Glow with RadialGradient) ---
-                    val pColor = planet.colorRgb
-                    val transparentColor = (pColor and 0x00FFFFFF)
+                // 2. Base physical screen size (Pinhole perspective projection)
+                var diameterInPixels = 2f * focalLengthPixels * kotlin.math.tan(Math.toRadians(safeAngularDiameterDeg.toDouble() * 0.5)).toFloat()
+
+                // 3. The Planetarium Trick: Artificial boosting for distant small celestial bodies
+                // The smaller the angular size, the larger the boost (e.g. 1x for Jupiter ~0.013°, up to 10x for Neptune/Mercury)
+                // Moon is excluded as it is already large enough (~0.52°)
+                val isMoon = planet.isMoon || planet.id.equals("moon", ignoreCase = true)
+                if (!isMoon) {
+                    val boostFactor = (0.013f / safeAngularDiameterDeg).coerceIn(1.0f, 10.0f)
+                    diameterInPixels *= boostFactor
+                }
+
+                // 4. Smooth Transition Logic (15px threshold)
+                val minTextureRenderSizePx = 15f
+
+                val baseColor = getPlanetGlowColor(planet.id)
+                planetGlowPaint.color = baseColor
+
+                // Calculate glow size and opacity inversely to magnitude (brighter objects have lower/negative magnitudes)
+                // Clamp magnitude between -5.0 (Venus/Max) and 8.0 (Neptune/Min)
+                val clampedMag = planet.magnitude.coerceIn(-5.0f, 8.0f)
+                // Normalize magnitude to a 0.0 to 1.0 intensity scale (1.0 = brightest)
+                val intensity = 1.0f - ((clampedMag + 5.0f) / 13.0f)
+
+                val glowShader = getPlanetGlowShader(planet.id)
+
+                if (diameterInPixels < minTextureRenderSizePx) {
+                    // --- STATE A: ZOOMED OUT (Optical Star / Point Light View with Magnitude Halo) ---
                     val opticScale = StarOptics.computeOpticScale(zoomFactor)
                     val coreRadius = 2.5f * density * opticScale
-                    val haloRadius = 10.0f * density * opticScale
-                    planetRadiusPx[pIdx] = maxOf(12f * density, haloRadius)
+                    val haloRadius = (10.0f + 25.0f * intensity) * (2f / 3f) * density * opticScale
+                    planetRadiusPx[pIdx] = maxOf(10f * density, haloRadius)
 
-                    // 1. Draw solid core
-                    planetPaint.shader = null
-                    planetPaint.color = pColor
-                    planetPaint.alpha = 255
-                    nativeCanvas.drawCircle(pX, pY, coreRadius, planetPaint)
+                    // Solid core
+                    planetCorePaint.color = baseColor
+                    planetCorePaint.alpha = 255
+                    nativeCanvas.drawCircle(pX, pY, coreRadius, planetCorePaint)
 
-                    // 2. Draw soft optical halo with rapid falloff using RadialGradient
-                    planetPaint.shader = RadialGradient(
-                        pX, pY, haloRadius,
-                        intArrayOf(pColor, transparentColor),
-                        floatArrayOf(0.0f, 0.6f),
-                        Shader.TileMode.CLAMP,
-                    )
-                    nativeCanvas.drawCircle(pX, pY, haloRadius, planetPaint)
-                    planetPaint.shader = null
+                    // Dynamic magnitude-based optical halo (Zero-Alloc RadialGradient, scaled to 2/3)
+                    planetGlowMatrix.reset()
+                    planetGlowMatrix.postScale(haloRadius, haloRadius)
+                    planetGlowMatrix.postTranslate(pX, pY)
+                    glowShader.setLocalMatrix(planetGlowMatrix)
+                    planetGlowPaint.shader = glowShader
+                    planetGlowPaint.alpha = (140 * intensity).toInt().coerceIn(25, 200)
+                    nativeCanvas.drawCircle(pX, pY, haloRadius, planetGlowPaint)
                 } else {
-                    // --- STATE B: ZOOMED IN (Realistic High-Resolution Texture) ---
+                    // --- STATE B: ZOOMED IN (Realistic High-Resolution Texture with Atmospheric Rim Glow) ---
                     val resName = "planet_${planet.id.lowercase()}"
                     val bitmap = context?.let { getOrLoadArtwork(it, resName) }
                     if (bitmap != null) {
-                        val trueAngularSizeRad = Math.toRadians(planet.angularDiameterDeg.toDouble()).toFloat()
-                        val baseDiameterPx = trueAngularSizeRad * (focalLengthPixels / zs)
-                        val renderDiameterPx = maxOf(baseDiameterPx * 20f, 15f * density)
-                        planetRadiusPx[pIdx] = maxOf(12f * density, renderDiameterPx * 0.5f)
+                        var bodyToImageRatio = 1.0f
+                        if (planet.id.equals("Saturn", ignoreCase = true)) {
+                            bodyToImageRatio = 2.33f
+                        } else if (planet.id.equals("Uranus", ignoreCase = true)) {
+                            bodyToImageRatio = 1.0f
+                        }
 
-                        val scale = renderDiameterPx / bitmap.width.toFloat()
+                        val finalDiameterPx = diameterInPixels.coerceAtLeast(minTextureRenderSizePx)
+                        val expectedBodyWidthInPixels = bitmap.width.toFloat() / bodyToImageRatio
+                        val scale = finalDiameterPx / expectedBodyWidthInPixels
 
+                        val assetDisplayRadius = (bitmap.width * scale) * 0.5f
+                        planetRadiusPx[pIdx] = maxOf(12f * density, assetDisplayRadius)
+
+                        // 1. Draw atmospheric rim glow BEFORE drawing the planet bitmap
+                        // Account for rings when calculating the background glow radius (scaled to 2/3 extent)
+                        val ringMultiplier = when {
+                            planet.id.equals("Saturn", ignoreCase = true) -> 2.38f
+                            planet.id.equals("Uranus", ignoreCase = true) -> 1.4f
+                            else -> 1.2f
+                        }
+                        val rimGlowRadius = (finalDiameterPx * 0.5f) * ringMultiplier
+                        val zoomFade = (30f / finalDiameterPx).coerceIn(0.1f, 1.0f)
+
+                        planetGlowMatrix.reset()
+                        planetGlowMatrix.postScale(rimGlowRadius, rimGlowRadius)
+                        planetGlowMatrix.postTranslate(pX, pY)
+                        glowShader.setLocalMatrix(planetGlowMatrix)
+                        planetGlowPaint.shader = glowShader
+                        planetGlowPaint.alpha = (140 * intensity * zoomFade).toInt().coerceIn(15, 200)
+                        nativeCanvas.drawCircle(pX, pY, rimGlowRadius, planetGlowPaint)
+
+                        // 2. Draw planet bitmap over the glow
                         planetMatrix.reset()
                         planetMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
                         planetMatrix.postScale(scale, scale)
+                        val finalRotation = computeCelestialNorthAngle(
+                            pX = pX,
+                            pY = pY,
+                            ra = ra,
+                            dec = dec,
+                            lstDegrees = lstDegrees,
+                            latitudeDegrees = latitudeDegrees,
+                            matrix = matrix,
+                            displayRotation = displayRotation,
+                            halfW = halfW,
+                            halfH = halfH,
+                            focalLengthPixels = focalLengthPixels,
+                        )
+                        planetMatrix.postRotate(finalRotation)
                         planetMatrix.postTranslate(pX, pY)
 
                         planetPaint.shader = null
@@ -1589,11 +1776,12 @@ class NightSkyRenderer {
                         nativeCanvas.drawBitmap(bitmap, planetMatrix, planetPaint)
                     } else {
                         // Fallback if texture asset is loading
-                        val radius = 10f * density
+                        val finalDiameterPx = diameterInPixels.coerceAtLeast(minTextureRenderSizePx)
+                        val radius = maxOf(10f * density, finalDiameterPx * 0.5f)
                         planetRadiusPx[pIdx] = radius
-                        planetPaint.shader = null
-                        planetPaint.color = planet.colorRgb
-                        nativeCanvas.drawCircle(pX, pY, radius, planetPaint)
+                        planetCorePaint.color = baseColor
+                        planetCorePaint.alpha = 255
+                        nativeCanvas.drawCircle(pX, pY, radius, planetCorePaint)
                     }
                 }
             }

@@ -44,8 +44,8 @@ class PlanetaryEphemerisCalculatorTest {
         assertEquals("Měsíc", moon.localizedName(isCzech = true))
         assertEquals("Moon", moon.localizedName(isCzech = false))
 
-        // Lunar angular diameter is ~0.49° to ~0.55° (29.3' to 33.5')
-        assertTrue("Moon angular diameter should be ~0.5°", moon.angularDiameterDeg in 0.45f..0.60f)
+        // Lunar physical disk angular diameter is ~0.48° to ~0.57° (29.3' to 33.5')
+        assertTrue("Moon physical disk angular diameter should be ~0.52°", moon.angularDiameterDeg in 0.45f..0.60f)
 
         // Moon visual magnitude is between -12.8 (Full Moon) and -2.0 (New Moon / Crescent)
         assertTrue("Moon magnitude should be in realistic visual range", moon.magnitude in -12.8f..-2.0f)
@@ -70,14 +70,15 @@ class PlanetaryEphemerisCalculatorTest {
         // Jupiter is very bright (-2.9 to -1.6)
         assertTrue("Jupiter should be bright (mag < -1.5)", jupiter.magnitude < -1.5f)
 
-        // Jupiter has largest planetary angular diameter (~30 to 50 arcsec = 0.008° to 0.014°)
-        assertTrue("Jupiter angular diameter should be ~0.01°", jupiter.angularDiameterDeg in 0.006f..0.020f)
+        // Jupiter has largest planetary angular diameter (~30 to 50 arcsec = 0.008° to 0.014° body)
+        assertTrue("Jupiter physical body angular diameter should be ~0.01°", jupiter.angularDiameterDeg in 0.006f..0.020f)
 
         // Mars magnitude
         assertTrue("Mars magnitude in normal range", mars.magnitude in -3.0f..3.0f)
 
-        // Saturn magnitude
+        // Saturn magnitude and physical body diameter (~14 to 20 arcsec = 0.004° to 0.006°)
         assertTrue("Saturn magnitude in normal range", saturn.magnitude in -1.0f..2.5f)
+        assertTrue("Saturn physical body angular diameter should be ~0.005°", saturn.angularDiameterDeg in 0.003f..0.010f)
     }
 
     @Test

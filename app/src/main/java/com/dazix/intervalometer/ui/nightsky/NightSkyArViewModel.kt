@@ -163,9 +163,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val zoomRatioState = MutableStateFlow(1.0f)
     val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
 
-    // Dynamic effective FOV factoring in pinch-to-zoom (supports deep zoom down to 0.01°)
+    // Dynamic effective FOV factoring in pinch-to-zoom (supports deep zoom down to 0.0005°)
     val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(0.01f, 140.0f)
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(0.0005f, 140.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
@@ -528,6 +528,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 val updatedPlanets = PlanetaryEphemerisCalculator.computeAll(now)
                 planetStates.value = updatedPlanets
 
+                val currentPlanetId = selectedPlanetId.value
+                if (currentPlanetId != null) {
+                    val currentPlanet = updatedPlanets.firstOrNull { it.id.equals(currentPlanetId, ignoreCase = true) }
+                    if (currentPlanet != null) {
+                        selectedBodyState.value = createPlanetDetails(currentPlanet)
+                    }
+                }
+
                 if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
                     updateManualOrientation()
                 }
@@ -780,15 +788,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    /**
-     * Selects a dynamic planet or Moon by its ID string and populates [selectedBodyState].
-     */
-    fun selectPlanetById(planetId: String) {
-        val planet = planetStates.value.firstOrNull { it.id.equals(planetId, ignoreCase = true) } ?: return
-        selectedPlanetId.value = planet.id
-        selectedStarIndex.value = -1
-        selectedConstellationIndex.value = -1
-
+    private fun createPlanetDetails(planet: PlanetState): CelestialBodyDetails {
         val app = getApplication<Application>()
         val isCzech = java.util.Locale.getDefault().language == "cs"
         val name = planet.localizedName(isCzech)
@@ -802,7 +802,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val diamFormatted = String.format(java.util.Locale.US, "%.4f° (%.1f\")", planet.angularDiameterDeg, planet.angularDiameterDeg * 3600f)
         val prop2 = Pair(app.getString(R.string.celestial_angular_diameter), diamFormatted)
 
-        selectedBodyState.value = CelestialBodyDetails(
+        return CelestialBodyDetails(
             name = name,
             subtitle = subtitle,
             property1 = prop1,
@@ -811,6 +811,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             raDegrees = planet.raDegrees,
             decDegrees = planet.decDegrees,
         )
+    }
+
+    /**
+     * Selects a dynamic planet or Moon by its ID string and populates [selectedBodyState].
+     */
+    fun selectPlanetById(planetId: String) {
+        val planet = planetStates.value.firstOrNull { it.id.equals(planetId, ignoreCase = true) } ?: return
+        selectedPlanetId.value = planet.id
+        selectedStarIndex.value = -1
+        selectedConstellationIndex.value = -1
+        selectedBodyState.value = createPlanetDetails(planet)
     }
 
     /**
@@ -972,14 +983,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun adjustZoomBy(factor: Float) {
         val current = zoomRatioState.value
-        val updated = (current * factor).coerceIn(0.4f, 150.0f)
+        val updated = (current * factor).coerceIn(MIN_ZOOM, MAX_SAFE_ZOOM)
         if (kotlin.math.abs(updated - current) > 0.001f) {
             zoomRatioState.value = updated
         }
     }
 
     fun setZoomRatio(ratio: Float) {
-        zoomRatioState.value = ratio.coerceIn(0.4f, 150.0f)
+        zoomRatioState.value = ratio.coerceIn(MIN_ZOOM, MAX_SAFE_ZOOM)
     }
 
     fun resetZoom() {
@@ -1170,5 +1181,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     override fun onCleared() {
         super.onCleared()
         stopSensors()
+    }
+
+    companion object {
+        const val MIN_ZOOM = 0.4f
+        const val MAX_SAFE_ZOOM = 2500.0f
     }
 }

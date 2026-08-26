@@ -153,7 +153,7 @@ object PlanetaryEphemerisCalculator {
             nameEn = "Saturn",
             nameCs = "Saturn",
             colorRgb = COLOR_SATURN,
-            theta0Arcsec = 165.6,
+            theta0Arcsec = 165.6, // Physical body diameter (rings scaled via bodyToImageRatio)
             a0 = 9.53707032, aDot = -0.00301530,
             e0 = 0.05415060, eDot = -0.00036762,
             i0 = 2.48446, iDot = 0.0019364,
@@ -390,8 +390,9 @@ object PlanetaryEphemerisCalculator {
         val phi = phaseAngle
         val mag = (-12.73 + 0.026 * phi + 4e-9 * phi * phi * phi * phi).toFloat().coerceIn(-12.8f, -2.0f)
 
-        // Moon angular diameter: theta = 2 * asin(1737.4 / distanceKm) in degrees
-        val angularDiameterDeg = (2.0 * asin((1737.4 / distanceKm).coerceIn(0.0, 1.0)) * DEG).toFloat()
+        // Moon angular diameter: theta_body = 2 * asin(1737.4 / distanceKm) in degrees.
+        val physicalBodyDiameterDeg = 2.0 * asin((1737.4 / distanceKm).coerceIn(0.0, 1.0)) * DEG
+        val angularDiameterDeg = physicalBodyDiameterDeg.toFloat()
         val distFormatted = String.format(java.util.Locale.US, "%,d km", distanceKm.toInt())
 
         return PlanetState(

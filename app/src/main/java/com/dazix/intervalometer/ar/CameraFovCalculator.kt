@@ -127,6 +127,25 @@ object CameraFovCalculator {
     ): Float {
         val safeZoom = zoomFactor.coerceAtLeast(0.01f)
         val safeBaseFov = baseEffectiveFovDegrees.coerceIn(0.1f, 160.0f)
-        return (safeBaseFov / safeZoom).coerceIn(0.01f, 150.0f)
+        return (safeBaseFov / safeZoom).coerceIn(0.0005f, 150.0f)
+    }
+
+    /**
+     * Computes the vertical Field of View in degrees from horizontal FOV and viewport dimensions.
+     *
+     * @param fovHorizontalDegrees Horizontal FOV in degrees.
+     * @param viewportWidth Width of viewport in pixels.
+     * @param viewportHeight Height of viewport in pixels.
+     * @return Vertical FOV in degrees.
+     */
+    fun computeVerticalFov(
+        fovHorizontalDegrees: Float,
+        viewportWidth: Float,
+        viewportHeight: Float,
+    ): Float {
+        if (viewportWidth <= 1f || viewportHeight <= 1f) return fovHorizontalDegrees
+        val halfAngleRad = fovHorizontalDegrees * 0.5 * DEG_TO_RAD
+        val halfAngleVRad = atan(tan(halfAngleRad) * (viewportHeight / viewportWidth))
+        return (2.0 * halfAngleVRad * RAD_TO_DEG).toFloat().coerceIn(0.01f, 170.0f)
     }
 }
