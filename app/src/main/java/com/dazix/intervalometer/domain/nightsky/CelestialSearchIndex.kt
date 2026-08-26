@@ -4,6 +4,18 @@ import com.dazix.intervalometer.data.nightsky.Constellation
 import com.dazix.intervalometer.data.nightsky.NightSkyCatalog
 import com.dazix.intervalometer.data.nightsky.Star
 import com.dazix.intervalometer.data.nightsky.StarMetadata
+import java.text.Normalizer
+
+private val DIACRITICS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
+
+/**
+ * Strips diacritics, converts to lowercase, and trims whitespace.
+ * Example: "Velká medvědice" -> "velka medvedice"
+ */
+fun String.normalizeForSearch(): String {
+    val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)
+    return DIACRITICS_REGEX.replace(normalized, "").lowercase().trim()
+}
 
 enum class CelestialType {
     STAR,
@@ -21,12 +33,14 @@ data class SearchResultItem(
     val dec: Float,
     val magnitude: Float? = null,
     val planetId: String? = null,
+    val searchableText: String = "$primaryName ${secondaryName ?: ""}".normalizeForSearch(),
 )
 
 object CelestialSearchIndex {
 
     /**
      * Builds an in-memory search index of all named stars, constellations, asterisms, and dynamic planets.
+     * Pre-computes normalized diacritic-free [SearchResultItem.searchableText] for zero-allocation query filtering.
      * Zero-allocation access during iteration via reusable FlatBuffers structs/tables.
      */
     fun buildSearchIndex(
@@ -42,6 +56,7 @@ object CelestialSearchIndex {
         for ((idx, planet) in planets.withIndex()) {
             val primary = planet.nameCs
             val secondary = if (planet.nameCs != planet.nameEn) planet.nameEn else if (planet.isMoon) "Měsíc" else "Planeta"
+            val combinedForSearch = "$primary $secondary".normalizeForSearch()
             result.add(
                 SearchResultItem(
                     indexId = idx,
@@ -52,19 +67,23 @@ object CelestialSearchIndex {
                     dec = planet.decDegrees.toFloat(),
                     magnitude = planet.magnitude,
                     planetId = planet.id,
+                    searchableText = combinedForSearch,
                 )
             )
             if (planet.nameCs != planet.nameEn) {
+                val secondaryEn = planet.nameCs
+                val combinedEnForSearch = "${planet.nameEn} $secondaryEn".normalizeForSearch()
                 result.add(
                     SearchResultItem(
                         indexId = idx,
                         primaryName = planet.nameEn,
-                        secondaryName = planet.nameCs,
+                        secondaryName = secondaryEn,
                         type = CelestialType.PLANET,
                         ra = planet.raDegrees.toFloat(),
                         dec = planet.decDegrees.toFloat(),
                         magnitude = planet.magnitude,
                         planetId = planet.id,
+                        searchableText = combinedEnForSearch,
                     )
                 )
             }
@@ -79,6 +98,7 @@ object CelestialSearchIndex {
             val primaryName = localized ?: name
             val secondaryName = if (localized != null && localized != name) name else reusableConst.family()
             val type = if (reusableConst.isAsterism()) CelestialType.ASTERISM else CelestialType.CONSTELLATION
+            val combinedForSearch = "$primaryName ${secondaryName ?: ""}".normalizeForSearch()
 
             result.add(
                 SearchResultItem(
@@ -88,6 +108,7 @@ object CelestialSearchIndex {
                     type = type,
                     ra = reusableConst.centroidRa(),
                     dec = reusableConst.centroidDec(),
+                    searchableText = combinedForSearch,
                 )
             )
         }
@@ -102,6 +123,7 @@ object CelestialSearchIndex {
                 catalog.stars(reusableStar, starIdx)
                 val starName = reusableMeta.name() ?: "HIP ${starIdx + 1}"
                 val constellation = reusableMeta.constellation()
+                val combinedForSearch = "$starName ${constellation ?: ""}".normalizeForSearch()
 
                 result.add(
                     SearchResultItem(
@@ -112,6 +134,7 @@ object CelestialSearchIndex {
                         ra = reusableStar.ra(),
                         dec = reusableStar.dec(),
                         magnitude = reusableStar.mag(),
+                        searchableText = combinedForSearch,
                     )
                 )
             }
@@ -122,6 +145,7 @@ object CelestialSearchIndex {
 
     /**
      * Filters the in-memory search index by query substring with relevance sorting.
+     * Normalized query is matched against pre-computed diacritic-free [SearchResultItem.searchableText].
      */
     fun filter(
         index: List<SearchResultItem>,
@@ -131,19 +155,21 @@ object CelestialSearchIndex {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
 
-        val lowerQuery = trimmed.lowercase()
+        val normalizedQuery = trimmed.normalizeForSearch()
+        if (normalizedQuery.isEmpty()) return emptyList()
+
+        val secondaryPrefixPattern = " $normalizedQuery"
 
         return index
             .filter { item ->
-                item.primaryName.lowercase().contains(lowerQuery) ||
-                    (item.secondaryName?.lowercase()?.contains(lowerQuery) == true)
+                item.searchableText.contains(normalizedQuery)
             }
             .sortedWith(
                 compareBy<SearchResultItem> { item ->
                     // Priority 1: Primary name starts with query
-                    if (item.primaryName.lowercase().startsWith(lowerQuery)) 0
-                    // Priority 2: Secondary name starts with query
-                    else if (item.secondaryName?.lowercase()?.startsWith(lowerQuery) == true) 1
+                    if (item.searchableText.startsWith(normalizedQuery)) 0
+                    // Priority 2: Secondary name starts with query (word boundary match)
+                    else if (item.searchableText.contains(secondaryPrefixPattern)) 1
                     // Priority 3: Contains match
                     else 2
                 }.thenBy { it.primaryName.length }

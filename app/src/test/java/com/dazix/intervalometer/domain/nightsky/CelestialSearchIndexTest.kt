@@ -152,4 +152,58 @@ class CelestialSearchIndexTest {
         val mercuryResultsEn = CelestialSearchIndex.filter(searchIndex, "mercury")
         assertTrue("Should find Mercury with English query 'mercury'", mercuryResultsEn.any { it.type == CelestialType.PLANET && it.planetId.equals("Mercury", ignoreCase = true) })
     }
+
+    @Test
+    fun `normalizeForSearch strips diacritics, converts to lowercase and trims whitespace`() {
+        assertEquals("velka medvedice", "Velká medvědice".normalizeForSearch())
+        assertEquals("mesic", "Měsíc".normalizeForSearch())
+        assertEquals("strelec", "Střelec".normalizeForSearch())
+        assertEquals("kun", "Kůň".normalizeForSearch())
+        assertEquals("zirafa", "Žirafa".normalizeForSearch())
+        assertEquals("byk", "Býk".normalizeForSearch())
+        assertEquals("jest", "Jěst".normalizeForSearch())
+        assertEquals("orion", "   ORION   ".normalizeForSearch())
+        assertEquals("sirius", "SÍRIUS".normalizeForSearch())
+    }
+
+    @Test
+    fun `filter performs diacritics-agnostic and case-insensitive matching with priority ranking`() {
+        val items = listOf(
+            SearchResultItem(0, "Velká medvědice", "Ursa Major", CelestialType.CONSTELLATION, 165.5f, 55.2f),
+            SearchResultItem(1, "Velký vůz", "Big Dipper", CelestialType.ASTERISM, 165.5f, 55.2f),
+            SearchResultItem(2, "Střelec", "Sagittarius", CelestialType.CONSTELLATION, 285.0f, -25.0f),
+            SearchResultItem(3, "Kůň", "Equuleus", CelestialType.CONSTELLATION, 318.0f, 6.0f),
+            SearchResultItem(4, "Sirius", "Velký pes", CelestialType.STAR, 101.28f, -16.71f, -1.44f),
+        )
+
+        // Query without diacritics matches diacritic-rich items
+        val velkaResults = CelestialSearchIndex.filter(items, "velka")
+        assertEquals(1, velkaResults.size)
+        assertEquals("Velká medvědice", velkaResults[0].primaryName)
+
+        val kunResults = CelestialSearchIndex.filter(items, "kun")
+        assertEquals(1, kunResults.size)
+        assertEquals("Kůň", kunResults[0].primaryName)
+
+        val strelecResults = CelestialSearchIndex.filter(items, "strelec")
+        assertEquals(1, strelecResults.size)
+        assertEquals("Střelec", strelecResults[0].primaryName)
+
+        // Uppercase query without diacritics
+        val upperKunResults = CelestialSearchIndex.filter(items, "KUN")
+        assertEquals(1, upperKunResults.size)
+        assertEquals("Kůň", upperKunResults[0].primaryName)
+
+        // Diacritic query on diacritic-free secondary or primary
+        val diacriticQueryResults = CelestialSearchIndex.filter(items, "síríus")
+        assertEquals(1, diacriticQueryResults.size)
+        assertEquals("Sirius", diacriticQueryResults[0].primaryName)
+
+        // Priority ranking: "velk" query matches "Velký vůz" (length 9) before "Velká medvědice" (length 15), then "Sirius" (secondary match)
+        val velkResults = CelestialSearchIndex.filter(items, "velk")
+        assertEquals(3, velkResults.size)
+        assertEquals("Velký vůz", velkResults[0].primaryName)
+        assertEquals("Velká medvědice", velkResults[1].primaryName)
+        assertEquals("Sirius", velkResults[2].primaryName)
+    }
 }
