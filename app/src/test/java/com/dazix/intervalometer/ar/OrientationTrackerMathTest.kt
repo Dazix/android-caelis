@@ -342,4 +342,45 @@ class OrientationTrackerMathTest {
         assertEquals(0f, panAzimuth, 0.001f)
         assertEquals(0f, panPitch, 0.001f)
     }
+
+    @Test
+    fun `verifies target routing delta azimuth and elevation calculations across 360 wrap and zenith limits`() {
+        // Base frozen matrix facing North (Azimuth = 0°, Elevation = 0°)
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        val camFwdX = -northMatrix[2]
+        val camFwdY = -northMatrix[6]
+        val camFwdZ = -northMatrix[10]
+
+        val camAzRad = kotlin.math.atan2(camFwdX.toDouble(), camFwdY.toDouble())
+        var camAzDeg = Math.toDegrees(camAzRad).toFloat()
+        if (camAzDeg < 0f) camAzDeg += 360f
+        val camElDeg = Math.toDegrees(kotlin.math.asin(camFwdZ.coerceIn(-1f, 1f).toDouble())).toFloat()
+
+        assertEquals(0f, camAzDeg, 0.001f)
+        assertEquals(0f, camElDeg, 0.001f)
+
+        // Case 1: Target to North-East (Az = 45°, El = 30°)
+        var deltaAz1 = 45f - camAzDeg
+        if (deltaAz1 > 180f) deltaAz1 -= 360f
+        if (deltaAz1 < -180f) deltaAz1 += 360f
+        val deltaEl1 = (30f - camElDeg).coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
+        assertEquals(45f, deltaAz1, 0.001f)
+        assertEquals(30f, deltaEl1, 0.001f)
+
+        // Case 2: Target to North-West (Az = 315° -> shortest path is -45°)
+        var deltaAz2 = 315f - camAzDeg
+        if (deltaAz2 > 180f) deltaAz2 -= 360f
+        if (deltaAz2 < -180f) deltaAz2 += 360f
+        assertEquals(-45f, deltaAz2, 0.001f)
+
+        // Case 3: Target near Zenith (El = 89° -> clamped to 85°)
+        val deltaEl3 = (89f - camElDeg).coerceIn(-OrientationTracker.MAX_GESTURE_PITCH, OrientationTracker.MAX_GESTURE_PITCH)
+        assertEquals(85f, deltaEl3, 0.001f)
+    }
 }

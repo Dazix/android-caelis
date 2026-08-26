@@ -646,7 +646,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     /**
      * Selects a celestial body from search results, updates selection state,
-     * and in Manual Mode smoothly pans the virtual camera to the target's coordinates.
+     * and smoothly pans the camera to the target's coordinates.
      */
     fun selectCelestialBody(item: SearchResultItem) {
         when (item.type) {
@@ -657,9 +657,35 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         isSearchActive.value = false
         searchQuery.value = ""
 
-        if (!isSensorTrackingEnabled.value) {
-            // Manual Mode: Smoothly pan virtual camera to target
-            animateCameraToCoordinates(targetRa = item.ra, targetDec = item.dec)
+        routeCameraToCoordinates(item.ra.toDouble(), item.dec.toDouble())
+    }
+
+    /**
+     * Centers the virtual camera on the currently selected celestial object.
+     */
+    fun routeCameraToSelection() {
+        val body = selectedBodyState.value ?: return
+        val ra = body.raDegrees ?: return
+        val dec = body.decDegrees ?: return
+        routeCameraToCoordinates(ra, dec)
+    }
+
+    /**
+     * Smoothly rotates/animates the camera to [raDegrees] and [decDegrees]
+     * in both AR Sensor / Hybrid mode and Manual Pan mode.
+     */
+    fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double) {
+        val lst = lstDegreesState.value
+        val lat = locationProvider.location.value.latitude
+        val (targetAz, targetEl) = EquatorialCoordinates.equatorialToHorizontal(raDegrees, decDegrees, lst, lat)
+
+        if (isSensorTrackingEnabled.value) {
+            orientationTracker.animateToTarget(targetAz.toFloat(), targetEl.toFloat()) { az, pitch ->
+                panAzimuthOffset.value = az
+                panPitchOffset.value = pitch
+            }
+        } else {
+            animateCameraToCoordinates(targetRa = raDegrees.toFloat(), targetDec = decDegrees.toFloat())
         }
     }
 

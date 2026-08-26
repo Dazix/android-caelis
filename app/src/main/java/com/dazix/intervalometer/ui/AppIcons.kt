@@ -720,6 +720,22 @@ object AppIcons {
         }
     }
 
+    /** CenterFocus: crosshair targeting / center celestial body in viewport. */
+    val CenterFocus: ImageVector by lazy {
+        icon("CenterFocus") {
+            strokePath {
+                // 4 corner brackets
+                moveTo(3.5f, 7.5f); lineTo(3.5f, 4.5f); lineTo(6.5f, 4.5f)
+                moveTo(17.5f, 4.5f); lineTo(20.5f, 4.5f); lineTo(20.5f, 7.5f)
+                moveTo(20.5f, 16.5f); lineTo(20.5f, 19.5f); lineTo(17.5f, 19.5f)
+                moveTo(6.5f, 19.5f); lineTo(3.5f, 19.5f); lineTo(3.5f, 16.5f)
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 12f, radius = 2.4f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

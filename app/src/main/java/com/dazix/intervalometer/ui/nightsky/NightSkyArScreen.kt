@@ -248,6 +248,8 @@ fun NightSkyArScreen(
                         fullHeightPx = height
                     }
                 },
+                onRouteToTarget = viewModel::routeCameraToSelection,
+                onClose = viewModel::clearSelectedBody,
                 nightVisionTheme = uiState.nightVisionState.theme,
             )
         },

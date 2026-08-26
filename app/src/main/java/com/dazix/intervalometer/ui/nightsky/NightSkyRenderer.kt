@@ -1347,8 +1347,6 @@ class NightSkyRenderer {
         activePlanetsCount = 0
         if (planets.isNotEmpty()) {
             val density = drawScope.density
-            val transitionThresholdPx = 18f * density
-            val isCzech = java.util.Locale.getDefault().language == "cs"
 
             for (pIdx in 0 until minOf(planets.size, maxPlanets)) {
                 val planet = planets[pIdx]
@@ -1397,68 +1395,60 @@ class NightSkyRenderer {
                     continue
                 }
 
-                // Calculate physical screen diameter in pixels from angular diameter and focal length
-                val angularSizeRad = Math.toRadians(planet.angularDiameterDeg.toDouble()).toFloat()
-                val perspectiveFocalLength = focalLengthPixels / zs
-                val diameterInPixels = angularSizeRad * perspectiveFocalLength
-                planetRadiusPx[pIdx] = maxOf(16f * density, diameterInPixels * 0.5f)
+                // Determine rendering state based on ZOOM RATIO, not physical pixels (planets are too small)
+                val isZoomedIn = zoomFactor > 12.0f
 
-                val isSelectedPlanet = (planet.id == selectedPlanetId)
-
-                // Dual-State Rendering Logic
-                if (diameterInPixels < transitionThresholdPx) {
-                    // --- STATE A: ZOOMED OUT (Optical Point Light with Core & Glowing Corona Halo) ---
-                    val baseColor = planet.colorRgb
-                    val pr = AndroidColor.red(baseColor)
-                    val pg = AndroidColor.green(baseColor)
-                    val pb = AndroidColor.blue(baseColor)
-
+                if (!isZoomedIn) {
+                    // --- STATE A: ZOOMED OUT (Optical Glow with RadialGradient) ---
+                    val pColor = planet.colorRgb
+                    val transparentColor = (pColor and 0x00FFFFFF)
                     val opticScale = StarOptics.computeOpticScale(zoomFactor)
-                    val coreRadius = 4.2f * density * opticScale
-                    val haloRadius = 16.0f * density * opticScale
+                    val coreRadius = 3.5f * density * opticScale
+                    val haloRadius = 18.0f * density * opticScale
+                    planetRadiusPx[pIdx] = maxOf(18f * density, haloRadius)
 
-                    // Outer soft glow halo
-                    planetHaloPaint.color = AndroidColor.argb(85, pr, pg, pb)
-                    nativeCanvas.drawCircle(pX, pY, haloRadius, planetHaloPaint)
+                    // 1. Draw solid core
+                    planetPaint.shader = null
+                    planetPaint.color = pColor
+                    planetPaint.alpha = 255
+                    nativeCanvas.drawCircle(pX, pY, coreRadius, planetPaint)
 
-                    // Primary colored core
-                    planetCorePaint.color = AndroidColor.argb(255, pr, pg, pb)
-                    nativeCanvas.drawCircle(pX, pY, coreRadius, planetCorePaint)
-
-                    // Brilliant nucleus
-                    planetCorePaint.color = AndroidColor.WHITE
-                    nativeCanvas.drawCircle(pX, pY, coreRadius * 0.55f, planetCorePaint)
-
-                    // Planet label when near center or selected
-                    val label = planet.localizedName(isCzech)
-                    val textY = pY + haloRadius + (14f * density)
-                    val labelPaint = if (isSelectedPlanet) planetHighlightLabelPaint else planetLabelPaint
-                    nativeCanvas.drawText(label, pX, textY, labelPaint)
+                    // 2. Draw soft optical halo using RadialGradient
+                    planetPaint.shader = RadialGradient(
+                        pX, pY, haloRadius,
+                        intArrayOf(pColor, transparentColor),
+                        floatArrayOf(0.1f, 1.0f),
+                        Shader.TileMode.CLAMP,
+                    )
+                    nativeCanvas.drawCircle(pX, pY, haloRadius, planetPaint)
+                    planetPaint.shader = null
                 } else {
-                    // --- STATE B: ZOOMED IN (Photorealistic High-Resolution Texture) ---
+                    // --- STATE B: ZOOMED IN (Realistic High-Resolution Texture) ---
                     val resName = "planet_${planet.id.lowercase()}"
                     val bitmap = context?.let { getOrLoadArtwork(it, resName) }
                     if (bitmap != null) {
-                        val scale = diameterInPixels / bitmap.width.toFloat()
+                        val trueAngularSizeRad = Math.toRadians(planet.angularDiameterDeg.toDouble()).toFloat()
+                        val baseDiameterPx = trueAngularSizeRad * (focalLengthPixels / zs)
+                        val renderDiameterPx = maxOf(baseDiameterPx * 40f, 30f * density)
+                        planetRadiusPx[pIdx] = maxOf(18f * density, renderDiameterPx * 0.5f)
+
+                        val scale = renderDiameterPx / bitmap.width.toFloat()
 
                         planetMatrix.reset()
                         planetMatrix.postTranslate(-bitmap.width / 2f, -bitmap.height / 2f)
                         planetMatrix.postScale(scale, scale)
                         planetMatrix.postTranslate(pX, pY)
 
+                        planetPaint.shader = null
                         planetPaint.alpha = 255
                         nativeCanvas.drawBitmap(bitmap, planetMatrix, planetPaint)
-
-                        // Render name label below zoomed body
-                        val label = planet.localizedName(isCzech)
-                        val textY = pY + (diameterInPixels * 0.5f) + (18f * density)
-                        val labelPaint = if (isSelectedPlanet) planetHighlightLabelPaint else planetLabelPaint
-                        nativeCanvas.drawText(label, pX, textY, labelPaint)
                     } else {
                         // Fallback if texture asset is loading
-                        val radius = diameterInPixels * 0.5f
-                        planetCorePaint.color = planet.colorRgb
-                        nativeCanvas.drawCircle(pX, pY, radius, planetCorePaint)
+                        val radius = 15f * density
+                        planetRadiusPx[pIdx] = radius
+                        planetPaint.shader = null
+                        planetPaint.color = planet.colorRgb
+                        nativeCanvas.drawCircle(pX, pY, radius, planetPaint)
                     }
                 }
             }

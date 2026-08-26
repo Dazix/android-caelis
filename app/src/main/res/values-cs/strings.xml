@@ -338,6 +338,7 @@
     <string name="celestial_magnitude">Magnituda</string>
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>
     <string name="celestial_parent_constellation">Mateřské souhvězdí</string>
+    <string name="celestial_route_to_target">Vycentrovat v zorném poli</string>
     <string name="celestial_close">Zavřít podrobnosti</string>
 
     <!-- Calibration Debugger -->

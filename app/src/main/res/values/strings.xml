@@ -332,6 +332,7 @@
     <string name="celestial_magnitude">Magnitude</string>
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>
     <string name="celestial_parent_constellation">Parent constellation</string>
+    <string name="celestial_route_to_target">Center in viewport</string>
     <string name="celestial_close">Close details</string>
 
     <!-- Calibration Debugger -->

@@ -95,6 +95,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     private var magneticDeclinationDeg = 0.0f
 
+    private var targetAnimator: android.animation.ValueAnimator? = null
+
     fun updateLocation(location: GeoLocation) {
         try {
             val field = GeomagneticField(
@@ -121,6 +123,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     fun resumeSensorTracking() {
+        targetAnimator?.cancel()
+        targetAnimator = null
         panAzimuthOffsetDeg = 0f
         panPitchOffsetDeg = 0f
         isSensorTrackingPaused.value = false
@@ -135,6 +139,76 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             outMatrix = adjustedMatrix,
         )
         publishOrientation(accuracy = 3)
+    }
+
+    /**
+     * Smoothly rotates the virtual camera in Hybrid Alt-Azimuth mode to center on [targetAzimuthDeg]
+     * and [targetElevationDeg] over 800ms using shortest spherical angular interpolation.
+     */
+    fun animateToTarget(
+        targetAzimuthDeg: Float,
+        targetElevationDeg: Float,
+        currentFrozenMatrix: FloatArray = if (isSensorTrackingPaused.value) frozenMatrix else liveTrueMatrix,
+        onUpdate: ((Float, Float) -> Unit)? = null,
+    ) {
+        targetAnimator?.cancel()
+
+        // 1. FREEZE SENSORS IF NOT PAUSED
+        if (!isSensorTrackingPaused.value) {
+            isSensorTrackingPaused.value = true
+            System.arraycopy(currentFrozenMatrix, 0, frozenMatrix, 0, minOf(currentFrozenMatrix.size, 16))
+        }
+
+        // 2. EXTRACT CAMERA FORWARD VECTOR FROM FROZEN MATRIX
+        val camFwdX = -frozenMatrix[2]
+        val camFwdY = -frozenMatrix[6]
+        val camFwdZ = -frozenMatrix[10]
+
+        // 3. CONVERT TO BASE AZIMUTH & ELEVATION
+        val camAzRad = kotlin.math.atan2(camFwdX.toDouble(), camFwdY.toDouble())
+        var camAzDeg = Math.toDegrees(camAzRad).toFloat()
+        if (camAzDeg < 0f) camAzDeg += 360f
+        val camElDeg = Math.toDegrees(kotlin.math.asin(camFwdZ.coerceIn(-1f, 1f).toDouble())).toFloat()
+
+        // 4. CALCULATE TARGET OFFSETS RELATIVE TO FROZEN BASE MATRIX
+        var targetOffsetAz = targetAzimuthDeg - camAzDeg
+        if (targetOffsetAz > 180f) targetOffsetAz -= 360f
+        if (targetOffsetAz < -180f) targetOffsetAz += 360f
+        val targetOffsetPitch = (targetElevationDeg - camElDeg).coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
+
+        // 5. CALCULATE SHORTEST PATH FROM CURRENT OFFSETS
+        val startAzOffset = panAzimuthOffsetDeg
+        val startPitchOffset = panPitchOffsetDeg
+
+        var diffAz = targetOffsetAz - startAzOffset
+        if (diffAz > 180f) diffAz -= 360f
+        if (diffAz < -180f) diffAz += 360f
+        val diffPitch = targetOffsetPitch - startPitchOffset
+
+        // 6. ANIMATE VIA VALUEANIMATOR OVER 800MS
+        val animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 800L
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addUpdateListener { anim ->
+                val fraction = anim.animatedValue as Float
+                val newAz = startAzOffset + diffAz * fraction
+                panAzimuthOffsetDeg = (newAz % 360f + 360f) % 360f
+                panPitchOffsetDeg = (startPitchOffset + diffPitch * fraction).coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
+
+                applyCalibration(
+                    sensorMatrix = frozenMatrix,
+                    declinationDeg = 0.0f,
+                    panAzimuthOffsetDeg = panAzimuthOffsetDeg,
+                    panPitchOffsetDeg = panPitchOffsetDeg,
+                    tempDeclinationBuffer = tempDeclinationMatrix,
+                    outMatrix = adjustedMatrix,
+                )
+                publishOrientation(accuracy = 3)
+                onUpdate?.invoke(panAzimuthOffsetDeg, panPitchOffsetDeg)
+            }
+        }
+        targetAnimator = animator
+        animator.start()
     }
 
     fun isUserRotated(): Boolean = isSensorTrackingPaused.value || (panAzimuthOffsetDeg != 0f || panPitchOffsetDeg != 0f)
@@ -200,6 +274,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     fun stop() {
+        targetAnimator?.cancel()
+        targetAnimator = null
         if (!isListening || sensorManager == null) return
         sensorManager.unregisterListener(this)
         isListening = false

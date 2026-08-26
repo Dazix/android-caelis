@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import com.dazix.intervalometer.R
 import com.dazix.intervalometer.ar.paletteForTheme
 import com.dazix.intervalometer.domain.nightsky.CelestialBodyDetails
 import com.dazix.intervalometer.domain.nightsky.NightVisionTheme
+import com.dazix.intervalometer.ui.AppIcons
 import java.util.Locale
 import kotlin.math.abs
 
@@ -48,6 +51,8 @@ fun CelestialDetailSheetContent(
     redVisionMode: Boolean,
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
+    onRouteToTarget: (() -> Unit)? = null,
+    onClose: (() -> Unit)? = null,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
 ) {
@@ -84,23 +89,66 @@ fun CelestialDetailSheetContent(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
-            Text(
-                text = selectedBody.name,
-                color = titleColor,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 0.dp),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 8.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = selectedBody.name,
+                        color = titleColor,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
 
-            Text(
-                text = selectedBody.subtitle,
-                color = labelColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Normal,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-            )
+                    Text(
+                        text = selectedBody.subtitle,
+                        color = labelColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (onRouteToTarget != null) {
+                        IconButton(
+                            onClick = onRouteToTarget,
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.CenterFocus,
+                                contentDescription = stringResource(R.string.celestial_route_to_target),
+                                tint = accentColor,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+
+                    if (onClose != null) {
+                        IconButton(
+                            onClick = onClose,
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.Clear,
+                                contentDescription = stringResource(R.string.celestial_close),
+                                tint = labelColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
 
             // Divider (Horizontal line aligning with the bottom edge of the peek view)
             Box(
