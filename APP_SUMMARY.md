@@ -28,8 +28,8 @@ Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní vý
    - Nemá žádnou minimální prodlevu fotoaparátu (podlaha je pouze 70 ms délka dotykového gesta).
 
 ### Integrované moduly Rozšířené Reality (AR)
-- **Sun AR (Solární plánovač):** 3D projekce sluneční trajektorie, poloh slunce v průběhu dne, časových značek, východu, západu a zlaté hodinky na živý obraz kamery s kompenzací True-North a zorného pole (FOV).
-- **Night Sky AR (Noční obloha):** 3D projekce nebeské sféry, hvězd z katalogu (J2000.0) a souhvězdí v reálném čase při 60 FPS s nulovými alokacemi paměti (zero-allocation) přes Google FlatBuffers.
+- **Sun & Moon AR (Solární a lunární plánovač):** 3D projekce sluneční a měsíční trajektorie, poloh těles v průběhu dne, fází Měsíce, časových značek, východu, západu, zlaté hodinky a fází soumraku (občanský, nautický, astronomický) na živý obraz kamery s kompenzací True-North a zorného pole (FOV).
+- **Night Sky AR (Noční obloha a planetárium):** 3D projekce nebeské sféry, 60 FPS vykreslování hvězdného pole přímo z binárního FlatBuffers katalogu (`catalog.bin`) s nulovými alokacemi paměti, 88 IAU souhvězdí a asterismů s artworky přes 4-bodovou homografii, dynamické planety Sluneční soustavy s dvoustavovým vykreslováním (optické bodové světlo vs fototextura), globální astronomické vyhledávání s chytrým směrováním kamery a procedurální GPU AGSL shadery (Mléčná dráha, atmosféra, horizont).
 
 ---
 
@@ -40,9 +40,12 @@ Aplikace striktně dodržuje principy čisté architektury s oddělením doméno
 ```
 com.dazix.intervalometer
 ├── domain/                  # Čistý Kotlin (žádné Android importy) – plánování, křivky, stop podmínky
-│   ├── solar/               # Sluneční efemeridy, PSA/Meeus algoritmy, denní časy, trajektorie
-│   └── nightsky/            # Hvězdná astronomie (J2000.0 RA/Dec -> Alt/Az), Frustum Culling, katalogy
+│   ├── solar/               # Sluneční a měsíční efemeridy, PSA/Meeus algoritmy, denní časy, trajektorie
+│   └── nightsky/            # Hvězdná astronomie (J2000.0 RA/Dec -> Alt/Az), Frustum Culling, optika hvězd,
+│                            # planetární efemeridy, tabulky souhvězdí, vyhledávací index
 ├── ar/                      # AR projekce (R^T matice), FOV kalkulátor, senzory, GPS, SkyDomeRenderer
+├── data/                    # Preferences DataStore (SettingsStore), SessionRepository, AdvancedSettings
+│   └── nightsky/            # FlatBuffers schémata a generované přístupové třídy (NightSkyCatalog, Star, Constellation)
 ├── service/                 # Jádro: ShutterAccessibilityService, SessionEngine, ShutterDispatcher,
 │                            # CameraProfiles, RunStateStore, SessionAlarmReceiver, DisplayGeometry
 ├── overlay/                 # Plovoucí ovládací panel (OverlayController, PanelPlacement, OverlayPolicy)
@@ -50,10 +53,9 @@ com.dazix.intervalometer
 ├── notify/                  # Průběžná systémová notifikace (SessionNotifications)
 ├── verify/                  # Detekce a validace zápisu snímků do MediaStore (CaptureVerifier)
 ├── monitor/                 # Sledování stavu baterie a volného úložiště (BatteryMonitor, StorageMonitor)
-├── data/                    # Preferences DataStore (SettingsStore), SessionRepository, FlatBuffers
 └── ui/                      # Jetpack Compose UI (Material 3 Expressive), ViewModel, obrazovky
     ├── solar/               # Sun AR obrazovka a ViewModel
-    └── nightsky/            # Night Sky AR obrazovka, ViewModel a NightSkyRenderer
+    └── nightsky/            # Night Sky AR obrazovka, ViewModel, NightSkyRenderer, SearchBar, BottomSheets, AGSL shadery
 ```
 
 ### Přehled vrstev a jejich zodpovědností
@@ -239,17 +241,19 @@ Pro zdánlivou výšku Slunce blízko horizontu ($h \ge -0.8333^\circ$):
 $$R_{\text{arcmin}} = \frac{1.02}{\tan\left(\left(h + \frac{10.3}{h + 5.11}\right) \cdot \frac{\pi}{180}\right)}$$
 $$h_{\text{apparent}} = h + \frac{R_{\text{arcmin}}}{60}$$
 
-#### 5. Vyhledávání solárních událostí (Východ, Západ, Zlatá hodinka)
-V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarDayTimes.kt):
+#### 5. Vyhledávání solárních událostí a Lunární efemeridy
+V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarDayTimes.kt), [`LunarPositionCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/LunarPositionCalculator.kt) a [`LunarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/LunarDayTimes.kt):
 - **Pravé poledne (Meridian Transit):** Hrubé vzorkování po 5 minutách $\pm 2$ hodiny kolem aproximovaného poledne, následované ternárním vyhledáváním s přesností na 1 sekundu.
 - **Východ a západ slunce:** Detekce průchodu výšky $h_{\text{target}} = -0.8333^\circ$ (zohledňuje $34'$ refrakci a $16'$ poloměr disku) pomocí 5minutového scanu a binárního vyhledávání (bisekce) s přesností na 1 sekundu.
+- **Fáze soumraku:** Občanský ($h = -6^\circ$), nautický ($h = -12^\circ$) a astronomický ($h = -18^\circ$) soumrak.
 - **Zlatá hodinka (Golden Hour):** Průchod elevacemi od $-4.0^\circ$ do $+6.0^\circ$.
+- **Lunární efemeridy a trajektorie:** Výpočet geocentrických souřadnic Měsíce, fáze osvětlení ($0.0 \dots 1.0$), úhlového průměru a trajektorie s přesností Meeusovy lunární teorie ($< 0.1^\circ$).
 
 ---
 
-### 4.3. Rovníková astronomie a Noční obloha (Night Sky AR)
+### 4.3. Rovníková astronomie, Hvězdná optika a Noční obloha (Night Sky AR)
 
-Implementováno v [`EquatorialCoordinates.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/EquatorialCoordinates.kt) a [`StarFrustumCulling.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarFrustumCulling.kt).
+Implementováno v [`EquatorialCoordinates.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/EquatorialCoordinates.kt), [`StarFrustumCulling.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarFrustumCulling.kt), [`StarOptics.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarOptics.kt) a [`NightSkyCatalogLoader.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/NightSkyCatalogLoader.kt).
 
 #### 1. Převod rovníkových souřadnic (RA $\alpha$, Dec $\delta$) na 3D ENU vektor
 Přímo bez mezikroků v sférických úhlech pro nulové alokace:
@@ -259,7 +263,7 @@ $$\mathbf{V}_{\text{world}} = \begin{bmatrix} V_{\text{East}} \\ V_{\text{North}
 #### 2. Vektorový Frustum Culling na nebeské sféře
 Místo náročné projekce tisíců hvězd na obrazovku se provádí rychlé oříznutí v 3D prostoru pomocí skalárního součinu (dot-product).
 Optická osa kamery v ENU souřadnicích je dána:
-$$\mathbf{V}_{\text{cam}} = \begin{bmatrix} -R_{13} \\ -R_{23} \\ -R_{33} \end{bmatrix} = \begin{bmatrix} -R[2] \\ -R[6] \\ -R[10] \end{bmatrix}$$
+$$\mathbf{V}_{\text{cam}} = \begin{bmatrix} -R[2] \\ -R[6] \\ -R[10] \end{bmatrix}$$
 
 Maximální úhlopříčný poloviční úhel záběru kamery:
 $$\tan(\theta_H) = \tan\left(\frac{\text{FOV}_H}{2}\right), \quad \tan(\theta_V) = \tan(\theta_H) \cdot \frac{\text{Height}}{\text{Width}}$$
@@ -269,9 +273,72 @@ $$\text{Threshold} = \cos(\theta_{\text{max}})$$
 Hvězda je ve frustumu právě tehdy, když:
 $$\mathbf{V}_{\text{cam}} \cdot \mathbf{V}_{\text{star}} = (V_{\text{cam},x} V_{\text{star},x} + V_{\text{cam},y} V_{\text{star},y} + V_{\text{cam},z} V_{\text{star},z}) \ge \text{Threshold}$$
 
+#### 3. Fyzikální optika hvězd a Johnsonův barevný index $B-V$
+- **Mocninná škálovací křivka poloměru podle vizuální magnitudy:**
+  $$r_{\text{star}} = r_{\text{min}} + (r_{\text{max}} - r_{\text{min}}) \cdot \left(1.0 - \frac{m - m_{\text{min}}}{m_{\text{max}} - m_{\text{min}}}\right)^{1.85}$$
+- **Teplota a barva hvězdy z indexu $B-V$:** Převod na černotělesové záření ($1\,500\,\text{K}$ až $35\,000\,\text{K}$) a barevný prostor RGB pro věrné zobrazení spektrálních tříd O, B, A, F, G, K, M.
+- **Atmosférická scintilace (Scintillation / Twinkle):** Deterministický šum založený na čase a ID hvězdy modulující jas v rozsahu $\pm 15\,\%$ bez alokace paměti.
+
 ---
 
-### 4.4. 3D projekce rozšířené reality (AR Camera Projection)
+### 4.4. Souhvězdí, Spojnice a Perspektivní Homografie Artworků
+
+Implementováno v [`NightSkyRenderer.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/NightSkyRenderer.kt) a [`Constellation.java`](app/src/main/java/com/dazix/intervalometer/data/nightsky/Constellation.java).
+
+#### 1. Dávkové vykreslování spojnic (Batch Lines) s meet-in-the-middle animací
+- Spojnice hvězd jsou uloženy jako indexované páry ve FlatBuffers katalogu.
+- Transformované body na obrazovce jsou zapsány do předalokovaného pole `constellationLinesBuffer: FloatArray` a vykresleny jediným voláním `nativeCanvas.drawLines()`.
+- Animace náběhu při zaměření vykresluje linky směrem od koncových hvězd do středu (meet-in-the-middle).
+
+#### 2. Prostorová hystereze fokusu (Spatial Hysteresis)
+Pro eliminaci blikání při chvění ruky na okraji zorného pole:
+- Vnitřní poloměr pro získání fokusu: $R_{\text{in}} = 0.45 \cdot W_{\text{viewport}}$
+- Vnější poloměr pro ztrátu fokusu: $R_{\text{out}} = 0.55 \cdot W_{\text{viewport}}$
+- V pásmu $R_{\text{in}} < d \le R_{\text{out}}$ zůstává stav uzamčen.
+
+#### 3. Perspektivní homografie 4 rohů ilustrace (`Matrix.setPolyToPoly`)
+Každé souhvězdí nese souřadnice 4 rohů své mytologické ilustrace $(\alpha_k, \delta_k)_{k=0}^3$. Tyto rohy jsou transformovány na obrazovku $(x_k, y_k)_{k=0}^3$ a pomocí maticové homografie `Matrix.setPolyToPoly()` je rastrový artwork přesně namapován na hvězdné pozadí se správnou perspektivou a rotací.
+
+---
+
+### 4.5. Dynamická tělesa Sluneční soustavy (Planetary Ephemeris)
+
+Implementováno v [`PlanetaryEphemerisCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/PlanetaryEphemerisCalculator.kt).
+
+#### 1. Keplerovy elementy a poruchová teorie
+Výpočet geocentrických poloh pro 8 planet (Merkur, Venuše, Mars, Jupiter, Saturn, Uran, Neptun) a Měsíc z Keplerových elementů (JPL Standish):
+- Poloosa $a$, excentricita $e$, sklon $I$, střední délka $L$, délka perihelia $\varpi$, délka výstupního uzlu $\Omega$.
+- Řešení Keplerovy rovnice $M = E - e \sin E$ metodou Newton-Raphson.
+- Helio/Geocentrický přepočet odečtením vektoru Země $\implies$ zdánlivé RA/Dec a vzdálenost v AU.
+
+#### 2. Dvoustavový vykreslovací systém (Dual-State Rendering)
+- **Stav A (Vzdálené těleso, Zoom $\le 12\times$):** Optické bodové světlo s jádrem a měkkou korónou tvořenou `RadialGradient` v barvě daného tělesa.
+- **Stav B (Hloubkový zoom, Zoom $> 12\times$):** Fotorealistická 3D WebP textura s 40násobným úhlovým zvětšením pro pozorování detailů povrchu a prstenců.
+
+---
+
+### 4.6. Globální vyhledávací systém a Kinematika směrování kamery
+
+Implementováno v [`CelestialSearchIndex.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/CelestialSearchIndex.kt) a [`NightSkyArViewModel.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/NightSkyArViewModel.kt).
+
+- **Prioritní řazení výsledků:** Prefixová shoda v primárním českém názvu (Priorita 0), v latinském názvu (Priorita 1), substring shoda (Priorita 2).
+- **Historie hledání:** Trvale ukládána do DataStore přes `SearchHistoryCodec`.
+- **AR Re-kalibrace kamery:** V senzorovém režimu zmrazí aktuální senzorovou matici a plynule přetočí $R_{\text{user}}$ pomocí 800ms interpolátoru `AccelerateDecelerateInterpolator` na nejkratší úhlové dráze modulo $360^\circ$ s ořezem náklonu $\pm 85^\circ$.
+- **Manuální virtuální režim:** Animace ekvatoriálních souřadnic $(\alpha, \delta)$ virtuální kamery po S-křivce `FastOutSlowIn` na nejkratší úsečce po sféře.
+
+---
+
+### 4.7. Procedurální GPU AGSL Shadery
+
+Implementováno v [`MilkyWayShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/MilkyWayShader.kt), [`AtmosphereShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/AtmosphereShader.kt) a [`LandscapeShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/LandscapeShader.kt).
+
+- **Procedurální Mléčná dráha (`MilkyWayShader`):** AGSL fragment shader počítající v reálném čase galaktické souřadnice $(l, b)$ z $R^T$ matice. Vykresluje galaktické jádro, spirální ramena a prachové pásy s volumetrickým šumem (FBM).
+- **Atmosférický rozptyl (`AtmosphereShader`):** Simulace Rayleighova a Mieova rozptylu s gradientem horizontu a plynulým přechodem do noční černě.
+- **Silueta horizontu (`LandscapeShader`):** Vykreslení horizontální linie oddělující pozemní krajinu od oblohy.
+
+---
+
+### 4.8. 3D projekce rozšířené reality (AR Camera Projection)
 
 Implementováno v [`CameraProjection.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraProjection.kt) a [`CameraFovCalculator.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraFovCalculator.kt).
 
@@ -300,7 +367,7 @@ $$Y_{\text{screen}} = \frac{H_{\text{viewport}}}{2} - f_{\text{pixels}} \cdot \f
 #### 4. Směrový radar pro objekty mimo záběr (Off-screen Bearing)
 Pokud bod leží mimo viditelnou plochu obrazovky nebo za pozorovatelem ($Z_s \le 0$):
 $$\theta_{\text{bearing}} = \operatorname{atan2}(X_s, Y_s) \pmod{360^\circ}$$
-Tento úhel naviguje uživatele pomocí směrové šipky a kompasu přímo k hledanému objektu (např. Slunci v noci).
+Tento úhel naviguje uživatele pomocí směrové šipky a kompasu přímo k hledanému objektu (např. Slunci v noci nebo vyhledanému souhvězdí).
 
 #### 5. Efektivní FOV s korekcí ořezu hledáčku (`CameraFovCalculator`)
 Snímače fotoaparátu mívají poměr stran 4:3, zatímco moderní displeje telefonů jsou protáhlé (19.5:9, 20:9). CameraX náhled s `ScaleType.FILL_CENTER` vyplní výšku a ořízne strany snímače, čímž zmenší efektivní horizontální zorné pole:
@@ -311,8 +378,9 @@ $$\text{cropRatio} = \frac{\text{viewportAspect}}{\text{sensorAspect}}$$
 $$\text{effectiveFov}_H = 2 \cdot \arctan\left(\tan\left(\frac{\text{rawFov}_H}{2}\right) \cdot \text{cropRatio}\right)$$
 
 #### 6. Stabilizace senzorů a korekce True-North (`OrientationTracker`)
-- **SLERP/LERP vyhlazování kvaterniónů:**
-  $$\mathbf{q}_{\text{smooth}} \leftarrow \mathbf{q}_{\text{smooth}} + \alpha (\operatorname{sgn}(\mathbf{q} \cdot \mathbf{q}_{\text{smooth}})\mathbf{q} - \mathbf{q}_{\text{smooth}}), \quad \alpha = 0.22$$
+- **Adaptivní SLERP vyhlazování kvaterniónů:**
+  $$\alpha = 0.30 + \operatorname{clamp}\left(\frac{\Delta\theta - 0.002\,\text{rad}}{0.025\,\text{rad} - 0.002\,\text{rad}}, 0, 1\right) \cdot (0.85 - 0.30)$$
+  $$\mathbf{q}_{\text{smooth}} \leftarrow \mathbf{q}_{\text{smooth}} + \alpha (\operatorname{sgn}(\mathbf{q} \cdot \mathbf{q}_{\text{smooth}})\mathbf{q} - \mathbf{q}_{\text{smooth}})$$
   $$\mathbf{q}_{\text{smooth}} \leftarrow \frac{\mathbf{q}_{\text{smooth}}}{\|\mathbf{q}_{\text{smooth}}\|}$$
 - **Premultiplikace magnetické deklinace a uživatelského posunu:**
   $$D = \text{declination}_{\text{geomagnetic}} + \text{offset}_{\text{user}}$$
@@ -320,7 +388,7 @@ $$\text{effectiveFov}_H = 2 \cdot \arctan\left(\tan\left(\frac{\text{rawFov}_H}{
 
 ---
 
-### 4.5. Geometrie displeje a kalibrace nezávislá na otočení (`DisplayGeometry`)
+### 4.9. Geometrie displeje a kalibrace nezávislá na otočení (`DisplayGeometry`)
 
 Kalibrovaný bod spouště je uložen jako normalizované zlomky obrazovky $[0.0, 1.0]$ v **přirozeném prostoru (Natural Space, `Surface.ROTATION_0`)**.
 
@@ -344,7 +412,7 @@ $$Y = \text{rect.top} + \text{rand} \cdot \text{rect.height}$$
 
 ---
 
-### 4.6. Matematický algoritmus umístění plovoucího panelu (`PanelPlacement`)
+### 4.10. Matematický algoritmus umístění plovoucího panelu (`PanelPlacement`)
 
 Plovoucí panel s tlačítky Pause/Stop nesmí nikdy překrýt oblast, na kterou dopadá syntetický dotyk spouště.
 
@@ -359,7 +427,7 @@ kde $M \gg 0$ je vysoká váha penalizující jakýkoliv průnik. Algoritmus v d
 
 ---
 
-### 4.7. Pravidla verifikace expozice (`CaptureVerifier` & `CameraImageRule`)
+### 4.11. Pravidla verifikace expozice (`CaptureVerifier` & `CameraImageRule`)
 
 Verifikace kontroluje zápis nových fotografií do `MediaStore.Images`:
 1. **Před stiskem spouště:** Získá se token obsahující aktuální časové razítko $T_{\text{window\_start}}$ a identitu posledního existujícího snímku.
@@ -446,12 +514,18 @@ flowchart TD
 
 ---
 
-## 6. Souhrnný přehled vlastností
+## 6. Souhrnný přehled a testovací architektura
 
+Aplikace disponuje robustním systémem automatizovaného testování a verifikace:
+
+- **429 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
+  - `scripts/run_tests.sh intervalometer` (260 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence, lokalizace.
+  - `scripts/run_tests.sh solar` (78 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor s ořezem.
+  - `scripts/run_tests.sh nightsky` (91 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer.
+- **20 Instrumentovaných testů na reálném zařízení / ART:**
+  - Pokrývají přesnost časování bez driftu, automatické pozastavení při zhasnutí obrazovky (`ScreenOffTest`), foreground ochranu (`ForegroundGuardTest`), čtení a vykreslení FlatBuffers katalogu na reálném Android plátně (`StarCatalogDeviceTest`).
+- **End-to-End validace (`scripts/e2e_pixel_camera.sh`):**
+  - Reálné spouštění nativní Google Camera aplikace na vyhrazeném vývojářském profilu s detekcí nově pořízených souborů v `MediaStore` a jejich následným úklidem.
 - **Drift-Free přesnost:** Absolutní časování eliminující kumulaci chyb.
-- **Plná kvalita snímků:** Využití originálního post-processingu fotoaparátu (GCam HDR+, Night Sight).
-- **Rampování expozice:** Lineární i exponenciální přechody intervalů.
-- **Inteligentní ochrana:** Automatické pozastavení při zhasnutí obrazovky či přepnutí aplikace.
-- **Bezpečnostní limity (Auto-Stop):** Hlídání baterie, volného místa na disku, max. trvání a počtu snímků.
-- **AR Solární & Hvězdné plánování:** Precizní astronomické modely NOAA/Meeus a 60 FPS FlatBuffers vykreslování.
-- **100% Soukromí:** Žádná síťová komunikace, lokální open-source zpracování.
+- **Plná kvalita snímků:** Využití originálního post-processingu fotoaparátu (GCam HDR+, Night Sight, Astrofotografie).
+- **100% Soukromí:** Žádná síťová komunikace (`INTERNET` oprávnění chybí v manifestu), lokální open-source zpracování.

@@ -55,9 +55,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, session planner, calibration (252 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris, AR projection (74 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (48 tests)
+scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, session planner, calibration (260 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris, AR projection (78 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (91 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -73,7 +73,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **374 JVM tests (252 intervalometer, 74 solar, 48 night sky), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
+`skipped`), not from the console. Current baseline: **429 JVM tests (260 intervalometer, 78 solar, 91 night sky), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -85,17 +85,19 @@ a session from the shell.
 | Package | Rule |
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
-| `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories). |
-| `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, zero-alloc star catalog). |
+| `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris). |
+| `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, search index). |
 | `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview (`CameraPreview`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
-| `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
-| `ui/nightsky/` | Night Sky AR Compose screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), and zero-allocation 60 FPS batch star renderer (`NightSkyRenderer`). |
+| `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
+| `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `StarMetadata`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing notification. It re-arms its own tick; it must never post while unattached. |
-| `data/` | DataStore settings and the process-wide `SessionRepository` snapshot. |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
-| `ui/` | One activity, Compose screens, `IntervalometerTheme`. |
+| `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
+| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`IntervalometerTheme`). |
+| `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
+| `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, bottom sheets, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
 
 `ShutterAccessibilityService` marks its UI wiring with an `==== INTEGRATION POINT ====` block: those are
 the only calls into the notification and the panel.

@@ -284,6 +284,7 @@ deleting them, and the deletion is retried, because a row the camera has not fin
 | `InterruptedRunTest` | a run record left on disk is picked back up at its stored progress and calibration when the service rebinds, and takes only the frames it still owed; a service torn down mid-run stops as `SERVICE_LOST`, drops its plan, and the rebound service reports the loss and the shot count from disk alone. |
 | `ForegroundGuardTest` | leaving the target app parks the session with the wrong-app warning, nothing is tapped and `shotsTaken` does not move while another app is in front, and bringing the target app back resumes it without any user action. |
 | `GuardTickTest` | `maxDurationMs` also ends a session parked in `WaitingToStart` behind a long start delay (with no frame ever taken) and one the engine paused itself, both within one `SessionEngine.GUARD_TICK_MS` of the limit. |
+| `StarCatalogDeviceTest` | verifies `catalog.bin` binary FlatBuffers loading directly from Android `res/raw` on real ART runtime, asserts minimum star/constellation thresholds and coordinates, and executes full `NightSkyRenderer` canvas render loop with celestial dome grid and star batch projection without allocations or exceptions. |
 
 Every test starts its session the same way, through the running service instance:
 

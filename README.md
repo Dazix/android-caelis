@@ -39,26 +39,48 @@ Nothing leaves the device. The app has no network permission at all.
   camera app itself wrote, retries the shutter once if none appeared, and flags the session instead of
   silently shooting nothing. Off by default; the photo permission is only requested when you turn it on.
 
-**Sun AR (Augmented Reality Solar Planning)**
+**Sun & Moon AR (Augmented Reality Solar & Lunar Planning)**
 
-Built-in augmented reality module for planning solar time-lapses (sunsets, sunrises, golden hour):
+Built-in augmented reality module for planning solar and lunar time-lapses (sunsets, sunrises, golden hour, moon phases, twilight):
 
-- **Static 3D Celestial Dome**: Projects the solar trajectory curve, hourly time markers, and solstices
+- **Static 3D Celestial Dome**: Projects solar and lunar trajectory curves, hourly time markers, and solstices
   locked 1:1 to the real physical landscape using perspective matrix transpose projection ($R^T$).
 - **3D Celestial Wireframe Grid**: 12 vertical azimuth meridians from Nadir ($-90^\circ$) to Zenith
   ($+90^\circ$) and 7 altitude parallels ($-30^\circ, -15^\circ, +15^\circ, +30^\circ, +45^\circ, +60^\circ, +75^\circ$)
   with degree elevation tags.
-- **24/7 Directional Sun Pointer**: Real-time 8-ray vector sun glyph with a directional chevron arrow and
-  elevation badge (e.g. `☀️ -27°` at night) guiding the user towards the sun in any direction.
+- **24/7 Directional Pointers**: Real-time vector sun glyph and lunar indicator with directional chevron arrows
+  and elevation badges (e.g. `☀️ -27°` at night) guiding the user towards celestial bodies in any direction.
 - **Dynamic FOV & Aspect Crop Calculation**: Dynamically queries `CameraCharacteristics` (sensor physical size
   and focal length) and calculates effective horizontal FOV compensating for `PreviewView.ScaleType.FILL_CENTER`
   on modern tall displays (20:9, 19.5:9).
-- **Magnetic Declination & Swipe Calibration**: Real-time True-North correction plus 1:1 pixel-to-angle
-  horizontal swipe gesture to compensate for metallic tripod magnetic distortion, with 1-tap reset.
-- **Terrain Sunset Continuation**: Solid daytime trajectory continuing down to $-15^\circ$ below the visual
-  horizon for framing sunsets behind hills and buildings.
+- **Magnetic Declination & Calibration**: Real-time True-North geomagnetic correction plus 1:1 pixel-to-angle
+  drag gestures to compensate for metallic tripod magnetic distortion, with 1-tap reset.
+- **Twilight & Terrain Sunset Continuation**: Precise Civil, Nautical, and Astronomical twilight phases plus solid
+  daytime trajectory continuing down to $-15^\circ$ below the visual horizon for framing sunsets behind hills and buildings.
 - **Red Vision Mode**: Astrophotography dark red theme (`#FFFF1744`) preserving night adaptation.
 - **Two-Row Floating HUD**: Row 1 with GPS fix status & location, Row 2 with Compass Azimuth and Lens FOV.
+
+**Night Sky AR (Real-Time 60 FPS Astrophotography & Planetarium)**
+
+Augmented reality planetarium for night sky framing, astrophotography alignment, and celestial navigation:
+
+- **Zero-Allocation 60 FPS Star Field**: Directly reads pre-compiled binary FlatBuffers star catalog (`catalog.bin`)
+  from memory with zero GC allocations on the render loop, utilizing 3D vector Frustum Culling on the celestial sphere.
+- **Physical Star Optics**: Magnitude-to-radius power curve scaling, Johnson $B-V$ color index to accurate RGB
+  temperature mapping, and realistic atmospheric scintillation (twinkle).
+- **88 IAU Constellations & Asterisms**: Stick-figure line asterisms, meet-in-the-middle animations, focus region
+  spatial hysteresis ($0.45 W / 0.55 W$) to eliminate hand jitter, and perspective artwork illustration overlays
+  mapped via 4-corner homography (`Matrix.setPolyToPoly`).
+- **Dynamic Planetary Ephemeris**: Real-time Keplerian orbital elements (Simon/Standish & Meeus lunar theory) for
+  all 8 planets and the Moon with dual-state rendering (soft optical point light with `RadialGradient` vs photorealistic
+  3D textures with deep zoom).
+- **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (Czech / Latin / IAU names) and
+  search history. Features animated camera routing in AR mode (freeze-frame accelerate-decelerate re-calibration) and
+  interactive manual virtual planetarium pan mode (FastOutSlowIn S-curve).
+- **Procedural GPU AGSL Shaders**: Procedural volumetric Milky Way galaxy shader, Rayleigh/Mie atmospheric scattering,
+  and horizon landscape silhouette.
+- **Layer Controls & Detail Sheets**: Layer toggles (stars, constellations, artwork, planets, grid, atmosphere), visual
+  magnitude cutoff slider, and rich celestial body bottom sheet with astronomical distance, magnitude, and rise/set times.
 
 **Universal targeting.** The engine knows nothing about any particular camera. It needs "which package,
 which shutter matcher, which calibrated point". Camera-specific knowledge lives in data-only
@@ -185,20 +207,26 @@ camera, and the broadcast entry points that start a session from a shell.
 ### The gates
 
 ```bash
-# 1. everything that needs no device — also what CI runs
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
+# 1. Scoped domain unit tests (fast JVM execution):
+scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, calibration (260 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris (78 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog (91 tests)
 
-# 2. the real engine on the real device (installs, runs, restores)
+# 2. Full gate before final commit (all suites + assemble + Android Lint):
+scripts/run_tests.sh all
+# or directly:
+# ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug
+
+# 3. The real engine on the real device (installs, runs, restores)
 scripts/run_instrumented.sh
 
-# 3. the proof: real camera, real photos
+# 4. The proof: real camera, real photos
 scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: 290 JVM tests, 18 instrumented tests, no
-failures, no skips, lint clean.
+what a dead accessibility service produces. Current baseline: **429 JVM tests (260 intervalometer, 78 solar, 91 night sky), 20 instrumented tests, no failures, no skips, lint clean.**
 
 ---
 
@@ -206,18 +234,22 @@ failures, no skips, lint clean.
 
 ```
 com.dazix.intervalometer
-├── domain/      pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
-│   └── solar/   pure Kotlin solar ephemeris, day times, trajectory planner, PSA algorithms
-├── ar/          AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers
-├── service/     ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
-│                CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
-├── overlay/     the floating panel, its placement/cloak/dim policy, and the calibration overlay
-├── notify/      the ongoing notification and its actions
-├── data/        DataStore settings, calibrations, and the process-wide session snapshot
-├── verify/      the optional MediaStore capture check
-├── monitor/     battery and storage
-└── ui/          activity, Compose screens (Home, Setup, Ramp, Sun AR), Material 3 Expressive theme
-    └── solar/   Sun AR screen, ViewModel, and 60 FPS zero-allocation 3D celestial canvas renderer
+├── domain/          pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
+│   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
+│   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
+│                    star optics, planetary ephemeris, constellation tables, search index)
+├── ar/              AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers, SkyDomeRenderer
+├── data/            DataStore settings, calibrations, and the process-wide session snapshot
+│   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors
+├── service/         ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
+│                    CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
+├── overlay/         the floating panel, its placement/cloak/dim policy, and the calibration overlay
+├── notify/          the ongoing notification and its actions
+├── verify/          the optional MediaStore capture check
+├── monitor/         battery and storage
+└── ui/              activity, Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme
+    ├── solar/       Sun AR screen, ViewModel, and 60 FPS zero-allocation 3D celestial canvas renderer
+    └── nightsky/    Night Sky AR screen, ViewModel, 60 FPS batch star renderer, search bar, bottom sheets, AGSL shaders
 ```
 
 **The accessibility service owns the session.** Only an accessibility service may call
@@ -248,11 +280,12 @@ BOM's 1.4.0 ships the expressive *tokens* but keeps the components out of its pu
 ## Testing
 
 ```bash
-# JVM: schedule and ramp maths, stop conditions, settings round-trips, overlay policy, UI state
-./gradlew :app:testDebugUnitTest
+# JVM: schedule and ramp maths, stop conditions, settings round-trips, overlay policy, UI state, astronomical math
+scripts/run_tests.sh all               # or scoped: scripts/run_tests.sh intervalometer|solar|nightsky
 
-# on a connected device: the real engine, the real service, a fake camera
+# on a connected device: the real engine, the real service, a fake camera, FlatBuffers zero-copy validation
 scripts/run_instrumented.sh            # optional filter: scripts/run_instrumented.sh ScreenOffTest
+scripts/run_instrumented.sh StarCatalogDeviceTest
 
 # the proof: the real Pixel camera, real photos on disk, counted in MediaStore
 scripts/e2e_pixel_camera.sh
