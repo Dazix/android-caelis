@@ -55,10 +55,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.isActive
 import com.dazix.intervalometer.ui.AppToastHost
 import com.dazix.intervalometer.ui.AppToastHostState
 import androidx.compose.ui.Alignment
@@ -652,7 +655,21 @@ private fun NightSkyOverlayCanvas(
         landscapeBitmap?.let { renderer.setLandscapeBitmap(it) }
     }
 
+    // Continuous frame ticker driving hardware vsync (60/120 Hz) draw invalidations
+    // Decouples the render loop from sensor/gesture state updates
+    val frameTicker by produceState(initialValue = 0L) {
+        while (isActive) {
+            withFrameNanos { time ->
+                value = time
+            }
+        }
+    }
+
     Canvas(modifier = modifier) {
+        // Read the ticker state first to establish a DrawScope dependency for continuous 60 FPS redraws
+        @Suppress("UNUSED_VARIABLE")
+        val currentTimeNanos = frameTicker
+
         if (orientation == null) return@Canvas
 
         val w = size.width
