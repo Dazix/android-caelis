@@ -21,7 +21,7 @@ TEMP_DOWNLOAD = os.path.join(os.path.dirname(__file__), "temp_milkyway_source.jp
 
 def download_source_panorama():
     print(f"Downloading celestial Milky Way panorama from NASA SVS ({NASA_SVS_URL})...")
-    req = urllib.request.Request(NASA_SVS_URL, headers={"User-Agent": "Mozilla/5.0 (Intervalometer Asset Pipeline)"})
+    req = urllib.request.Request(NASA_SVS_URL, headers={"User-Agent": "Mozilla/5.0 (CAELIS Asset Pipeline)"})
     with urllib.request.urlopen(req, timeout=20) as response, open(TEMP_DOWNLOAD, "wb") as out_file:
         out_file.write(response.read())
     print(f"Downloaded source image ({os.path.getsize(TEMP_DOWNLOAD):,} bytes).")

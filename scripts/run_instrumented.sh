@@ -29,7 +29,7 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 USER_ID=$ANDROID_USER_ID
-PKG=com.dazix.intervalometer
+PKG=com.dazix.caelis
 SCRIPT_DIR="${PROJECT_DIR}/scripts"
 REPORT_ROOT="${PROJECT_DIR}/app/build/reports/androidTests"
 RESULTS_DIR="${PROJECT_DIR}/app/build/outputs/androidTest-results/connected"

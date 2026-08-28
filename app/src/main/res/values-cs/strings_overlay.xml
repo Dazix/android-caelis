@@ -55,7 +55,7 @@
     <string name="ovl_notif_title_paused">Timelapse pozastaveno</string>
     <string name="ovl_notif_title_waiting">Timelapse startuje</string>
     <string name="ovl_notif_title_stopped">Timelapse dokončeno</string>
-    <string name="ovl_notif_title_idle">Intervalometr připraven</string>
+    <string name="ovl_notif_title_idle">CAELIS připraven</string>
     <string name="ovl_action_move_panel">Přesunout panel na druhou stranu</string>
     <string name="ovl_panel_moved_left">Panel přesunut doleva</string>
     <string name="ovl_panel_moved_right">Panel přesunut doprava</string>

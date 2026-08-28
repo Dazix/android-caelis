@@ -3,7 +3,7 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 USER_ID=$ANDROID_USER_ID
-PKG=com.dazix.intervalometer
+PKG=com.dazix.caelis
 
 die() {
     printf 'install_debug: FATAL: %s\n' "$1" >&2

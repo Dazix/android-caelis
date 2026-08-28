@@ -3,7 +3,7 @@
   Debug-variant-only resources for the test harness.
 
   The `shutter_button` id is the point of this file: the accessibility node of the fake shutter
-  reports `viewIdResourceName = "com.dazix.intervalometer:id/shutter_button"` only because the id
+  reports `viewIdResourceName = "com.dazix.caelis:id/shutter_button"` only because the id
   comes from a real resource, so the service exercises its real id-based node search.
 
   The content description is intentionally NOT a string resource - it is a Kotlin constant

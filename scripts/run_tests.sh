@@ -57,31 +57,31 @@ if total_tests == 0:
 }
 
 case "$TARGET" in
-    intervalometer|core)
-        info "Running Intervalometer test suite (Service, Overlay, Session, Calibration, Plurals, Verify)..."
+    caelis|intervalometer|core)
+        info "Running Caelis core test suite (Service, Overlay, Session, Calibration, Plurals, Verify)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
-            --tests "com.dazix.intervalometer.service.*" \
-            --tests "com.dazix.intervalometer.overlay.*" \
-            --tests "com.dazix.intervalometer.verify.*" \
-            --tests "com.dazix.intervalometer.domain.IntervalScheduleTest" \
-            --tests "com.dazix.intervalometer.domain.SessionPlannerTest" \
-            --tests "com.dazix.intervalometer.data.SettingsMappingTest" \
-            --tests "com.dazix.intervalometer.res.*" \
-            --tests "com.dazix.intervalometer.ui.CalibrationResolutionTest" \
-            --tests "com.dazix.intervalometer.ui.LaunchModeOptionsTest" \
-            --tests "com.dazix.intervalometer.ui.NavigationDestinationTest" \
-            --tests "com.dazix.intervalometer.ui.SetupUiStateTest" \
-            --tests "com.dazix.intervalometer.ui.WaitProgressTest" \
+            --tests "com.dazix.caelis.service.*" \
+            --tests "com.dazix.caelis.overlay.*" \
+            --tests "com.dazix.caelis.verify.*" \
+            --tests "com.dazix.caelis.domain.IntervalScheduleTest" \
+            --tests "com.dazix.caelis.domain.SessionPlannerTest" \
+            --tests "com.dazix.caelis.data.SettingsMappingTest" \
+            --tests "com.dazix.caelis.res.*" \
+            --tests "com.dazix.caelis.ui.CalibrationResolutionTest" \
+            --tests "com.dazix.caelis.ui.LaunchModeOptionsTest" \
+            --tests "com.dazix.caelis.ui.NavigationDestinationTest" \
+            --tests "com.dazix.caelis.ui.SetupUiStateTest" \
+            --tests "com.dazix.caelis.ui.WaitProgressTest" \
             --rerun-tasks)
         check_xml_results
-        info "Intervalometer test suite PASSED."
+        info "Caelis core test suite PASSED."
         ;;
 
     solar|sun)
         info "Running Sun Trajectory test suite (Solar & Lunar Ephemeris, Trajectory Planning, AR Projection, Camera FOV)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
-            --tests "com.dazix.intervalometer.domain.solar.*" \
-            --tests "com.dazix.intervalometer.ar.*" \
+            --tests "com.dazix.caelis.domain.solar.*" \
+            --tests "com.dazix.caelis.ar.*" \
             --rerun-tasks)
         check_xml_results
         info "Sun Trajectory test suite PASSED."
@@ -90,8 +90,8 @@ case "$TARGET" in
     nightsky|stars)
         info "Running Night Sky test suite (Celestial Math, FlatBuffers Catalog, Frustum Culling, Optics, Renderer Zero-Alloc)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
-            --tests "com.dazix.intervalometer.domain.nightsky.*" \
-            --tests "com.dazix.intervalometer.ui.nightsky.*" \
+            --tests "com.dazix.caelis.domain.nightsky.*" \
+            --tests "com.dazix.caelis.ui.nightsky.*" \
             --rerun-tasks)
         check_xml_results
         info "Night Sky test suite PASSED."
@@ -107,6 +107,6 @@ case "$TARGET" in
         ;;
 
     *)
-        die "Unknown test target: '$TARGET'. Supported targets: intervalometer, solar, nightsky, all"
+        die "Unknown test target: '$TARGET'. Supported targets: caelis (or intervalometer), solar, nightsky, all"
         ;;
 esac

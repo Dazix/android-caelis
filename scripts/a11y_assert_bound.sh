@@ -27,7 +27,7 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 USER_ID=$ANDROID_USER_ID
-PKG=com.dazix.intervalometer
+PKG=com.dazix.caelis
 SERVICE_CLASS=ShutterAccessibilityService
 
 # Two attempts per second. A cold first bind after an install takes a couple of seconds.

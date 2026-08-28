@@ -23,8 +23,8 @@
             android:exported="true"
             android:label="@string/debug_fake_camera_label"
             android:launchMode="singleTop"
-            android:taskAffinity="com.dazix.intervalometer.debug.fakecamera"
-            android:theme="@style/Theme.Intervalometer" />
+            android:taskAffinity="com.dazix.caelis.debug.fakecamera"
+            android:theme="@style/Theme.Caelis" />
 
         <!--
           Debug-only session entry point for scripts/e2e_pixel_camera.sh. Exported because adb
@@ -35,9 +35,9 @@
             android:exported="true"
             tools:ignore="ExportedReceiver">
             <intent-filter>
-                <action android:name="com.dazix.intervalometer.debug.START_SESSION" />
-                <action android:name="com.dazix.intervalometer.debug.STOP_SESSION" />
-                <action android:name="com.dazix.intervalometer.debug.CLEAR_TAP_LOG" />
+                <action android:name="com.dazix.caelis.debug.START_SESSION" />
+                <action android:name="com.dazix.caelis.debug.STOP_SESSION" />
+                <action android:name="com.dazix.caelis.debug.CLEAR_TAP_LOG" />
             </intent-filter>
         </receiver>
 

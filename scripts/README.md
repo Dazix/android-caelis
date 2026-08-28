@@ -112,13 +112,13 @@ for "this key was unset", and teardown answers it with `settings delete`.
 | --- | --- | --- |
 | `SNAPSHOT_VERSION` | literal `2` | – (format marker; a `1` snapshot has no POST_NOTIFICATIONS row and teardown then leaves that permission alone) |
 | `SNAPSHOT_USER_ID` | `$ANDROID_USER_ID` | – (teardown refuses a snapshot from another user) |
-| `SNAPSHOT_PACKAGE` | `com.dazix.intervalometer` | – |
+| `SNAPSHOT_PACKAGE` | `com.dazix.caelis` | – |
 | `SNAPSHOT_TAKEN_AT` | UTC ISO-8601 timestamp | – |
 | `ORIG_SECURE_ENABLED_ACCESSIBILITY_SERVICES` | `settings --user "$ANDROID_USER_ID" get secure enabled_accessibility_services` | `settings --user "$ANDROID_USER_ID" put secure enabled_accessibility_services '<value>'`, or `settings --user "$ANDROID_USER_ID" delete secure enabled_accessibility_services` when `__NULL__` |
 | `ORIG_SECURE_ACCESSIBILITY_ENABLED` | `settings --user "$ANDROID_USER_ID" get secure accessibility_enabled` | `settings --user "$ANDROID_USER_ID" put secure accessibility_enabled '<value>'`, or `settings --user "$ANDROID_USER_ID" delete secure accessibility_enabled` when `__NULL__` |
-| `ORIG_APPOP_SYSTEM_ALERT_WINDOW` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.intervalometer SYSTEM_ALERT_WINDOW` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.intervalometer SYSTEM_ALERT_WINDOW <mode>` |
-| `ORIG_APPOP_ACCESS_RESTRICTED_SETTINGS` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.intervalometer ACCESS_RESTRICTED_SETTINGS` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.intervalometer ACCESS_RESTRICTED_SETTINGS <mode>` |
-| `ORIG_PERM_POST_NOTIFICATIONS` | `dumpsys package com.dazix.intervalometer`, the `POST_NOTIFICATIONS: granted=` line inside the `User <id>:` block (`granted` / `revoked` / `unknown` when the package is not installed) | `pm grant --user "$ANDROID_USER_ID" ...` when it was `granted`, otherwise `pm revoke --user "$ANDROID_USER_ID" ...`; skipped when the package is gone |
+| `ORIG_APPOP_SYSTEM_ALERT_WINDOW` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.caelis SYSTEM_ALERT_WINDOW` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.caelis SYSTEM_ALERT_WINDOW <mode>` |
+| `ORIG_APPOP_ACCESS_RESTRICTED_SETTINGS` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.caelis ACCESS_RESTRICTED_SETTINGS` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.caelis ACCESS_RESTRICTED_SETTINGS <mode>` |
+| `ORIG_PERM_POST_NOTIFICATIONS` | `dumpsys package com.dazix.caelis`, the `POST_NOTIFICATIONS: granted=` line inside the `User <id>:` block (`granted` / `revoked` / `unknown` when the package is not installed) | `pm grant --user "$ANDROID_USER_ID" ...` when it was `granted`, otherwise `pm revoke --user "$ANDROID_USER_ID" ...`; skipped when the package is gone |
 | `ORIG_PERM_READ_MEDIA_IMAGES` | same line for `READ_MEDIA_IMAGES` (granted so `CaptureVerifier` can actually see the camera's output instead of degrading to a silent no-op) | as above |
 
 Some adb calls in these scripts carry no `--user` flag, because the commands have none:
@@ -147,7 +147,7 @@ whose `attributes:{id=11,` marker matches and requires all of:
 * `Crashed services:{}` - an empty crashed set,
 * `Enabled services:{...ShutterAccessibilityService...}` - the framework really saw our setting,
 * and, as a per-component confirmation, a `ServiceRecord` for `ShutterAccessibilityService` with an
-  `app=ProcessRecord{...}` line in `dumpsys activity services com.dazix.intervalometer`, i.e. a live
+  `app=ProcessRecord{...}` line in `dumpsys activity services com.dazix.caelis`, i.e. a live
   process is hosting it. If that dump has no record for the class at all the check says so and falls
   back on the accessibility sets, so a dump-format change can only warn, never fail wrongly.
 
@@ -198,8 +198,8 @@ One class per file, all under `app/src/debug/java/com/dazix/intervalometer/debug
 
 ### Fake camera
 
-`com.dazix.intervalometer.debug.FakeCameraActivity` - a stand-in camera used by the instrumented
-tests. Its shutter node reports `viewIdResourceName = com.dazix.intervalometer:id/shutter_button`
+`com.dazix.caelis.debug.FakeCameraActivity` - a stand-in camera used by the instrumented
+tests. Its shutter node reports `viewIdResourceName = com.dazix.caelis:id/shutter_button`
 and `contentDescription = "Take photo"`, so the service runs the same node search it uses on a real
 camera app. Every tap appends `elapsedRealtime,source` to `filesDir/fake_camera_taps.csv`; `source`
 is `node` (accessibility `ACTION_CLICK`), `gesture` (a dispatched touch that landed on the labeled
@@ -208,32 +208,32 @@ shutter) or `coord` (a dispatched touch on the unlabeled variant, i.e. the coord
 ```
 # labeled shutter, tap log cleared
 adb shell am start --user "$ANDROID_USER_ID" \
-  -n com.dazix.intervalometer/com.dazix.intervalometer.debug.FakeCameraActivity \
+  -n com.dazix.caelis/com.dazix.caelis.debug.FakeCameraActivity \
   --ez clear true
 
 # unlabeled variant: no findable node at all, forces the coordinate fallback
 adb shell am start --user "$ANDROID_USER_ID" \
-  -n com.dazix.intervalometer/com.dazix.intervalometer.debug.FakeCameraActivity \
+  -n com.dazix.caelis/com.dazix.caelis.debug.FakeCameraActivity \
   --ez clear true --ez unlabeled true
 ```
 
 ### Session broadcasts
 
-`com.dazix.intervalometer.debug.DebugSessionReceiver` starts and stops a session without any UI
+`com.dazix.caelis.debug.DebugSessionReceiver` starts and stops a session without any UI
 scripting. This is what `e2e_pixel_camera.sh` drives.
 
 ```
 # start
 adb shell am broadcast --user "$ANDROID_USER_ID" \
-  -a com.dazix.intervalometer.debug.START_SESSION \
-  -n com.dazix.intervalometer/com.dazix.intervalometer.debug.DebugSessionReceiver \
+  -a com.dazix.caelis.debug.START_SESSION \
+  -n com.dazix.caelis/com.dazix.caelis.debug.DebugSessionReceiver \
   -f 0x00000020 \
   --es target_package com.google.android.GoogleCamera \
   --el interval_ms 3000 --ei max_shots 5 --el start_delay_ms 0
 
 # stop / clear the fake camera tap log
-adb shell am broadcast --user "$ANDROID_USER_ID" -a com.dazix.intervalometer.debug.STOP_SESSION   -n ... -f 0x00000020
-adb shell am broadcast --user "$ANDROID_USER_ID" -a com.dazix.intervalometer.debug.CLEAR_TAP_LOG -n ... -f 0x00000020
+adb shell am broadcast --user "$ANDROID_USER_ID" -a com.dazix.caelis.debug.STOP_SESSION   -n ... -f 0x00000020
+adb shell am broadcast --user "$ANDROID_USER_ID" -a com.dazix.caelis.debug.CLEAR_TAP_LOG -n ... -f 0x00000020
 ```
 
 Extras: `target_package` (string), `interval_ms`, `start_delay_ms`, `max_shots`, `max_duration_ms`,
@@ -346,7 +346,7 @@ waits for `ShutterAccessibilityService.instance` to actually become null, so the
 
 ### Why there is no force-stop test
 
-A real `adb shell am force-stop --user "$ANDROID_USER_ID" com.dazix.intervalometer` cannot be expressed as an
+A real `adb shell am force-stop --user "$ANDROID_USER_ID" com.dazix.caelis` cannot be expressed as an
 instrumented test: the instrumentation runs *in* the app process, so however it is issued -
 `UiDevice.executeShellCommand` included - it kills the test with the app and the run reports as a
 crashed instrumentation instead of a pass or a fail. `InterruptedRunTest` therefore asserts the two

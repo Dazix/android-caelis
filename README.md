@@ -1,6 +1,6 @@
-# Intervalometer
+# CAELIS
 
-[![CI](https://github.com/Dazix/android-intervalometer/actions/workflows/ci.yml/badge.svg)](https://github.com/Dazix/android-intervalometer/actions/workflows/ci.yml)
+[![CI](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml/badge.svg)](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml)
 
 An Android intervalometer that presses the shutter **inside the camera app you already use**, on a
 drift-free schedule, so every frame of a time-lapse keeps that app's full image pipeline — HDR+, Night
@@ -208,7 +208,7 @@ camera, and the broadcast entry points that start a session from a shell.
 
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
-scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, calibration (260 tests)
+scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration (260 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris (78 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog (91 tests)
 
@@ -233,7 +233,7 @@ what a dead accessibility service produces. Current baseline: **429 JVM tests (2
 ## How it is put together
 
 ```
-com.dazix.intervalometer
+com.dazix.caelis
 ├── domain/          pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
 │   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
 │   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
@@ -281,7 +281,7 @@ BOM's 1.4.0 ships the expressive *tokens* but keeps the components out of its pu
 
 ```bash
 # JVM: schedule and ramp maths, stop conditions, settings round-trips, overlay policy, UI state, astronomical math
-scripts/run_tests.sh all               # or scoped: scripts/run_tests.sh intervalometer|solar|nightsky
+scripts/run_tests.sh all               # or scoped: scripts/run_tests.sh caelis|solar|nightsky
 
 # on a connected device: the real engine, the real service, a fake camera, FlatBuffers zero-copy validation
 scripts/run_instrumented.sh            # optional filter: scripts/run_instrumented.sh ScreenOffTest

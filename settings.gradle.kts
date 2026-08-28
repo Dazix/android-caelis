@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Intervalometer"
+rootProject.name = "Caelis"
 include(":app")

@@ -30,7 +30,7 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 USER_ID=$ANDROID_USER_ID
-PKG=com.dazix.intervalometer
+PKG=com.dazix.caelis
 SNAPSHOT="${PROJECT_DIR}/.device_snapshot"
 NULL_SENTINEL=__NULL__
 

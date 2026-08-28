@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Intervalometr</string>
-    <string name="accessibility_service_label">Intervalometr – spoušť</string>
+    <string name="app_name">CAELIS</string>
+    <string name="accessibility_service_label">CAELIS – spoušť</string>
     <string name="accessibility_service_summary">Mačká spoušť ve vaší fotoaplikaci podle časovače</string>
-    <string name="accessibility_service_description">Umožní Intervalometru mačkat spoušť ve zvolené fotoaplikaci, takže snímky timelapse zůstanou v plné kvalitě dané aplikace. Obsah obrazovky se nikam neukládá ani neodesílá.</string>
+    <string name="accessibility_service_description">Umožní aplikaci CAELIS mačkat spoušť ve zvolené fotoaplikaci, takže snímky timelapse zůstanou v plné kvalitě dané aplikace. Obsah obrazovky se nikam neukládá ani neodesílá.</string>
 
     <!-- Shared -->
     <string name="action_back">Zpět</string>
@@ -38,7 +38,7 @@
       Krátké popisky pro navigační lištu a boční lištu, kde je na každý jen jeden řádek. Delší
       podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
     -->
-    <string name="nav_short_home">Intervalometr</string>
+    <string name="nav_short_home">CAELIS</string>
     <string name="nav_short_sun_ar">Slunce</string>
     <string name="nav_short_settings">Nastavení</string>
     <string name="nav_short_setup">Série</string>
@@ -47,7 +47,7 @@
     <string name="nav_short_permissions">Práva</string>
 
     <!-- Home -->
-    <string name="home_title">Intervalometr</string>
+    <string name="home_title">CAELIS</string>
     <string name="home_start">Spustit</string>
     <string name="home_stop">Zastavit</string>
     <string name="home_pause">Pozastavit</string>
@@ -220,7 +220,7 @@
     <string name="onboarding_restricted_action">Otevřít informace o aplikaci</string>
     <string name="onboarding_restricted_not_needed">Pro tuto instalaci není potřeba.</string>
     <string name="onboarding_accessibility_title">Služba zpřístupnění pro spoušť</string>
-    <string name="onboarding_accessibility_desc">Jediný způsob, jak může aplikace zmáčknout spoušť v jiné aplikaci. Najděte Intervalometr – spoušť mezi nainstalovanými nebo staženými aplikacemi a zapněte ji.</string>
+    <string name="onboarding_accessibility_desc">Jediný způsob, jak může aplikace zmáčknout spoušť v jiné aplikaci. Najděte CAELIS – spoušť mezi nainstalovanými nebo staženými aplikacemi a zapněte ji.</string>
     <string name="onboarding_accessibility_action">Otevřít nastavení zpřístupnění</string>
     <string name="onboarding_overlay_title">Kreslení přes ostatní aplikace</string>
     <string name="onboarding_overlay_desc">Potřebné pro zobrazení kalibračního zaměřovače a ovládání série nad fotoaplikací.</string>

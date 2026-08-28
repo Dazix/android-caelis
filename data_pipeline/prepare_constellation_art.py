@@ -21,7 +21,7 @@ def download_file(url, target_path):
     if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
         return
     print(f"Downloading {url}...")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Intervalometer/1.0)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (CAELIS/1.0)"})
     with urllib.request.urlopen(req, timeout=60) as resp:
         data = resp.read()
     with open(target_path, "wb") as f:

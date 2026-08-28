@@ -1,4 +1,4 @@
-namespace com.dazix.intervalometer.data.nightsky;
+namespace com.dazix.caelis.data.nightsky;
 
 // Structs are stored inline in memory (fixed size). 
 // This guarantees zero-allocation sequential reads for the rendering loop.

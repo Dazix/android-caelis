@@ -621,7 +621,7 @@ def download_or_read_cache(url, filename):
             return f.read()
     
     print(f"Downloading from {url}...")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Intervalometer/1.0)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (CAELIS/1.0)"})
     with urllib.request.urlopen(req, timeout=60) as resp:
         data = resp.read()
     

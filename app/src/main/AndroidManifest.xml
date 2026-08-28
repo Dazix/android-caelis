@@ -40,7 +40,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Intervalometer">
+        android:theme="@style/Theme.Caelis">
 
         <activity
             android:name=".ui.MainActivity"

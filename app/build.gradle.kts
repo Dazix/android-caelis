@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    namespace = "com.dazix.intervalometer"
+    namespace = "com.dazix.caelis"
     compileSdk = 37
     compileSdkMinor = 1
 
     defaultConfig {
-        applicationId = "com.dazix.intervalometer"
+        applicationId = "com.dazix.caelis"
         minSdk = 33
         targetSdk = 37
         versionCode = 1

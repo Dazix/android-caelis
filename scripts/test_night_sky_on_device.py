@@ -39,17 +39,17 @@ def main():
     run([adb, "install", "-r", "--user", user_id, apk])
 
     print("Granting Camera and Location permissions...")
-    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.CAMERA"])
-    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_FINE_LOCATION"])
-    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_COARSE_LOCATION"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.CAMERA"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.ACCESS_FINE_LOCATION"])
+    run([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.ACCESS_COARSE_LOCATION"])
 
     print("Waking device...")
     subprocess.run([os.path.join(project_dir, "scripts", "wake_device.sh")])
 
     print("Stopping previous instance and launching updated MainActivity...")
-    run([adb, "shell", "am", "force-stop", "--user", user_id, "com.dazix.intervalometer"])
+    run([adb, "shell", "am", "force-stop", "--user", user_id, "com.dazix.caelis"])
     time.sleep(0.5)
-    run([adb, "shell", "am", "start", "--user", user_id, "-n", "com.dazix.intervalometer/.ui.MainActivity"])
+    run([adb, "shell", "am", "start", "--user", user_id, "-n", "com.dazix.caelis/.ui.MainActivity"])
     time.sleep(1.5)
 
     # Click on "Night Sky" tab in navigation (3rd item in bottom bar or navigation rail)

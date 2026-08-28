@@ -55,7 +55,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh intervalometer # Intervalometer core, service, overlay, session planner, calibration (260 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration (260 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris, AR projection (78 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (91 tests)
 
@@ -95,7 +95,7 @@ a session from the shell.
 | `notify/` | The ongoing notification. It re-arms its own tick; it must never post while unattached. |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
-| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`IntervalometerTheme`). |
+| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, bottom sheets, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
 
@@ -171,7 +171,7 @@ Each of these was found by review or on the device and is now covered by a test.
 
 ## Style of work
 
-- **Scoped test runs during development**: Run only the domain test suite corresponding to your changes (`scripts/run_tests.sh intervalometer|solar|nightsky`). Run the full suite (`scripts/run_tests.sh all`) and device tests only for final verification before commit.
+- **Scoped test runs during development**: Run only the domain test suite corresponding to your changes (`scripts/run_tests.sh caelis|solar|nightsky`). Run the full suite (`scripts/run_tests.sh all`) and device tests only for final verification before commit.
 - Do the whole task and report what actually happened, including what failed and what you left out.
 - When a subagent reports success, verify it — several "green" reports in this repo's history were not.
 - Keep the device restored at the end of every session, and say so with the values, not with a claim.

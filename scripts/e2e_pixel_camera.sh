@@ -33,7 +33,7 @@
 #     touched.
 #
 # The session is started through the debug-only broadcast receiver
-# (com.dazix.intervalometer.debug.DebugSessionReceiver, debug source set only) so no UI scripting is
+# (com.dazix.caelis.debug.DebugSessionReceiver, debug source set only) so no UI scripting is
 # involved and the timing is exactly what the engine chose.
 #
 # Usage:
@@ -54,7 +54,7 @@ set -eu
 . "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 USER_ID=$ANDROID_USER_ID
-PKG=com.dazix.intervalometer
+PKG=com.dazix.caelis
 RECEIVER="${PKG}/${PKG}.debug.DebugSessionReceiver"
 CAM_PKG=com.google.android.GoogleCamera
 MEDIA_URI=content://media/external/images/media

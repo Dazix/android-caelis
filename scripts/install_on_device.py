@@ -45,17 +45,17 @@ def main():
     run_cmd([adb, "install", "-r", "--user", user_id, apk_path], cwd=project_dir)
 
     print("3. Granting runtime permissions (CAMERA, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION)...")
-    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.CAMERA"], cwd=project_dir, check=False)
-    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_FINE_LOCATION"], cwd=project_dir, check=False)
-    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.intervalometer", "android.permission.ACCESS_COARSE_LOCATION"], cwd=project_dir, check=False)
+    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.CAMERA"], cwd=project_dir, check=False)
+    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.ACCESS_FINE_LOCATION"], cwd=project_dir, check=False)
+    run_cmd([adb, "shell", "pm", "grant", "--user", user_id, "com.dazix.caelis", "android.permission.ACCESS_COARSE_LOCATION"], cwd=project_dir, check=False)
 
     print("4. Waking device screen...")
     subprocess.run([os.path.join(project_dir, "scripts", "wake_device.sh")])
 
     print("5. Launching MainActivity...")
-    run_cmd([adb, "shell", "am", "force-stop", "--user", user_id, "com.dazix.intervalometer"], cwd=project_dir, check=False)
+    run_cmd([adb, "shell", "am", "force-stop", "--user", user_id, "com.dazix.caelis"], cwd=project_dir, check=False)
     time.sleep(0.5)
-    run_cmd([adb, "shell", "am", "start", "--user", user_id, "-n", "com.dazix.intervalometer/.ui.MainActivity"], cwd=project_dir)
+    run_cmd([adb, "shell", "am", "start", "--user", user_id, "-n", "com.dazix.caelis/.ui.MainActivity"], cwd=project_dir)
 
     print(f"\nSUCCESS: Application successfully installed and launched for user {user_id}!")
 

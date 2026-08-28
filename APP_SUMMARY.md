@@ -1,12 +1,12 @@
-# Podrobný technický a architektonický souhrn aplikace Intervalometer
+# Podrobný technický a architektonický souhrn aplikace CAELIS
 
-Tento dokument poskytuje vyčerpávající technický popis aplikace **Intervalometer** – její architektury, funkcionality, použitých technologií, knihoven, stavových automatů a detailních matematických/astronomických výpočtů.
+Tento dokument poskytuje vyčerpávající technický popis aplikace **CAELIS** – její architektury, funkcionality, použitých technologií, knihoven, stavových automatů a detailních matematických/astronomických výpočtů.
 
 ---
 
 ## 1. Přehled a hlavní účel aplikace
 
-**Intervalometer** je open-source (GPLv3), plně lokální Android aplikace určená k automatizovanému snímání časosběrných fotografií (time-lapse) a periodickému klikání na obrazovku. 
+**CAELIS** je open-source (GPLv3), plně lokální Android aplikace určená k automatizovanému snímání časosběrných fotografií (time-lapse) a periodickému klikání na obrazovku. 
 
 ### Hlavní princip fungování
 Namísto vytváření vlastního zjednodušeného fotoaparátu přes Camera2/CameraX API aplikace **stiskne spoušť přímo uvnitř nativní aplikace fotoaparátu** (např. Google Camera / GCam porty, Samsung Camera, Open Camera atd.). 
@@ -38,7 +38,7 @@ Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní vý
 Aplikace striktně dodržuje principy čisté architektury s oddělením doménové logiky od Android frameworku.
 
 ```
-com.dazix.intervalometer
+com.dazix.caelis
 ├── domain/                  # Čistý Kotlin (žádné Android importy) – plánování, křivky, stop podmínky
 │   ├── solar/               # Sluneční a měsíční efemeridy, PSA/Meeus algoritmy, denní časy, trajektorie
 │   └── nightsky/            # Hvězdná astronomie (J2000.0 RA/Dec -> Alt/Az), Frustum Culling, optika hvězd,
@@ -519,7 +519,7 @@ flowchart TD
 Aplikace disponuje robustním systémem automatizovaného testování a verifikace:
 
 - **429 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
-  - `scripts/run_tests.sh intervalometer` (260 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence, lokalizace.
+  - `scripts/run_tests.sh caelis` (260 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence, lokalizace.
   - `scripts/run_tests.sh solar` (78 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor s ořezem.
   - `scripts/run_tests.sh nightsky` (91 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer.
 - **20 Instrumentovaných testů na reálném zařízení / ART:**
