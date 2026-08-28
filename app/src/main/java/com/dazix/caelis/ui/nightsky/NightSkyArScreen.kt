@@ -591,7 +591,7 @@ fun NightSkyArScreen(
 }
 
 @Composable
-private fun NightSkyOverlayCanvas(
+internal fun NightSkyOverlayCanvas(
     renderer: NightSkyRenderer,
     orientation: DeviceOrientation?,
     onGetRenderMatrix: (FloatArray) -> Boolean = { false },
@@ -800,7 +800,7 @@ private fun NightSkyOverlayCanvas(
 }
 
 @Composable
-private fun NightSkyTopBar(
+internal fun NightSkyTopBar(
     hasGpsFix: Boolean,
     locationText: String,
     orientation: DeviceOrientation?,
@@ -959,7 +959,7 @@ private fun NightSkyTopBar(
 }
 
 @Composable
-private fun NightSkyBottomHud(
+internal fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
     redVisionMode: Boolean,

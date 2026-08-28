@@ -377,7 +377,7 @@ fun SunArScreen(
 }
 
 @Composable
-private fun SkyDomeOverlayCanvas(
+internal fun SkyDomeOverlayCanvas(
     orientation: DeviceOrientation?,
     displayRotation: Int,
     fovHorizontalDegrees: Float,
@@ -1213,7 +1213,7 @@ private fun DrawScope.drawOffscreenMoonPointer(
 }
 
 @Composable
-private fun SunArTopBar(
+internal fun SunArTopBar(
     hasGpsFix: Boolean,
     locationText: String,
     orientation: DeviceOrientation?,
@@ -1349,7 +1349,7 @@ private fun SunArTopBar(
 }
 
 @Composable
-private fun DateNavigatorBar(
+internal fun DateNavigatorBar(
     selectedDate: LocalDate,
     isToday: Boolean,
     onPrevDay: () -> Unit,
@@ -1428,7 +1428,7 @@ private fun DateNavigatorBar(
 }
 
 @Composable
-private fun SunMoonTimesInfoCard(
+internal fun SunMoonTimesInfoCard(
     solarTrajectory: SolarTrajectory,
     lunarTrajectory: LunarTrajectory,
     keepScreenOn: Boolean,

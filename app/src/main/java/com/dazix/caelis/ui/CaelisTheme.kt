@@ -34,15 +34,17 @@ import androidx.compose.ui.text.TextStyle
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun CaelisTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun CaelisTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     // Wallpaper colour, unconditionally: `minSdk` is 33 and dynamic colour exists from 31, so a
     // hand-picked fallback here would be a scheme no supported device could ever render — which is
     // exactly what it used to be. The panel drawn over the camera app is the one place that still needs
     // a literal palette, because it is plain Views with no Compose theme to read: see [OverlayPalette].
-    val scheme = remember(dark, context) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val scheme = remember(darkTheme, context) {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     }
     MaterialExpressiveTheme(
         colorScheme = scheme,
