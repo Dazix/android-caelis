@@ -38,7 +38,7 @@
       Krátké popisky pro navigační lištu a boční lištu, kde je na každý jen jeden řádek. Delší
       podoba zůstává v nav_*_summary výše, kde ji používá seznam na obrazovce série.
     -->
-    <string name="nav_short_home">CAELIS</string>
+    <string name="nav_short_home">Intervalometr</string>
     <string name="nav_short_sun_ar">Slunce</string>
     <string name="nav_short_settings">Nastavení</string>
     <string name="nav_short_setup">Série</string>
@@ -47,7 +47,7 @@
     <string name="nav_short_permissions">Práva</string>
 
     <!-- Home -->
-    <string name="home_title">CAELIS</string>
+    <string name="home_title">Intervalometr</string>
     <string name="home_start">Spustit</string>
     <string name="home_stop">Zastavit</string>
     <string name="home_pause">Pozastavit</string>

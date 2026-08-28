@@ -38,7 +38,7 @@
       Short labels for the navigation bar and rail, where each one has a single line to work with.
       The nav_*_summary strings above stay the long form used on the session screen's list.
     -->
-    <string name="nav_short_home">CAELIS</string>
+    <string name="nav_short_home">Intervalometer</string>
     <string name="nav_short_sun_ar">Sun</string>
     <string name="nav_short_settings">Settings</string>
     <string name="nav_short_setup">Setup</string>
@@ -47,7 +47,7 @@
     <string name="nav_short_permissions">Permissions</string>
 
     <!-- Home -->
-    <string name="home_title">CAELIS</string>
+    <string name="home_title">Intervalometer</string>
     <string name="home_start">Start</string>
     <string name="home_stop">Stop</string>
     <string name="home_pause">Pause</string>
