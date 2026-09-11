@@ -44,6 +44,7 @@ import com.dazix.caelis.ui.AppIcons
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun CelestialSearchBar(
     query: String,

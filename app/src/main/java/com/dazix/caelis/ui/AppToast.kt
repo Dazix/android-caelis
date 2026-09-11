@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 
 sealed interface AppToastContent {
     data class Text(val value: String) : AppToastContent
-    data class Resource(@StringRes val resId: Int) : AppToastContent
+    data class Resource(@param:StringRes val resId: Int) : AppToastContent
 }
 
 data class AppToastMessage(

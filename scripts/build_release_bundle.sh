@@ -16,7 +16,20 @@ info() {
     printf 'build_release_bundle: %s\n' "$1"
 }
 
-KEYSTORE_PATH="${SIGNING_KEY_STORE_PATH:-${PROJECT_DIR}/release.keystore}"
+KEYSTORE_PATH="${SIGNING_KEY_STORE_PATH:-}"
+if [ -z "$KEYSTORE_PATH" ]; then
+    if [ -f "${PROJECT_DIR}/keys/release.keystore" ]; then
+        KEYSTORE_PATH="${PROJECT_DIR}/keys/release.keystore"
+    elif [ -f "${PROJECT_DIR}/release.keystore" ]; then
+        KEYSTORE_PATH="${PROJECT_DIR}/release.keystore"
+    elif [ -f "${PROJECT_DIR}/keys/release.jks" ]; then
+        KEYSTORE_PATH="${PROJECT_DIR}/keys/release.jks"
+    elif [ -f "${PROJECT_DIR}/release.jks" ]; then
+        KEYSTORE_PATH="${PROJECT_DIR}/release.jks"
+    else
+        die "Keystore file not found. Expected at '${PROJECT_DIR}/keys/release.keystore' or '${PROJECT_DIR}/release.keystore'. Set SIGNING_KEY_STORE_PATH to specify a custom path."
+    fi
+fi
 KEY_ALIAS="${SIGNING_KEY_ALIAS:-caelis_release}"
 
 if [ ! -f "$KEYSTORE_PATH" ]; then
