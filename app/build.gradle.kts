@@ -18,13 +18,34 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        val keystorePath = System.getenv("SIGNING_KEY_STORE_PATH")
+        val storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+        val keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+        val keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+
+        if (!keystorePath.isNullOrBlank() &&
+            !storePassword.isNullOrBlank() &&
+            !keyAlias.isNullOrBlank() &&
+            !keyPassword.isNullOrBlank() &&
+            file(keystorePath).exists()
+        ) {
+            create("release") {
+                this.storeFile = file(keystorePath)
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
