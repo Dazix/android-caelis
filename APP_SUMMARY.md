@@ -514,18 +514,22 @@ flowchart TD
 
 ---
 
-## 6. Souhrnný přehled a testovací architektura
+## 6. Souhrnný přehled, testovací architektura a CI/CD
 
-Aplikace disponuje robustním systémem automatizovaného testování a verifikace:
+Aplikace disponuje robustním systémem automatizovaného testování, optimalizací sestavení a nasazování:
 
-- **429 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
+- **446 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
   - `scripts/run_tests.sh caelis` (260 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence, lokalizace.
   - `scripts/run_tests.sh solar` (78 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor s ořezem.
-  - `scripts/run_tests.sh nightsky` (91 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer.
+  - `scripts/run_tests.sh nightsky` (108 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer, screenshotové testy.
 - **20 Instrumentovaných testů na reálném zařízení / ART:**
   - Pokrývají přesnost časování bez driftu, automatické pozastavení při zhasnutí obrazovky (`ScreenOffTest`), foreground ochranu (`ForegroundGuardTest`), čtení a vykreslení FlatBuffers katalogu na reálném Android plátně (`StarCatalogDeviceTest`).
 - **End-to-End validace (`scripts/e2e_pixel_camera.sh`):**
   - Reálné spouštění nativní Google Camera aplikace na vyhrazeném vývojářském profilu s detekcí nově pořízených souborů v `MediaStore` a jejich následným úklidem.
+- **CI/CD a Play Store Deployment:**
+  - GitHub Actions workflow (`.github/workflows/deploy-playstore.yml`) pro automatické sestavení a nahrání podepsaného `.aab` balíčku do trasy interního testování Google Play Store při publikování GitHub Release.
+  - Lokální interaktivní skript `scripts/build_release_bundle.sh` pro bezpečné podepsání a vygenerování release bundle bez ukládání hesel na disk.
+  - Aktivní Gradle Configuration Cache pro bleskovou kompilaci a nulová varování kompilátoru.
 - **Drift-Free přesnost:** Absolutní časování eliminující kumulaci chyb.
 - **Plná kvalita snímků:** Využití originálního post-processingu fotoaparátu (GCam HDR+, Night Sight, Astrofotografie).
 - **100% Soukromí:** Žádná síťová komunikace (`INTERNET` oprávnění chybí v manifestu), lokální open-source zpracování.

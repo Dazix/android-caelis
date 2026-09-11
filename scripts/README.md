@@ -57,8 +57,11 @@ scripts/a11y_teardown.sh             # restore exactly what was snapshotted
 | `a11y_setup.sh` | Snapshots the original device state, allows `SYSTEM_ALERT_WINDOW` / `ACCESS_RESTRICTED_SETTINGS`, grants `POST_NOTIFICATIONS`, **cycles** the enabled-services list off and on with our service **appended**, and does not return until the service is verifiably bound - it `die`s if it never binds. |
 | `a11y_assert_bound.sh` | Standalone: exits 0 only when the service is really bound for the harness user, non-zero otherwise. Takes an optional timeout in seconds (default 30, `0` = check once). `a11y_setup.sh` ends by handing over to it. |
 | `a11y_teardown.sh` | Restores every value the snapshot recorded (secure settings first, per-package state after), then deletes the snapshot. |
+| `install_debug.sh` | Builds the debug APK with Gradle and installs it exclusively for `$ANDROID_USER_ID` via `adb install -r --user`. |
+| `run_tests.sh` | Runs scoped domain JVM unit tests (`caelis`, `solar`, `nightsky`) or full test gate (`all`) with strict Python result XML validation. |
 | `run_instrumented.sh` | wake → `assembleDebug` + `adb install -r --user "$ANDROID_USER_ID"` → setup → `./gradlew :app:connectedDebugAndroidTest` → teardown (in a trap). Prints the HTML report path and then **decides the verdict from the result XML**, not from Gradle's exit code. Optional first argument filters to one test class or `Class#method`. |
 | `e2e_pixel_camera.sh` | Wakes/unlocks, lists MediaStore image ids, launches the Pixel camera, runs a 5 shot / 6 s session with the adaptive long-exposure wait on, waits for the rows, asserts them, screenshots into `build/e2e/`, **deletes exactly the rows it created**, always tears down. |
+| `build_release_bundle.sh` | Builds and signs a release Android App Bundle (`.aab`) locally, prompting interactively for keystore passwords and automatically locating `keys/release.keystore`. |
 
 ## Device-hygiene guarantee
 

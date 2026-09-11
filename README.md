@@ -111,6 +111,7 @@ chip between shots.
 
 ## Build and install
 
+### Debug APK
 ```bash
 ./gradlew :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -121,7 +122,20 @@ installs for every user on the device:
 
 ```bash
 adb install -r --user <id> app/build/outputs/apk/debug/app-debug.apk
+# or run the dedicated helper:
+scripts/install_debug.sh
 ```
+
+### Release Android App Bundle (.aab) & Play Store Deployment
+Build a signed release bundle locally with interactive password prompt and keystore auto-discovery:
+```bash
+./scripts/build_release_bundle.sh
+```
+The output `.aab` will be generated at `app/build/outputs/bundle/release/app-release.aab`.
+
+**Automated CI/CD Deployment:**
+The repository includes a GitHub Actions workflow [`.github/workflows/deploy-playstore.yml`](.github/workflows/deploy-playstore.yml) that builds and deploys signed release `.aab` bundles directly to Google Play Store (Internal Testing track) whenever a new GitHub Release is published.
+
 
 ## First run
 
@@ -226,7 +240,7 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **429 JVM tests (260 intervalometer, 78 solar, 91 night sky), 20 instrumented tests, no failures, no skips, lint clean.**
+what a dead accessibility service produces. Current baseline: **446 JVM tests (260 intervalometer, 78 solar, 108 night sky / docs), 20 instrumented tests, no failures, no skips, lint clean.**
 
 ---
 

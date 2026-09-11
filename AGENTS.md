@@ -73,7 +73,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **429 JVM tests (260 intervalometer, 78 solar, 91 night sky), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
+`skipped`), not from the console. Current baseline: **446 JVM tests (260 intervalometer, 78 solar, 108 night sky / docs), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
