@@ -247,6 +247,66 @@
     <string name="sun_ar_solar_noon">Solar noon</string>
     <string name="sun_ar_day_length">Day length</string>
     <string name="sun_ar_golden_hour">Golden hour</string>
+
+    <!-- Terrain horizon -->
+    <string name="horizon_section_title">Terrain horizon</string>
+    <string name="horizon_enabled">Show the real horizon</string>
+    <string name="horizon_enabled_desc">Draws the terrain skyline in AR and reports when the Sun really goes behind it.</string>
+    <string name="horizon_terrain_sunrise">Sun clears terrain</string>
+    <string name="horizon_terrain_sunset">Sun behind terrain</string>
+    <string name="horizon_terrain_earlier">%1$d min earlier</string>
+    <string name="horizon_terrain_later">%1$d min later</string>
+    <string name="horizon_hidden_all_day">The Sun does not clear the terrain at all today.</string>
+    <string name="horizon_range">Search radius</string>
+    <string name="horizon_range_value">%1$d km</string>
+    <string name="horizon_range_auto">Automatic</string>
+    <string name="horizon_range_auto_value">Automatic · %1$d km</string>
+    <string name="horizon_eye_height">Eye height</string>
+    <string name="horizon_eye_height_value">%1$d cm</string>
+    <string name="horizon_shade_occluded">Dim the hidden part of the path</string>
+    <string name="horizon_shade_occluded_desc">The stretch of the trajectory behind the terrain is drawn faint, so you can see how much of the golden hour the hills take.</string>
+    <string name="horizon_wifi_only">Download over Wi‑Fi only</string>
+    <string name="horizon_wifi_only_desc">An elevation tile is 5 to 19 MB.</string>
+    <string name="horizon_night_sky_real">Use the real horizon in Night Sky</string>
+    <string name="horizon_night_sky_real_desc">Replaces the stylised tree line with the terrain around you, and hides the stars behind it.</string>
+
+    <string name="horizon_consent_title">Download terrain elevation?</string>
+    <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. All that leaves the device is the name of that one-degree tile — no coordinates, no identifiers, nothing about you.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
+    <string name="horizon_consent_allow">Allow</string>
+    <string name="horizon_consent_never">Never</string>
+
+    <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d…</string>
+    <string name="horizon_status_computing">Computing the skyline…</string>
+    <string name="horizon_status_ready">Terrain horizon ready</string>
+    <string name="horizon_status_needs_tiles">Elevation data missing for this place</string>
+    <string name="horizon_status_failed_network">Could not download the elevation data</string>
+    <string name="horizon_status_failed_metered">Waiting for Wi‑Fi to download the elevation data</string>
+    <string name="horizon_status_failed_no_data">No elevation data for this place</string>
+
+    <string name="horizon_import_title">Import elevation data</string>
+    <string name="horizon_import_body">Download these tiles in a browser and pick them here:\n\n%1$s\n\nFrom: %2$s</string>
+    <string name="horizon_import_action">Choose file</string>
+    <string name="horizon_import_ok">Imported %1$s</string>
+    <string name="horizon_import_not_a_tile">That file is not an elevation tile. The name has to look like N50E014.hgt.</string>
+    <string name="horizon_import_failed">Could not read that file</string>
+    <string name="horizon_download_now">Download terrain for this place</string>
+    <string name="horizon_recompute">Recompute the skyline</string>
+    <string name="horizon_clear_cache">Delete downloaded terrain</string>
+    <string name="horizon_cache_size">%1$s of terrain cached</string>
+    <string name="horizon_no_permission">This build has no network permission, so terrain has to be imported by hand.</string>
+
+    <string name="horizon_step_down">Decrease %1$s</string>
+    <string name="horizon_step_up">Increase %1$s</string>
+    <string name="horizon_notif_channel_name">Terrain download</string>
+    <string name="horizon_notif_channel_desc">Progress while elevation data for the real horizon is downloaded.</string>
+    <string name="horizon_notif_downloading">Downloading terrain %1$d of %2$d</string>
+    <string name="horizon_notif_computing">Computing the skyline</string>
+    <string name="horizon_notif_ready">Terrain horizon ready</string>
+    <string name="horizon_notif_ready_detail">Skyline reaches %1$d° above the horizon</string>
+    <string name="horizon_notif_failed">Terrain horizon unavailable</string>
+
+    <string name="horizon_attribution_title">Elevation data sources</string>
+    <string name="horizon_attribution_body">Terrain elevation comes from the Tilezen Terrain Tiles on the AWS Open Data programme, which combine:\n\n• 3DEP, SRTM and GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nThe model describes bare ground: it knows the hills, not the trees or the buildings on them.</string>
     <string name="sun_ar_max_elevation">Peak elevation</string>
     <string name="sun_ar_current_elevation">Elevation</string>
     <string name="sun_ar_current_azimuth">Azimuth</string>
@@ -279,6 +339,22 @@
     <string name="sun_ar_calib_active">Manual 3D view</string>
     <string name="sun_ar_calib_hint">Drag with finger in any direction to rotate 3D view</string>
     <string name="sun_ar_calib_reset">Reset calibration</string>
+    <string name="ar_align_title">Align with the horizon</string>
+    <string name="ar_align_hint">Nudge the overlay until the terrain line sits on the real ridge. Kept for next time.</string>
+    <string name="ar_align_azimuth">Left / right</string>
+    <string name="ar_align_azimuth_left">Move the overlay left</string>
+    <string name="ar_align_azimuth_right">Move the overlay right</string>
+    <string name="ar_align_elevation">Up / down</string>
+    <string name="ar_align_elevation_up">Move the overlay up</string>
+    <string name="ar_align_elevation_down">Move the overlay down</string>
+    <string name="ar_align_compass_low">The compass is reporting low accuracy. Wave the phone in a figure of eight, away from metal and magnets.</string>
+    <string name="ar_align_auto">Align automatically</string>
+    <string name="ar_align_auto_working">Looking for the skyline…</string>
+    <string name="ar_align_auto_done">Aligned with the skyline</string>
+    <string name="ar_align_auto_vertical_only">The terrain in view is too flat to fix the compass. Height aligned only.</string>
+    <string name="ar_align_auto_no_skyline">No skyline found. Point the camera at the horizon in good light.</string>
+    <string name="ar_align_auto_no_profile">No terrain profile yet. Switch the terrain horizon on in Settings.</string>
+    <string name="ar_align_auto_no_camera">The camera is not available.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
 
     <!-- Night Sky AR -->

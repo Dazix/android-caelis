@@ -18,6 +18,26 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!--
+      The only two network permissions, and the only reason either is here: fetching terrain
+      elevation tiles for the real-horizon layer in the AR views.
+
+      `INTERNET` is a `normal` permission - granted at install, no runtime API, and on stock Android
+      the user cannot revoke it. So the guarantee this app used to get from the operating system is
+      gone, and what replaces it is checkable in the source instead:
+
+        * every socket is opened in data/horizon/DemTileDownloader.kt, and NetworkIsolationTest
+          fails the build if a second place ever appears;
+        * nothing is sent but a 1-degree tile name in a URL path - no identifiers, no fine
+          coordinates, no request body;
+        * DemTileDownloader consults the stored consent on every call, so revoking it in Settings
+          takes effect immediately;
+        * deleting the INTERNET line below is a supported way to build from source without any
+          network at all. NetworkAvailability.hasInternetPermission() notices at runtime, the app
+          hides the download entirely, and the hand-import path still delivers the whole feature.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 

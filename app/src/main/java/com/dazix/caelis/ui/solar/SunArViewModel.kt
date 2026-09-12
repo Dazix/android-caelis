@@ -1,13 +1,21 @@
 package com.dazix.caelis.ui.solar
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.ar.CameraFovCalculator
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.FrameGrabber
 import com.dazix.caelis.ar.OrientationTracker
+import com.dazix.caelis.ar.SkylineAligner
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
+import com.dazix.caelis.data.horizon.DemTileImporter
+import com.dazix.caelis.data.horizon.HorizonRepository
+import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.solar.LunarCoordinates
@@ -18,6 +26,9 @@ import com.dazix.caelis.domain.solar.SolarCoordinates
 import com.dazix.caelis.domain.solar.SolarPositionCalculator
 import com.dazix.caelis.domain.solar.SolarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectoryPlanner
+import com.dazix.caelis.domain.solar.TerrainEvent
+import com.dazix.caelis.domain.solar.TerrainRiseSetCalculator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,9 +42,55 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+
+/**
+ * When the Sun actually clears, and is lost behind, the real terrain — as opposed to the flat-Earth
+ * times in [SolarTrajectory].
+ *
+ * [hiddenAllDay] is its own field rather than "both times are null", because a north-facing gorge in
+ * winter is a real answer worth saying out loud, and it looks exactly like a failed computation
+ * otherwise.
+ */
+data class TerrainTimes(
+    val sunrise: TerrainEvent? = null,
+    val sunset: TerrainEvent? = null,
+    val hiddenAllDay: Boolean = false,
+) {
+    val hasAny: Boolean get() = sunrise != null || sunset != null || hiddenAllDay
+}
+
+/**
+ * What came of pressing "align automatically".
+ *
+ * Every unsuccessful case is its own value rather than a bare null, because the reason is the useful
+ * part: "point at a skyline" and "switch the terrain layer on" ask for different things from a user
+ * standing in a field.
+ */
+sealed interface AutoAlignResult {
+    /** A frame has been asked for and is being matched. */
+    data object Working : AutoAlignResult
+
+    /** No terrain profile yet, so there is nothing to align against. */
+    data object NoProfile : AutoAlignResult
+
+    /** The camera is not bound — no permission, or it failed to open. */
+    data object NoCamera : AutoAlignResult
+
+    /** Nothing in the frame looked like a skyline: fog, darkness, a wall, a fit that did not stand out. */
+    data object NoSkyline : AutoAlignResult
+
+    /**
+     * The calibration has been moved onto the skyline.
+     *
+     * @param azimuthDetermined false when the terrain in view was too flat to pin the compass, so
+     *   only the vertical half of the correction was applied.
+     */
+    data class Aligned(val residualDegrees: Double, val azimuthDetermined: Boolean) : AutoAlignResult
+}
 
 data class SunArUiState(
     val selectedDate: LocalDate = LocalDate.now(),
@@ -64,8 +121,24 @@ data class SunArUiState(
     val keepScreenOn: Boolean = false,
     val isCalibrated: Boolean = false,
     val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
-    val zoomRatio: Float = 1.0f,
-)
+    val horizonSettings: HorizonSettings = HorizonSettings(),
+    /** `null` until a profile exists for where the observer is standing. */
+    val horizonProfile: HorizonProfile? = null,
+    val horizonState: HorizonState = HorizonState.Idle,
+    /** False in a build made from source with the `INTERNET` line removed from the manifest. */
+    val canDownloadTerrain: Boolean = true,
+    val terrainTimes: TerrainTimes = TerrainTimes(),
+) {
+    /** Draw the terrain layer only when it is switched on *and* there is something to draw. */
+    val isHorizonVisible: Boolean get() = horizonSettings.enabled && horizonProfile != null
+
+    /**
+     * Ask about the network exactly once, and only in a build that could use the answer.
+     * A user who declined is not asked again; one whose build has no `INTERNET` is never asked.
+     */
+    val shouldAskNetworkConsent: Boolean
+        get() = canDownloadTerrain && !horizonSettings.networkConsentAnswered
+}
 
 @OptIn(FlowPreview::class)
 class SunArViewModel(application: Application) : AndroidViewModel(application) {
@@ -73,6 +146,19 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsStore = SettingsStore(application)
     private val orientationTracker = OrientationTracker(application)
     private val locationProvider = SolarLocationProvider(application)
+    private val horizonRepository = HorizonRepository.getInstance(application)
+
+    val horizonSettings: StateFlow<HorizonSettings> = settingsStore.horizon.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HorizonSettings(),
+    )
+
+    val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
+    val horizonState: StateFlow<HorizonState> = horizonRepository.state
+
+    /** Whether this build declares `INTERNET` at all. Constant for the life of the process. */
+    val canDownloadTerrain: Boolean = horizonRepository.canDownload
 
     private val selectedDateState = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = selectedDateState.asStateFlow()
@@ -80,14 +166,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     private val bubbleIntervalState = MutableStateFlow(BubbleInterval.ONE_HOUR)
     val bubbleInterval: StateFlow<BubbleInterval> = bubbleIntervalState.asStateFlow()
 
+    /**
+     * The field of view the camera is actually delivering.
+     *
+     * There is no zoom on this screen, so this is simply what [CameraPreview] measured — no division
+     * by a zoom ratio, and no way for the image and the overlay to end up at different scales.
+     */
     private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
-    private val zoomRatioState = MutableStateFlow(1.0f)
-    val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
-
-    // Dynamic effective FOV factoring in pinch-to-zoom
-    val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(5.0f, 140.0f)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
+    val cameraFovHorizontal: StateFlow<Float> = baseCameraFovState.asStateFlow()
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
     val location: StateFlow<GeoLocation> = locationProvider.location
@@ -103,8 +189,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     val panAzimuthOffset = MutableStateFlow(0f)
     val panPitchOffset = MutableStateFlow(0f)
-    val isCalibrated: StateFlow<Boolean> = combine(isSensorTrackingPaused, panAzimuthOffset, panPitchOffset) { paused, az, pitch ->
-        paused || az != 0f || pitch != 0f
+    /**
+     * Whether a standing correction is in force.
+     *
+     * No longer "are the sensors paused": on this screen they never are. Dragging calibrates and
+     * keeps tracking, so the only thing that makes the overlay non-default is a non-zero offset.
+     */
+    val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
+        az != 0f || pitch != 0f
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
@@ -141,6 +233,28 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         LunarTrajectoryPlanner.planTrajectory(LocalDate.now(), GeoLocation.DEFAULT, BubbleInterval.ONE_HOUR)
     )
 
+    /**
+     * The terrain crossing times, recomputed whenever the day, the place or the skyline changes.
+     *
+     * Kept out of the per-frame path deliberately: this walks 720 trajectory samples and bisects
+     * each crossing, which is far too much to do on a canvas redraw but nothing at all once a minute.
+     */
+    val terrainTimes: StateFlow<TerrainTimes> = combine(
+        trajectory,
+        horizonProfile,
+        horizonSettings,
+    ) { traj, prof, cfg ->
+        if (prof == null || !cfg.enabled) {
+            TerrainTimes()
+        } else {
+            TerrainTimes(
+                sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, ZoneId.systemDefault()),
+                sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, ZoneId.systemDefault()),
+                hiddenAllDay = TerrainRiseSetCalculator.isSunHiddenAllDay(traj, prof),
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, TerrainTimes())
+
     val uiState: StateFlow<SunArUiState> = combine(
         selectedDateState,
         bubbleIntervalState,
@@ -153,7 +267,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         keepScreenOn,
         isCalibrated,
         cameraFovHorizontal,
-        zoomRatioState,
+        horizonSettings,
+        horizonProfile,
+        horizonState,
+        terrainTimes,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -166,7 +283,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val keepOn = args[8] as Boolean
         val calib = args[9] as Boolean
         val fov = args[10] as Float
-        val zoom = args[11] as Float
+        val horizonCfg = args[11] as HorizonSettings
+        val horizonProf = args[12] as HorizonProfile?
+        val horizonSt = args[13] as HorizonState
+        val terrain = args[14] as TerrainTimes
 
         SunArUiState(
             selectedDate = date,
@@ -181,29 +301,32 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             keepScreenOn = keepOn,
             isCalibrated = calib,
             cameraFovHorizontal = fov,
-            zoomRatio = zoom,
+            horizonSettings = horizonCfg,
+            horizonProfile = horizonProf,
+            horizonState = horizonSt,
+            canDownloadTerrain = canDownloadTerrain,
+            terrainTimes = terrain,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
     init {
-        // Initialize user Alt-Azimuth offsets from settings store
+        // Restore the one compass correction this phone has.
         viewModelScope.launch {
-            val initialAz = settingsStore.sunArAzimuthOffset.firstOrNull() ?: 0f
-            val initialPitch = settingsStore.sunArElevationOffset.firstOrNull() ?: 0f
+            val initialAz = settingsStore.arAzimuthOffset.firstOrNull() ?: 0f
+            val initialPitch = settingsStore.arElevationOffset.firstOrNull() ?: 0f
             panAzimuthOffset.value = initialAz
             panPitchOffset.value = initialPitch
-            orientationTracker.setPanOffsets(initialAz, initialPitch)
+            // setCalibration, never setPanOffsets: the latter pauses the sensors, so restoring a
+            // saved calibration used to open this screen with the overlay frozen in place.
+            orientationTracker.setCalibration(initialAz, initialPitch)
         }
 
-        // Debounce saving pan offsets to eliminate disk I/O lag during continuous drag gestures
+        // Debounced because a drag emits on every frame and each write would hit the disk.
         viewModelScope.launch {
             combine(panAzimuthOffset, panPitchOffset) { az, pitch -> Pair(az, pitch) }
                 .drop(1)
                 .debounce(300L)
-                .collect { (az, pitch) ->
-                    settingsStore.saveSunArAzimuthOffset(az)
-                    settingsStore.saveSunArPitchOffset(pitch)
-                }
+                .collect { (az, pitch) -> settingsStore.saveArCalibration(az, pitch) }
         }
 
         // Update magnetic declination whenever location updates
@@ -211,6 +334,18 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             locationProvider.location.collect { loc ->
                 orientationTracker.updateLocation(loc)
             }
+        }
+
+        // Keep a terrain profile for wherever the observer currently is.
+        //
+        // Debounced because the location provider emits every few seconds while the GPS settles, and
+        // each emission would otherwise be a candidate for a 26 MB download. The repository rounds
+        // the position to about 110 m and ignores a repeat of the same request, so a stationary
+        // observer resolves this exactly once.
+        viewModelScope.launch {
+            combine(locationProvider.location, horizonSettings) { loc, cfg -> loc to cfg }
+                .debounce(1_000L)
+                .collect { (loc, cfg) -> horizonRepository.ensureProfile(loc, cfg) }
         }
 
         // Ticker to update sun and moon positions every 2 seconds for selected date at current time-of-day
@@ -228,39 +363,123 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setCameraFov(fovDeg: Float) {
+    /**
+     * @param includesZoom accepted and ignored: this screen has no zoom, so a measured FOV and a
+     *   geometry-only one are both simply the field of view in front of the camera.
+     */
+    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
         if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
             baseCameraFovState.value = fovDeg
         }
     }
 
+    /**
+     * Dragging a finger across the viewfinder walks the overlay onto the real skyline.
+     *
+     * It is a calibration, not a pan: the sensors keep running, so letting go snaps nothing back and
+     * turning around still works. The pixels-to-degrees factor and the sign are the ones the pan
+     * gesture used, so the gesture feels exactly as it did.
+     */
     fun onPanGesture(deltaX: Float, deltaY: Float, viewWidth: Float, fovDeg: Float) {
         val factor = fovDeg / viewWidth.coerceAtLeast(1f)
-        orientationTracker.onPanGesture(deltaX, deltaY, factor)
-        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
-        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
+        nudgeCalibration(
+            deltaAzimuthDeg = -deltaX * factor,
+            deltaElevationDeg = deltaY * factor,
+        )
     }
 
-    fun rotatePan(pitchRad: Float, yawRad: Float) {
-        val deltaAzDeg = Math.toDegrees(yawRad.toDouble()).toFloat()
-        val deltaElDeg = Math.toDegrees(pitchRad.toDouble()).toFloat()
-        orientationTracker.onPanGesture(-deltaAzDeg, -deltaElDeg, 1f)
-        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
-        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
+    /**
+     * Nudges the standing calibration, leaving the sensors live.
+     *
+     * This is what both the drag and the alignment panel drive: the user walks the silhouette onto
+     * the real ridge while the overlay keeps following the phone.
+     */
+    fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
     }
 
-    fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        orientationTracker.onPanGesture(-deltaAzimuthDeg, -deltaElevationDeg, 1f)
-        panAzimuthOffset.value = orientationTracker.panAzimuthOffsetDeg
-        panPitchOffset.value = orientationTracker.panPitchOffsetDeg
+    /** Set by [com.dazix.caelis.ar.CameraPreview] once bound; null when the camera is unavailable. */
+    private var frameGrabber: FrameGrabber? = null
+
+    fun attachFrameGrabber(grabber: FrameGrabber?) {
+        frameGrabber = grabber
+    }
+
+    private val autoAlignState = MutableStateFlow<AutoAlignResult?>(null)
+
+    /** The outcome of the last automatic alignment, for the UI to report. Cleared when consumed. */
+    val autoAlign: StateFlow<AutoAlignResult?> = autoAlignState.asStateFlow()
+
+    fun consumeAutoAlignResult() {
+        autoAlignState.value = null
+    }
+
+    /**
+     * Matches the camera image against the terrain profile and applies the offset it finds.
+     *
+     * Refuses rather than guesses. A wrong alignment is worse than none because it looks measured:
+     * the user has no way to tell a fit to a cloud bank from a fit to a ridge, so the decision is
+     * made here on the residual and reported either way.
+     */
+    fun autoAlign(viewportWidth: Float, viewportHeight: Float, displayRotation: Int) {
+        val grabber = frameGrabber
+        val profile = horizonProfile.value
+        when {
+            profile == null || !horizonSettings.value.enabled -> {
+                autoAlignState.value = AutoAlignResult.NoProfile
+                return
+            }
+            grabber == null -> {
+                autoAlignState.value = AutoAlignResult.NoCamera
+                return
+            }
+        }
+
+        autoAlignState.value = AutoAlignResult.Working
+        grabber!!.grabNext { frame ->
+            viewModelScope.launch {
+                val match = withContext(Dispatchers.Default) {
+                    SkylineAligner.align(
+                        frame = frame,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        rotationMatrix = orientationTracker.getLiveMatrix(),
+                        displayRotation = displayRotation,
+                        fovHorizontalDegrees = cameraFovHorizontal.value,
+                        profile = profile!!,
+                    )
+                }
+                if (match == null) {
+                    autoAlignState.value = AutoAlignResult.NoSkyline
+                    return@launch
+                }
+                nudgeCalibration(
+                    deltaAzimuthDeg = match.azimuthOffsetDegrees.toFloat(),
+                    deltaElevationDeg = match.elevationOffsetDegrees.toFloat(),
+                )
+                autoAlignState.value = AutoAlignResult.Aligned(
+                    residualDegrees = match.residualDegrees,
+                    azimuthDetermined = match.azimuthDetermined,
+                )
+            }
+        }
+    }
+
+    /** Keeps the pan the user just dragged as the standing calibration and resumes tracking. */
+    fun commitCalibration() {
+        orientationTracker.commitPanAsCalibration()
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
     }
 
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
+        nudgeCalibration(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
     }
 
     fun adjustElevationOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
+        nudgeCalibration(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
@@ -268,33 +487,17 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeSensorTracking() {
+        orientationTracker.setCalibration(0f, 0f)
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
         viewModelScope.launch {
-            settingsStore.saveSunArAzimuthOffset(0f)
-            settingsStore.saveSunArPitchOffset(0f)
+            settingsStore.saveArCalibration(0f, 0f)
         }
     }
 
     fun resetCalibration() {
         resumeSensorTracking()
-    }
-
-    fun adjustZoomBy(factor: Float) {
-        val current = zoomRatioState.value
-        val updated = (current * factor).coerceIn(0.5f, 4.0f)
-        if (kotlin.math.abs(updated - current) > 0.001f) {
-            zoomRatioState.value = updated
-        }
-    }
-
-    fun setZoomRatio(ratio: Float) {
-        zoomRatioState.value = ratio.coerceIn(0.5f, 4.0f)
-    }
-
-    fun resetZoom() {
-        zoomRatioState.value = 1.0f
     }
 
     fun startSensors() {
@@ -341,8 +544,46 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // ==== Terrain horizon ====
+    //
+    // Only the two things this screen owns. Everything shared — search radius, eye height, the
+    // download, the tile cache — is configured once in the app's Settings and reached through
+    // MainViewModel, because it describes where you are standing rather than which screen is open.
+
+    /**
+     * Records the user's answer to the network question and, on a yes, switches the layer on.
+     *
+     * A "no" is stored just as durably as a yes: the prompt must not come back on the next launch.
+     * It leaves the layer itself alone, because the hand-import path still works without a network.
+     */
+    fun answerNetworkConsent(granted: Boolean) {
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(
+                current.copy(
+                    networkConsent = granted,
+                    enabled = current.enabled || granted,
+                ),
+            )
+        }
+    }
+
+    /** Show or hide the terrain silhouette. The only horizon control on this screen. */
+    fun toggleHorizon() {
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(current.copy(enabled = !current.enabled))
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopSensors()
+    }
+
+    companion object {
+        /** Steps the alignment panel nudges by: coarse enough to see, fine enough to land on. */
+        const val COARSE_NUDGE_DEGREES = 0.5f
+        const val FINE_NUDGE_DEGREES = 0.1f
     }
 }

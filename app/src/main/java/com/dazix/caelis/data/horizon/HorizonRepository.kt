@@ -1,0 +1,394 @@
+package com.dazix.caelis.data.horizon
+
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import com.dazix.caelis.data.HorizonSettings
+import com.dazix.caelis.data.SettingsStore
+import com.dazix.caelis.domain.horizon.CompositeElevationGrid
+import com.dazix.caelis.domain.horizon.DemTileKey
+import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.horizon.HorizonProfileCalculator
+import com.dazix.caelis.domain.horizon.HorizonRangeEstimator
+import com.dazix.caelis.domain.solar.GeoLocation
+import com.dazix.caelis.notify.TerrainNotifications
+import java.io.File
+import java.io.IOException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.cos
+
+/** What the terrain horizon layer is currently doing, for the UI to report honestly. */
+sealed interface HorizonState {
+
+    /** Nothing asked for yet, or the feature is off. */
+    data object Idle : HorizonState
+
+    /** Tiles are needed and the app cannot fetch them itself — the user has to import them. */
+    data class NeedsTiles(val keys: List<DemTileKey>) : HorizonState
+
+    data class Downloading(val key: DemTileKey, val index: Int, val total: Int, val progress: Float) : HorizonState
+
+    data class Computing(val progress: Float) : HorizonState
+
+    data class Ready(val profile: HorizonProfile) : HorizonState
+
+    data class Failed(val reason: Reason, val cause: Throwable? = null) : HorizonState {
+        enum class Reason { NETWORK, METERED, STORAGE, NO_DATA }
+    }
+}
+
+/**
+ * Owns the path from "where the observer is standing" to "a horizon profile to draw".
+ *
+ * Three sources are tried in order, and the first that answers wins:
+ *  1. a profile already computed for this spot, read straight off disk — this is what makes the
+ *     feature work in a valley with no signal, which is exactly where it is wanted;
+ *  2. elevation tiles already in the cache, imported or downloaded earlier;
+ *  3. a download, and only when the user has agreed to one.
+ *
+ * The tiles are disposable; the profile is not. See [DemTileCache] and [HorizonProfileCodec].
+ */
+class HorizonRepository private constructor(
+    context: Context,
+    private val settingsStore: SettingsStore,
+    private val scope: CoroutineScope,
+) {
+
+    private val appContext = context.applicationContext
+    private val cache = DemTileCache(appContext)
+    private val importer = DemTileImporter(appContext)
+    private val downloader = DemTileDownloader(
+        // Read per call, not captured once: turning consent off in settings must take effect now.
+        consent = { settingsStore.currentHorizon().networkDownloadAllowed },
+    )
+
+    private val profileDirectory = File(appContext.filesDir, "horizons")
+    private val notifications = TerrainNotifications(appContext)
+
+    private val _state = MutableStateFlow<HorizonState>(HorizonState.Idle)
+    val state: StateFlow<HorizonState> = _state.asStateFlow()
+
+    init {
+        scope.launch {
+            state.collect { notifications.update(it) }
+        }
+    }
+
+    private val _profile = MutableStateFlow<HorizonProfile?>(null)
+    val profile: StateFlow<HorizonProfile?> = _profile.asStateFlow()
+
+    private var inFlight: Job? = null
+    private val _effectiveRangeKm = MutableStateFlow<Int?>(null)
+
+    /** The radius actually in use, which with an automatic setting is worked out from the terrain. */
+    val effectiveRangeKm: StateFlow<Int?> = _effectiveRangeKm.asStateFlow()
+
+    /** Automatic radius per rounded position, so a settling GPS does not re-probe every few seconds. */
+    private val estimatedRangeKm = mutableMapOf<Pair<Double, Double>, Int>()
+
+    private var lastRequest: Request? = null
+
+    private data class Request(val latitude: Double, val longitude: Double, val rangeKm: Int, val eyeCm: Int)
+
+    /** True when this build can download at all. False in a source build with `INTERNET` removed. */
+    val canDownload: Boolean get() = NetworkAvailability.hasInternetPermission(appContext)
+
+    /**
+     * Makes sure a profile exists for [location], computing or fetching one if needed.
+     *
+     * Repeated calls for the same rounded position and the same settings are ignored while one is
+     * already running: the location provider emits every few seconds, and each emission must not
+     * start another 26 MB download.
+     */
+    fun ensureProfile(location: GeoLocation, settings: HorizonSettings) {
+        if (!settings.enabled) {
+            inFlight?.cancel()
+            _state.value = HorizonState.Idle
+            return
+        }
+
+        val request = Request(
+            latitude = roundPosition(location.latitude),
+            longitude = roundPosition(location.longitude),
+            // The *requested* radius, not the effective one: with an automatic radius the effective
+            // value is not known until the observer's tile has been read, and a request that has not
+            // run yet must still be recognised as the same request.
+            rangeKm = if (settings.autoRange) AUTO_RANGE_REQUEST else settings.maxRangeKm,
+            eyeCm = settings.eyeHeightCm,
+        )
+        if (request == lastRequest && inFlight?.isActive == true) return
+        if (request == lastRequest && _profile.value != null) return
+
+        lastRequest = request
+        inFlight?.cancel()
+        inFlight = scope.launch { resolve(location, settings) }
+    }
+
+    /** Forgets the current position so the next [ensureProfile] recomputes rather than reusing. */
+    fun invalidate() {
+        lastRequest = null
+        _profile.value = null
+        _state.value = HorizonState.Idle
+    }
+
+    private suspend fun resolve(location: GeoLocation, requested: HorizonSettings) {
+        // The square the observer is standing in is not one tile among several: without it the ray
+        // march finds nothing within the first two kilometres on every azimuth, gives up, and falls
+        // back to the geometric dip — a flat ring that draws exactly like a real skyline. Everything
+        // below treats it as mandatory and the outer ring as best-effort.
+        val observerKey = DemTileKey.containing(location.latitude, location.longitude)
+
+        // Resolve the search radius before anything else is fetched. With an automatic radius the
+        // answer comes out of the observer's own tile, which has to be downloaded either way, so a
+        // valley floor never pulls down eight neighbours to discover they change nothing.
+        val settings = withEffectiveRange(location, requested, observerKey) ?: return
+        _effectiveRangeKm.value = settings.maxRangeKm
+
+        val cached = withContext(Dispatchers.IO) { readStoredProfile(location, settings) }
+        if (cached != null) {
+            publish(cached)
+            return
+        }
+
+        val keys = tilesFor(location, settings)
+
+        val (present, missing) = cache.partition(keys)
+        if (missing.isNotEmpty()) {
+            val fetched = fetchMissing(missing, settings)
+            if (!fetched) return
+        }
+
+        val tiles = withContext(Dispatchers.IO) { keys.mapNotNull { cache.open(it) } }
+        // Trim only now, and never the tiles this run needs. Reclaiming space from the working set
+        // does not save a download; it corrupts the answer.
+        withContext(Dispatchers.IO) { cache.trim(protect = keys.toSet()) }
+
+        if (tiles.none { it.key == observerKey }) {
+            Log.w(TAG, "no tile for the observer's own square $observerKey; refusing to invent a horizon")
+            _state.value = HorizonState.NeedsTiles(listOf(observerKey))
+            return
+        }
+        Log.i(TAG, "computing horizon from ${tiles.size} tile(s), ${present.size} were already cached")
+
+        val profile = withContext(Dispatchers.Default) {
+            HorizonProfileCalculator.compute(
+                grid = CompositeElevationGrid(tiles),
+                observer = location,
+                eyeHeightMeters = settings.eyeHeightMeters,
+                maxRangeMeters = settings.maxRangeMeters,
+                onProgress = { _state.value = HorizonState.Computing(it) },
+            )
+        }
+
+        if (!profile.isUsable) {
+            // Mostly the mathematical horizon wearing a terrain colour. Saying "no data" is the
+            // honest answer; drawing it would be a confident wrong one.
+            Log.w(TAG, "profile covers only ${profile.coveredSamples} of ${HorizonProfile.SAMPLE_COUNT} azimuths")
+            _state.value = HorizonState.Failed(HorizonState.Failed.Reason.NO_DATA)
+            return
+        }
+
+        withContext(Dispatchers.IO) { writeStoredProfile(profile, settings) }
+        publish(profile)
+    }
+
+    /**
+     * Returns [requested] with a concrete search radius filled in, or null when the observer's own
+     * tile could not be obtained and there is therefore nothing to estimate from.
+     *
+     * Estimates are remembered per rounded position: the location provider emits every few seconds
+     * and the probe is a full profile computation, cheap but not free.
+     */
+    private suspend fun withEffectiveRange(
+        location: GeoLocation,
+        requested: HorizonSettings,
+        observerKey: DemTileKey,
+    ): HorizonSettings? {
+        if (!requested.autoRange) return requested
+
+        val positionKey = roundPosition(location.latitude) to roundPosition(location.longitude)
+        estimatedRangeKm[positionKey]?.let { return requested.copy(maxRangeKm = it) }
+
+        if (cache.partition(listOf(observerKey)).second.isNotEmpty()) {
+            if (!fetchMissing(listOf(observerKey), requested)) return null
+        }
+        val observerTile = withContext(Dispatchers.IO) { cache.open(observerKey) }
+        if (observerTile == null) {
+            _state.value = HorizonState.NeedsTiles(listOf(observerKey))
+            return null
+        }
+
+        val suggested = withContext(Dispatchers.Default) {
+            HorizonRangeEstimator.suggestRangeMeters(
+                grid = observerTile,
+                observer = location,
+                eyeHeightMeters = requested.eyeHeightMeters,
+                probeRangeMeters = HorizonSettings.AUTO_PROBE_RANGE_KM * 1000.0,
+                maxRangeMeters = HorizonSettings.RANGE_CHOICES_KM.last() * 1000.0,
+            )
+        }
+        // Rounded up onto one of the offered values so a profile's file name still says, exactly,
+        // what it was computed with — and so the same spot does not recompute over a 300 m drift.
+        val km = HorizonSettings.RANGE_CHOICES_KM.firstOrNull { it * 1000.0 >= suggested }
+            ?: HorizonSettings.RANGE_CHOICES_KM.last()
+        Log.i(TAG, "automatic range for ${observerKey.name}: ${(suggested / 1000).toInt()} km -> $km km")
+        estimatedRangeKm[positionKey] = km
+        return requested.copy(maxRangeKm = km)
+    }
+
+    /** @return true when every missing tile is now on disk. */
+    private suspend fun fetchMissing(missing: List<DemTileKey>, settings: HorizonSettings): Boolean {
+        if (!canDownload || !settings.networkDownloadAllowed) {
+            _state.value = HorizonState.NeedsTiles(missing)
+            return false
+        }
+        if (settings.wifiOnly && NetworkAvailability.isMetered(appContext)) {
+            _state.value = HorizonState.Failed(HorizonState.Failed.Reason.METERED)
+            return false
+        }
+
+        missing.forEachIndexed { index, key ->
+            _state.value = HorizonState.Downloading(key, index + 1, missing.size, 0f)
+            try {
+                cache.store(key) { out ->
+                    downloader.download(key, out) { progress ->
+                        _state.value = HorizonState.Downloading(key, index + 1, missing.size, progress)
+                    }
+                }
+            } catch (e: DemTileDownloader.NotPermittedException) {
+                _state.value = HorizonState.NeedsTiles(missing)
+                return false
+            } catch (e: IOException) {
+                Log.w(TAG, "tile ${key.name} failed", e)
+                _state.value = HorizonState.Failed(HorizonState.Failed.Reason.NETWORK, e)
+                return false
+            }
+        }
+        return true
+    }
+
+    private fun publish(profile: HorizonProfile) {
+        _profile.value = profile
+        _state.value = HorizonState.Ready(profile)
+    }
+
+    /** Every tile the search radius can reach from [location]. */
+    fun tilesFor(location: GeoLocation, settings: HorizonSettings): List<DemTileKey> {
+        val rangeMeters = settings.maxRangeMeters
+        val latSpan = rangeMeters / HorizonProfileCalculator.EARTH_RADIUS_METERS * (180.0 / Math.PI)
+        // Longitude degrees shrink towards the poles; the guard keeps the divisor away from zero so
+        // an observer in Svalbard asks for a sane number of tiles instead of the whole parallel.
+        val cosLat = cos(location.latitude * Math.PI / 180.0).coerceAtLeast(MIN_COS_LATITUDE)
+        val lonSpan = latSpan / cosLat
+
+        return DemTileKey.coveringBox(
+            minLatitude = (location.latitude - latSpan).coerceIn(-90.0, 89.999),
+            maxLatitude = (location.latitude + latSpan).coerceIn(-90.0, 89.999),
+            minLongitude = location.longitude - lonSpan,
+            maxLongitude = location.longitude + lonSpan,
+        )
+    }
+
+    /** Tiles the search radius needs that are not on disk yet. */
+    fun missingTilesFor(location: GeoLocation, settings: HorizonSettings): List<DemTileKey> =
+        cache.partition(tilesFor(location, settings)).second
+
+    suspend fun importTile(uri: Uri): DemTileImporter.Result = withContext(Dispatchers.IO) {
+        importer.import(uri, cache).also { if (it is DemTileImporter.Result.Imported) lastRequest = null }
+    }
+
+    fun cachedTileBytes(): Long = cache.totalBytes()
+
+    fun storedProfileCount(): Int = profileDirectory.listFiles()?.count { it.extension == "bin" } ?: 0
+
+    /** Drops every downloaded tile. Computed profiles are untouched: they cost nothing and are the point. */
+    fun clearTileCache() = cache.clear()
+
+    /** Drops every computed profile as well, returning the feature to a fresh state. */
+    fun clearEverything() {
+        cache.clear()
+        profileDirectory.listFiles()?.forEach { it.delete() }
+        notifications.cancel()
+        invalidate()
+    }
+
+    private fun profileFile(location: GeoLocation, settings: HorizonSettings) = File(
+        profileDirectory,
+        HorizonProfileCodec.fileName(
+            latitude = roundPosition(location.latitude),
+            longitude = roundPosition(location.longitude),
+            maxRangeKm = settings.maxRangeKm,
+            eyeHeightCm = settings.eyeHeightCm,
+        ),
+    )
+
+    private fun readStoredProfile(location: GeoLocation, settings: HorizonSettings): HorizonProfile? {
+        val file = profileFile(location, settings)
+        if (!file.isFile) return null
+        return try {
+            // An unusable cached profile is treated as no cache at all, so a flat one written by an
+            // earlier run is recomputed instead of being served back forever.
+            file.inputStream().use { HorizonProfileCodec.read(it) }?.takeIf { it.isUsable }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    private fun writeStoredProfile(profile: HorizonProfile, settings: HorizonSettings) {
+        try {
+            profileDirectory.mkdirs()
+            profileFile(profile.observer, settings).outputStream().use {
+                HorizonProfileCodec.write(it, profile)
+            }
+        } catch (e: IOException) {
+            // A profile that cannot be cached is still a profile that can be drawn. Losing the cache
+            // costs a recomputation next time; failing the screen over it would cost the feature.
+            Log.w(TAG, "cannot cache horizon profile", e)
+        }
+    }
+
+    companion object {
+        private const val TAG = "HorizonRepository"
+
+        /** Stands in for "work it out yourself" in the de-duplication key. Not a real radius. */
+        private const val AUTO_RANGE_REQUEST = -1
+
+        @Volatile
+        private var instance: HorizonRepository? = null
+
+        /**
+         * The one repository for the whole process.
+         *
+         * A singleton for the same reason [com.dazix.caelis.data.SessionRepository] is one: three
+         * screens care about the same state. With one instance per view model, opening Settings and
+         * then Sun AR started the same 26 MB download twice, and both would have driven the same
+         * progress notification from different coroutines.
+         *
+         * Its scope outlives every view model on purpose — a download must survive leaving the
+         * screen that started it, which is precisely when the phone goes into a pocket.
+         */
+        fun getInstance(context: Context): HorizonRepository =
+            instance ?: synchronized(this) {
+                instance ?: HorizonRepository(
+                    context = context.applicationContext,
+                    settingsStore = SettingsStore(context.applicationContext),
+                    scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                ).also { instance = it }
+            }
+
+        /** About 110 m of latitude: close enough that the skyline has not meaningfully moved. */
+        private const val POSITION_ROUNDING = 1000.0
+
+        private const val MIN_COS_LATITUDE = 0.05
+
+        fun roundPosition(value: Double): Double = Math.round(value * POSITION_ROUNDING) / POSITION_ROUNDING
+    }
+}

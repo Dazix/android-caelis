@@ -95,6 +95,24 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     var panPitchOffsetDeg: Float = 0f
         private set
 
+    /**
+     * Standing correction for the compass, applied to the *live* matrix on every sensor sample.
+     *
+     * Separate from [panAzimuthOffsetDeg] on purpose. A pan is a gesture and freezes the sensors
+     * while it lasts; a calibration is a property of the phone's magnetometer in the place it is
+     * standing, and the overlay has to keep tracking while it is in force. Restoring a saved
+     * calibration through [setPanOffsets] used to open the AR screen frozen, which made the stored
+     * value worse than useless.
+     */
+    @Volatile
+    var calibrationAzimuthOffsetDeg: Float = 0f
+        private set
+
+    /** Standing correction for the camera's pitch. See [calibrationAzimuthOffsetDeg]. */
+    @Volatile
+    var calibrationPitchOffsetDeg: Float = 0f
+        private set
+
     val isSensorTrackingPaused = MutableStateFlow(false)
 
     private val stateFlow = MutableStateFlow<DeviceOrientation?>(null)
@@ -150,6 +168,67 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
     }
 
+    /**
+     * Sets the standing calibration without touching sensor tracking.
+     *
+     * This is what a restored calibration and the alignment controls go through. [setPanOffsets] is
+     * the gesture path and pauses the sensors; using it to restore a saved value froze the overlay
+     * on every launch for anyone who had ever calibrated.
+     */
+    fun setCalibration(azimuthDeg: Float, pitchDeg: Float) {
+        // Clamped, not wrapped. A calibration corrects a compass by single degrees; allowing it to
+        // run all the way round would turn a careless swipe into "the sky is now facing the other
+        // way", indistinguishable on the next launch from a broken magnetometer.
+        calibrationAzimuthOffsetDeg = signedAzimuth(azimuthDeg)
+            .coerceIn(-MAX_CALIBRATION_AZIMUTH, MAX_CALIBRATION_AZIMUTH)
+        calibrationPitchOffsetDeg = pitchDeg.coerceIn(-MAX_CALIBRATION_PITCH, MAX_CALIBRATION_PITCH)
+
+        // Re-derive the published matrix immediately: a nudge has to move the overlay now, not on
+        // the next sensor sample, and while tracking is paused there will not be one.
+        applyCalibration(
+            sensorMatrix = rawMatrix,
+            declinationDeg = magneticDeclinationDeg,
+            panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
+            panPitchOffsetDeg = calibrationPitchOffsetDeg,
+            tempDeclinationBuffer = tempDeclinationMatrix,
+            outMatrix = liveTrueMatrix,
+        )
+        if (!isSensorTrackingPaused.value) {
+            System.arraycopy(liveTrueMatrix, 0, frozenMatrix, 0, 16)
+            System.arraycopy(liveTrueMatrix, 0, adjustedMatrix, 0, 16)
+            publishOrientation(accuracy = stateFlow.value?.accuracy ?: 3)
+        }
+    }
+
+    /**
+     * Moves the standing calibration by a delta, leaving the sensors running.
+     *
+     * This is the drag gesture on the Sun AR screen and the nudge buttons: the finger walks the
+     * overlay onto the real skyline while the phone keeps tracking, so letting go does not snap
+     * anything back and turning around still works.
+     */
+    fun nudgeCalibrationBy(deltaAzimuthDeg: Float, deltaPitchDeg: Float) {
+        setCalibration(
+            azimuthDeg = calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
+            pitchDeg = calibrationPitchOffsetDeg + deltaPitchDeg,
+        )
+    }
+
+    /**
+     * Turns the pan the user has just dragged into the standing calibration and resumes tracking.
+     *
+     * This is the "align the overlay with the real skyline, then keep tracking" gesture: the frozen
+     * delta is exactly the compass error the user just measured by eye.
+     */
+    fun commitPanAsCalibration() {
+        val azimuth = calibrationAzimuthOffsetDeg + panAzimuthOffsetDeg
+        val pitch = calibrationPitchOffsetDeg + panPitchOffsetDeg
+        panAzimuthOffsetDeg = 0f
+        panPitchOffsetDeg = 0f
+        isSensorTrackingPaused.value = false
+        setCalibration(azimuth, pitch)
+    }
+
     fun setPanOffsets(azimuthDeg: Float, pitchDeg: Float) {
         panAzimuthOffsetDeg = (azimuthDeg % 360f + 360f) % 360f
         panPitchOffsetDeg = pitchDeg.coerceIn(-MAX_GESTURE_PITCH, MAX_GESTURE_PITCH)
@@ -167,15 +246,18 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         panPitchOffsetDeg = 0f
         isSensorTrackingPaused.value = false
 
-        // Immediately update orientation to live sensor values
+        // Immediately update orientation to live sensor values. The standing calibration survives:
+        // dropping a pan is "stop dragging", not "forget where north is".
         applyCalibration(
             sensorMatrix = rawMatrix,
             declinationDeg = magneticDeclinationDeg,
-            panAzimuthOffsetDeg = 0f,
-            panPitchOffsetDeg = 0f,
+            panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
+            panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
             outMatrix = adjustedMatrix,
         )
+        System.arraycopy(adjustedMatrix, 0, liveTrueMatrix, 0, 16)
+        System.arraycopy(adjustedMatrix, 0, frozenMatrix, 0, 16)
         publishOrientation(accuracy = 3)
     }
 
@@ -300,8 +382,16 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // Convert unit quaternion to guaranteed 100% orthonormal rotation matrix (sensor ENU)
         SensorManager.getRotationMatrixFromVector(rawMatrix, smoothedQuat)
 
-        // Compute live True North matrix
-        applyMagneticDeclination(rawMatrix, magneticDeclinationDeg, liveTrueMatrix)
+        // Compute live True North matrix, with the standing calibration folded in. Both are rotations
+        // of the world frame, so they compose into the single offset applyCalibration already takes.
+        applyCalibration(
+            sensorMatrix = rawMatrix,
+            declinationDeg = magneticDeclinationDeg,
+            panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
+            panPitchOffsetDeg = calibrationPitchOffsetDeg,
+            tempDeclinationBuffer = tempDeclinationMatrix,
+            outMatrix = liveTrueMatrix,
+        )
 
         // If not paused, update frozen snapshot and publish live orientation
         if (!isSensorTrackingPaused.value) {
@@ -336,6 +426,24 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     companion object {
         const val MAX_GESTURE_PITCH = 85f
+
+        /**
+         * How far the standing calibration may tilt the world frame.
+         *
+         * A compass and a rotation vector are wrong by degrees, not by tens of them. A larger value
+         * would only ever be a mis-drag saved by accident, and it would be indistinguishable from a
+         * broken sensor the next time the screen opened.
+         */
+        const val MAX_CALIBRATION_PITCH = 20f
+
+        /** The same bound for the compass correction. See [MAX_CALIBRATION_PITCH]. */
+        const val MAX_CALIBRATION_AZIMUTH = 20f
+
+        /** An azimuth expressed in (-180, 180] — the short way round, which is what a bound needs. */
+        fun signedAzimuth(azimuthDeg: Float): Float {
+            val wrapped = ((azimuthDeg % 360f) + 360f) % 360f
+            return if (wrapped > 180f) wrapped - 360f else wrapped
+        }
         const val ALPHA_STATIONARY = 0.30f
         const val ALPHA_MOVING = 0.85f
 

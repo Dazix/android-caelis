@@ -194,6 +194,179 @@ class CameraFovCalculatorTest {
         assertEquals(1692.8f, focalLengthPx, 5.0f)
     }
 
+    /**
+     * The case that was measured on the device: the overlay was drawn at 36.7° while fitting the
+     * terrain profile to the camera image put the real field of view at about 32°. The difference is
+     * a sensor crop the app never asked about.
+     */
+    @Test
+    fun `a sensor crop region narrows the field of view the geometry alone predicts`() {
+        val withoutCrop = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            activeArrayWidthPx = 4080,
+            activeArrayHeightPx = 3072,
+            cropRegionWidthPx = 4080,
+            cropRegionHeightPx = 3072,
+            streamWidthPx = 4032,
+            streamHeightPx = 3024,
+            viewportWidth = 1080f,
+            viewportHeight = 2340f,
+            isPortrait = true,
+        )
+        val withCrop = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            activeArrayWidthPx = 4080,
+            activeArrayHeightPx = 3072,
+            cropRegionWidthPx = 3492, // 0.856 of the active array, the factor measured on the device
+            cropRegionHeightPx = 2630,
+            streamWidthPx = 4032,
+            streamHeightPx = 3024,
+            viewportWidth = 1080f,
+            viewportHeight = 2340f,
+            isPortrait = true,
+        )
+
+        assertEquals(37.27f, withoutCrop, 0.3f)
+        assertEquals(32.1f, withCrop, 0.3f)
+        // The crop scales the tangent of the half angle, not the angle.
+        val ratio = tanHalf(withCrop) / tanHalf(withoutCrop)
+        assertEquals(0.856f, ratio, 0.005f)
+    }
+
+    /**
+     * The stream's aspect ratio is not the answer on its own. FILL_CENTER on a tall phone scales the
+     * stream until it covers the viewport, so what survives is the long axis; a 16:9 buffer and a 4:3
+     * buffer off the same sensor show the same horizontal field of view.
+     */
+    @Test
+    fun `a 16 to 9 stream and a 4 to 3 stream give the same horizontal FOV on a tall viewport`() {
+        fun fovFor(streamW: Int, streamH: Int) = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            activeArrayWidthPx = 4080,
+            activeArrayHeightPx = 3072,
+            cropRegionWidthPx = 4080,
+            cropRegionHeightPx = 3072,
+            streamWidthPx = streamW,
+            streamHeightPx = streamH,
+            viewportWidth = 1080f,
+            viewportHeight = 2340f,
+            isPortrait = true,
+        )
+
+        assertEquals(fovFor(4032, 3024), fovFor(1920, 1080), 0.15f)
+    }
+
+    @Test
+    fun `a stream narrower than the viewport keeps its own width instead of inventing one`() {
+        // A 4:3 stream shown in a 4:3 viewport: nothing is cropped, so the answer is the raw FOV.
+        val fov = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            activeArrayWidthPx = 4080,
+            activeArrayHeightPx = 3060,
+            cropRegionWidthPx = 4080,
+            cropRegionHeightPx = 3060,
+            streamWidthPx = 4032,
+            streamHeightPx = 3024,
+            viewportWidth = 1080f,
+            viewportHeight = 1440f,
+            isPortrait = true,
+        )
+
+        assertEquals(57.44f, fov, 0.4f)
+    }
+
+    @Test
+    fun `landscape reads the crop across the sensor long axis`() {
+        val fov = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            activeArrayWidthPx = 4080,
+            activeArrayHeightPx = 3060,
+            cropRegionWidthPx = 2040, // half the array in each direction
+            cropRegionHeightPx = 1530,
+            streamWidthPx = 4032,
+            streamHeightPx = 3024,
+            viewportWidth = 2400f,
+            viewportHeight = 1080f,
+            isPortrait = false,
+        )
+
+        // Landscape raw FOV is 72.3°; halving the sensor extent halves the tangent.
+        assertEquals(0.5f, tanHalf(fov) / tanHalf(72.3f), 0.01f)
+    }
+
+    /**
+     * Not every device reports a crop region, and a driver that reports a broken one must not be
+     * trusted over the geometry. Either way the answer has to stay the one the app shipped with.
+     */
+    @Test
+    fun `missing or impossible measurements fall back to the geometry only answer`() {
+        val geometry = CameraFovCalculator.computeEffectiveHorizontalFov(
+            sensorWidthMm = 6.4f,
+            sensorHeightMm = 4.8f,
+            focalLengthMm = 4.38f,
+            viewportWidth = 1080f,
+            viewportHeight = 2340f,
+            isPortrait = true,
+        )
+
+        fun fovWith(activeW: Int, activeH: Int, cropW: Int, cropH: Int, streamW: Int, streamH: Int) =
+            CameraFovCalculator.computeStreamHorizontalFov(
+                sensorWidthMm = 6.4f,
+                sensorHeightMm = 4.8f,
+                focalLengthMm = 4.38f,
+                activeArrayWidthPx = activeW,
+                activeArrayHeightPx = activeH,
+                cropRegionWidthPx = cropW,
+                cropRegionHeightPx = cropH,
+                streamWidthPx = streamW,
+                streamHeightPx = streamH,
+                viewportWidth = 1080f,
+                viewportHeight = 2340f,
+                isPortrait = true,
+            )
+
+        assertEquals(geometry, fovWith(0, 0, 0, 0, 0, 0), 0.001f)
+        assertEquals(geometry, fovWith(4080, 3072, 0, 0, 4032, 3024), 0.001f)
+        assertEquals(geometry, fovWith(4080, 3072, 4080, 3072, 0, 0), 0.001f)
+        assertEquals(geometry, fovWith(4080, 3072, -10, -10, 4032, 3024), 0.001f)
+        // A crop region bigger than the array it lives in is not a wider lens.
+        assertEquals(geometry, fovWith(4080, 3072, 8000, 6000, 4032, 3024), 0.001f)
+    }
+
+    @Test
+    fun `falls back to the default FOV when neither sensor nor crop is known`() {
+        val fov = CameraFovCalculator.computeStreamHorizontalFov(
+            sensorWidthMm = null,
+            sensorHeightMm = null,
+            focalLengthMm = null,
+            activeArrayWidthPx = 0,
+            activeArrayHeightPx = 0,
+            cropRegionWidthPx = 0,
+            cropRegionHeightPx = 0,
+            streamWidthPx = 0,
+            streamHeightPx = 0,
+            viewportWidth = 1080f,
+            viewportHeight = 2400f,
+            isPortrait = true,
+            fallbackFovDegrees = 56f,
+        )
+
+        assertEquals(35.38f, fov, 0.5f)
+    }
+
+    private fun tanHalf(fovDegrees: Float): Float =
+        kotlin.math.tan(fovDegrees * 0.5f * (Math.PI / 180.0).toFloat())
+
     @Test
     fun `calculates zoomed FOV correctly and clamps within valid bounds`() {
         val baseFov = 56.0f

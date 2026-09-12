@@ -37,6 +37,130 @@ class SettingsMappingTest {
     private val landscape = TapTarget(xFraction = 0.88f, yFraction = 0.5f, jitter = true)
 
     @Test
+    fun `the shared AR calibration survives a round trip`() {
+        val prefs = mutablePreferencesOf()
+
+        SettingsMapping.writeArCalibration(prefs, azimuthDeg = -2.9f, elevationDeg = 1.3f)
+
+        assertEquals(-2.9f, SettingsMapping.readArAzimuthOffset(prefs), 1e-6f)
+        assertEquals(1.3f, SettingsMapping.readArElevationOffset(prefs), 1e-6f)
+    }
+
+    /**
+     * The compass correction used to be stored twice, once per AR screen. Merging the two must not
+     * throw away what someone had already aligned — a silently reset overlay looks like a bug in the
+     * sensors, not like a migration.
+     */
+    @Test
+    fun `a calibration stored under the old Sun AR key is inherited`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArAzimuthOffset(prefs, -2.5f)
+        SettingsMapping.writeSunArElevationOffset(prefs, 0.75f)
+
+        assertEquals(-2.5f, SettingsMapping.readArAzimuthOffset(prefs), 1e-6f)
+        assertEquals(0.75f, SettingsMapping.readArElevationOffset(prefs), 1e-6f)
+    }
+
+    @Test
+    fun `a calibration stored only under the old Night Sky key is inherited`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyAzimuthOffset(prefs, 4f)
+        SettingsMapping.writeNightSkyElevationOffset(prefs, -1.5f)
+
+        assertEquals(4f, SettingsMapping.readArAzimuthOffset(prefs), 1e-6f)
+        assertEquals(-1.5f, SettingsMapping.readArElevationOffset(prefs), 1e-6f)
+    }
+
+    @Test
+    fun `the shared key wins over both old ones`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArAzimuthOffset(prefs, -2.5f)
+        SettingsMapping.writeNightSkyAzimuthOffset(prefs, 4f)
+
+        SettingsMapping.writeArCalibration(prefs, azimuthDeg = 0.5f, elevationDeg = 0f)
+
+        assertEquals(0.5f, SettingsMapping.readArAzimuthOffset(prefs), 1e-6f)
+    }
+
+    /** Sun AR is where the correction can be measured against a ridge, so it outranks Night Sky. */
+    @Test
+    fun `Sun AR outranks Night Sky when both old keys exist`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeSunArAzimuthOffset(prefs, -2.5f)
+        SettingsMapping.writeNightSkyAzimuthOffset(prefs, 4f)
+
+        assertEquals(-2.5f, SettingsMapping.readArAzimuthOffset(prefs), 1e-6f)
+    }
+
+    @Test
+    fun `no calibration anywhere reads as zero, not as missing`() {
+        assertEquals(0f, SettingsMapping.readArAzimuthOffset(emptyPreferences()), 1e-6f)
+        assertEquals(0f, SettingsMapping.readArElevationOffset(emptyPreferences()), 1e-6f)
+    }
+
+    @Test
+    fun `every horizon setting survives a round trip`() {
+        val settings = HorizonSettings(
+            enabled = true,
+            networkConsent = true,
+            maxRangeKm = 100,
+            eyeHeightCm = 175,
+            shadeOccludedTrajectory = false,
+            wifiOnly = true,
+            realHorizonInNightSky = true,
+        )
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeHorizon(prefs, settings)
+
+        assertEquals(settings, SettingsMapping.readHorizon(prefs))
+    }
+
+    /**
+     * "Never asked" and "said no" must not collapse into the same value. If they did, a user who
+     * declined the download once would be asked again on every launch, or — worse, if the default
+     * went the other way — would never be offered it again after a mis-tap.
+     */
+    @Test
+    fun `horizon network consent keeps refusal apart from an unanswered question`() {
+        assertNull("a fresh install has not been asked", SettingsMapping.readHorizon(emptyPreferences()).networkConsent)
+        assertFalse(SettingsMapping.readHorizon(emptyPreferences()).networkConsentAnswered)
+        assertFalse(SettingsMapping.readHorizon(emptyPreferences()).networkDownloadAllowed)
+
+        val refused = mutablePreferencesOf()
+        SettingsMapping.writeHorizon(refused, HorizonSettings(networkConsent = false))
+        val readBack = SettingsMapping.readHorizon(refused)
+
+        assertEquals(false, readBack.networkConsent)
+        assertEquals(true, readBack.networkConsentAnswered)
+        assertFalse(readBack.networkDownloadAllowed)
+    }
+
+    /**
+     * Horizon keys are absent from every install that predates the feature. Missing must read as the
+     * same thing a fresh install reads: the layer off, no consent given, and nothing fetched.
+     */
+    @Test
+    fun `horizon settings default to off on an install that never had the feature`() {
+        val defaults = SettingsMapping.readHorizon(emptyPreferences())
+
+        assertEquals(HorizonSettings(), defaults)
+        assertFalse(defaults.enabled)
+        assertFalse(defaults.networkDownloadAllowed)
+        assertEquals(60, defaults.maxRangeKm)
+        assertEquals(60_000.0, defaults.maxRangeMeters, 1e-9)
+        assertEquals(1.6, defaults.eyeHeightMeters, 1e-9)
+    }
+
+    @Test
+    fun `an absurd stored eye height is clamped rather than trusted`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeHorizon(prefs, HorizonSettings(eyeHeightCm = 900))
+
+        assertEquals(HorizonSettings.MAX_EYE_HEIGHT_CM, SettingsMapping.readHorizon(prefs).eyeHeightCm)
+    }
+
+    @Test
     fun `every advanced flag survives a round trip`() {
         val settings = AdvancedSettings(
             launchCameraMode = "Night Sight",
@@ -615,6 +739,21 @@ class SettingsMappingTest {
         val raw = "STAR\t42\tSirius\tCanis Major\t101.28\t-16.71\t-1.46\t"
         SettingsMapping.writeNightSkySearchHistory(prefs, raw)
         assertEquals(raw, SettingsMapping.readNightSkySearchHistory(prefs))
+    }
+
+    @Test
+    fun `notification permission prompted defaults to false on empty preferences`() {
+        assertFalse(SettingsMapping.readNotificationPermissionPrompted(emptyPreferences()))
+    }
+
+    @Test
+    fun `notification permission prompted survives round trip when true and false`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNotificationPermissionPrompted(prefs, true)
+        assertEquals(true, SettingsMapping.readNotificationPermissionPrompted(prefs))
+
+        SettingsMapping.writeNotificationPermissionPrompted(prefs, false)
+        assertEquals(false, SettingsMapping.readNotificationPermissionPrompted(prefs))
     }
 
     /** Simulates a record written by a build that did not have these keys yet. */

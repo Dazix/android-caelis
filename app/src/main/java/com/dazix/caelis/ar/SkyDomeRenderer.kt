@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dazix.caelis.domain.horizon.HorizonProfile
 
 // Normal Color Palette
 val NormalGoldSolar = Color(0xFFFFB300)
@@ -20,6 +21,15 @@ val NormalSunset = Color(0xFFE64A19)
 val NormalHorizon = Color(0xDD4DD0E1)
 val NormalGrid = Color(0x664DD0E1)
 val NormalNightArc = Color(0x44FFB300)
+
+/**
+ * The real terrain skyline. Deliberately a different hue from [NormalHorizon]: the two lines are
+ * drawn together and the whole point is telling the mathematical horizon apart from the ground.
+ */
+val NormalTerrain = Color(0xFF8BC34A)
+
+/** Casing drawn under the silhouette so it stays readable against a bright sky or a pale field. */
+val SilhouetteCasing = Color(0x99000000)
 
 // Red Vision (Astrophotography Night Mode) Palette
 val RedPrimary = Color(0xFFFF1744)
@@ -82,6 +92,12 @@ class SkyDomeRenderer {
     val tempPoint = FloatArray(3)
     val pathBuffer = FloatArray(1440 * 3)
     val horizonBuffer = FloatArray(180 * 3)
+
+    /**
+     * The real terrain skyline, one slot per [com.dazix.caelis.domain.horizon.HorizonProfile] sample.
+     * Pre-allocated like every other buffer here: this one is walked in full on every frame.
+     */
+    val silhouetteBuffer = FloatArray(HorizonProfile.SAMPLE_COUNT * 3)
     val altitudeGridBuffer = FloatArray(72 * 3)
     val meridianBuffer = FloatArray(36 * 3)
 
@@ -490,5 +506,91 @@ class SkyDomeRenderer {
                 gridTextPaint,
             )
         }
+    }
+
+    /**
+     * Draws the real terrain skyline as a closed polyline, in exactly the way the mathematical
+     * horizon circle above is drawn — batch-project every vertex into a pre-allocated buffer, then
+     * walk the buffer emitting segments.
+     *
+     * The two lines are meant to be seen together: the thin circle is 0° elevation, the thick line
+     * is where the ground actually is, and the gap between them is the part of a sunset that happens
+     * behind a hill.
+     *
+     * Segments are dropped when either end is behind the camera, and when both ends are outside the
+     * viewport. The second test matters here and not for the 180-vertex circle: this polyline has
+     * 1440 vertices and most of them are behind the observer or far off screen on any given frame.
+     */
+    fun drawHorizonSilhouette(
+        drawScope: DrawScope,
+        profile: HorizonProfile,
+        matrix: FloatArray,
+        displayRotation: Int,
+        fovH: Float,
+        redVisionMode: Boolean,
+        w: Float,
+        h: Float,
+        theme: com.dazix.caelis.domain.nightsky.NightVisionTheme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER,
+    ) {
+        val palette = paletteForTheme(theme)
+        val lineColor = if (redVisionMode) palette.primary else NormalTerrain
+        val samples = HorizonProfile.SAMPLE_COUNT
+
+        for (i in 0 until samples) {
+            CameraProjection.projectFast(
+                azimuthDegrees = HorizonProfile.azimuthForIndex(i),
+                elevationDegrees = profile.elevationsDegrees[i].toDouble(),
+                rotationMatrix = matrix,
+                viewportWidth = w,
+                viewportHeight = h,
+                displayRotation = displayRotation,
+                fovHorizontalDegrees = fovH,
+                outBuffer = silhouetteBuffer,
+                offset = i * 3,
+            )
+        }
+
+        val margin = SILHOUETTE_CULL_MARGIN
+        for (i in 0 until samples) {
+            val off1 = i * 3
+            val off2 = ((i + 1) % samples) * 3
+
+            if (silhouetteBuffer[off1 + 2] <= 0.001f || silhouetteBuffer[off2 + 2] <= 0.001f) continue
+
+            val x1 = silhouetteBuffer[off1]
+            val y1 = silhouetteBuffer[off1 + 1]
+            val x2 = silhouetteBuffer[off2]
+            val y2 = silhouetteBuffer[off2 + 1]
+
+            if (x1 < -margin && x2 < -margin) continue
+            if (x1 > w + margin && x2 > w + margin) continue
+            if (y1 < -margin && y2 < -margin) continue
+            if (y1 > h + margin && y2 > h + margin) continue
+
+            // Dark casing under the coloured line, as the trajectory arcs use: over a bright sky or a
+            // pale field a single thin stroke disappears exactly where it is needed most.
+            drawScope.drawLine(
+                color = SilhouetteCasing,
+                start = Offset(x1, y1),
+                end = Offset(x2, y2),
+                strokeWidth = 3.4f,
+            )
+            drawScope.drawLine(
+                color = lineColor,
+                start = Offset(x1, y1),
+                end = Offset(x2, y2),
+                strokeWidth = 2.2f,
+            )
+        }
+    }
+
+    companion object {
+        /**
+         * How far outside the viewport a segment may reach before it is dropped.
+         *
+         * Generous on purpose: a segment with both ends just off screen can still cross a corner of
+         * it, and a horizon with a notch missing reads as a bug rather than as an optimisation.
+         */
+        private const val SILHOUETTE_CULL_MARGIN = 200f
     }
 }

@@ -61,12 +61,14 @@ case "$TARGET" in
         info "Running Caelis core test suite (Service, Overlay, Session, Calibration, Plurals, Verify)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
             --tests "com.dazix.caelis.service.*" \
+            --tests "com.dazix.caelis.notify.*" \
             --tests "com.dazix.caelis.overlay.*" \
             --tests "com.dazix.caelis.verify.*" \
             --tests "com.dazix.caelis.domain.IntervalScheduleTest" \
             --tests "com.dazix.caelis.domain.SessionPlannerTest" \
             --tests "com.dazix.caelis.data.SettingsMappingTest" \
             --tests "com.dazix.caelis.res.*" \
+            --tests "com.dazix.caelis.NetworkIsolationTest" \
             --tests "com.dazix.caelis.ui.CalibrationResolutionTest" \
             --tests "com.dazix.caelis.ui.LaunchModeOptionsTest" \
             --tests "com.dazix.caelis.ui.NavigationDestinationTest" \
@@ -78,9 +80,11 @@ case "$TARGET" in
         ;;
 
     solar|sun)
-        info "Running Sun Trajectory test suite (Solar & Lunar Ephemeris, Trajectory Planning, AR Projection, Camera FOV)..."
+        info "Running Sun Trajectory test suite (Solar & Lunar Ephemeris, Trajectory Planning, AR Projection, Camera FOV, Terrain Horizon)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
             --tests "com.dazix.caelis.domain.solar.*" \
+            --tests "com.dazix.caelis.domain.horizon.*" \
+            --tests "com.dazix.caelis.data.horizon.*" \
             --tests "com.dazix.caelis.ar.*" \
             --rerun-tasks)
         check_xml_results

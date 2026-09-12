@@ -109,8 +109,13 @@ fun NightSkyArScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val alignAzimuthOffset by viewModel.panAzimuthOffset.collectAsStateWithLifecycle()
+    val alignElevationOffset by viewModel.panPitchOffset.collectAsStateWithLifecycle()
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
+    val horizonProfile by viewModel.horizonProfile.collectAsStateWithLifecycle()
+    val useRealHorizon by viewModel.useRealHorizon.collectAsStateWithLifecycle()
+    val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
 
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -337,6 +342,7 @@ fun NightSkyArScreen(
                     lifecycleOwner = lifecycleOwner,
                     isPortrait = isPortrait,
                     onFovCalculated = viewModel::setCameraFov,
+                    onCameraBound = viewModel::attachCamera,
                 )
 
                 // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, Landscape, and Opaque Sky Dome layers
@@ -356,6 +362,8 @@ fun NightSkyArScreen(
                     isAtmosphereVisible = uiState.isAtmosphereVisible,
                     isLandscapeVisible = uiState.isLandscapeVisible,
                     isGridVisible = uiState.isGridVisible,
+                    horizonProfile = horizonProfile,
+                    useRealHorizon = useRealHorizon,
                     isPlanetsVisible = uiState.isPlanetsVisible,
                     isConstellationsVisible = uiState.isConstellationsVisible,
                     isConstellationArtVisible = uiState.isConstellationArtVisible,
@@ -455,6 +463,7 @@ fun NightSkyArScreen(
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
                     zoomRatio = uiState.zoomRatio,
                     isCalibrated = uiState.isCalibrated,
+                    horizonState = uiState.horizonState,
                     redVisionMode = uiState.redVisionMode,
                     onBack = onBack,
                     onOpenSearch = {
@@ -554,6 +563,8 @@ fun NightSkyArScreen(
         ) {
             NightSkyLayerSettingsSheet(
                 isLandscapeVisible = uiState.isLandscapeVisible,
+                isRealHorizonEnabled = horizonSettings.realHorizonInNightSky,
+                isRealHorizonAvailable = horizonSettings.enabled,
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isPlanetsVisible = uiState.isPlanetsVisible,
@@ -568,6 +579,7 @@ fun NightSkyArScreen(
                 isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
                 isDebugOptionsEnabled = uiState.isDebugOptionsEnabled,
                 onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
+                onToggleRealHorizon = viewModel::toggleRealHorizonInNightSky,
                 onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
                 onToggleMilkyWayVisible = viewModel::toggleMilkyWayVisible,
                 onTogglePlanetsVisible = viewModel::togglePlanetsVisible,
@@ -580,6 +592,10 @@ fun NightSkyArScreen(
                 onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
                 onToggleDebugCalibration = viewModel::toggleDebugCalibration,
                 onToggleDebugFocusRegion = viewModel::toggleDebugFocusRegion,
+                alignAzimuthOffsetDeg = alignAzimuthOffset,
+                alignElevationOffsetDeg = alignElevationOffset,
+                onNudgeAlignment = viewModel::nudgeCalibration,
+                onResetAlignment = viewModel::resumeSensorTracking,
                 nightVisionTheme = uiState.nightVisionState.theme,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -607,6 +623,8 @@ internal fun NightSkyOverlayCanvas(
     isAtmosphereVisible: Boolean,
     isLandscapeVisible: Boolean,
     isGridVisible: Boolean,
+    horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+    useRealHorizon: Boolean = false,
     isPlanetsVisible: Boolean = true,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
@@ -666,6 +684,12 @@ internal fun NightSkyOverlayCanvas(
     LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
         milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
         landscapeBitmap?.let { renderer.setLandscapeBitmap(it) }
+    }
+
+    // Packing the profile into its strip is a per-location cost, not a per-frame one, so it is keyed
+    // on the profile itself and never runs from inside the draw scope.
+    LaunchedEffect(horizonProfile) {
+        renderer.setHorizonProfile(horizonProfile)
     }
 
     // Lazy background population of remaining ~78,000 telescopic stars (Tier 2) on Dispatchers.Default
@@ -765,6 +789,7 @@ internal fun NightSkyOverlayCanvas(
             isLandscapeVisible = isLandscapeVisible,
             isRedVision = nightVisionState.isActive,
             theme = nightVisionState.theme,
+            useRealHorizon = useRealHorizon,
         )
 
         // Layer 4: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
@@ -814,6 +839,7 @@ internal fun NightSkyTopBar(
     onResetZoom: () -> Unit,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
+    horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
@@ -871,6 +897,22 @@ internal fun NightSkyTopBar(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
+                if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
+                    horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
+                ) {
+                    val pct = when (horizonState) {
+                        is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
+                        is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
+                        else -> 0
+                    }
+                    Text(
+                        text = "• ⛰ $pct %",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
             }
 
             // Row 2: Azimuth, Elevation, FOV Data

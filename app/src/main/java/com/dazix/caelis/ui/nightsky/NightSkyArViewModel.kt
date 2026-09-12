@@ -2,6 +2,7 @@ package com.dazix.caelis.ui.nightsky
 
 import android.app.Application
 import android.view.Surface
+import androidx.camera.core.CameraControl
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.R
@@ -9,9 +10,13 @@ import com.dazix.caelis.ar.CameraFovCalculator
 import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
+import com.dazix.caelis.data.horizon.HorizonRepository
+import com.dazix.caelis.data.horizon.HorizonState
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
+import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.CelestialSearchIndex
@@ -92,6 +97,7 @@ data class NightSkyArUiState(
     val debugFocusRadiusMultiplier: Float = 0.48f,
     val debugFocusDisplayThreshold: Float = 0.0f,
     val isDebugOptionsEnabled: Boolean = false,
+    val horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
 )
 
 @OptIn(FlowPreview::class)
@@ -163,9 +169,24 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val zoomRatioState = MutableStateFlow(1.0f)
     val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
 
+    /**
+     * True once the reported FOV is measured from the sensor's crop region, which already contains
+     * the part of the zoom the camera itself performed. Only the remainder is virtual.
+     */
+    private val fovIncludesZoomState = MutableStateFlow(false)
+
+    /** The zoom the camera accepted. Deep zoom goes far past any lens, so the rest stays virtual. */
+    private val appliedCameraZoomState = MutableStateFlow(1.0f)
+
     // Dynamic effective FOV factoring in pinch-to-zoom (supports deep zoom down to 0.0005°)
-    val cameraFovHorizontal: StateFlow<Float> = combine(baseCameraFovState, zoomRatioState) { baseFov, zoom ->
-        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(0.0005f, 140.0f)
+    val cameraFovHorizontal: StateFlow<Float> = combine(
+        baseCameraFovState,
+        zoomRatioState,
+        fovIncludesZoomState,
+        appliedCameraZoomState,
+    ) { baseFov, zoom, includesZoom, appliedZoom ->
+        val residualZoom = if (includesZoom) zoom / appliedZoom.coerceAtLeast(0.0001f) else zoom
+        CameraFovCalculator.computeZoomedFov(baseFov, residualZoom).coerceIn(0.0005f, 140.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
@@ -292,6 +313,37 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    // ==== Terrain horizon ====
+    //
+    // The repository is shared behaviour, not shared state: it reads the same cached profiles the
+    // Sun AR screen wrote, so walking from one screen to the other costs nothing and needs no
+    // second download.
+    private val horizonRepository = HorizonRepository.getInstance(application)
+
+    val horizonSettings: StateFlow<HorizonSettings> = settingsStore.horizon.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HorizonSettings(),
+    )
+
+    val horizonState: StateFlow<HorizonState> = horizonRepository.state
+    val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
+
+    /** Replace the stylised tree line with the terrain around you — only once a profile exists. */
+    val useRealHorizon: StateFlow<Boolean> = combine(horizonSettings, horizonProfile) { cfg, profile ->
+        cfg.enabled && cfg.realHorizonInNightSky && profile != null
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setRealHorizonInNightSky(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveHorizon(
+                settingsStore.currentHorizon().copy(realHorizonInNightSky = enabled),
+            )
+        }
+    }
+
+    fun toggleRealHorizonInNightSky() = setRealHorizonInNightSky(!horizonSettings.value.realHorizonInNightSky)
+
     val isGridVisible: StateFlow<Boolean> = settingsStore.nightSkyGridVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -376,6 +428,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isDebugOptionsEnabled,
             planetStates,
             selectedPlanetId,
+            horizonState,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -421,6 +474,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         @Suppress("UNCHECKED_CAST")
         val planetsList = args[38] as List<PlanetState>
         val planetId = args[39] as String?
+        val horizState = args[40] as com.dazix.caelis.data.horizon.HorizonState
 
         NightSkyArUiState(
             location = loc,
@@ -465,6 +519,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             debugFocusRadiusMultiplier = dbgRadius,
             debugFocusDisplayThreshold = dbgThresh,
             isDebugOptionsEnabled = dbgOptions,
+            horizonState = horizState,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -496,10 +551,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 }
         }
 
-        // Ensure Night Sky AR always starts with pure live sensor tracking (0 offsets)
-        panAzimuthOffset.value = 0f
-        panPitchOffset.value = 0f
+        // Start with live sensor tracking, but keep the standing calibration: it is a correction for
+        // this phone's compass, not a pan the user forgot to end. Restoring it through
+        // setCalibration leaves the sensors running; setPanOffsets would have frozen them.
         orientationTracker.resumeSensorTracking()
+        viewModelScope.launch {
+            val savedAz = settingsStore.arAzimuthOffset.firstOrNull() ?: 0f
+            val savedPitch = settingsStore.arElevationOffset.firstOrNull() ?: 0f
+            panAzimuthOffset.value = savedAz
+            panPitchOffset.value = savedPitch
+            orientationTracker.setCalibration(savedAz, savedPitch)
+        }
 
         // Update magnetic declination on location updates
         viewModelScope.launch {
@@ -511,6 +573,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
         }
+
+        // Keep a terrain profile for wherever the observer is, on the same terms as the Sun AR
+        // screen: debounced, rounded to about 110 m, and a no-op when the layer is switched off.
+        viewModelScope.launch {
+            combine(locationProvider.location, horizonSettings) { loc, cfg -> loc to cfg }
+                .debounce(1_000L)
+                .collect { (loc, cfg) ->
+                    if (cfg.realHorizonInNightSky) horizonRepository.ensureProfile(loc, cfg)
+                }
+        }
+
 
         // Sidereal time, planetary ephemeris & day/night ticker updating every second
         viewModelScope.launch {
@@ -564,7 +637,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun setCameraFov(fovDeg: Float) {
+    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
+        fovIncludesZoomState.value = includesZoom
         if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
             baseCameraFovState.value = fovDeg
         }
@@ -912,12 +986,37 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
     }
 
+    /** Nudges the standing calibration, leaving the sensors live. See [OrientationTracker.setCalibration]. */
+    fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        orientationTracker.setCalibration(
+            azimuthDeg = orientationTracker.calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
+            pitchDeg = orientationTracker.calibrationPitchOffsetDeg + deltaElevationDeg,
+        )
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
+        persistCalibration()
+    }
+
+    /** Keeps the pan the user just dragged as the standing calibration and resumes tracking. */
+    fun commitCalibration() {
+        orientationTracker.commitPanAsCalibration()
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
+        persistCalibration()
+    }
+
+    private fun persistCalibration() {
+        val azimuth = panAzimuthOffset.value
+        val pitch = panPitchOffset.value
+        viewModelScope.launch { settingsStore.saveArCalibration(azimuth, pitch) }
+    }
+
     fun adjustAzimuthOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
+        nudgeCalibration(deltaAzimuthDeg = deltaDeg, deltaElevationDeg = 0.0f)
     }
 
     fun adjustElevationOffset(deltaDeg: Float) {
-        adjustPan(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
+        nudgeCalibration(deltaAzimuthDeg = 0.0f, deltaElevationDeg = deltaDeg)
     }
 
     fun resetAzimuthOffset() {
@@ -927,13 +1026,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun resumeSensorTracking() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null
+        orientationTracker.setCalibration(0f, 0f)
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
-        viewModelScope.launch {
-            settingsStore.saveNightSkyAzimuthOffset(0f)
-            settingsStore.saveNightSkyPitchOffset(0f)
-        }
+        viewModelScope.launch { settingsStore.saveArCalibration(0f, 0f) }
     }
 
     fun resetCalibration() {
@@ -981,20 +1078,49 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * The bound camera's zoom control and the range its lens supports.
+     *
+     * Night Sky zooms far past any phone lens, so only the first few times are optical or digital on
+     * the camera; the rest stays a zoom of the star field alone. Sending the camera the part it can
+     * do keeps the image and the overlay together for as long as that is possible at all.
+     */
+    private var cameraControl: CameraControl? = null
+    private var cameraZoomRange: ClosedFloatingPointRange<Float> = 1f..1f
+
+    fun attachCamera(control: CameraControl?, minRatio: Float, maxRatio: Float) {
+        cameraControl = control
+        cameraZoomRange = if (maxRatio > minRatio && minRatio > 0f) minRatio..maxRatio else 1f..1f
+        applyZoom(zoomRatioState.value)
+    }
+
+    private fun applyZoom(ratio: Float) {
+        val clamped = ratio.coerceIn(MIN_ZOOM, MAX_SAFE_ZOOM)
+        zoomRatioState.value = clamped
+        val control = cameraControl
+        if (control == null) {
+            appliedCameraZoomState.value = 1.0f
+            return
+        }
+        val onCamera = clamped.coerceIn(cameraZoomRange)
+        appliedCameraZoomState.value = onCamera
+        control.setZoomRatio(onCamera)
+    }
+
     fun adjustZoomBy(factor: Float) {
         val current = zoomRatioState.value
         val updated = (current * factor).coerceIn(MIN_ZOOM, MAX_SAFE_ZOOM)
         if (kotlin.math.abs(updated - current) > 0.001f) {
-            zoomRatioState.value = updated
+            applyZoom(updated)
         }
     }
 
     fun setZoomRatio(ratio: Float) {
-        zoomRatioState.value = ratio.coerceIn(MIN_ZOOM, MAX_SAFE_ZOOM)
+        applyZoom(ratio)
     }
 
     fun resetZoom() {
-        zoomRatioState.value = 1.0f
+        applyZoom(1.0f)
     }
 
     fun toggleRedVisionMode() {
@@ -1157,8 +1283,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         routingAnimationJob?.cancel()
         routingAnimationJob = null
         orientationTracker.resumeSensorTracking()
-        panAzimuthOffset.value = 0f
-        panPitchOffset.value = 0f
+        // Drop the pan, keep the calibration: returning to the screen must not silently undo the
+        // alignment the user did last time.
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
         if (!isSensorTrackingEnabled.value) {
             setSensorTrackingEnabled(true)
         } else {
@@ -1184,6 +1312,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     companion object {
+        /** Steps the alignment control nudges by: coarse enough to see, fine enough to land on. */
+        const val COARSE_NUDGE_DEGREES = 0.5f
+        const val FINE_NUDGE_DEGREES = 0.1f
+
         const val MIN_ZOOM = 0.4f
         const val MAX_SAFE_ZOOM = 2500.0f
     }

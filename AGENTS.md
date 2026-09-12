@@ -55,9 +55,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration (260 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris, AR projection (78 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (91 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (283 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (179 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (92 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -73,7 +73,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **446 JVM tests (260 intervalometer, 78 solar, 108 night sky / docs), 20 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
+`skipped`), not from the console. Current baseline: **571 JVM tests (283 intervalometer, 179 solar & horizon, 92 night sky, plus docs/UI), 31
+instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
+
+`run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
+to one. `domain.horizon.*` and `data.horizon.*` are in `solar`; `NetworkIsolationTest` is in `caelis`.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -85,14 +89,16 @@ a session from the shell.
 | Package | Rule |
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
-| `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris). |
+| `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
+| `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, search index). |
-| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview (`CameraPreview`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the camera-geometry half of automatic horizon alignment (`SkylineAligner`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
+| `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `StarMetadata`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
-| `notify/` | The ongoing notification. It re-arms its own tick; it must never post while unattached. |
+| `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
 | `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
@@ -118,6 +124,47 @@ Each of these was found by review or on the device and is now covered by a test.
   fit tall screens (20:9, 19.5:9), altering the horizontal FOV:
   $\text{cropRatio} = \text{viewportAspect} / \text{sensorAspect}$,
   $\text{effectiveFovH} = 2 \arctan(\tan(\text{rawFovH} / 2) \cdot \text{cropRatio})$.
+- **The AR FOV is measured from the stream, not derived from the lens.** `SENSOR_INFO_PHYSICAL_SIZE`
+  describes the whole pixel array; what reaches the screen is a `SCALER_CROP_REGION` inside the
+  active array, at the resolution CameraX chose, scaled by `PreviewView` FILL_CENTER.
+  `CameraFovCalculator.computeStreamHorizontalFov` takes all three and
+  `CameraPreview` reads the crop region out of the capture results. Deriving it from the lens alone
+  reported 36.7° where fitting the terrain profile to the camera image measured ~32° — 14 % wide,
+  which squeezes the whole overlay towards the centre and cannot be corrected by panning. The
+  geometry-only path stays as the fallback for devices that report no crop region.
+- **A measured FOV already contains the zoom; an unmeasured one does not.** `CameraPreview` says
+  which it is handing over, and the view models divide only by the zoom the camera did *not*
+  perform. Dividing a measured FOV by the full zoom ratio counts the zoom twice.
+- **Zoom belongs to the camera and the overlay, or to neither.** `cameraFovHorizontal` is
+  `baseFov / zoomRatio`, so a pinch that never reaches `CameraControl.setZoomRatio` shrinks the
+  overlay while the image stays put. `attachCamera` is how the control gets there. Sun AR has no
+  zoom at all — it only added a variable to the alignment — so its FOV *is* the measured one.
+- **A drag in Sun AR is a calibration, not a pan.** It moves `calibration*` through
+  `nudgeCalibrationBy` and never pauses the sensors: the overlay keeps tracking while the finger
+  walks it onto the ridge, and letting go snaps nothing back. The freezing pan stays for Night Sky's
+  manual mode. The calibration is clamped to ±20° in both axes — a compass is wrong by degrees, and
+  anything larger is a mis-drag that would be indistinguishable from a broken magnetometer next time.
+- **One compass correction per phone.** `ar_azimuth_offset` / `ar_elevation_offset` are shared by
+  both AR screens; the old `sun_ar_*` and `night_sky_*` keys are read only to migrate from and never
+  written again. Aligning against a ridge by day is what makes the stars line up at night.
+- **Automatic alignment refuses rather than guesses.** `SkylineMatcher` returns null unless enough
+  columns carried a boundary, the photographed skyline has at least half the relief the terrain does,
+  the residual minimum stands out from the average candidate, and the fit is under 0.5°. A confident
+  wrong alignment is worse than none, because from the outside it looks measured. Its vertical offset
+  comes from a low quantile of the differences, never the median: trees and roofs stand above the
+  bare-earth model and never below it, so a median folds the average tree height into the calibration.
+- **The search radius is estimated before the ring is fetched, not after.** `HorizonRangeEstimator`
+  works from the observer's own tile, which is mandatory anyway, so a valley floor never downloads
+  eight neighbours to discover they change nothing. The bound is real: past the distance where a peak
+  of the highest elevation nearby would sink below the skyline already found, nothing out there can
+  change the answer.
+- **A stored calibration must never freeze the sensors.** `OrientationTracker.setPanOffsets` pauses
+  tracking on purpose — it is the drag gesture. Restoring a saved offset goes through
+  `setCalibration`, which folds into the live matrix on every sensor sample and leaves tracking
+  alone; restoring it through `setPanOffsets` opened the AR screen with the overlay frozen for
+  anyone who had ever calibrated, which made the stored value worse than useless.
+- **Dropping a pan is not forgetting the calibration.** `resumeSensorTracking` and `startSensors`
+  clear `pan*` and keep `calibration*`; only an explicit reset clears both.
 - **Zero allocations on the AR render loop.** `SkyDomeRenderer` uses pre-allocated flat FloatArrays
   and in-place `CameraProjection.projectFast` to ensure zero GC allocations per frame at 60 FPS.
 - **Timing is absolute.** Shot times come from `IntervalSchedule.targetElapsedFor`, never "now +
@@ -147,6 +194,71 @@ Each of these was found by review or on the device and is now covered by a test.
   one.
 - **No `startForeground` on the accessibility service.** It has no foreground service type and the
   manifest declares no `FOREGROUND_SERVICE`; the notification goes through `NotificationManager`.
+- **`data/horizon/DemTileDownloader.kt` is the only file in `app/src/main` allowed to touch the
+  network.** `NetworkIsolationTest` walks the sources and fails the build on a second one. The app
+  used to prove "nothing leaves the device" through the *absence* of `INTERNET`; that permission is
+  `normal`, so once declared it cannot be withheld or revoked, and the guarantee is now the source's
+  to keep. Do not add a second network caller, an analytics SDK, or an HTTP client dependency without
+  deciding, out loud, to give that guarantee up.
+- **Deleting the `INTERNET` line from the manifest must keep working.** It is a documented way to
+  build from source without a network. `NetworkAvailability.hasInternetPermission()` is how the UI
+  finds out at runtime; never gate that on a build flag, which would drift from the manifest.
+- **Consent is read per call, never captured.** `DemTileDownloader` takes a `suspend () -> Boolean`
+  and evaluates it on every download, so revoking consent in settings takes effect immediately rather
+  than at the next process start.
+- **A profile is never computed without the tile the observer is standing in.** Without it every ray
+  runs out of data inside two kilometres, gives up, and the profile comes back as a flat ring at the
+  geometric dip — which renders exactly like a real skyline. `HorizonRepository` treats that one tile
+  as mandatory and `HorizonProfile.coveredSamples` counts how many azimuths were actually backed by
+  data; below `MIN_USABLE_SAMPLES` the profile is refused rather than drawn. This was a real device
+  bug, caused by the next invariant.
+- **`DemTileCache.store` must not trim, and `trim` must never evict the working set.** The cap was
+  once smaller than a single 60 km working set and trimming ran after every tile, so tile three was
+  reclaimed while tile five was still downloading. Reclaiming space from tiles the current run needs
+  does not save a download; it corrupts the answer.
+- **`HorizonRepository` is a process singleton**, like `SessionRepository`. Three screens read the
+  same state; one instance per view model meant the same 26 MB download started twice and two
+  coroutines drove one progress notification. Its scope outlives every view model on purpose — a
+  download has to survive leaving the screen that started it.
+- **Shared horizon settings live in the app's Settings, not on an AR screen.** Radius, eye height,
+  download and cache describe where you are standing, not which screen is open; each AR screen keeps
+  only its own show/hide switch.
+- **The terrain profile is the artefact; the elevation tiles are cache.** Profiles live in
+  `filesDir/horizons/` (5.8 kB each) and are what makes the layer work with no signal. Tiles live in
+  `cacheDir/dem/` (up to 26 MB each) and Android may reclaim them at any time. Never move a tile into
+  `filesDir`, and never make a drawn horizon depend on one still being there.
+- **A tile is stored atomically or not at all.** `DemTileCache.store` writes to `<name>.part` and
+  renames only after the length is checked against `HgtTile.isPlausibleGridLength`. A truncated
+  transfer is still a mappable blob that would invent a skyline out of whatever the missing rows
+  decoded to.
+- **A void DEM sample is `null`, never 0 m.** `-32768` marks "no measurement", and those sit in steep
+  valleys and on glaciers — exactly where a sea-level reading would invent a horizon dip. The
+  calculator skips them; `blendCorners` renormalises around them.
+- **Observer height comes from the DEM plus eye height, not from `Location.altitude`.** A phone's GPS
+  altitude is routinely tens of metres out, which tilts the entire skyline visibly. The DEM value is
+  the same surface the ray march measures against.
+- **Terrain crossings are compared against the *apparent* elevation.** The profile already has
+  refraction folded into an enlarged Earth radius ($R/(1-k)$, $k = 0.13$); comparing the geometric
+  elevation would count it once on one side and not the other.
+- **The night sky profile strip is sampled NEAREST and interpolated in the shader.** Elevation is
+  packed 16-bit across R and G; hardware filtering would blend the packed bytes, and an interpolated
+  R channel across a carry boundary decodes to a wild number, not to a halfway elevation.
+- **The profile strip and the landscape panorama do not share a texture coordinate.** The strip
+  starts at north (texel 0 is azimuth 0); the panorama has north in the middle of the image, which is
+  what its `texU`'s `+ 0.5` is for. Reading the strip with `texU` drew the whole terrain horizon half
+  a turn out — a ridge due north appeared due south — and it looked entirely plausible, because a
+  horizon is a horizon whichever way you face. `NightSkyHorizonOrientationTest` renders the real
+  shader against a profile with terrain in one direction only and checks all four cardinal points, so
+  a quarter-turn is caught as well as a half-turn.
+- **Terrain download notifications use `IMPORTANCE_DEFAULT` with muted sound and vibration.**
+  Android's `IMPORTANCE_LOW` categorises notifications into the Silent section, where Android
+  SystemUI suppresses the status bar icon by default. `IMPORTANCE_DEFAULT` with `setSound(null, null)`
+  and `enableVibration(false)` guarantees visibility in the status bar next to the clock while keeping
+  the download and compute operations completely silent.
+- **The notification permission prompt on first launch is one-shot.** On Android 13+ (API 33+),
+  `POST_NOTIFICATIONS` is prompted once on first launch and remembered in DataStore
+  (`notification_permission_prompted`). The app never nags the user again on subsequent opens
+  regardless of whether they accepted or declined.
 
 ## Conventions
 

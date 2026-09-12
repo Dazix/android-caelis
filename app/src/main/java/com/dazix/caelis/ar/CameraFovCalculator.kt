@@ -100,6 +100,114 @@ object CameraFovCalculator {
     }
 
     /**
+     * Effective horizontal FOV computed from what the camera **actually delivers**, not from the
+     * lens geometry alone.
+     *
+     * [computeEffectiveHorizontalFov] assumes the preview shows the whole sensor at the sensor's own
+     * aspect ratio. Neither is true on a modern phone: `SENSOR_INFO_PHYSICAL_SIZE` describes the full
+     * pixel array, while the stream is produced from a `SCALER_CROP_REGION` inside the active array —
+     * narrowed further by preview stabilisation or a default zoom — and at whatever aspect ratio
+     * CameraX picked for the `Preview` use case. On a Pixel that made the computed FOV 36.7° where a
+     * fit of the terrain skyline against the camera image measured 31.7°: 14 % too wide, which
+     * squeezes the whole overlay towards the centre of the frame and cannot be corrected by any
+     * amount of panning.
+     *
+     * @param activeArrayWidthPx width of `SENSOR_INFO_ACTIVE_ARRAY_SIZE` in sensor pixels.
+     * @param activeArrayHeightPx height of the same rectangle.
+     * @param cropRegionWidthPx width of `CaptureResult.SCALER_CROP_REGION`.
+     * @param cropRegionHeightPx height of the same rectangle.
+     * @param streamWidthPx width of the buffer the `Preview` use case receives.
+     * @param streamHeightPx height of that buffer.
+     * @return the horizontal FOV visible in the viewport, or the geometry-only answer from
+     *   [computeEffectiveHorizontalFov] when any of the measured values is missing or degenerate.
+     */
+    fun computeStreamHorizontalFov(
+        sensorWidthMm: Float?,
+        sensorHeightMm: Float?,
+        focalLengthMm: Float?,
+        activeArrayWidthPx: Int,
+        activeArrayHeightPx: Int,
+        cropRegionWidthPx: Int,
+        cropRegionHeightPx: Int,
+        streamWidthPx: Int,
+        streamHeightPx: Int,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        isPortrait: Boolean,
+        fallbackFovDegrees: Float = DEFAULT_PORTRAIT_FOV_DEGREES,
+    ): Float {
+        val geometryOnly = computeEffectiveHorizontalFov(
+            sensorWidthMm,
+            sensorHeightMm,
+            focalLengthMm,
+            viewportWidth,
+            viewportHeight,
+            isPortrait,
+            fallbackFovDegrees,
+        )
+
+        val measurable = activeArrayWidthPx > 0 && activeArrayHeightPx > 0 &&
+            cropRegionWidthPx > 0 && cropRegionHeightPx > 0 &&
+            streamWidthPx > 0 && streamHeightPx > 0 &&
+            viewportWidth > 1f && viewportHeight > 1f
+        if (!measurable) return geometryOnly
+
+        val activeShort = minOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
+        val activeLong = maxOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
+        val cropShort = minOf(cropRegionWidthPx, cropRegionHeightPx).toDouble()
+        val cropLong = maxOf(cropRegionWidthPx, cropRegionHeightPx).toDouble()
+
+        val cropFractionShort = cropShort / activeShort
+        val cropFractionLong = cropLong / activeLong
+        // A crop region larger than the array it is measured in is a driver reporting nonsense.
+        if (cropFractionShort <= 0.0 || cropFractionShort > 1.01 ||
+            cropFractionLong <= 0.0 || cropFractionLong > 1.01
+        ) {
+            return geometryOnly
+        }
+
+        // Everything below works in tangents, because a crop scales the extent on the sensor plane —
+        // which is proportional to tan(halfAngle) — and not the angle itself.
+        val rawTanShort = tan(
+            computeHorizontalFov(sensorWidthMm, sensorHeightMm, focalLengthMm, true, fallbackFovDegrees) *
+                0.5 * DEG_TO_RAD,
+        )
+        // Pixels are square, so the pixel array's own aspect converts the short half-angle into the
+        // long one more reliably than the two millimetre figures do.
+        val rawTanLong = rawTanShort * (activeLong / activeShort)
+
+        var tanLong = rawTanLong * cropFractionLong
+        var tanShort = rawTanShort * cropFractionShort
+
+        // The stream is a centre crop of the crop region: whichever axis is relatively longer in the
+        // stream survives whole and the other one is trimmed to match.
+        val cropAspect = cropLong / cropShort
+        val streamAspect = maxOf(streamWidthPx, streamHeightPx).toDouble() /
+            minOf(streamWidthPx, streamHeightPx).toDouble()
+        if (streamAspect >= cropAspect) {
+            tanShort = tanLong / streamAspect
+        } else {
+            tanLong = tanShort * streamAspect
+        }
+
+        val tanHorizontal = if (isPortrait) tanShort else tanLong
+        val tanVertical = if (isPortrait) tanLong else tanShort
+        if (tanVertical <= 0.0) return geometryOnly
+
+        // PreviewView FILL_CENTER scales the stream until it covers the viewport, so the axis that
+        // stays whole is the one the viewport is relatively longer in.
+        val viewportAspect = (viewportWidth / viewportHeight).toDouble()
+        val streamAspectOnScreen = tanHorizontal / tanVertical
+        val tanVisible = if (viewportAspect < streamAspectOnScreen) {
+            tanVertical * viewportAspect
+        } else {
+            tanHorizontal
+        }
+
+        return (2.0 * atan(tanVisible) * RAD_TO_DEG).toFloat().coerceIn(1.0f, 150.0f)
+    }
+
+    /**
      * Computes the effective focal length in pixels for perspective projection matching PreviewView FILL_CENTER.
      *
      * @param effectiveFovHorizontalDegrees Effective horizontal field of view in degrees.

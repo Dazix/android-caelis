@@ -79,6 +79,18 @@ class NightSkyRenderer {
     private var landscapeTextureHeight = 1024f
     private var hasLandscapeTexture = false
 
+    /**
+     * The real terrain skyline, packed into a 1440x1 strip the shader reads per pixel.
+     *
+     * Re-created only when the profile itself changes — once per location, not per frame — and kept
+     * here so the render loop stays allocation-free. Null until a profile exists, which is also how
+     * the shader is told to fall back to the stylised panorama.
+     */
+    private var horizonProfileBitmap: Bitmap? = null
+    private var hasHorizonProfile = false
+    private var horizonProfileStamp: Long = Long.MIN_VALUE
+    private val terrainColorBuffer = FloatArray(4)
+
     val numBuckets = StarOptics.NUM_BUCKETS
     val bucketPoints = Array(numBuckets) { FloatArray(MAX_STARS * 2) }
     val bucketCounts = IntArray(numBuckets)
@@ -124,6 +136,11 @@ class NightSkyRenderer {
     private val reusableConstellation = Constellation()
 
     companion object {
+        /** Fill below the real skyline. Near-black, never pure black — see [drawLandscape]. */
+        private const val TERRAIN_FILL_R = 0.024f
+        private const val TERRAIN_FILL_G = 0.031f
+        private const val TERRAIN_FILL_B = 0.043f
+
         const val MAX_STARS = 100_000
 
         data class IndicatorTransform(
@@ -806,6 +823,53 @@ class NightSkyRenderer {
         }
     }
 
+    /**
+     * Packs a terrain profile into the 1440x1 strip the landscape shader reads, and binds it.
+     *
+     * Elevation is stored as a 16-bit value split across R and G, over a fixed [-128, +128] degree
+     * window — 0.0039 degrees per step. A single 8-bit channel was the obvious first try and is not
+     * enough: over any usable range it quantises the skyline into visible terraces.
+     *
+     * Sampling is NEAREST on purpose. Hardware filtering would blend the packed bytes, and an
+     * interpolated R channel across a carry boundary decodes to a wild number rather than to a
+     * halfway elevation — so the blend is done in the shader, between two decoded samples.
+     *
+     * Does nothing when [profile] has not changed, so this is safe to call from a recomposition.
+     */
+    fun setHorizonProfile(profile: com.dazix.caelis.domain.horizon.HorizonProfile?) {
+        val shader = landscapeShader ?: return
+
+        if (profile == null) {
+            hasHorizonProfile = false
+            horizonProfileStamp = Long.MIN_VALUE
+            return
+        }
+        if (hasHorizonProfile && profile.generatedAtEpochMillis == horizonProfileStamp) return
+
+        val width = LandscapeShader.PROFILE_WIDTH
+        val bitmap = horizonProfileBitmap
+            ?: Bitmap.createBitmap(width, 1, Bitmap.Config.ARGB_8888).also { horizonProfileBitmap = it }
+
+        val pixels = IntArray(width)
+        for (i in 0 until width) {
+            val degrees = profile.elevationsDegrees[i].toDouble()
+            val packed = (((degrees + 128.0) / 256.0) * 65535.0)
+                .toInt()
+                .coerceIn(0, 65535)
+            val r = (packed shr 8) and 0xFF
+            val g = packed and 0xFF
+            pixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8)
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, 1)
+
+        val bitmapShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.CLAMP).apply {
+            setFilterMode(BitmapShader.FILTER_MODE_NEAREST)
+        }
+        shader.setInputShader("horizonProfile", bitmapShader)
+        hasHorizonProfile = true
+        horizonProfileStamp = profile.generatedAtEpochMillis
+    }
+
     private val shaderTintBuffer = FloatArray(3)
 
     /**
@@ -902,7 +966,13 @@ class NightSkyRenderer {
         isLandscapeVisible: Boolean,
         isRedVision: Boolean,
         theme: com.dazix.caelis.domain.nightsky.NightVisionTheme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER,
+        useRealHorizon: Boolean = false,
     ) {
+        // The real skyline needs no panorama texture, but the shader still declares both inputs, so
+        // an unbound sampler would be undefined behaviour. Requiring the texture either way keeps
+        // the fallback honest: no profile, no bitmap, nothing drawn.
+        val realHorizon = useRealHorizon && hasHorizonProfile
+
         if (isLandscapeVisible && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
             val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
             val fovFactor = 1.0f / tan(halfFovHRad)
@@ -924,6 +994,15 @@ class NightSkyRenderer {
             landscapeShader.setFloatUniform("fovFactor", fovFactor)
             landscapeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
             landscapeShader.setFloatUniform("nightVisionTint", shaderTintBuffer)
+            landscapeShader.setFloatUniform("useRealHorizon", if (realHorizon) 1.0f else 0.0f)
+
+            // Near-black rather than black: on an OLED panel a pure-black fill against a dark sky
+            // reads as a hole in the render, not as ground.
+            terrainColorBuffer[0] = TERRAIN_FILL_R
+            terrainColorBuffer[1] = TERRAIN_FILL_G
+            terrainColorBuffer[2] = TERRAIN_FILL_B
+            terrainColorBuffer[3] = 1.0f
+            landscapeShader.setFloatUniform("terrainColor", terrainColorBuffer)
 
             drawScope.drawRect(brush = landscapeBrush)
         }

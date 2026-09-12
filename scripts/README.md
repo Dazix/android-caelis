@@ -195,7 +195,7 @@ deleted is listed in `build/e2e/ids-leftover-<stamp>.txt` and warned about.
 These live in the **debug source set only** (`app/src/debug/`), so nothing below exists in a release
 build.
 
-One class per file, all under `app/src/debug/java/com/dazix/intervalometer/debug/`:
+One class per file, all under `app/src/debug/java/com/dazix/caelis/debug/`:
 `FakeCameraActivity.kt` (the activity), `FakeCameraViews.kt` (its two tap surfaces),
 `FakeCameraTapLog.kt` (the log format) and `DebugSessionReceiver.kt` (the broadcast entry point).
 
@@ -273,7 +273,7 @@ deleting them, and the deletion is retried, because a row the camera has not fin
 
 ## Instrumented tests
 
-`app/src/androidTest/java/com/dazix/intervalometer/`
+`app/src/androidTest/java/com/dazix/caelis/`
 
 | Class | Asserts |
 | --- | --- |
@@ -356,7 +356,7 @@ crashed instrumentation instead of a pass or a fail. `InterruptedRunTest` theref
 halves that survive a kill and can be observed: what `RunStateStore` persisted while the session was
 live, and what a rebound service does with that record (resume it, or report the loss exactly once).
 The record format itself is round-tripped on the JVM in
-`app/src/test/java/com/dazix/intervalometer/service/RunPlanCodecTest.kt`.
+`app/src/test/java/com/dazix/caelis/service/RunPlanCodecTest.kt`.
 
 ### Tolerances, and where they come from
 

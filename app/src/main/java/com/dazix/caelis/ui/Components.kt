@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -777,4 +778,16 @@ private fun String.filterNumeric(decimal: Boolean): String {
         }
     }
     return allowed.take(9)
+}
+
+/**
+ * A signed alignment offset, in the viewer's own locale.
+ *
+ * The locale comes from [LocalResources] rather than `Locale.getDefault()`: the latter is read once
+ * and never invalidates, so a language change would leave a stale decimal separator on screen.
+ */
+@Composable
+internal fun formatOffsetDegrees(valueDegrees: Float): String {
+    val locale = LocalResources.current.configuration.locales[0]
+    return String.format(locale, "%+.1f°", valueDegrees)
 }

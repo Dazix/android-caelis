@@ -210,4 +210,76 @@ object CameraProjection {
 
         return isInFront
     }
+
+    /**
+     * The exact inverse of [projectFast]: which direction in the world a screen pixel looks at.
+     *
+     * Needed to read the sky out of the camera image. The automatic horizon alignment finds the
+     * sky/terrain boundary in pixels and has to ask what azimuth and elevation each of those pixels
+     * is pointing at before it can compare them with the terrain profile.
+     *
+     * @param outAzEl receives `[azimuthDegrees, elevationDegrees]`; azimuth is in [0, 360).
+     */
+    fun unprojectFast(
+        screenX: Float,
+        screenY: Float,
+        rotationMatrix: FloatArray,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        displayRotation: Int = Surface.ROTATION_0,
+        fovHorizontalDegrees: Float = 56f,
+        outAzEl: DoubleArray,
+        offset: Int = 0,
+    ) {
+        val halfFovHRad = fovHorizontalDegrees * 0.5f * RAD.toFloat()
+        val focalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+
+        // Undo the perspective divide by fixing the camera-axis component at 1: only the direction
+        // matters, and the ray through a pixel is the same at any distance.
+        val xs = (screenX - viewportWidth * 0.5f) / focalLengthPixels
+        val ys = -(screenY - viewportHeight * 0.5f) / focalLengthPixels
+        val zs = 1f
+
+        val xDev: Float
+        val yDev: Float
+        when (displayRotation) {
+            Surface.ROTATION_0 -> { xDev = xs; yDev = ys }
+            Surface.ROTATION_90 -> { xDev = -ys; yDev = xs }
+            Surface.ROTATION_180 -> { xDev = -xs; yDev = -ys }
+            Surface.ROTATION_270 -> { xDev = ys; yDev = -xs }
+            else -> { xDev = xs; yDev = ys }
+        }
+        val zDev = -zs
+
+        // projectFast computes V_dev = R^T · V_world, so the way back is V_world = R · V_dev.
+        val r = rotationMatrix
+        val vx: Float
+        val vy: Float
+        val vz: Float
+        if (r.size >= 16) {
+            vx = r[0] * xDev + r[1] * yDev + r[2] * zDev
+            vy = r[4] * xDev + r[5] * yDev + r[6] * zDev
+            vz = r[8] * xDev + r[9] * yDev + r[10] * zDev
+        } else if (r.size >= 9) {
+            vx = r[0] * xDev + r[1] * yDev + r[2] * zDev
+            vy = r[3] * xDev + r[4] * yDev + r[5] * zDev
+            vz = r[6] * xDev + r[7] * yDev + r[8] * zDev
+        } else {
+            vx = xDev
+            vy = yDev
+            vz = zDev
+        }
+
+        val length = kotlin.math.sqrt((vx * vx + vy * vy + vz * vz).toDouble())
+        var azimuth = atan2(vx.toDouble(), vy.toDouble()) * DEG
+        if (azimuth < 0.0) azimuth += 360.0
+        val elevation = if (length > 1e-9) {
+            kotlin.math.asin((vz / length).coerceIn(-1.0, 1.0)) * DEG
+        } else {
+            0.0
+        }
+
+        outAzEl[offset] = azimuth
+        outAzEl[offset + 1] = elevation
+    }
 }

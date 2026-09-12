@@ -57,7 +57,15 @@ class SettingsStore(context: Context) {
 
     val sunArKeepScreenOn: Flow<Boolean> = preferences.map { SettingsMapping.readSunArKeepScreenOn(it) }
 
+    val notificationPermissionPrompted: Flow<Boolean> =
+        preferences.map { SettingsMapping.readNotificationPermissionPrompted(it) }
+
     val sunArRedVisionMode: Flow<Boolean> = preferences.map { SettingsMapping.readSunArRedVisionMode(it) }
+
+    /** The one compass correction, shared by Sun AR and Night Sky AR. */
+    val arAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readArAzimuthOffset(it) }
+
+    val arElevationOffset: Flow<Float> = preferences.map { SettingsMapping.readArElevationOffset(it) }
 
     val sunArAzimuthOffset: Flow<Float> = preferences.map { SettingsMapping.readSunArAzimuthOffset(it) }
 
@@ -110,6 +118,15 @@ class SettingsStore(context: Context) {
 
     val debugModeEnabled: Flow<Boolean> = preferences.map { SettingsMapping.readDebugModeEnabled(it) }
 
+    val horizon: Flow<HorizonSettings> = preferences.map { SettingsMapping.readHorizon(it) }
+
+    suspend fun saveHorizon(settings: HorizonSettings) {
+        dataStore.edit { SettingsMapping.writeHorizon(it, settings) }
+    }
+
+    /** One-shot read for the places that need the current settings without collecting a flow. */
+    suspend fun currentHorizon(): HorizonSettings = SettingsMapping.readHorizon(currentPreferences())
+
     suspend fun saveNightVisionTheme(theme: NightVisionTheme) {
         dataStore.edit { SettingsMapping.writeNightVisionTheme(it, theme) }
     }
@@ -136,6 +153,11 @@ class SettingsStore(context: Context) {
 
     suspend fun saveSunArRedVisionMode(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeSunArRedVisionMode(it, enabled) }
+    }
+
+    /** Writes the shared compass correction. The per-screen keys are no longer written at all. */
+    suspend fun saveArCalibration(azimuthDeg: Float, elevationDeg: Float) {
+        dataStore.edit { SettingsMapping.writeArCalibration(it, azimuthDeg, elevationDeg) }
     }
 
     suspend fun saveSunArAzimuthOffset(offsetDeg: Float) {
@@ -234,6 +256,13 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkySensorTracking(it, enabled) }
     }
 
+    suspend fun saveNotificationPermissionPrompted(prompted: Boolean = true) {
+        dataStore.edit { SettingsMapping.writeNotificationPermissionPrompted(it, prompted) }
+    }
+
+    suspend fun currentNotificationPermissionPrompted(): Boolean =
+        SettingsMapping.readNotificationPermissionPrompted(currentPreferences())
+
     suspend fun saveConfig(config: SessionConfig) {
         dataStore.edit { SettingsMapping.writeConfig(it, config) }
     }
@@ -307,6 +336,15 @@ internal object SettingsMapping {
     private val ADV_DIM_OVERLAY = booleanPreferencesKey("advanced_dim_overlay")
     private val SUN_AR_KEEP_SCREEN_ON = booleanPreferencesKey("sun_ar_keep_screen_on")
     private val SUN_AR_RED_VISION_MODE = booleanPreferencesKey("sun_ar_red_vision_mode")
+    /**
+     * One compass correction per phone, shared by every AR screen.
+     *
+     * There used to be a `sun_ar_` pair and a `night_sky_` pair for what is physically one
+     * magnetometer in one device: aligning the terrain silhouette by day taught the app nothing
+     * about where north is at night. Those two are read only to migrate from, never written again.
+     */
+    private val AR_AZIMUTH_OFFSET = floatPreferencesKey("ar_azimuth_offset")
+    private val AR_ELEVATION_OFFSET = floatPreferencesKey("ar_elevation_offset")
     private val SUN_AR_AZIMUTH_OFFSET = floatPreferencesKey("sun_ar_azimuth_offset")
     private val SUN_AR_ELEVATION_OFFSET = floatPreferencesKey("sun_ar_elevation_offset")
     private val SUN_AR_QUAT_X = floatPreferencesKey("sun_ar_quat_x")
@@ -336,6 +374,15 @@ internal object SettingsMapping {
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
     private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
     private val DEBUG_MODE_ENABLED = booleanPreferencesKey("debug_mode_enabled")
+
+    private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
+    private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
+    private val HORIZON_AUTO_RANGE = booleanPreferencesKey("horizon_auto_range")
+    private val HORIZON_MAX_RANGE_KM = intPreferencesKey("horizon_max_range_km")
+    private val HORIZON_EYE_HEIGHT_CM = intPreferencesKey("horizon_eye_height_cm")
+    private val HORIZON_SHADE_OCCLUDED = booleanPreferencesKey("horizon_shade_occluded")
+    private val HORIZON_WIFI_ONLY = booleanPreferencesKey("horizon_wifi_only")
+    private val HORIZON_NIGHT_SKY_REAL = booleanPreferencesKey("horizon_night_sky_real")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -529,6 +576,29 @@ internal object SettingsMapping {
 
     fun writeSunArRedVisionMode(prefs: MutablePreferences, enabled: Boolean) {
         prefs[SUN_AR_RED_VISION_MODE] = enabled
+    }
+
+    /**
+     * The shared compass correction, falling back to whichever per-screen value exists.
+     *
+     * Sun AR wins the tie: it is the screen where the correction can actually be measured against a
+     * ridge, so a value stored there is the better-founded of the two.
+     */
+    fun readArAzimuthOffset(prefs: Preferences): Float =
+        prefs[AR_AZIMUTH_OFFSET]
+            ?: prefs[SUN_AR_AZIMUTH_OFFSET]
+            ?: prefs[NIGHT_SKY_AZIMUTH_OFFSET]
+            ?: 0.0f
+
+    fun readArElevationOffset(prefs: Preferences): Float =
+        prefs[AR_ELEVATION_OFFSET]
+            ?: prefs[SUN_AR_ELEVATION_OFFSET]
+            ?: prefs[NIGHT_SKY_ELEVATION_OFFSET]
+            ?: 0.0f
+
+    fun writeArCalibration(prefs: MutablePreferences, azimuthDeg: Float, elevationDeg: Float) {
+        prefs[AR_AZIMUTH_OFFSET] = azimuthDeg
+        prefs[AR_ELEVATION_OFFSET] = elevationDeg
     }
 
     fun readSunArAzimuthOffset(prefs: Preferences): Float =
@@ -726,6 +796,40 @@ internal object SettingsMapping {
 
     fun writeDebugModeEnabled(prefs: MutablePreferences, enabled: Boolean) {
         prefs[DEBUG_MODE_ENABLED] = enabled
+    }
+
+    fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(
+        enabled = prefs[HORIZON_ENABLED] ?: false,
+        // Absent means "never asked", which is not the same as "said no" — the prompt has to be able
+        // to tell those apart or it either nags forever or never appears at all.
+        networkConsent = prefs[HORIZON_NETWORK_CONSENT],
+        autoRange = prefs[HORIZON_AUTO_RANGE] ?: true,
+        maxRangeKm = prefs[HORIZON_MAX_RANGE_KM] ?: HorizonSettings.DEFAULT_MAX_RANGE_KM,
+        eyeHeightCm = (prefs[HORIZON_EYE_HEIGHT_CM] ?: HorizonSettings.DEFAULT_EYE_HEIGHT_CM)
+            .coerceIn(HorizonSettings.MIN_EYE_HEIGHT_CM, HorizonSettings.MAX_EYE_HEIGHT_CM),
+        shadeOccludedTrajectory = prefs[HORIZON_SHADE_OCCLUDED] ?: true,
+        wifiOnly = prefs[HORIZON_WIFI_ONLY] ?: false,
+        realHorizonInNightSky = prefs[HORIZON_NIGHT_SKY_REAL] ?: false,
+    )
+
+    fun writeHorizon(prefs: MutablePreferences, settings: HorizonSettings) {
+        prefs[HORIZON_ENABLED] = settings.enabled
+        prefs.put(HORIZON_NETWORK_CONSENT, settings.networkConsent)
+        prefs[HORIZON_AUTO_RANGE] = settings.autoRange
+        prefs[HORIZON_MAX_RANGE_KM] = settings.maxRangeKm
+        prefs[HORIZON_EYE_HEIGHT_CM] = settings.eyeHeightCm
+        prefs[HORIZON_SHADE_OCCLUDED] = settings.shadeOccludedTrajectory
+        prefs[HORIZON_WIFI_ONLY] = settings.wifiOnly
+        prefs[HORIZON_NIGHT_SKY_REAL] = settings.realHorizonInNightSky
+    }
+
+    private val NOTIFICATION_PERMISSION_PROMPTED = booleanPreferencesKey("notification_permission_prompted")
+
+    fun readNotificationPermissionPrompted(prefs: Preferences): Boolean =
+        prefs[NOTIFICATION_PERMISSION_PROMPTED] ?: false
+
+    fun writeNotificationPermissionPrompted(prefs: MutablePreferences, prompted: Boolean) {
+        prefs[NOTIFICATION_PERMISSION_PROMPTED] = prompted
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

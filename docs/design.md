@@ -347,7 +347,8 @@ Augmented reality solar and lunar trajectory alignment for outdoor landscape pho
 
 #### Design Highlights:
 - **3D Celestial Ribbons**: Golden solar and cyan lunar trajectory arcs projected directly onto the physical horizon with hourly bubble markers.
-- **Field Telemetry HUD**: Top bar floating HUD shows GPS fix, latitude/longitude, compass azimuth, and lens FOV.
+- **Real Terrain Horizon Silhouette**: 1440-sample ray-marched skyline rendered directly against the landscape, dimming occluded solar arcs and calculating actual ridge sunset times.
+- **Field Telemetry HUD**: Top bar floating HUD shows GPS fix, latitude/longitude, compass azimuth, lens FOV, and live terrain download/compute progress chips (`• ⛰ 45 %`).
 - **Bottom Date Bar**: Segmented date stepping for planning upcoming shoots across solstices and moon phases.
 
 ---
@@ -422,6 +423,7 @@ A transparent onboarding flow designed to establish user trust and grant essenti
 #### Design Highlights:
 - **Transparent Cards**: Clear explanations detailing why each privilege is required.
 - **Live Status Chips**: Checkmark status chips turn green dynamically as settings are configured.
+- **One-Shot Notification Prompt**: Automatic, non-intrusive runtime notification permission dialog on first launch with permanent DataStore persistence ("ask once and done").
 
 ---
 

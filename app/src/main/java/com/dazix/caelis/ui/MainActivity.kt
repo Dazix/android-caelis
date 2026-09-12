@@ -3,6 +3,7 @@ package com.dazix.caelis.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,6 +86,7 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
     val customStartTime by viewModel.customStartTime.collectAsStateWithLifecycle()
     val customEndTime by viewModel.customEndTime.collectAsStateWithLifecycle()
     val debugModeEnabled by viewModel.debugModeEnabled.collectAsStateWithLifecycle()
+    val notificationPrompted by viewModel.notificationPermissionPrompted.collectAsStateWithLifecycle()
 
     // Every one of these is granted outside the app, so the state is re-read on each resume.
     LifecycleResumeEffect(Unit) {
@@ -93,6 +97,16 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
     val notificationsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshSystemState() }
+
+    LaunchedEffect(notificationPrompted, permissions.notificationsGranted) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !permissions.notificationsGranted &&
+            notificationPrompted == false
+        ) {
+            viewModel.markNotificationPermissionPrompted()
+            notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // The answer is only re-read, never acted on: on this target SDK the dialog always offers
     // "Select photos", which grants partial access and leaves READ_MEDIA_IMAGES denied. Switching
@@ -238,6 +252,34 @@ private fun CaelisScreen(
     onRequestMediaPermission: () -> Unit,
 ) {
     val context = LocalContext.current
+    val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
+    val horizonState by viewModel.horizonState.collectAsStateWithLifecycle()
+    val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
+
+    // LocalResources, not LocalContext: a Configuration change does not invalidate LocalContext
+    // reads, so a string fetched through the context can be stale after a locale switch.
+    val resources = LocalResources.current
+
+    // The system file chooser for a hand-imported elevation tile. Present in every build, including
+    // one made from source with INTERNET removed from the manifest.
+    val terrainImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importTerrainTile(uri) { result ->
+                val message = when (result) {
+                    is com.dazix.caelis.data.horizon.DemTileImporter.Result.Imported ->
+                        resources.getString(R.string.horizon_import_ok, result.key.name)
+                    is com.dazix.caelis.data.horizon.DemTileImporter.Result.NotATile ->
+                        resources.getString(R.string.horizon_import_not_a_tile)
+                    is com.dazix.caelis.data.horizon.DemTileImporter.Result.Failed ->
+                        resources.getString(R.string.horizon_import_failed)
+                }
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     when (screen) {
         Screen.HOME -> HomeScreen(
             snapshot = snapshot,
@@ -327,6 +369,22 @@ private fun CaelisScreen(
             startTime = customStartTime,
             endTime = customEndTime,
             debugModeEnabled = debugModeEnabled,
+            horizonSettings = horizonSettings,
+            horizonState = horizonState,
+            canDownloadTerrain = viewModel.canDownloadTerrain,
+            missingTerrainTiles = remember(horizonState, horizonSettings) { viewModel.missingTerrainTiles() },
+            cachedTerrainBytes = remember(horizonState) { viewModel.cachedTerrainBytes() },
+            effectiveRangeKm = effectiveHorizonRangeKm,
+            onHorizonEnabledChange = viewModel::setHorizonEnabled,
+            onHorizonAutoRangeChange = viewModel::setHorizonAutoRange,
+            onHorizonRangeChange = viewModel::setHorizonRangeKm,
+            onHorizonEyeHeightChange = viewModel::setHorizonEyeHeightCm,
+            onHorizonShadeOccludedChange = viewModel::setHorizonShadeOccluded,
+            onHorizonWifiOnlyChange = viewModel::setHorizonWifiOnly,
+            onHorizonRealInNightSkyChange = viewModel::setRealHorizonInNightSky,
+            onDownloadTerrain = viewModel::downloadTerrainForCurrentLocation,
+            onImportTerrain = { terrainImportLauncher.launch(arrayOf("*/*")) },
+            onClearTerrainCache = viewModel::clearTerrainCache,
             onThemeChange = viewModel::setNightVisionTheme,
             onActivationModeChange = viewModel::setNightVisionActivationMode,
             onStartTimeChange = viewModel::setCustomStartTime,

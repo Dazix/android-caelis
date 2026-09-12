@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,10 +22,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -47,6 +57,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.dazix.caelis.R
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
+import com.dazix.caelis.data.HorizonSettings
+import com.dazix.caelis.data.horizon.DemTileDownloader
+import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -54,7 +68,7 @@ import java.time.format.FormatStyle
 
 private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     theme: NightVisionTheme,
@@ -62,6 +76,23 @@ fun SettingsScreen(
     startTime: LocalTime,
     endTime: LocalTime,
     debugModeEnabled: Boolean = false,
+    horizonSettings: HorizonSettings = HorizonSettings(),
+    horizonState: HorizonState = HorizonState.Idle,
+    canDownloadTerrain: Boolean = true,
+    missingTerrainTiles: List<DemTileKey> = emptyList(),
+    cachedTerrainBytes: Long = 0L,
+    /** The radius the automatic setting settled on, once it has been worked out. */
+    effectiveRangeKm: Int? = null,
+    onHorizonEnabledChange: (Boolean) -> Unit = {},
+    onHorizonAutoRangeChange: (Boolean) -> Unit = {},
+    onHorizonRangeChange: (Int) -> Unit = {},
+    onHorizonEyeHeightChange: (Int) -> Unit = {},
+    onHorizonShadeOccludedChange: (Boolean) -> Unit = {},
+    onHorizonWifiOnlyChange: (Boolean) -> Unit = {},
+    onHorizonRealInNightSkyChange: (Boolean) -> Unit = {},
+    onDownloadTerrain: () -> Unit = {},
+    onImportTerrain: () -> Unit = {},
+    onClearTerrainCache: () -> Unit = {},
     onThemeChange: (NightVisionTheme) -> Unit,
     onActivationModeChange: (NightVisionActivationMode) -> Unit,
     onStartTimeChange: (LocalTime) -> Unit,
@@ -71,6 +102,7 @@ fun SettingsScreen(
 ) {
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
+    var showAttribution by remember { mutableStateOf(false) }
 
     ScreenScaffold(
         title = stringResource(R.string.settings_title),
@@ -175,6 +207,149 @@ fun SettingsScreen(
             }
         }
 
+        // ---- Terrain horizon ----
+        //
+        // Shared by both AR screens on purpose: the search radius, the eye height and the downloaded
+        // tiles describe where you are standing, not which screen you happen to be looking at. The
+        // AR screens keep only their own show/hide switch.
+        SectionHeader(
+            text = stringResource(R.string.horizon_section_title),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SectionCard(
+            title = stringResource(R.string.horizon_section_title),
+            subtitle = stringResource(R.string.horizon_enabled_desc),
+        ) {
+            SwitchRow(
+                title = stringResource(R.string.horizon_enabled),
+                description = stringResource(R.string.horizon_enabled_desc),
+                checked = horizonSettings.enabled,
+                onCheckedChange = onHorizonEnabledChange,
+            )
+
+            HorizonStatusRow(state = horizonState)
+
+            if (!canDownloadTerrain) {
+                Text(
+                    text = stringResource(R.string.horizon_no_permission),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.horizon_range),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+            )
+            // Automatic first and selected by default: the useful radius varies from two kilometres
+            // in a valley to eighty on a plain, and guessing high costs tiles, not accuracy.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = horizonSettings.autoRange,
+                    onClick = { onHorizonAutoRangeChange(true) },
+                    label = {
+                        Text(
+                            if (horizonSettings.autoRange && effectiveRangeKm != null) {
+                                stringResource(R.string.horizon_range_auto_value, effectiveRangeKm)
+                            } else {
+                                stringResource(R.string.horizon_range_auto)
+                            },
+                        )
+                    },
+                )
+                HorizonSettings.RANGE_CHOICES_KM.forEach { km ->
+                    FilterChip(
+                        selected = !horizonSettings.autoRange && horizonSettings.maxRangeKm == km,
+                        onClick = {
+                            onHorizonAutoRangeChange(false)
+                            onHorizonRangeChange(km)
+                        },
+                        label = { Text(stringResource(R.string.horizon_range_value, km)) },
+                    )
+                }
+            }
+
+            StepperRow(
+                title = stringResource(R.string.horizon_eye_height),
+                value = stringResource(R.string.horizon_eye_height_value, horizonSettings.eyeHeightCm),
+                canDecrease = horizonSettings.eyeHeightCm > HorizonSettings.MIN_EYE_HEIGHT_CM,
+                canIncrease = horizonSettings.eyeHeightCm < HorizonSettings.MAX_EYE_HEIGHT_CM,
+                onDecrease = { onHorizonEyeHeightChange(horizonSettings.eyeHeightCm - EYE_HEIGHT_STEP_CM) },
+                onIncrease = { onHorizonEyeHeightChange(horizonSettings.eyeHeightCm + EYE_HEIGHT_STEP_CM) },
+            )
+
+            SwitchRow(
+                title = stringResource(R.string.horizon_shade_occluded),
+                description = stringResource(R.string.horizon_shade_occluded_desc),
+                checked = horizonSettings.shadeOccludedTrajectory,
+                onCheckedChange = onHorizonShadeOccludedChange,
+            )
+
+            SwitchRow(
+                title = stringResource(R.string.horizon_night_sky_real),
+                description = stringResource(R.string.horizon_night_sky_real_desc),
+                checked = horizonSettings.realHorizonInNightSky,
+                onCheckedChange = onHorizonRealInNightSkyChange,
+            )
+
+            if (canDownloadTerrain) {
+                SwitchRow(
+                    title = stringResource(R.string.horizon_wifi_only),
+                    description = stringResource(R.string.horizon_wifi_only_desc),
+                    checked = horizonSettings.wifiOnly,
+                    onCheckedChange = onHorizonWifiOnlyChange,
+                )
+
+                Button(
+                    onClick = onDownloadTerrain,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    Text(stringResource(R.string.horizon_download_now))
+                }
+            }
+
+            OutlinedButton(
+                onClick = onImportTerrain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            ) {
+                Text(stringResource(R.string.horizon_import_action))
+            }
+
+            if (missingTerrainTiles.isNotEmpty()) {
+                Text(
+                    text = stringResource(
+                        R.string.horizon_import_body,
+                        missingTerrainTiles.joinToString("\n") { "${it.fileName}.gz" },
+                        "${DemTileDownloader.DEFAULT_BASE_URL}/skadi/",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 6.dp),
+                )
+            }
+
+            if (cachedTerrainBytes > 0) {
+                TextButton(onClick = onClearTerrainCache) {
+                    Text(
+                        stringResource(R.string.horizon_clear_cache) + " · " +
+                            stringResource(R.string.horizon_cache_size, formatBytes(cachedTerrainBytes)),
+                    )
+                }
+            }
+
+            // Attribution is a licence condition of the elevation data, not a nicety.
+            TextButton(onClick = { showAttribution = true }) {
+                Text(stringResource(R.string.horizon_attribution_title))
+            }
+        }
+
         // ---- Section 4: Debug Options (Ladění) ----
         SectionHeader(
             text = stringResource(R.string.settings_section_debug),
@@ -192,6 +367,26 @@ fun SettingsScreen(
                 onCheckedChange = onDebugModeEnabledChange,
             )
         }
+    }
+
+    if (showAttribution) {
+        AlertDialog(
+            onDismissRequest = { showAttribution = false },
+            title = { Text(stringResource(R.string.horizon_attribution_title)) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = stringResource(R.string.horizon_attribution_body),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAttribution = false }) {
+                    Text(stringResource(R.string.action_dismiss))
+                }
+            },
+        )
     }
 
     if (showStartTimeDialog) {
@@ -313,3 +508,94 @@ private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** One line saying what the terrain layer is doing, including when it is stuck and why. */
+@Composable
+private fun HorizonStatusRow(state: HorizonState) {
+    val text = when (state) {
+        is HorizonState.Idle -> null
+        is HorizonState.NeedsTiles -> stringResource(R.string.horizon_status_needs_tiles)
+        is HorizonState.Downloading -> stringResource(R.string.horizon_status_downloading, state.index, state.total)
+        is HorizonState.Computing -> stringResource(R.string.horizon_status_computing)
+        is HorizonState.Ready -> stringResource(R.string.horizon_status_ready)
+        is HorizonState.Failed -> when (state.reason) {
+            HorizonState.Failed.Reason.NETWORK -> stringResource(R.string.horizon_status_failed_network)
+            HorizonState.Failed.Reason.METERED -> stringResource(R.string.horizon_status_failed_metered)
+            HorizonState.Failed.Reason.STORAGE -> stringResource(R.string.horizon_status_failed_network)
+            HorizonState.Failed.Reason.NO_DATA -> stringResource(R.string.horizon_status_failed_no_data)
+        }
+    } ?: return
+
+    val busy = state is HorizonState.Downloading || state is HorizonState.Computing
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (busy) {
+            val progress = when (state) {
+                is HorizonState.Downloading -> state.progress
+                is HorizonState.Computing -> state.progress
+                else -> 0f
+            }
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state is HorizonState.Failed) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+/** A value with a minus and a plus, both full 48dp touch targets. */
+@Composable
+private fun StepperRow(
+    title: String,
+    value: String,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onDecrease, enabled = canDecrease, modifier = Modifier.size(48.dp)) {
+            Icon(AppIcons.Back, contentDescription = stringResource(R.string.horizon_step_down, title))
+        }
+        IconButton(onClick = onIncrease, enabled = canIncrease, modifier = Modifier.size(48.dp)) {
+            Icon(AppIcons.Forward, contentDescription = stringResource(R.string.horizon_step_up, title))
+        }
+    }
+}
+
+private const val EYE_HEIGHT_STEP_CM = 5
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> "${bytes / (1024L * 1024L)} MB"
+    bytes >= 1024L -> "${bytes / 1024L} kB"
+    else -> "$bytes B"
+}

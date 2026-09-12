@@ -163,6 +163,38 @@ class CelestialMatrixCalculatorTest {
         assertEquals("Screen top points straight up towards zenith", 1.0f, topZ, 0.001f)
     }
 
+    /**
+     * Which *way* the centre of the screen faces, not just how high.
+     *
+     * The elevation assertion above passes just as happily on a matrix turned half way round, and the
+     * shaders that consume this matrix read an azimuth out of it. A terrain horizon drawn half a turn
+     * out got all the way onto the screen through exactly that gap: the ridge looked right, it was
+     * simply on the wrong side of the sky.
+     */
+    @Test
+    fun `atmosphere view matrix puts the screen centre on the azimuth the camera faces`() {
+        val outMatrix = FloatArray(9)
+        val sensorMatrix = FloatArray(16)
+
+        for (azimuth in doubleArrayOf(0.0, 90.0, 180.0, 270.0, 37.5)) {
+            CelestialMatrixCalculator.computeManualRotationMatrix(azimuth, 0.0, sensorMatrix)
+            CelestialMatrixCalculator.computeAtmosphereViewMatrix(
+                sensorMatrix16 = sensorMatrix,
+                displayRotation = 0,
+                outMatrix9 = outMatrix,
+            )
+
+            // worldDir for the centre ray [0, 0, -1] is minus the third column of the mat3, which the
+            // shader receives column-major: entries 6, 7 and 8.
+            val east = -outMatrix[6]
+            val north = -outMatrix[7]
+            val recovered = Math.toDegrees(kotlin.math.atan2(east.toDouble(), north.toDouble()))
+                .let { if (it < 0.0) it + 360.0 else it }
+
+            assertEquals("centre of the screen at azimuth $azimuth", azimuth, recovered, 0.01)
+        }
+    }
+
     @Test
     fun `computeManualRotationMatrix constructs strictly orthonormal 4x4 matrix pointing to requested Az and El`() {
         val mat = FloatArray(16)

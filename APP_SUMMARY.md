@@ -13,8 +13,8 @@ Namísto vytváření vlastního zjednodušeného fotoaparátu přes Camera2/Cam
 Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní výpočetní pipeline daného fotoaparátu – včetně **HDR+, Night Sight, Astrofotografie, pokročilého odšumování a zpracování RAW/JPEG**.
 
 ### Bezpečnost a soukromí
-- Aplikace **nemá žádné síťové oprávnění** (`android.permission.INTERNET` není v manifestu).
-- Žádná data, telemetrie ani poloha neopouštějí zařízení.
+- Aplikace deklaruje oprávnění `android.permission.INTERNET` výhradně pro stahování výškových DEM dlaždic terénního horizontu v AR modulech po explicitním souhlasu uživatele. Veškeré síťové volání je striktně izolováno v [`DemTileDownloader.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/data/horizon/DemTileDownloader.kt), což je nepřetržitě vynucováno architektonickým testem `NetworkIsolationTest`. Odstranění řádku `INTERNET` z manifestu je plně podporováno (aplikace funguje s ručním importem HGT souborů).
+- Žádná telemetrie, analytika, identifikátory ani poloha neopouštějí zařízení.
 - Využívá systémovou službu přístupnosti (`AccessibilityService`), což je jedno z nejvyšších oprávnění v systému Android. Kód je koncipován tak, aby byl jednoduše auditovatelný a sestavitelný přímo ze zdrojových kódů.
 
 ### Dva základní provozní režimy
@@ -28,8 +28,8 @@ Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní vý
    - Nemá žádnou minimální prodlevu fotoaparátu (podlaha je pouze 70 ms délka dotykového gesta).
 
 ### Integrované moduly Rozšířené Reality (AR)
-- **Sun & Moon AR (Solární a lunární plánovač):** 3D projekce sluneční a měsíční trajektorie, poloh těles v průběhu dne, fází Měsíce, časových značek, východu, západu, zlaté hodinky a fází soumraku (občanský, nautický, astronomický) na živý obraz kamery s kompenzací True-North a zorného pole (FOV).
-- **Night Sky AR (Noční obloha a planetárium):** 3D projekce nebeské sféry, 60 FPS vykreslování hvězdného pole přímo z binárního FlatBuffers katalogu (`catalog.bin`) s nulovými alokacemi paměti, 88 IAU souhvězdí a asterismů s artworky přes 4-bodovou homografii, dynamické planety Sluneční soustavy s dvoustavovým vykreslováním (optické bodové světlo vs fototextura), globální astronomické vyhledávání s chytrým směrováním kamery a procedurální GPU AGSL shadery (Mléčná dráha, atmosféra, horizont).
+- **Sun & Moon AR (Solární a lunární plánovač):** 3D projekce sluneční a měsíční trajektorie, poloh těles v průběhu dne, fází Měsíce, časových značek, východu, západu, zlaté hodinky, fází soumraku (občanský, nautický, astronomický) a reálného terénního horizontu na živý obraz kamery s kompenzací True-North a zorného pole (FOV).
+- **Night Sky AR (Noční obloha a planetárium):** 3D projekce nebeské sféry, 60 FPS vykreslování hvězdného pole přímo z binárního FlatBuffers katalogu (`catalog.bin`) s nulovými alokacemi paměti, 88 IAU souhvězdí a asterismů s artworky přes 4-bodovou homografii, dynamické planety Sluneční soustavy s dvoustavovým vykreslováním (optické bodové světlo vs fototextura), globální astronomické vyhledávání s chytrým směrováním kamery, reálný terénní profil v AGSL shaderu a procedurální GPU shadery (Mléčná dráha, atmosféra, krajina).
 
 ---
 
@@ -40,17 +40,19 @@ Aplikace striktně dodržuje principy čisté architektury s oddělením doméno
 ```
 com.dazix.caelis
 ├── domain/                  # Čistý Kotlin (žádné Android importy) – plánování, křivky, stop podmínky
-│   ├── solar/               # Sluneční a měsíční efemeridy, PSA/Meeus algoritmy, denní časy, trajektorie
+│   ├── horizon/             # Terénní horizont: dekodér .hgt, ray-marching, HorizonProfile, SkylineMatcher
+│   ├── solar/               # Sluneční a měsíční efemeridy, PSA/Meeus algoritmy, denní časy, trajektorie, terrain rise/set
 │   └── nightsky/            # Hvězdná astronomie (J2000.0 RA/Dec -> Alt/Az), Frustum Culling, optika hvězd,
 │                            # planetární efemeridy, tabulky souhvězdí, vyhledávací index
-├── ar/                      # AR projekce (R^T matice), FOV kalkulátor, senzory, GPS, SkyDomeRenderer
+├── ar/                      # AR projekce (R^T matice), měřený FOV kalkulátor, senzory, GPS, SkylineAligner, SkyDomeRenderer
 ├── data/                    # Preferences DataStore (SettingsStore), SessionRepository, AdvancedSettings
+│   ├── horizon/             # Síťové stahování (DemTileDownloader), ruční import, mmap cache dlaždic, HorizonRepository
 │   └── nightsky/            # FlatBuffers schémata a generované přístupové třídy (NightSkyCatalog, Star, Constellation)
 ├── service/                 # Jádro: ShutterAccessibilityService, SessionEngine, ShutterDispatcher,
 │                            # CameraProfiles, RunStateStore, SessionAlarmReceiver, DisplayGeometry
 ├── overlay/                 # Plovoucí ovládací panel (OverlayController, PanelPlacement, OverlayPolicy)
 │                            # a kalibrační overlay (CalibrationOverlay, CalibrationMath)
-├── notify/                  # Průběžná systémová notifikace (SessionNotifications)
+├── notify/                  # Systémová oznámení: SessionNotifications (průběh snímání) a TerrainNotifications (stahování/výpočet)
 ├── verify/                  # Detekce a validace zápisu snímků do MediaStore (CaptureVerifier)
 ├── monitor/                 # Sledování stavu baterie a volného úložiště (BatteryMonitor, StorageMonitor)
 └── ui/                      # Jetpack Compose UI (Material 3 Expressive), ViewModel, obrazovky
@@ -185,7 +187,7 @@ Tím se časová osa re-ukotví přesně jednou a zamezí se vzniku nechtěné s
 
 ### 4.2. Astronomické výpočty pozice Slunce (Solar Ephemeris)
 
-Implementováno v [`SolarPositionCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarPositionCalculator.kt) na základě standardu NOAA Solar Position a algoritmů Jeana Meeuse (přesnost $< 0.01^\circ$).
+Implementováno v [`SolarPositionCalculator.kt`](app/src/main/java/com/dazix/caelis/domain/solar/SolarPositionCalculator.kt) na základě standardu NOAA Solar Position a algoritmů Jeana Meeuse (přesnost $< 0.01^\circ$).
 
 ```mermaid
 flowchart LR
@@ -242,7 +244,7 @@ $$R_{\text{arcmin}} = \frac{1.02}{\tan\left(\left(h + \frac{10.3}{h + 5.11}\righ
 $$h_{\text{apparent}} = h + \frac{R_{\text{arcmin}}}{60}$$
 
 #### 5. Vyhledávání solárních událostí a Lunární efemeridy
-V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/SolarDayTimes.kt), [`LunarPositionCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/LunarPositionCalculator.kt) a [`LunarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/LunarDayTimes.kt):
+V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/caelis/domain/solar/SolarDayTimes.kt), [`LunarPositionCalculator.kt`](app/src/main/java/com/dazix/caelis/domain/solar/LunarPositionCalculator.kt) a [`LunarDayTimes.kt`](app/src/main/java/com/dazix/caelis/domain/solar/LunarDayTimes.kt):
 - **Pravé poledne (Meridian Transit):** Hrubé vzorkování po 5 minutách $\pm 2$ hodiny kolem aproximovaného poledne, následované ternárním vyhledáváním s přesností na 1 sekundu.
 - **Východ a západ slunce:** Detekce průchodu výšky $h_{\text{target}} = -0.8333^\circ$ (zohledňuje $34'$ refrakci a $16'$ poloměr disku) pomocí 5minutového scanu a binárního vyhledávání (bisekce) s přesností na 1 sekundu.
 - **Fáze soumraku:** Občanský ($h = -6^\circ$), nautický ($h = -12^\circ$) a astronomický ($h = -18^\circ$) soumrak.
@@ -253,7 +255,7 @@ V [`SolarDayTimes.kt`](app/src/main/java/com/dazix/intervalometer/domain/solar/S
 
 ### 4.3. Rovníková astronomie, Hvězdná optika a Noční obloha (Night Sky AR)
 
-Implementováno v [`EquatorialCoordinates.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/EquatorialCoordinates.kt), [`StarFrustumCulling.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarFrustumCulling.kt), [`StarOptics.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/StarOptics.kt) a [`NightSkyCatalogLoader.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/NightSkyCatalogLoader.kt).
+Implementováno v [`EquatorialCoordinates.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/EquatorialCoordinates.kt), [`StarFrustumCulling.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/StarFrustumCulling.kt), [`StarOptics.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/StarOptics.kt) a [`NightSkyCatalogLoader.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/NightSkyCatalogLoader.kt).
 
 #### 1. Převod rovníkových souřadnic (RA $\alpha$, Dec $\delta$) na 3D ENU vektor
 Přímo bez mezikroků v sférických úhlech pro nulové alokace:
@@ -283,7 +285,7 @@ $$\mathbf{V}_{\text{cam}} \cdot \mathbf{V}_{\text{star}} = (V_{\text{cam},x} V_{
 
 ### 4.4. Souhvězdí, Spojnice a Perspektivní Homografie Artworků
 
-Implementováno v [`NightSkyRenderer.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/NightSkyRenderer.kt) a [`Constellation.java`](app/src/main/java/com/dazix/intervalometer/data/nightsky/Constellation.java).
+Implementováno v [`NightSkyRenderer.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/NightSkyRenderer.kt) a [`Constellation.java`](app/src/main/java/com/dazix/caelis/data/nightsky/Constellation.java).
 
 #### 1. Dávkové vykreslování spojnic (Batch Lines) s meet-in-the-middle animací
 - Spojnice hvězd jsou uloženy jako indexované páry ve FlatBuffers katalogu.
@@ -303,7 +305,7 @@ Každé souhvězdí nese souřadnice 4 rohů své mytologické ilustrace $(\alph
 
 ### 4.5. Dynamická tělesa Sluneční soustavy (Planetary Ephemeris)
 
-Implementováno v [`PlanetaryEphemerisCalculator.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/PlanetaryEphemerisCalculator.kt).
+Implementováno v [`PlanetaryEphemerisCalculator.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/PlanetaryEphemerisCalculator.kt).
 
 #### 1. Keplerovy elementy a poruchová teorie
 Výpočet geocentrických poloh pro 8 planet (Merkur, Venuše, Mars, Jupiter, Saturn, Uran, Neptun) a Měsíc z Keplerových elementů (JPL Standish):
@@ -319,7 +321,7 @@ Výpočet geocentrických poloh pro 8 planet (Merkur, Venuše, Mars, Jupiter, Sa
 
 ### 4.6. Globální vyhledávací systém a Kinematika směrování kamery
 
-Implementováno v [`CelestialSearchIndex.kt`](app/src/main/java/com/dazix/intervalometer/domain/nightsky/CelestialSearchIndex.kt) a [`NightSkyArViewModel.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/NightSkyArViewModel.kt).
+Implementováno v [`CelestialSearchIndex.kt`](app/src/main/java/com/dazix/caelis/domain/nightsky/CelestialSearchIndex.kt) a [`NightSkyArViewModel.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/NightSkyArViewModel.kt).
 
 - **Prioritní řazení výsledků:** Prefixová shoda v primárním českém názvu (Priorita 0), v latinském názvu (Priorita 1), substring shoda (Priorita 2).
 - **Historie hledání:** Trvale ukládána do DataStore přes `SearchHistoryCodec`.
@@ -330,17 +332,17 @@ Implementováno v [`CelestialSearchIndex.kt`](app/src/main/java/com/dazix/interv
 
 ### 4.7. Procedurální GPU AGSL Shadery
 
-Implementováno v [`MilkyWayShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/MilkyWayShader.kt), [`AtmosphereShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/AtmosphereShader.kt) a [`LandscapeShader.kt`](app/src/main/java/com/dazix/intervalometer/ui/nightsky/LandscapeShader.kt).
+Implementováno v [`MilkyWayShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/MilkyWayShader.kt), [`AtmosphereShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/AtmosphereShader.kt) a [`LandscapeShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/LandscapeShader.kt).
 
 - **Procedurální Mléčná dráha (`MilkyWayShader`):** AGSL fragment shader počítající v reálném čase galaktické souřadnice $(l, b)$ z $R^T$ matice. Vykresluje galaktické jádro, spirální ramena a prachové pásy s volumetrickým šumem (FBM).
 - **Atmosférický rozptyl (`AtmosphereShader`):** Simulace Rayleighova a Mieova rozptylu s gradientem horizontu a plynulým přechodem do noční černě.
-- **Silueta horizontu (`LandscapeShader`):** Vykreslení horizontální linie oddělující pozemní krajinu od oblohy.
+- **Silueta horizontu (`LandscapeShader`):** Vykreslení horizontální linie oddělující pozemní krajinu od oblohy – v reálném režimu vzorkuje 1440-vzorkový terénní profil přes NEAREST filtr a shaderovou interpolaci.
 
 ---
 
 ### 4.8. 3D projekce rozšířené reality (AR Camera Projection)
 
-Implementováno v [`CameraProjection.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraProjection.kt) a [`CameraFovCalculator.kt`](app/src/main/java/com/dazix/intervalometer/ar/CameraFovCalculator.kt).
+Implementováno v [`CameraProjection.kt`](app/src/main/java/com/dazix/caelis/ar/CameraProjection.kt) a [`CameraFovCalculator.kt`](app/src/main/java/com/dazix/caelis/ar/CameraFovCalculator.kt).
 
 #### 1. Transformace souřadnic Svět $\to$ Zařízení ($R^T$)
 Matice $R$ ze systémového `SensorManager` mapuje vektory ze souřadnic zařízení do světových ENU souřadnic ($\mathbf{V}_{\text{world}} = R \cdot \mathbf{V}_{\text{dev}}$).
@@ -436,11 +438,25 @@ Verifikace kontroluje zápis nových fotografií do `MediaStore.Images`:
 3. **Pravidlo akceptace řádku (`CameraImageRule`):**
    - Vlastník řádku (`OWNER_PACKAGE_NAME`) odpovídá balíčku fotoaparátu, NEBO
    - Cesta začíná v `DCIM/` a nepatří mezi vyloučené složky (`screenshots`, `screen_recordings`, `restored`, `download`).
-4. **Stavový automat verifikace (`VerifyStep`):**
-   - `RESOLVED`: Snímek nalezen $\implies$ započítat snímek a naplánovat další.
-   - `KEEP_POLLING`: Okno ještě nevypršelo $\implies$ další dotaz za 500 ms.
-   - `RETRY`: Okno vypršelo při prvním pokusu $\implies$ provést přesně jeden opravný stisk spouště.
-   - `GIVE_UP`: Okno vypršelo i po opravném stisku $\implies$ zobrazit varování "Capture unverified", ale neukončovat session.
+---
+
+### 4.12. Výpočet profilu horizontu terénu (Terrain Horizon & Ray-Marching)
+
+Implementováno v [`HgtTile.kt`](app/src/main/java/com/dazix/caelis/domain/horizon/HgtTile.kt), [`HorizonProfileCalculator.kt`](app/src/main/java/com/dazix/caelis/domain/horizon/HorizonProfileCalculator.kt), [`SkylineMatcher.kt`](app/src/main/java/com/dazix/caelis/domain/horizon/SkylineMatcher.kt) a [`TerrainRiseSetCalculator.kt`](app/src/main/java/com/dazix/caelis/domain/solar/TerrainRiseSetCalculator.kt).
+
+#### 1. Dekódování binárních výškových modelů SRTM HGT
+- 1 arc-second mřížka ($3601 \times 3601$ 16-bit vzorků na $1^\circ \times 1^\circ$ čtverec, big-endian signed short).
+- Void hodnoty ($-32768$) jsou striktně reprezentovány jako `null`, nikoli $0\,\text{m}$, což brání vzniku falešných propadů v ledovcích a údolích.
+
+#### 2. Ray-marching se zakřivením Země a atmosférickou refrakcí
+- Profil tvoří 1440 ekvidistantních azimutálních vzorků ($0.25^\circ$ krok).
+- Poloměr Země je škálován koeficientem refrakce ($R_{\text{eff}} = R / (1 - k), k = 0.13$).
+- Výška pozorovatele je odvozena přímo z DEM modelu + výška očí (`eyeHeightMeters`), nikoli z nepřesné GPS nadmořské výšky.
+- Automatický odhad dosahu (`HorizonRangeEstimator`) omezuje stahování sousedních dlaždic pouze na ty, které mohou fyzicky ovlivnit viditelný horizont.
+
+#### 3. Automatické zarovnání s kamerou (`SkylineExtractor` & `SkylineMatcher`)
+- Detekce rozhraní obloha/krajina na snímku z kamery a fitování proti 1440-vzorkovému profilu.
+- Algoritmus odmítne nejistá zarovnání (vyžaduje kontrast, nízký reziduální rozptyl $< 0.5^\circ$ a robustní nízký kvantil pro eliminaci výšky stromů a budov).
 
 ---
 
@@ -501,16 +517,21 @@ flowchart TD
     ClickAction -- Selhalo / Not Clickable --> GestureNode[Syntetické gesto na střed uzlu]
 ```
 
-### 5.3. Plovoucí panel (Overlay) a Notifikace
+### 5.3. Plovoucí panel (Overlay), Notifikace a Oprávnění
 
 - **Plovoucí panel (`OverlayController`):**
   - Implementován pomocí čistých Android Views (`WindowManager.addView` s typem `TYPE_APPLICATION_OVERLAY`).
   - Vždy tmavé schéma (`OverlayPalette`), aby neoslňovalo při nočním fotografování.
   - Funkce **Cloaking**: Během okamžiku stisku spouště panel dočasně nastaví příznak `FLAG_NOT_TOUCHABLE`, aby nemohl pohltit vyslané syntetické gesto.
   - Funkce **Suppression**: Automaticky se skryje, pokud je v popředí hlavní aktivita Intervalometru.
-- **Systémová notifikace (`SessionNotifications`):**
+- **Systémová notifikace snímání (`SessionNotifications`):**
   - Trvalá (ongoing) notifikace s nízkou důležitostí (`IMPORTANCE_LOW`), živým odpočtem, počtem snímků a akcemi Pause/Resume a Stop.
   - Záměrně nepoužívá `startForeground` na `AccessibilityService`, což předchází výjimkám `ForegroundServiceStartNotAllowedException` na Androidu 14+.
+- **Systémová notifikace terénu (`TerrainNotifications`):**
+  - Informuje o průběhu stahování dlaždic a výpočtu obzoru (`Downloading`, `Computing`, `Ready`, `Failed`).
+  - Využívá kanál s `NotificationManager.IMPORTANCE_DEFAULT` s vypnutým zvukem a vibracemi (`sound = null`, `enableVibration = false`) pro trvalé zobrazení ikony v horní stavové liště u hodin bez akustického rušení.
+- **Jednorázová výzva k notifikacím (`POST_NOTIFICATIONS`):**
+  - Na Androidu 13+ se při prvním spuštění aplikace jednorázově vyžádá oprávnění k oznámením a stav se uloží do DataStore (`notification_permission_prompted`). Aplikace uživatele nikdy znovu automaticky neobtěžuje.
 
 ---
 
@@ -518,12 +539,13 @@ flowchart TD
 
 Aplikace disponuje robustním systémem automatizovaného testování, optimalizací sestavení a nasazování:
 
-- **446 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
-  - `scripts/run_tests.sh caelis` (260 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence, lokalizace.
-  - `scripts/run_tests.sh solar` (78 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor s ořezem.
-  - `scripts/run_tests.sh nightsky` (108 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer, screenshotové testy.
-- **20 Instrumentovaných testů na reálném zařízení / ART:**
-  - Pokrývají přesnost časování bez driftu, automatické pozastavení při zhasnutí obrazovky (`ScreenOffTest`), foreground ochranu (`ForegroundGuardTest`), čtení a vykreslení FlatBuffers katalogu na reálném Android plátně (`StarCatalogDeviceTest`).
+- **571 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
+  - `scripts/run_tests.sh caelis` (283 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence nastavení, perzistence `notification_permission_prompted`, lokalizace, `TerrainNotificationsTest` a `NetworkIsolationTest`.
+  - `scripts/run_tests.sh solar` (179 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor, terénní horizont (`HorizonProfile`, `HgtTile`, `DemTileCache`, `DemTileDownloader`, `SkylineMatcher`, `TerrainRiseSetCalculator`).
+  - `scripts/run_tests.sh nightsky` (92 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer, screenshotové testy.
+  - plus dokumentační a screenshotové testy.
+- **31 Instrumentovaných testů na reálném zařízení / ART:**
+  - Pokrývají přesnost časování bez driftu, automatické pozastavení při zhasnutí obrazovky (`ScreenOffTest`), foreground ochranu (`ForegroundGuardTest`), čtení a vykreslení FlatBuffers katalogu na reálném Android plátně (`StarCatalogDeviceTest`), pipeline terénního horizontu (`HorizonPipelineDeviceTest`) a orientaci horizontu v nočním shaderu (`NightSkyHorizonOrientationTest`).
 - **End-to-End validace (`scripts/e2e_pixel_camera.sh`):**
   - Reálné spouštění nativní Google Camera aplikace na vyhrazeném vývojářském profilu s detekcí nově pořízených souborů v `MediaStore` a jejich následným úklidem.
 - **CI/CD a Play Store Deployment:**
@@ -532,4 +554,4 @@ Aplikace disponuje robustním systémem automatizovaného testování, optimaliz
   - Aktivní Gradle Configuration Cache pro bleskovou kompilaci a nulová varování kompilátoru.
 - **Drift-Free přesnost:** Absolutní časování eliminující kumulaci chyb.
 - **Plná kvalita snímků:** Využití originálního post-processingu fotoaparátu (GCam HDR+, Night Sight, Astrofotografie).
-- **100% Soukromí:** Žádná síťová komunikace (`INTERNET` oprávnění chybí v manifestu), lokální open-source zpracování.
+- **100% Soukromí:** Žádná telemetrie, síťové volání izolováno výhradně pro stažení vyžádaných DEM dlaždic po výslovném souhlasu uživatele.

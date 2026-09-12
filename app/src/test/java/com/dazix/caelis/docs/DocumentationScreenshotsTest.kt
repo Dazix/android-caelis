@@ -414,12 +414,10 @@ class DocumentationScreenshotsTest {
                         locationText = "50.08° N, 14.44° E",
                         orientation = sampleOrientation,
                         cameraFovHorizontal = 56f,
-                        zoomRatio = 1.0f,
                         isCalibrated = true,
                         onBack = {},
                         onToggleInfo = {},
                         onResetCalibration = {},
-                        onResetZoom = {},
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)

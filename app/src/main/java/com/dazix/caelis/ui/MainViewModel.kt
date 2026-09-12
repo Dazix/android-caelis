@@ -11,7 +11,13 @@ import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.R
 import com.dazix.caelis.data.AdvancedSettings
 import com.dazix.caelis.data.SessionRepository
+import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
+import com.dazix.caelis.data.horizon.DemTileImporter
+import com.dazix.caelis.data.horizon.HorizonRepository
+import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.RampCurve
 import com.dazix.caelis.domain.RampDomain
 import com.dazix.caelis.domain.RampSpec
@@ -233,6 +239,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settings = SettingsStore(application)
 
+    // ==== Terrain horizon ====
+    //
+    // Owned here rather than by the AR view models because the settings are shared: the search
+    // radius, the eye height and the downloaded tiles are the same whether you are framing a sunset
+    // or a constellation. The AR screens keep only their own visibility toggle.
+    private val horizonRepository = HorizonRepository.getInstance(application)
+    private val horizonLocationProvider = SolarLocationProvider(application)
+
+    val horizonSettings: StateFlow<HorizonSettings> = settings.horizon.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        HorizonSettings(),
+    )
+
+    val horizonState: StateFlow<HorizonState> = horizonRepository.state
+
+    /** The radius in use once an automatic setting has worked one out; null until then. */
+    val effectiveHorizonRangeKm: StateFlow<Int?> = horizonRepository.effectiveRangeKm
+
+    /** False in a build made from source with the `INTERNET` line removed from the manifest. */
+    val canDownloadTerrain: Boolean = horizonRepository.canDownload
+
     private val screenState = MutableStateFlow(Screen.HOME)
     val screen: StateFlow<Screen> = screenState.asStateFlow()
 
@@ -274,6 +302,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val debugModeEnabled: StateFlow<Boolean> = settings.debugModeEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val notificationPermissionPrompted: StateFlow<Boolean?> = settings.notificationPermissionPrompted
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun markNotificationPermissionPrompted() {
+        viewModelScope.launch { settings.saveNotificationPermissionPrompted(true) }
+    }
 
     fun setNightVisionTheme(theme: NightVisionTheme) {
         viewModelScope.launch { settings.saveNightVisionTheme(theme) }
@@ -407,6 +442,77 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * written to both stores here, so the setting the user sees in the app is the one the panel
      * obeys and neither place can drift into telling a different story.
      */
+    // ==== Terrain horizon actions ====
+
+    private fun editHorizon(recompute: Boolean = false, transform: (HorizonSettings) -> HorizonSettings) {
+        viewModelScope.launch {
+            val updated = transform(settings.currentHorizon())
+            settings.saveHorizon(updated)
+            if (recompute) {
+                // Range and eye height both change the skyline, so a stored profile computed with the
+                // old values is not a cache hit — it is the wrong answer under the right file name.
+                horizonRepository.invalidate()
+                horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+            }
+        }
+    }
+
+    fun setHorizonEnabled(enabled: Boolean) = editHorizon { it.copy(enabled = enabled) }
+
+    fun setHorizonAutoRange(automatic: Boolean) = editHorizon(recompute = true) { it.copy(autoRange = automatic) }
+
+    fun setHorizonRangeKm(rangeKm: Int) = editHorizon(recompute = true) { it.copy(maxRangeKm = rangeKm) }
+
+    fun setHorizonEyeHeightCm(eyeHeightCm: Int) = editHorizon(recompute = true) {
+        it.copy(
+            eyeHeightCm = eyeHeightCm.coerceIn(
+                HorizonSettings.MIN_EYE_HEIGHT_CM,
+                HorizonSettings.MAX_EYE_HEIGHT_CM,
+            ),
+        )
+    }
+
+    fun setHorizonShadeOccluded(enabled: Boolean) = editHorizon { it.copy(shadeOccludedTrajectory = enabled) }
+
+    fun setHorizonWifiOnly(enabled: Boolean) = editHorizon { it.copy(wifiOnly = enabled) }
+
+    fun setHorizonNetworkConsent(granted: Boolean) = editHorizon { it.copy(networkConsent = granted) }
+
+    fun setRealHorizonInNightSky(enabled: Boolean) = editHorizon { it.copy(realHorizonInNightSky = enabled) }
+
+    /** Fetch or recompute for wherever the phone currently thinks it is. */
+    fun downloadTerrainForCurrentLocation() {
+        horizonLocationProvider.refreshLocation()
+        viewModelScope.launch {
+            val current = settings.currentHorizon()
+            horizonRepository.invalidate()
+            horizonRepository.ensureProfile(horizonLocationProvider.location.value, current)
+        }
+    }
+
+    fun importTerrainTile(uri: android.net.Uri, onResult: (DemTileImporter.Result) -> Unit) {
+        viewModelScope.launch {
+            val result = horizonRepository.importTile(uri)
+            if (result is DemTileImporter.Result.Imported) {
+                horizonRepository.ensureProfile(
+                    horizonLocationProvider.location.value,
+                    settings.currentHorizon(),
+                )
+            }
+            onResult(result)
+        }
+    }
+
+    /** Tiles the current radius needs that are not on disk — what the import hint lists. */
+    fun missingTerrainTiles(): List<DemTileKey> = horizonRepository.missingTilesFor(
+        horizonLocationProvider.location.value,
+        horizonSettings.value,
+    )
+
+    fun cachedTerrainBytes(): Long = horizonRepository.cachedTileBytes()
+
+    fun clearTerrainCache() = horizonRepository.clearTileCache()
+
     fun updateAdvanced(transform: (AdvancedSettings) -> AdvancedSettings) {
         val previous = advancedState.value
         val updated = transform(previous)

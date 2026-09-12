@@ -253,6 +253,66 @@
     <string name="sun_ar_solar_noon">Pravé poledne</string>
     <string name="sun_ar_day_length">Délka dne</string>
     <string name="sun_ar_golden_hour">Zlatá hodinka</string>
+
+    <!-- Terrain horizon -->
+    <string name="horizon_section_title">Horizont terénu</string>
+    <string name="horizon_enabled">Zobrazit skutečný horizont</string>
+    <string name="horizon_enabled_desc">Vykreslí v AR linii terénu a spočítá, kdy slunce doopravdy zajde za obzor.</string>
+    <string name="horizon_terrain_sunrise">Slunce nad terénem</string>
+    <string name="horizon_terrain_sunset">Slunce za terénem</string>
+    <string name="horizon_terrain_earlier">o %1$d min dřív</string>
+    <string name="horizon_terrain_later">o %1$d min později</string>
+    <string name="horizon_hidden_all_day">Slunce se dnes nad terén vůbec nedostane.</string>
+    <string name="horizon_range">Dosah výpočtu</string>
+    <string name="horizon_range_value">%1$d km</string>
+    <string name="horizon_range_auto">Automaticky</string>
+    <string name="horizon_range_auto_value">Automaticky · %1$d km</string>
+    <string name="horizon_eye_height">Výška očí</string>
+    <string name="horizon_eye_height_value">%1$d cm</string>
+    <string name="horizon_shade_occluded">Ztlumit skrytou část dráhy</string>
+    <string name="horizon_shade_occluded_desc">Úsek trajektorie za terénem se kreslí slabě, takže je vidět, kolik ze zlaté hodinky spolknou kopce.</string>
+    <string name="horizon_wifi_only">Stahovat jen přes Wi‑Fi</string>
+    <string name="horizon_wifi_only_desc">Jedna výšková dlaždice má 5 až 19 MB.</string>
+    <string name="horizon_night_sky_real">Skutečný horizont i v Noční obloze</string>
+    <string name="horizon_night_sky_real_desc">Nahradí stylizované stromořadí okolním terénem a schová za něj hvězdy.</string>
+
+    <string name="horizon_consent_title">Stáhnout výškopis terénu?</string>
+    <string name="horizon_consent_body">Aby aplikace mohla vykreslit skutečný obzor, potřebuje výšková data pro čtverec mapy, ve kterém právě stojíte. Ze zařízení odejde pouze název této jednostupňové dlaždice — žádné souřadnice, žádné identifikátory, nic o vás.\n\nSoubor můžete místo toho naimportovat ručně nebo si to později rozmyslet v Nastavení.</string>
+    <string name="horizon_consent_allow">Povolit</string>
+    <string name="horizon_consent_never">Nikdy</string>
+
+    <string name="horizon_status_downloading">Stahuji terén %1$d z %2$d…</string>
+    <string name="horizon_status_computing">Počítám linii obzoru…</string>
+    <string name="horizon_status_ready">Horizont terénu je připraven</string>
+    <string name="horizon_status_needs_tiles">Pro toto místo chybí výšková data</string>
+    <string name="horizon_status_failed_network">Výšková data se nepodařilo stáhnout</string>
+    <string name="horizon_status_failed_metered">Čekám na Wi‑Fi kvůli stažení výškových dat</string>
+    <string name="horizon_status_failed_no_data">Pro toto místo nejsou výšková data</string>
+
+    <string name="horizon_import_title">Import výškových dat</string>
+    <string name="horizon_import_body">Stáhněte si tyto dlaždice v prohlížeči a vyberte je zde:\n\n%1$s\n\nOdkud: %2$s</string>
+    <string name="horizon_import_action">Vybrat soubor</string>
+    <string name="horizon_import_ok">Naimportováno %1$s</string>
+    <string name="horizon_import_not_a_tile">Tento soubor není výšková dlaždice. Název musí vypadat jako N50E014.hgt.</string>
+    <string name="horizon_import_failed">Soubor se nepodařilo přečíst</string>
+    <string name="horizon_download_now">Stáhnout terén pro toto místo</string>
+    <string name="horizon_recompute">Přepočítat linii obzoru</string>
+    <string name="horizon_clear_cache">Smazat stažený terén</string>
+    <string name="horizon_cache_size">Uloženo %1$s terénu</string>
+    <string name="horizon_no_permission">Tento build nemá oprávnění k síti, terén je proto nutné naimportovat ručně.</string>
+
+    <string name="horizon_step_down">Snížit: %1$s</string>
+    <string name="horizon_step_up">Zvýšit: %1$s</string>
+    <string name="horizon_notif_channel_name">Stahování terénu</string>
+    <string name="horizon_notif_channel_desc">Průběh stahování výškových dat pro skutečný horizont.</string>
+    <string name="horizon_notif_downloading">Stahuji terén %1$d z %2$d</string>
+    <string name="horizon_notif_computing">Počítám linii obzoru</string>
+    <string name="horizon_notif_ready">Horizont terénu je připraven</string>
+    <string name="horizon_notif_ready_detail">Obzor sahá %1$d° nad horizont</string>
+    <string name="horizon_notif_failed">Horizont terénu není k dispozici</string>
+
+    <string name="horizon_attribution_title">Zdroje výškových dat</string>
+    <string name="horizon_attribution_body">Výškopis pochází z Tilezen Terrain Tiles v programu AWS Open Data, který kombinuje:\n\n• 3DEP, SRTM a GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nModel popisuje holý terén: zná kopce, ale ne stromy ani budovy na nich.</string>
     <string name="sun_ar_max_elevation">Nejvyšší výška</string>
     <string name="sun_ar_current_elevation">Výška</string>
     <string name="sun_ar_current_azimuth">Azimut</string>
@@ -285,6 +345,22 @@
     <string name="sun_ar_calib_active">Manuální 3D pohled</string>
     <string name="sun_ar_calib_hint">Tažením prstu libovolným směrem otáčíte 3D pohled</string>
     <string name="sun_ar_calib_reset">Resetovat kalibraci</string>
+    <string name="ar_align_title">Srovnat podle horizontu</string>
+    <string name="ar_align_hint">Posunujte překryv, dokud linie terénu nesedne na skutečný hřeben. Uloží se na příště.</string>
+    <string name="ar_align_azimuth">Vlevo / vpravo</string>
+    <string name="ar_align_azimuth_left">Posunout překryv doleva</string>
+    <string name="ar_align_azimuth_right">Posunout překryv doprava</string>
+    <string name="ar_align_elevation">Nahoru / dolů</string>
+    <string name="ar_align_elevation_up">Posunout překryv nahoru</string>
+    <string name="ar_align_elevation_down">Posunout překryv dolů</string>
+    <string name="ar_align_compass_low">Kompas hlásí nízkou přesnost. Zamávejte telefonem do osmičky, dál od kovu a magnetů.</string>
+    <string name="ar_align_auto">Srovnat automaticky</string>
+    <string name="ar_align_auto_working">Hledám linii obzoru…</string>
+    <string name="ar_align_auto_done">Srovnáno podle obzoru</string>
+    <string name="ar_align_auto_vertical_only">Terén v záběru je příliš plochý na určení azimutu. Srovnána jen výška.</string>
+    <string name="ar_align_auto_no_skyline">Obzor se nepodařilo najít. Namiřte kameru na horizont za dobrého světla.</string>
+    <string name="ar_align_auto_no_profile">Zatím není profil terénu. Zapněte horizont terénu v Nastavení.</string>
+    <string name="ar_align_auto_no_camera">Kamera není k dispozici.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
 
     <!-- Night Sky AR -->

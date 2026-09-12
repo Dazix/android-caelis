@@ -11,7 +11,23 @@ sideloaded from source** for one reason: that kind of app needs the **accessibil
 is the most powerful permission Android hands out, and this way the source of the app holding it is on
 your own disk.
 
-Nothing leaves the device. The app has no network permission at all.
+**Network.** The app declares `INTERNET` for exactly one thing: fetching terrain elevation tiles for
+the real-horizon layer in the AR views, and only after you say yes. Nothing else in the app opens a
+connection, there is no analytics of any kind, and all that is ever sent is the name of a 1°×1° map
+square — no coordinates, no identifiers, no request body.
+
+`INTERNET` is a `normal` permission: Android grants it at install time and gives you no switch to
+revoke it, so this is a promise the source keeps rather than one the operating system enforces. Three
+things make it checkable instead of merely stated:
+
+- every socket in the app is opened in [`DemTileDownloader.kt`](app/src/main/java/com/dazix/caelis/data/horizon/DemTileDownloader.kt),
+  and `NetworkIsolationTest` fails the build if a second place ever appears;
+- the consent flag is read on every call, so revoking it in Settings takes effect immediately;
+- **deleting the `INTERNET` line from the manifest is a supported way to build this from source.**
+  The app notices at runtime, hides the download entirely, and the terrain horizon still works from a
+  file you import by hand.
+
+Nothing else leaves the device.
 
 ---
 
@@ -57,6 +73,12 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   drag gestures to compensate for metallic tripod magnetic distortion, with 1-tap reset.
 - **Twilight & Terrain Sunset Continuation**: Precise Civil, Nautical, and Astronomical twilight phases plus solid
   daytime trajectory continuing down to $-15^\circ$ below the visual horizon for framing sunsets behind hills and buildings.
+- **Real Horizon Silhouette**: Optional terrain skyline computed from a 1 arcsecond (~30 m) elevation model by
+  ray-marching 1440 azimuths with Earth curvature and standard atmospheric refraction ($k = 0.13$), drawn as a
+  polyline locked to the landscape. It gives the **sunset that actually happens** - "the Sun goes behind the
+  ridge at 18:42", 25 minutes before the almanac's 19:07 - and dims the stretch of the trajectory that is
+  hidden, so it is obvious how much of the golden hour the hills take. Off by default; the elevation data is
+  either downloaded once with your consent or imported by hand, and the computed profile then works offline.
 - **Red Vision Mode**: Astrophotography dark red theme (`#FFFF1744`) preserving night adaptation.
 - **Two-Row Floating HUD**: Row 1 with GPS fix status & location, Row 2 with Compass Azimuth and Lens FOV.
 
@@ -78,7 +100,8 @@ Augmented reality planetarium for night sky framing, astrophotography alignment,
   search history. Features animated camera routing in AR mode (freeze-frame accelerate-decelerate re-calibration) and
   interactive manual virtual planetarium pan mode (FastOutSlowIn S-curve).
 - **Procedural GPU AGSL Shaders**: Procedural volumetric Milky Way galaxy shader, Rayleigh/Mie atmospheric scattering,
-  and horizon landscape silhouette.
+  and horizon landscape silhouette - optionally the **real** terrain around you, read per-pixel from a 1440x1
+  profile strip so stars are genuinely occluded by the ridge instead of shining through a painted tree line.
 - **Layer Controls & Detail Sheets**: Layer toggles (stars, constellations, artwork, planets, grid, atmosphere), visual
   magnitude cutoff slider, and rich celestial body bottom sheet with astronomical distance, magnitude, and rise/set times.
 
@@ -222,9 +245,9 @@ camera, and the broadcast entry points that start a session from a shell.
 
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
-scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration (260 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, solar positioning, ephemeris (78 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog (91 tests)
+scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (283 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (179 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog (92 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -240,7 +263,8 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **446 JVM tests (260 intervalometer, 78 solar, 108 night sky / docs), 20 instrumented tests, no failures, no skips, lint clean.**
+what a dead accessibility service produces. Current baseline: **571 JVM tests (283 intervalometer/caelis, 179 solar & horizon, 92 night sky, plus docs/UI), 31 instrumented
+tests, no failures, no skips, lint clean.**
 
 ---
 
@@ -249,16 +273,18 @@ what a dead accessibility service produces. Current baseline: **446 JVM tests (2
 ```
 com.dazix.caelis
 ├── domain/          pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
+│   ├── horizon/     pure Kotlin terrain horizon — .hgt decoder, ray-marched skyline with curvature & refraction
 │   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
 │   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
 │                    star optics, planetary ephemeris, constellation tables, search index)
 ├── ar/              AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers, SkyDomeRenderer
 ├── data/            DataStore settings, calibrations, and the process-wide session snapshot
+│   ├── horizon/     elevation tile download (the only network code), import, mmap cache, profile codec
 │   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors
 ├── service/         ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
 │                    CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
 ├── overlay/         the floating panel, its placement/cloak/dim policy, and the calibration overlay
-├── notify/          the ongoing notification and its actions
+├── notify/          the ongoing session notification, and terrain download progress
 ├── verify/          the optional MediaStore capture check
 ├── monitor/         battery and storage
 └── ui/              activity, Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme
@@ -334,8 +360,18 @@ retrying while the camera is still writing them.
 - **Capture verification costs time.** The window is the profile's capture latency plus grace, so a shot
   is confirmed seconds after the tap and a `maxShots` session ends that much later. That delay is what
   leaves room for the one honest re-tap.
-- **`QUERY_ALL_PACKAGES`** is declared so the picker can list every launchable app. Nothing is sent
-  anywhere; the app has no network permission.
+- **`QUERY_ALL_PACKAGES`** is declared so the picker can list every launchable app. The list never
+  leaves the device.
+- **The terrain horizon cost the app its "no network permission" guarantee.** That was a real
+  argument in an app holding the accessibility permission, and it is now a code-level promise instead
+  of a system-enforced one. The compensation is the isolation above, the one-line manifest edit that
+  takes it back, and a hand-import path that is a first-class citizen rather than a fallback.
+- **The elevation model is bare earth.** It knows the hills; it does not know the trees or the
+  buildings on them. The silhouette is where the ground is, which on a wooded ridge is a few degrees
+  below where the sky actually starts.
+- **A terrain profile is tied to where you stood.** Move more than about 110 m and it is recomputed;
+  the elevation tiles it came from live in the cache and Android may reclaim them at any time, but
+  the computed profile is kept and works with the radio off.
 
 ---
 

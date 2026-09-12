@@ -346,4 +346,67 @@ class CameraProjectionTest {
         assertEquals(screenW / 2f, proj.x, 0.5f)
         assertEquals(screenH / 2f, proj.y, 0.5f)
     }
+
+    /**
+     * Automatic horizon alignment reads the sky/terrain boundary in pixels and has to know what
+     * direction each of those pixels looks at. If the inverse drifts from the forward projection the
+     * alignment would confidently apply a wrong offset, which is worse than not aligning at all.
+     */
+    @Test
+    fun `unprojecting a projected point returns the direction it came from`() {
+        val out = DoubleArray(2)
+        val buffer = FloatArray(3)
+
+        for (rotation in intArrayOf(Surface.ROTATION_0, Surface.ROTATION_90, Surface.ROTATION_270)) {
+            for (azimuth in doubleArrayOf(350.0, 355.0, 0.0, 5.0, 12.0)) {
+                for (elevation in doubleArrayOf(-10.0, -2.0, 0.0, 3.5, 15.0)) {
+                    CameraProjection.projectFast(
+                        azimuthDegrees = azimuth,
+                        elevationDegrees = elevation,
+                        rotationMatrix = northPortraitMatrix,
+                        viewportWidth = screenW,
+                        viewportHeight = screenH,
+                        displayRotation = rotation,
+                        fovHorizontalDegrees = fovH,
+                        outBuffer = buffer,
+                    )
+                    if (buffer[2] <= 0.001f) continue
+
+                    CameraProjection.unprojectFast(
+                        screenX = buffer[0],
+                        screenY = buffer[1],
+                        rotationMatrix = northPortraitMatrix,
+                        viewportWidth = screenW,
+                        viewportHeight = screenH,
+                        displayRotation = rotation,
+                        fovHorizontalDegrees = fovH,
+                        outAzEl = out,
+                    )
+
+                    val azimuthError = ((out[0] - azimuth + 540.0) % 360.0) - 180.0
+                    assertEquals("azimuth at rot $rotation, az $azimuth el $elevation", 0.0, azimuthError, 0.02)
+                    assertEquals("elevation at rot $rotation, az $azimuth el $elevation", elevation, out[1], 0.02)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `the screen centre always looks along the camera axis`() {
+        val out = DoubleArray(2)
+
+        CameraProjection.unprojectFast(
+            screenX = screenW / 2f,
+            screenY = screenH / 2f,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            outAzEl = out,
+        )
+
+        assertEquals(0.0, out[0], 0.01)
+        assertEquals(0.0, out[1], 0.01)
+    }
 }

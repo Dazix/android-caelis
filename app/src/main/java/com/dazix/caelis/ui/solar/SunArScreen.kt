@@ -2,6 +2,7 @@ package com.dazix.caelis.ui.solar
 
 import android.Manifest
 import android.content.Context
+import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,9 +22,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,10 +34,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -73,12 +75,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -105,6 +112,7 @@ import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
+import com.dazix.caelis.ui.formatOffsetDegrees
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -123,6 +131,9 @@ private val NormalHorizon = Color(0xDD4DD0E1)
 private val NormalGrid = Color(0x664DD0E1)
 private val NormalNightArc = Color(0x44FFB300)
 
+/** Mirrors [com.dazix.caelis.ar.NormalTerrain]; the screen keeps its own copy of the palette. */
+private val NormalTerrain = Color(0xFF8BC34A)
+
 // Cool Lunar Color Palette
 private val MoonSilverCyan = Color(0xFF80DEEA)
 private val MoonNightArc = Color(0x3380DEEA)
@@ -140,6 +151,9 @@ fun SunArScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
+    val alignAzimuthOffset by viewModel.panAzimuthOffset.collectAsStateWithLifecycle()
+    val alignElevationOffset by viewModel.panPitchOffset.collectAsStateWithLifecycle()
+    val autoAlignResult by viewModel.autoAlign.collectAsStateWithLifecycle()
 
     val coroutineScope = rememberCoroutineScope()
     val toastHostState = remember(coroutineScope) { AppToastHostState(coroutineScope) }
@@ -193,34 +207,49 @@ fun SunArScreen(
     val isPortrait = displayRotation == android.view.Surface.ROTATION_0 ||
         displayRotation == android.view.Surface.ROTATION_180
 
+    // Report what the automatic alignment did, including when it refused. A silent no-op reads as a
+    // broken button; a silent success reads as a broken compass.
+    LaunchedEffect(autoAlignResult) {
+        val result = autoAlignResult
+        val messageId = when (result) {
+            null, AutoAlignResult.Working -> null
+            AutoAlignResult.NoProfile -> R.string.ar_align_auto_no_profile
+            AutoAlignResult.NoCamera -> R.string.ar_align_auto_no_camera
+            AutoAlignResult.NoSkyline -> R.string.ar_align_auto_no_skyline
+            is AutoAlignResult.Aligned -> if (result.azimuthDetermined) {
+                R.string.ar_align_auto_done
+            } else {
+                R.string.ar_align_auto_vertical_only
+            }
+        }
+        if (messageId != null) {
+            toastHostState.showToast(resId = messageId, icon = AppIcons.Compass)
+            viewModel.consumeAutoAlignResult()
+        }
+    }
+
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+
     Box(
         modifier = Modifier
+            .onSizeChanged { viewportSize = it }
             .fillMaxSize()
+            // Dragging aligns the overlay with what the camera sees; it is not a pan of a frozen
+            // sky. The sensors keep tracking throughout, so the correction the finger applies is the
+            // compass error and nothing else. There is deliberately no zoom here: it would scale the
+            // image and the overlay together and only add a variable to the alignment.
             .pointerInput(Unit) {
-                detectTransformGestures(
-                    panZoomLock = false,
-                    onGesture = { _, pan, zoom, _ ->
-                        val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                        if (pan.x != 0f || pan.y != 0f) {
-                            viewModel.onPanGesture(
-                                deltaX = pan.x,
-                                deltaY = pan.y,
-                                viewWidth = viewWidth,
-                                fovDeg = uiState.cameraFovHorizontal,
-                            )
-                        }
-                        if (zoom != 1.0f) {
-                            viewModel.adjustZoomBy(zoom)
-                        }
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    if (drag.x != 0f || drag.y != 0f) {
+                        viewModel.onPanGesture(
+                            deltaX = drag.x,
+                            deltaY = drag.y,
+                            viewWidth = size.width.toFloat().coerceAtLeast(1f),
+                            fovDeg = uiState.cameraFovHorizontal,
+                        )
                     }
-                )
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        viewModel.resetZoom()
-                    }
-                )
+                }
             }
     ) {
         if (hasCameraPermission) {
@@ -230,6 +259,8 @@ fun SunArScreen(
                 lifecycleOwner = lifecycleOwner,
                 isPortrait = isPortrait,
                 onFovCalculated = viewModel::setCameraFov,
+                analyzeFrames = true,
+                onFrameGrabber = viewModel::attachFrameGrabber,
             )
 
             // 3D Sky Dome AR Overlay Canvas
@@ -242,6 +273,8 @@ fun SunArScreen(
                 currentSunPos = uiState.currentSunPosition,
                 currentMoonPos = uiState.currentMoonPosition,
                 modifier = Modifier.fillMaxSize(),
+                horizonProfile = uiState.horizonProfile.takeIf { uiState.horizonSettings.enabled },
+                shadeOccludedTrajectory = uiState.horizonSettings.shadeOccludedTrajectory,
             )
         } else {
             // Camera Permission Needed Surface
@@ -258,8 +291,8 @@ fun SunArScreen(
             locationText = uiState.location.formatShort(),
             orientation = orientation,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
-            zoomRatio = uiState.zoomRatio,
             isCalibrated = uiState.isCalibrated,
+            horizonState = uiState.horizonState,
             onBack = onBack,
             onToggleInfo = { showInfoSheet = !showInfoSheet },
             onResetCalibration = {
@@ -268,9 +301,6 @@ fun SunArScreen(
                     icon = AppIcons.Compass,
                 )
                 viewModel.resetCalibration()
-            },
-            onResetZoom = {
-                viewModel.resetZoom()
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -306,6 +336,21 @@ fun SunArScreen(
                         viewModel.resetCalibration()
                     },
                     onClose = { showInfoSheet = false },
+                    terrainTimes = uiState.terrainTimes,
+                    horizonEnabled = uiState.horizonSettings.enabled,
+                    onToggleHorizon = viewModel::toggleHorizon,
+                    alignAzimuthOffsetDeg = alignAzimuthOffset,
+                    alignElevationOffsetDeg = alignElevationOffset,
+                    compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
+                    onNudgeAlignment = viewModel::nudgeCalibration,
+                    isAutoAligning = autoAlignResult is AutoAlignResult.Working,
+                    onAutoAlign = {
+                        viewModel.autoAlign(
+                            viewportWidth = viewportSize.width.toFloat(),
+                            viewportHeight = viewportSize.height.toFloat(),
+                            displayRotation = displayRotation,
+                        )
+                    },
                 )
             }
 
@@ -328,6 +373,14 @@ fun SunArScreen(
             ) { interval ->
                 interval.formatLabel()
             }
+        }
+
+        // Terrain horizon: the one-off network question, then its own settings sheet.
+        if (uiState.shouldAskNetworkConsent) {
+            HorizonConsentDialog(
+                onAllow = { viewModel.answerNetworkConsent(true) },
+                onNever = { viewModel.answerNetworkConsent(false) },
+            )
         }
 
         // Theme-Aware Floating Toast
@@ -386,6 +439,8 @@ internal fun SkyDomeOverlayCanvas(
     currentSunPos: com.dazix.caelis.domain.solar.SolarCoordinates?,
     currentMoonPos: com.dazix.caelis.domain.solar.LunarCoordinates?,
     modifier: Modifier = Modifier,
+    horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+    shadeOccludedTrajectory: Boolean = true,
 ) {
     val zenithLabel = stringResource(R.string.sun_ar_zenith)
     val nadirLabel = stringResource(R.string.sun_ar_nadir)
@@ -423,12 +478,24 @@ internal fun SkyDomeOverlayCanvas(
         // 1. Draw Horizon Ring (0° elevation), Cardinal Points, Altitude Grid (+30°, +60°), Zenith and Nadir
         renderer.drawSkyDomeGrid(this, matrix, displayRotation, fovHorizontalDegrees, redVisionMode = false, w, h)
 
+        // 1b. Draw the real terrain skyline, under the trajectories so an arc crossing a ridge still
+        // reads as one continuous curve rather than as two pieces.
+        horizonProfile?.let {
+            renderer.drawHorizonSilhouette(this, it, matrix, displayRotation, fovHorizontalDegrees, redVisionMode = false, w, h)
+        }
+
         // 2. Draw Solar Trajectory Path & Time Bubbles (Warm Gold)
-        drawSolarTrajectoryArc(renderer, matrix, displayRotation, fovHorizontalDegrees, solarTrajectory, w, h)
+        drawSolarTrajectoryArc(
+            renderer, matrix, displayRotation, fovHorizontalDegrees, solarTrajectory, w, h,
+            horizonProfile = if (shadeOccludedTrajectory) horizonProfile else null,
+        )
         drawSolarTimeBubbles(renderer, solarTrajectory.timeBubbles, matrix, displayRotation, fovHorizontalDegrees, w, h)
 
         // 3. Draw Lunar Trajectory Path & Time Bubbles (Cool Silver-Cyan)
-        drawLunarTrajectoryArc(renderer, matrix, displayRotation, fovHorizontalDegrees, lunarTrajectory, w, h)
+        drawLunarTrajectoryArc(
+            renderer, matrix, displayRotation, fovHorizontalDegrees, lunarTrajectory, w, h,
+            horizonProfile = if (shadeOccludedTrajectory) horizonProfile else null,
+        )
         drawLunarTimeBubbles(renderer, lunarTrajectory.timeBubbles, matrix, displayRotation, fovHorizontalDegrees, w, h)
 
         // 4. Draw Sunrise and Sunset Horizon Badges
@@ -514,6 +581,7 @@ private fun DrawScope.drawSolarTrajectoryArc(
     trajectory: SolarTrajectory,
     w: Float,
     h: Float,
+    horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
 ) {
     val solarColor = NormalGoldSolar
     val pts = trajectory.pathPoints
@@ -553,22 +621,36 @@ private fun DrawScope.drawSolarTrajectoryArc(
                 pt2.coordinates.apparentElevationDegrees >= -15.0
 
             if (isVisibleArc) {
+                // Behind a ridge the arc is drawn thin and faint, with no casing: the shaded stretch
+                // is exactly how much of the golden hour the terrain takes away, and it has to be
+                // legible at a glance without becoming a second, competing line.
+                val occluded = horizonProfile.hides(pt1.coordinates.azimuthDegrees, pt1.coordinates.apparentElevationDegrees) &&
+                    horizonProfile.hides(pt2.coordinates.azimuthDegrees, pt2.coordinates.apparentElevationDegrees)
+
+                if (!occluded) {
+                    drawLine(
+                        color = Color(0x99000000),
+                        start = Offset(x1, y1),
+                        end = Offset(x2, y2),
+                        strokeWidth = 3.2.dp.toPx(),
+                    )
+                }
                 drawLine(
-                    color = Color(0x99000000),
+                    color = if (occluded) solarColor.copy(alpha = 0.3f) else solarColor,
                     start = Offset(x1, y1),
                     end = Offset(x2, y2),
-                    strokeWidth = 3.2.dp.toPx(),
-                )
-                drawLine(
-                    color = solarColor,
-                    start = Offset(x1, y1),
-                    end = Offset(x2, y2),
-                    strokeWidth = 2.0.dp.toPx(),
+                    strokeWidth = if (occluded) 1.4.dp.toPx() else 2.0.dp.toPx(),
                 )
             }
         }
     }
 }
+
+/** `true` when a profile exists and puts terrain in front of this point. No profile hides nothing. */
+private fun com.dazix.caelis.domain.horizon.HorizonProfile?.hides(
+    azimuthDegrees: Double,
+    elevationDegrees: Double,
+): Boolean = this != null && isOccluded(azimuthDegrees, elevationDegrees)
 
 private fun DrawScope.drawSolarTimeBubbles(
     renderer: SkyDomeRenderer,
@@ -629,6 +711,7 @@ private fun DrawScope.drawLunarTrajectoryArc(
     trajectory: LunarTrajectory,
     w: Float,
     h: Float,
+    horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
 ) {
     val lunarColor = MoonSilverCyan
     val pts = trajectory.pathPoints
@@ -668,17 +751,22 @@ private fun DrawScope.drawLunarTrajectoryArc(
                 pt2.coordinates.apparentElevationDegrees >= -15.0
 
             if (isVisibleArc) {
+                val occluded = horizonProfile.hides(pt1.coordinates.azimuthDegrees, pt1.coordinates.apparentElevationDegrees) &&
+                    horizonProfile.hides(pt2.coordinates.azimuthDegrees, pt2.coordinates.apparentElevationDegrees)
+
+                if (!occluded) {
+                    drawLine(
+                        color = Color(0x99000000),
+                        start = Offset(x1, y1),
+                        end = Offset(x2, y2),
+                        strokeWidth = 3.2.dp.toPx(),
+                    )
+                }
                 drawLine(
-                    color = Color(0x99000000),
+                    color = if (occluded) lunarColor.copy(alpha = 0.3f) else lunarColor,
                     start = Offset(x1, y1),
                     end = Offset(x2, y2),
-                    strokeWidth = 3.2.dp.toPx(),
-                )
-                drawLine(
-                    color = lunarColor,
-                    start = Offset(x1, y1),
-                    end = Offset(x2, y2),
-                    strokeWidth = 2.0.dp.toPx(),
+                    strokeWidth = if (occluded) 1.4.dp.toPx() else 2.0.dp.toPx(),
                 )
             }
         }
@@ -1218,13 +1306,12 @@ internal fun SunArTopBar(
     locationText: String,
     orientation: DeviceOrientation?,
     cameraFovHorizontal: Float,
-    zoomRatio: Float,
     isCalibrated: Boolean,
     onBack: () -> Unit,
     onToggleInfo: () -> Unit,
     onResetCalibration: () -> Unit,
-    onResetZoom: () -> Unit,
     modifier: Modifier = Modifier,
+    horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
 ) {
     val containerBg = Color(0xDD1A1A1A)
     val containerBorder = Color(0x33FFFFFF)
@@ -1276,6 +1363,22 @@ internal fun SunArTopBar(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
+                if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
+                    horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
+                ) {
+                    val pct = when (horizonState) {
+                        is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
+                        is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
+                        else -> 0
+                    }
+                    Text(
+                        text = "• ⛰ $pct %",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
             }
 
             Row(
@@ -1305,18 +1408,13 @@ internal fun SunArTopBar(
                     style = MaterialTheme.typography.labelSmall,
                     color = subTextColor,
                 )
-                val isZoomed = abs(zoomRatio - 1.0f) > 0.05f
-                val fovLabel = if (isZoomed) {
-                    String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
-                } else {
-                    stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
-                }
+                // One number, because there is no zoom on this screen: the FOV shown is the one the
+                // camera is actually delivering, measured from its crop region.
                 Text(
-                    text = "📐 $fovLabel",
+                    text = "📐 " + stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isZoomed) accentColor else subTextColor,
-                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
+                    color = subTextColor,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -1436,6 +1534,15 @@ internal fun SunMoonTimesInfoCard(
     onToggleKeepScreenOn: () -> Unit,
     onResetCalibration: () -> Unit,
     onClose: () -> Unit,
+    terrainTimes: TerrainTimes = TerrainTimes(),
+    horizonEnabled: Boolean = false,
+    onToggleHorizon: () -> Unit = {},
+    alignAzimuthOffsetDeg: Float = 0f,
+    alignElevationOffsetDeg: Float = 0f,
+    compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_HIGH,
+    onNudgeAlignment: (Float, Float) -> Unit = { _, _ -> },
+    isAutoAligning: Boolean = false,
+    onAutoAlign: () -> Unit = {},
 ) {
     val dayTimes = solarTrajectory.dayTimes
     val lTimes = lunarTrajectory.dayTimes
@@ -1520,6 +1627,13 @@ internal fun SunMoonTimesInfoCard(
                 textAlign = TextAlign.Center,
             )
 
+            // 1b. TERRAIN SECTION — shown beside the almanac times, never instead of them. Both
+            // numbers are true; which one matters depends on whether you are shooting the sky or
+            // the ridge, and the difference between them is the thing worth seeing.
+            if (terrainTimes.hasAny) {
+                TerrainTimesRow(terrainTimes = terrainTimes, subColor = subColor)
+            }
+
             Spacer(Modifier.height(2.dp))
 
             // 2. LUNAR SECTION
@@ -1559,6 +1673,38 @@ internal fun SunMoonTimesInfoCard(
             Spacer(Modifier.height(2.dp))
 
             // 3. SETTINGS & CONTROLS
+            //
+            // Only the show/hide switch lives here. Everything else about the terrain horizon — the
+            // search radius, the eye height, the download — is shared with Night Sky AR and belongs
+            // in the app's own Settings, not on one of the two screens that happen to draw it.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onToggleHorizon() }
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.horizon_enabled),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = titleColor,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = stringResource(R.string.horizon_enabled_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subColor,
+                    )
+                }
+                Switch(
+                    checked = horizonEnabled,
+                    onCheckedChange = { onToggleHorizon() },
+                )
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1588,36 +1734,244 @@ internal fun SunMoonTimesInfoCard(
                 )
             }
 
-            // Manual 3D rotation calibration row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            HorizonAlignRow(
+                azimuthOffsetDeg = alignAzimuthOffsetDeg,
+                elevationOffsetDeg = alignElevationOffsetDeg,
+                compassAccuracy = compassAccuracy,
+                isCalibrated = isCalibrated,
+                isAutoAligning = isAutoAligning,
+                onNudge = onNudgeAlignment,
+                onAutoAlign = onAutoAlign,
+                onReset = onResetCalibration,
+                titleColor = titleColor,
+                subColor = subColor,
+            )
+        }
+    }
+}
+
+/**
+ * Walks the whole overlay onto the real skyline and keeps the correction.
+ *
+ * A phone compass is routinely a few degrees out — near a building or a car, more — and the screenshot
+ * that prompted this was 2.9° off with the silhouette sitting 1.3° low. No model removes that, so the
+ * user gets to nudge it by eye: line the green terrain line up with the ridge in the viewfinder and
+ * the offset is remembered for next time. The sensors keep tracking throughout.
+ */
+@Composable
+private fun HorizonAlignRow(
+    azimuthOffsetDeg: Float,
+    elevationOffsetDeg: Float,
+    compassAccuracy: Int,
+    isCalibrated: Boolean,
+    isAutoAligning: Boolean,
+    onNudge: (Float, Float) -> Unit,
+    onAutoAlign: () -> Unit,
+    onReset: () -> Unit,
+    titleColor: Color,
+    subColor: Color,
+) {
+    // Show the azimuth the short way round: +359° is a tenth of a degree left, not almost a full turn.
+    val signedAzimuth = if (azimuthOffsetDeg > 180f) azimuthOffsetDeg - 360f else azimuthOffsetDeg
+    val coarse = SunArViewModel.COARSE_NUDGE_DEGREES
+    val fine = SunArViewModel.FINE_NUDGE_DEGREES
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.ar_align_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = titleColor,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = stringResource(R.string.ar_align_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subColor,
+                )
+            }
+            if (isCalibrated) {
+                TextButton(onClick = onReset) {
                     Text(
-                        text = if (isCalibrated) stringResource(R.string.sun_ar_calib_active) else stringResource(R.string.sun_ar_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.Medium,
+                        text = stringResource(R.string.sun_ar_calib_reset),
+                        color = NormalGoldSolar,
+                        style = MaterialTheme.typography.labelMedium,
                     )
-                    Text(
-                        text = stringResource(R.string.sun_ar_calib_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                    )
-                }
-                if (isCalibrated) {
-                    TextButton(onClick = onResetCalibration) {
-                        Text(
-                            text = stringResource(R.string.sun_ar_calib_reset),
-                            color = NormalGoldSolar,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
                 }
             }
         }
+
+        AlignNudgeRow(
+            label = stringResource(R.string.ar_align_azimuth),
+            valueText = formatOffsetDegrees(signedAzimuth),
+            decreaseDescription = stringResource(R.string.ar_align_azimuth_left),
+            increaseDescription = stringResource(R.string.ar_align_azimuth_right),
+            onCoarseDecrease = { onNudge(-coarse, 0f) },
+            onFineDecrease = { onNudge(-fine, 0f) },
+            onFineIncrease = { onNudge(fine, 0f) },
+            onCoarseIncrease = { onNudge(coarse, 0f) },
+            subColor = subColor,
+        )
+
+        AlignNudgeRow(
+            label = stringResource(R.string.ar_align_elevation),
+            valueText = formatOffsetDegrees(elevationOffsetDeg),
+            decreaseDescription = stringResource(R.string.ar_align_elevation_down),
+            increaseDescription = stringResource(R.string.ar_align_elevation_up),
+            onCoarseDecrease = { onNudge(0f, -coarse) },
+            onFineDecrease = { onNudge(0f, -fine) },
+            onFineIncrease = { onNudge(0f, fine) },
+            onCoarseIncrease = { onNudge(0f, coarse) },
+            subColor = subColor,
+        )
+
+        // One press does what the nudges do by hand: find the sky/terrain boundary in the camera
+        // image and put the overlay on it. It refuses rather than guesses, and says which.
+        Button(
+            onClick = onAutoAlign,
+            enabled = !isAutoAligning,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = if (isAutoAligning) {
+                    stringResource(R.string.ar_align_auto_working)
+                } else {
+                    stringResource(R.string.ar_align_auto)
+                },
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+
+        // The compass knowing it is lost is worth saying: it explains the misalignment and the fix
+        // (a figure of eight) is not something a user would guess.
+        if (compassAccuracy <= SensorManager.SENSOR_STATUS_ACCURACY_LOW) {
+            Text(
+                text = stringResource(R.string.ar_align_compass_low),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/** One labelled ±row of the alignment control: coarse and fine steps either side of the readout. */
+@Composable
+private fun AlignNudgeRow(
+    label: String,
+    valueText: String,
+    decreaseDescription: String,
+    increaseDescription: String,
+    onCoarseDecrease: () -> Unit,
+    onFineDecrease: () -> Unit,
+    onFineIncrease: () -> Unit,
+    onCoarseIncrease: () -> Unit,
+    subColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = subColor,
+            modifier = Modifier.weight(1f),
+        )
+        NudgeButton("⏪", decreaseDescription, onCoarseDecrease)
+        NudgeButton("◀", decreaseDescription, onFineDecrease)
+        Text(
+            text = valueText,
+            style = MaterialTheme.typography.labelMedium,
+            color = NormalGoldSolar,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(56.dp),
+        )
+        NudgeButton("▶", increaseDescription, onFineIncrease)
+        NudgeButton("⏩", increaseDescription, onCoarseIncrease)
+    }
+}
+
+@Composable
+private fun NudgeButton(glyph: String, description: String, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = description },
+    ) {
+        Text(text = glyph, style = MaterialTheme.typography.labelLarge, color = NormalGoldSolar)
+    }
+}
+
+/**
+ * When the Sun really clears and really loses the terrain, next to the almanac times above.
+ *
+ * The sub-line is the difference, because that is the number a person actually plans around: not
+ * "18:42" on its own, but "25 minutes earlier than the app used to tell you".
+ */
+@Composable
+private fun TerrainTimesRow(terrainTimes: TerrainTimes, subColor: Color) {
+    val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "⛰ ${stringResource(R.string.horizon_section_title)}",
+            style = MaterialTheme.typography.labelMedium,
+            color = NormalTerrain,
+            fontWeight = FontWeight.Bold,
+        )
+
+        if (terrainTimes.hiddenAllDay) {
+            Text(
+                text = stringResource(R.string.horizon_hidden_all_day),
+                style = MaterialTheme.typography.bodySmall,
+                color = subColor,
+            )
+            return@Column
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            InfoItem(
+                label = stringResource(R.string.horizon_terrain_sunrise),
+                value = terrainTimes.sunrise?.localTime?.format(formatter) ?: "—",
+                sub = terrainTimes.sunrise?.let { formatTerrainDelta(it) } ?: "",
+                color = NormalTerrain,
+                subColor = subColor,
+            )
+            InfoItem(
+                label = stringResource(R.string.horizon_terrain_sunset),
+                value = terrainTimes.sunset?.localTime?.format(formatter) ?: "—",
+                sub = terrainTimes.sunset?.let { formatTerrainDelta(it) } ?: "",
+                color = NormalTerrain,
+                subColor = subColor,
+            )
+        }
+    }
+}
+
+/** "25 min earlier" / "12 min later", or blank when there is no almanac time to compare against. */
+@Composable
+private fun formatTerrainDelta(event: com.dazix.caelis.domain.solar.TerrainEvent): String {
+    val delta = event.delayFromAstronomical ?: return ""
+    val minutes = delta.toMinutes()
+    return when {
+        minutes < 0L -> stringResource(R.string.horizon_terrain_earlier, -minutes)
+        minutes > 0L -> stringResource(R.string.horizon_terrain_later, minutes)
+        else -> ""
     }
 }
 

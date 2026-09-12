@@ -1,0 +1,77 @@
+package com.dazix.caelis.data
+
+/**
+ * Everything the terrain horizon layer is configured by. All opt-in: a default-constructed instance
+ * behaves exactly like a build that never had the feature, draws nothing extra and opens no socket.
+ */
+data class HorizonSettings(
+    /**
+     * Draw the real terrain skyline in the AR views, and compute rise/set times against it.
+     *
+     * Off by default because the layer is useless until a profile exists for where you are standing,
+     * and computing one costs either a download or a file the user has to go and fetch.
+     */
+    val enabled: Boolean = false,
+    /**
+     * Whether the user has agreed to the app fetching elevation tiles over the network.
+     *
+     * This is the entire network gate. [com.dazix.caelis.data.horizon.DemTileDownloader] refuses to
+     * open a connection while it is false, which is what makes the promise auditable now that the
+     * `INTERNET` permission itself can no longer be withheld by the system.
+     *
+     * `null` means the question has not been asked yet, and is what makes the consent prompt appear
+     * exactly once: a user who said no is not asked again on the next launch.
+     */
+    val networkConsent: Boolean? = null,
+    /**
+     * Let the app work out how far to search from the terrain around the observer.
+     *
+     * On by default, because the honest answer varies by two orders of magnitude — a valley floor
+     * needs a couple of kilometres, a plain facing a distant range needs eighty — and the cost of
+     * guessing high is up to nine more tiles at 26 MB each, fetched to discover they changed nothing.
+     * The tile the observer is standing in is downloaded regardless and covers a whole degree, so the
+     * estimate itself is free. See [com.dazix.caelis.domain.horizon.HorizonRangeEstimator].
+     */
+    val autoRange: Boolean = true,
+    /**
+     * How far out terrain is searched, in kilometres, when [autoRange] is off.
+     *
+     * 60 km is a deliberate compromise. Further would catch the Alps from Bohemia on the rare day
+     * the air allows it, but each extra degree of latitude or longitude is another tile to fetch,
+     * and beyond about 80 km the atmosphere hides the terrain far more reliably than geometry does.
+     */
+    val maxRangeKm: Int = DEFAULT_MAX_RANGE_KM,
+    /** Height of the eye above the ground, in centimetres. Tripod at eye level by default. */
+    val eyeHeightCm: Int = DEFAULT_EYE_HEIGHT_CM,
+    /** Draw the part of a trajectory that is behind the terrain dimmed rather than solid. */
+    val shadeOccludedTrajectory: Boolean = true,
+    /** Only fetch tiles on an unmetered connection. A tile can be 19 MB in mountainous terrain. */
+    val wifiOnly: Boolean = false,
+    /** Use the real profile instead of the stylised landscape texture in Night Sky AR. */
+    val realHorizonInNightSky: Boolean = false,
+) {
+
+    val maxRangeMeters: Double get() = maxRangeKm * 1000.0
+
+    val eyeHeightMeters: Double get() = eyeHeightCm / 100.0
+
+    /** True once the user has answered the network question, either way. */
+    val networkConsentAnswered: Boolean get() = networkConsent != null
+
+    /** True only when the user actively agreed. A missing answer is not consent. */
+    val networkDownloadAllowed: Boolean get() = networkConsent == true
+
+    companion object {
+        const val DEFAULT_MAX_RANGE_KM: Int = 60
+        const val DEFAULT_EYE_HEIGHT_CM: Int = 160
+
+        /** Range values offered in the UI, in kilometres. An automatic estimate rounds up to one. */
+        val RANGE_CHOICES_KM: List<Int> = listOf(20, 40, 60, 100)
+
+        /** How far the automatic estimate is allowed to look before it has downloaded anything. */
+        const val AUTO_PROBE_RANGE_KM: Int = 40
+
+        val MIN_EYE_HEIGHT_CM: Int = 0
+        val MAX_EYE_HEIGHT_CM: Int = 500
+    }
+}
