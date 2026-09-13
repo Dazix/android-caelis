@@ -176,7 +176,7 @@ jobs:
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Upload to Google Play (Internal Testing)
-        uses: r0adkll/upload-google-play@a72c1dd77852ec626244f2b1d3d9d300eb030be9 # v1.1.2
+        uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.dazix.caelis
