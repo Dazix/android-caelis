@@ -19,15 +19,7 @@ info "1. Running unit tests and verification gates"
 
 info "2. Checking unit test results XML"
 RESULTS_DIR="${PROJECT_DIR}/app/build/test-results/testDebugUnitTest"
-[ -d "$RESULTS_DIR" ] || die "No test results directory at $RESULTS_DIR"
-
-FAILURES=$(grep -h 'failures="' "$RESULTS_DIR"/*.xml | grep -v 'failures="0"' || true)
-ERRORS=$(grep -h 'errors="' "$RESULTS_DIR"/*.xml | grep -v 'errors="0"' || true)
-SKIPPED=$(grep -h 'skipped="' "$RESULTS_DIR"/*.xml | grep -v 'skipped="0"' || true)
-
-if [ -n "$FAILURES" ] || [ -n "$ERRORS" ] || [ -n "$SKIPPED" ]; then
-    die "Unit test regressions found in XML results! Failures: $FAILURES, Errors: $ERRORS, Skipped: $SKIPPED"
-fi
+python3 "${SCRIPT_DIR}/check_test_results.py" "$RESULTS_DIR"
 info "All unit tests passed with 0 failures, 0 errors, 0 skipped."
 
 info "3. Installing to device for dedicated development user ($USER_ID)"

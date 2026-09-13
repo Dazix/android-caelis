@@ -62,6 +62,10 @@ scripts/a11y_teardown.sh             # restore exactly what was snapshotted
 | `run_instrumented.sh` | wake → `assembleDebug` + `adb install -r --user "$ANDROID_USER_ID"` → setup → `./gradlew :app:connectedDebugAndroidTest` → teardown (in a trap). Prints the HTML report path and then **decides the verdict from the result XML**, not from Gradle's exit code. Optional first argument filters to one test class or `Class#method`. |
 | `e2e_pixel_camera.sh` | Wakes/unlocks, lists MediaStore image ids, launches the Pixel camera, runs a 5 shot / 6 s session with the adaptive long-exposure wait on, waits for the rows, asserts them, screenshots into `build/e2e/`, **deletes exactly the rows it created**, always tears down. |
 | `build_release_bundle.sh` | Builds and signs a release Android App Bundle (`.aab`) locally, prompting interactively for keystore passwords and automatically locating `keys/release.keystore`. |
+| `check_test_results.py` | Standalone Python validator that parses JUnit test result XML files, counts tests/failures/errors/skipped, and fails strictly on any regression or empty test run. |
+| `check_portability.sh` | Enforces portability gates: ensures no machine-specific paths or personal values are committed, local configurations remain untracked, and template exists. |
+| `decode_keystore.sh` | Decodes base64-encoded release keystore from environment into target file for CI/CD signing. |
+| `set_build_version_vars.sh` | Calculates version names and release names across `internal`, `beta`, and `production` tracks and writes to `$GITHUB_OUTPUT`. |
 
 ## Device-hygiene guarantee
 

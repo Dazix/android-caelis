@@ -31,18 +31,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # Puts sdkmanager on PATH and accepts SDK licences for AGP (android-37.1 / compileSdkMinor = 1)
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android build environment
+        uses: ./.github/actions/setup-android-env
 
       - name: Assemble, unit-test and lint
         run: >-
@@ -54,36 +44,7 @@ jobs:
 
       - name: Check the unit-test result XML
         if: success() || failure()
-        run: |
-          set -eu
-          shopt -s nullglob
-          files=(app/build/test-results/testDebugUnitTest/*.xml)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "no unit-test result XML at all - the tests did not run" >&2
-            exit 1
-          fi
-          python3 - "${files[@]}" <<'PY'
-          import sys, xml.etree.ElementTree as ET
-          tests = failures = errors = skipped = 0
-          for path in sys.argv[1:]:
-              s = ET.parse(path).getroot()
-              tests += int(s.get("tests", 0))
-              failures += int(s.get("failures", 0))
-              errors += int(s.get("errors", 0))
-              skipped += int(s.get("skipped", 0))
-          print(f"tests={tests} failures={failures} errors={errors} skipped={skipped}")
-          bad = []
-          if tests == 0:
-              bad.append("no tests ran")
-          if failures:
-              bad.append(f"{failures} failed")
-          if errors:
-              bad.append(f"{errors} errored")
-          if skipped:
-              bad.append(f"{skipped} skipped - a skip is a test that did not answer the question")
-          if bad:
-              sys.exit("unit tests: " + "; ".join(bad))
-          PY
+        run: python3 scripts/check_test_results.py app/build/test-results/testDebugUnitTest
 
       - name: Upload test and lint reports
         if: always()
@@ -103,33 +64,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: No machine-specific or personal values in tracked files
-        run: |
-          set -eu
-          hits=$(git ls-files -z \
-            | grep -zv -E '^gradlew(\.bat)?$' \
-            | xargs -0 grep -InE '/home/[a-z]|/Users/[a-z]|/snap/|--user [0-9]' \
-            | grep -vE '^\.github/workflows/(ci|deploy)\.yml:' || true)
-          if [ -n "$hits" ]; then
-            echo "$hits" >&2
-            echo >&2
-            echo "Machine-specific values must not be committed. Put them in scripts/env.local.sh" >&2
-            echo "(gitignored) and reference \$ADB / \$JAVA_HOME / \$ANDROID_USER_ID instead." >&2
-            exit 1
-          fi
-          echo "no machine-specific values found"
-
-      - name: The gitignored local configuration is not tracked
-        run: |
-          set -eu
-          tracked=$(git ls-files -- local.properties scripts/env.local.sh .device_snapshot)
-          if [ -n "$tracked" ]; then
-            echo "these belong to one machine and must stay untracked:" >&2
-            echo "$tracked" >&2
-            exit 1
-          fi
-          test -f scripts/env.example.sh || { echo "scripts/env.example.sh is missing - it is the template the scripts point at" >&2; exit 1; }
-          echo "local configuration is untracked and the template is present"
+      - name: Check repository portability
+        run: ./scripts/check_portability.sh
 
   build_and_upload_internal:
     name: Build & Upload to Internal Testing
@@ -141,17 +77,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android build environment
+        uses: ./.github/actions/setup-android-env
 
       - name: Grant execution permissions to gradlew
         run: chmod +x ./gradlew
@@ -159,20 +86,11 @@ jobs:
       - name: Decode Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Error: ANDROID_KEYSTORE_BASE64 secret is not configured." >&2
-            exit 1
-          fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore.jks"
+        run: ./scripts/decode_keystore.sh "$RUNNER_TEMP/keystore.jks"
 
       - name: Set build version variables
         id: vars
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "version_name=internal [${SHORT_SHA}]" >> "$GITHUB_OUTPUT"
-          echo "release_name=Build #${{ github.run_number }} internal [${SHORT_SHA}]" >> "$GITHUB_OUTPUT"
+        run: ./scripts/set_build_version_vars.sh --track internal --sha "${{ github.sha }}" --run-number "${{ github.run_number }}"
 
       - name: Build Release App Bundle
         env:
@@ -204,17 +122,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android build environment
+        uses: ./.github/actions/setup-android-env
 
       - name: Grant execution permissions to gradlew
         run: chmod +x ./gradlew
@@ -222,23 +131,11 @@ jobs:
       - name: Decode Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Error: ANDROID_KEYSTORE_BASE64 secret is not configured." >&2
-            exit 1
-          fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore.jks"
+        run: ./scripts/decode_keystore.sh "$RUNNER_TEMP/keystore.jks"
 
       - name: Set release candidate version variables
         id: vars
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          TAG="${{ github.event.release.tag_name }}"
-          # Extract semantic version number without 'v' prefix and prerelease tag (e.g. v1.2.3-beta1 -> 1.2.3)
-          SEMVER=$(echo "$TAG" | sed -E 's/^v//; s/-.*//')
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "version_name=${SEMVER} [${SHORT_SHA}]" >> "$GITHUB_OUTPUT"
-          echo "release_name=${TAG} [${SHORT_SHA}]" >> "$GITHUB_OUTPUT"
+        run: ./scripts/set_build_version_vars.sh --track beta --sha "${{ github.sha }}" --tag "${{ github.event.release.tag_name }}"
 
       - name: Build Release Candidate Bundle
         env:
@@ -279,10 +176,7 @@ jobs:
 
       - name: Set production release variables
         id: vars
-        run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          TAG="${{ github.event.release.tag_name }}"
-          echo "release_name=${TAG} [${SHORT_SHA}]" >> "$GITHUB_OUTPUT"
+        run: ./scripts/set_build_version_vars.sh --track production --sha "${{ github.sha }}" --tag "${{ github.event.release.tag_name }}"
 
       - name: Promote Release (beta -> production)
         env:

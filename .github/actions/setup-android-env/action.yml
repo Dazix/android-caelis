@@ -1,0 +1,25 @@
+name: 'Setup Android Build Environment'
+description: 'Sets up JDK, Android SDK for AGP, and Gradle with dependency caching'
+
+inputs:
+  java-version:
+    description: 'Java JDK version'
+    required: false
+    default: '21'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+
+    # Puts sdkmanager on PATH and accepts the SDK licences, so AGP may download the platform and
+    # build-tools it wants. compileSdkMinor = 1 means it needs android-37.1 specifically.
+    - name: Set up Android SDK
+      uses: android-actions/setup-android@v4
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v6

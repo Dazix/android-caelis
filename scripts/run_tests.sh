@@ -21,39 +21,7 @@ info() {
 }
 
 check_xml_results() {
-    [ -d "$RESULTS_DIR" ] || die "No test results directory at $RESULTS_DIR"
-
-    # Count using Python for accurate totals and strict assertion
-    python3 -c '
-import xml.etree.ElementTree as ET
-import glob, sys
-
-files = glob.glob("app/build/test-results/testDebugUnitTest/*.xml")
-if not files:
-    print("ERROR: No test result XML files found!", file=sys.stderr)
-    sys.exit(1)
-
-total_tests = 0
-total_failures = 0
-total_errors = 0
-total_skipped = 0
-
-for f in files:
-    tree = ET.parse(f)
-    root = tree.getroot()
-    total_tests += int(root.attrib.get("tests", 0))
-    total_failures += int(root.attrib.get("failures", 0))
-    total_errors += int(root.attrib.get("errors", 0))
-    total_skipped += int(root.attrib.get("skipped", 0))
-
-print(f"Test XML Summary: {total_tests} test(s) executed, {total_failures} failure(s), {total_errors} error(s), {total_skipped} skipped across {len(files)} test file(s).")
-if total_failures > 0 or total_errors > 0 or total_skipped > 0:
-    print(f"FAILED: Regressions detected!", file=sys.stderr)
-    sys.exit(1)
-if total_tests == 0:
-    print("FAILED: 0 tests were executed!", file=sys.stderr)
-    sys.exit(1)
-'
+    python3 "${PROJECT_DIR}/scripts/check_test_results.py" "$RESULTS_DIR"
 }
 
 case "$TARGET" in
