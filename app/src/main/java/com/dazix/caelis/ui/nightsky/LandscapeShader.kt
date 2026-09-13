@@ -36,6 +36,8 @@ object LandscapeShader {
         uniform float3 nightVisionTint;
         uniform float useRealHorizon; // 1.0 to read the profile strip instead of the panorama
         uniform float4 terrainColor;  // Fill below the real skyline, straight RGBA
+        uniform float u_azimuthOffset;   // Dynamic alignment offset in radians
+        uniform float u_elevationOffset; // Dynamic alignment offset in radians
 
         const float PROFILE_TEXELS = 1440.0;
 
@@ -86,8 +88,8 @@ object LandscapeShader {
             vec3 worldDir = viewMatrix * rayDir;
 
             // 4. Cartesian to Spherical (Azimuth theta around Up/Z, Elevation phi above horizon)
-            float theta = atan(worldDir.x, worldDir.y);
-            float phi = asin(clamp(worldDir.z, -1.0, 1.0));
+            float theta = atan(worldDir.x, worldDir.y) + u_azimuthOffset;
+            float phi = asin(clamp(worldDir.z, -1.0, 1.0)) + u_elevationOffset;
 
             // 5. Map Spherical Coordinates to UV texture space [0.0, 1.0]
             // The half-turn offset is the *panorama's* convention: that asset has north in the centre

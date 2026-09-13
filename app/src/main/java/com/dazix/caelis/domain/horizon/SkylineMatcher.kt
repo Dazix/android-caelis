@@ -178,7 +178,7 @@ object SkylineMatcher {
         profile: HorizonProfile,
         azimuthOffset: Double,
     ): DoubleArray {
-        var buffer = scratch.get()
+        var buffer = scratch.get() ?: DoubleArray(0)
         if (buffer.size < count) {
             buffer = DoubleArray(count)
             scratch.set(buffer)

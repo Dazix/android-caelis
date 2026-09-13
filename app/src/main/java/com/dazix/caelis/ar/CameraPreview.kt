@@ -68,13 +68,23 @@ fun CameraPreview(
             var cropHeightPx = 0
 
             val previewBuilder = Preview.Builder()
+            val previewExtender = Camera2Interop.Extender(previewBuilder)
+            // Explicitly disable optical and digital stabilization to prevent IMU/viewfinder desynchronization
+            previewExtender.setCaptureRequestOption(
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF,
+            )
+            previewExtender.setCaptureRequestOption(
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
+            )
 
             // Assigned once the camera is bound. The first capture results can arrive before that,
             // so this stays nullable rather than lateinit: an early frame simply updates the crop
             // and the binding below dispatches it.
             var dispatchFov: (() -> Unit)? = null
 
-            Camera2Interop.Extender(previewBuilder).setSessionCaptureCallback(
+            previewExtender.setSessionCaptureCallback(
                 object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
                     override fun onCaptureCompleted(
                         session: android.hardware.camera2.CameraCaptureSession,
@@ -101,13 +111,23 @@ fun CameraPreview(
             // alignment asks for and removed again immediately: this screen is a viewfinder, not a
             // continuous vision pipeline, and an always-running analyzer costs battery for nothing.
             val analysis = if (analyzeFrames) {
-                ImageAnalysis.Builder()
+                val analysisBuilder = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                     // Delivered the way up the screen is, so a frame row is a screen row and the
                     // skyline search can look for "sky above, ground below" without a rotation.
                     .setOutputImageRotationEnabled(true)
-                    .build()
+
+                val analysisExtender = Camera2Interop.Extender(analysisBuilder)
+                analysisExtender.setCaptureRequestOption(
+                    CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                    CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF,
+                )
+                analysisExtender.setCaptureRequestOption(
+                    CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                    CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
+                )
+                analysisBuilder.build()
             } else {
                 null
             }
@@ -221,6 +241,7 @@ private fun frameGrabberFor(analysis: ImageAnalysis, context: android.content.Co
                         width = image.width,
                         height = image.height,
                         rowStride = plane.rowStride,
+                        timestampNs = image.imageInfo.timestamp,
                     ),
                 )
             }

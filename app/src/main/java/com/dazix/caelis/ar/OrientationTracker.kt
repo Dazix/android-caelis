@@ -87,6 +87,13 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
 
+    private val ringBuffer = SensorTimestampRingBuffer(128)
+    private val syncQ1 = FloatArray(4)
+    private val syncQ2 = FloatArray(4)
+    private val syncQInterp = FloatArray(4)
+    private val syncTimestamps = LongArray(2)
+    private val syncRawMatrix = FloatArray(16)
+
     @Volatile
     var panAzimuthOffsetDeg: Float = 0f
         private set
@@ -132,6 +139,44 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     fun getLiveMatrix(out: FloatArray): FloatArray {
         System.arraycopy(liveTrueMatrix, 0, out, 0, minOf(liveTrueMatrix.size, out.size))
         return out
+    }
+
+    /**
+     * Obtains the True-North and calibration-corrected rotation matrix matching the exact
+     * exposure [timestampNs] using quaternion SLERP.
+     *
+     * @param timestampNs Camera frame exposure timestamp in nanoseconds (from ImageInfo).
+     * @param outMatrix16 Pre-allocated 16-element FloatArray receiving R_true.
+     * @return true if interpolated from bracketing sensor events; false if falling back to live matrix.
+     */
+    fun getSynchronizedMatrix(timestampNs: Long, outMatrix16: FloatArray): Boolean {
+        require(outMatrix16.size >= 16) { "outMatrix16 must have at least 16 elements" }
+
+        if (timestampNs <= 0L || !ringBuffer.findBracket(timestampNs, syncQ1, syncQ2, syncTimestamps)) {
+            getLiveMatrix(outMatrix16)
+            return false
+        }
+
+        val t1 = syncTimestamps[0]
+        val t2 = syncTimestamps[1]
+        val u = if (t2 > t1) {
+            ((timestampNs - t1).toDouble() / (t2 - t1).toDouble()).toFloat().coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+
+        QuaternionSlerp.slerp(syncQ1, syncQ2, u, syncQInterp)
+        QuaternionSlerp.quaternionToRotationMatrix(syncQInterp, syncRawMatrix)
+
+        applyCalibration(
+            sensorMatrix = syncRawMatrix,
+            declinationDeg = magneticDeclinationDeg,
+            panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
+            panPitchOffsetDeg = calibrationPitchOffsetDeg,
+            tempDeclinationBuffer = tempDeclinationMatrix,
+            outMatrix = outMatrix16,
+        )
+        return true
     }
 
     /**
@@ -343,6 +388,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             val s = 1.0f - (qx * qx + qy * qy + qz * qz)
             if (s > 0f) sqrt(s) else 0f
         }
+
+        ringBuffer.push(event.timestamp, qx, qy, qz, qw)
 
         if (isFirstSample) {
             smoothedQuat[0] = qx

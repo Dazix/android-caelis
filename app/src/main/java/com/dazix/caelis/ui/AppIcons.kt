@@ -748,6 +748,45 @@ object AppIcons {
         }
     }
 
+    /** TerrainHorizon: mountain ridge silhouette with base horizon line. */
+    val TerrainHorizon: ImageVector by lazy {
+        icon("TerrainHorizon") {
+            strokePath {
+                moveTo(2.4f, 19f)
+                lineTo(21.6f, 19f)
+                moveTo(3f, 19f)
+                lineTo(9f, 9.5f)
+                lineTo(13.5f, 15f)
+                lineTo(17.5f, 7.5f)
+                lineTo(21.5f, 19f)
+            }
+        }
+    }
+
+    /** TerrainLock: locked mountain ridge with target crosshair. */
+    val TerrainLock: ImageVector by lazy {
+        icon("TerrainLock") {
+            strokePath {
+                moveTo(2.4f, 19f)
+                lineTo(21.6f, 19f)
+                moveTo(3f, 19f)
+                lineTo(9f, 9.5f)
+                lineTo(13.5f, 15f)
+                lineTo(17.5f, 7.5f)
+                lineTo(21.5f, 19f)
+                // Lock shackle and body
+                moveTo(10f, 6.5f)
+                arcTo(2f, 2f, 0f, false, true, 14f, 6.5f)
+                lineTo(14f, 8f)
+                lineTo(10f, 8f)
+                close()
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 11.5f, radius = 2.2f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

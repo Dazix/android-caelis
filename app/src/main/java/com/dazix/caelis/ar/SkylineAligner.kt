@@ -11,6 +11,7 @@ class LumaFrame(
     val width: Int,
     val height: Int,
     val rowStride: Int,
+    val timestampNs: Long = 0L,
 )
 
 /** Asks the camera for a single upright luma frame. Registered by [CameraPreview] once it is bound. */

@@ -438,17 +438,19 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         autoAlignState.value = AutoAlignResult.Working
-        grabber!!.grabNext { frame ->
+        grabber.grabNext { frame ->
             viewModelScope.launch {
+                val syncMatrix = FloatArray(16)
+                orientationTracker.getSynchronizedMatrix(frame.timestampNs, syncMatrix)
                 val match = withContext(Dispatchers.Default) {
                     SkylineAligner.align(
                         frame = frame,
                         viewportWidth = viewportWidth,
                         viewportHeight = viewportHeight,
-                        rotationMatrix = orientationTracker.getLiveMatrix(),
+                        rotationMatrix = syncMatrix,
                         displayRotation = displayRotation,
                         fovHorizontalDegrees = cameraFovHorizontal.value,
-                        profile = profile!!,
+                        profile = profile,
                     )
                 }
                 if (match == null) {

@@ -967,6 +967,8 @@ class NightSkyRenderer {
         isRedVision: Boolean,
         theme: com.dazix.caelis.domain.nightsky.NightVisionTheme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER,
         useRealHorizon: Boolean = false,
+        azimuthOffsetRad: Float = 0f,
+        elevationOffsetRad: Float = 0f,
     ) {
         // The real skyline needs no panorama texture, but the shader still declares both inputs, so
         // an unbound sampler would be undefined behaviour. Requiring the texture either way keeps
@@ -995,6 +997,8 @@ class NightSkyRenderer {
             landscapeShader.setFloatUniform("isRedVision", if (isRedVision) 1.0f else 0.0f)
             landscapeShader.setFloatUniform("nightVisionTint", shaderTintBuffer)
             landscapeShader.setFloatUniform("useRealHorizon", if (realHorizon) 1.0f else 0.0f)
+            landscapeShader.setFloatUniform("u_azimuthOffset", azimuthOffsetRad)
+            landscapeShader.setFloatUniform("u_elevationOffset", elevationOffsetRad)
 
             // Near-black rather than black: on an OLED panel a pure-black fill against a dark sky
             // reads as a hole in the render, not as ground.

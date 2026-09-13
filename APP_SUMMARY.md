@@ -539,9 +539,9 @@ flowchart TD
 
 Aplikace disponuje robustním systémem automatizovaného testování, optimalizací sestavení a nasazování:
 
-- **571 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
+- **587 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
   - `scripts/run_tests.sh caelis` (283 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence nastavení, perzistence `notification_permission_prompted`, lokalizace, `TerrainNotificationsTest` a `NetworkIsolationTest`.
-  - `scripts/run_tests.sh solar` (179 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor, terénní horizont (`HorizonProfile`, `HgtTile`, `DemTileCache`, `DemTileDownloader`, `SkylineMatcher`, `TerrainRiseSetCalculator`).
+  - `scripts/run_tests.sh solar` (191 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor, terénní horizont (`HorizonProfile`, `HgtTile`, `DemTileCache`, `DemTileDownloader`, `SkylineMatcher`, `TerrainRiseSetCalculator`), eliminace AR driftu (`SensorTimestampRingBuffer`, `QuaternionSlerp`, `DynamicMatrixCalculator`, `HorizonViewModel`).
   - `scripts/run_tests.sh nightsky` (92 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer, screenshotové testy.
   - plus dokumentační a screenshotové testy.
 - **31 Instrumentovaných testů na reálném zařízení / ART:**

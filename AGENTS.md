@@ -73,7 +73,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **571 JVM tests (283 intervalometer, 179 solar & horizon, 92 night sky, plus docs/UI), 31
+`skipped`), not from the console. Current baseline: **587 JVM tests (283 intervalometer, 191 solar & horizon, 92 night sky, plus docs/UI), 31
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -92,7 +92,7 @@ a session from the shell.
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, search index). |
-| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the camera-geometry half of automatic horizon alignment (`SkylineAligner`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), dynamic matrix calculation (`DynamicMatrixCalculator`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the camera-geometry half of automatic horizon alignment (`SkylineAligner`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `StarMetadata`). |
@@ -103,6 +103,7 @@ a session from the shell.
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
 | `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
+| `ui/horizon/` | Terrain AR screen (`TerrainArScreen`), ViewModel (`HorizonViewModel`), AGSL hardware shader canvas (`HardwareTerrainShaderCanvas`), lock indicator (`HorizonLockIndicator`). |
 | `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, bottom sheets, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
 
 `ShutterAccessibilityService` marks its UI wiring with an `==== INTEGRATION POINT ====` block: those are
@@ -112,6 +113,14 @@ the only calls into the notification and the panel.
 
 Each of these was found by review or on the device and is now covered by a test. Do not undo them.
 
+- **Disable OIS and EIS on CameraX preview and analysis during AR tracking.** Optical stabilization
+  physically shifts the lens and video stabilization distorts the frame, desynchronizing the camera feed
+  from the device's IMU data. `Camera2Interop` forces `CONTROL_VIDEO_STABILIZATION_MODE = OFF` and
+  `LENS_OPTICAL_STABILIZATION_MODE = OFF`.
+- **Camera frame orientation must use timestamp-interpolated sensor readings (SLERP).** Camera frames
+  arrive tens of milliseconds after exposure; using the latest live sensor matrix causes drift during
+  camera rotation. `SensorTimestampRingBuffer` + `QuaternionSlerp` queries orientation at the exact
+  `imageInfo.timestamp`.
 - **AR world-to-device mapping is $R^T$ (Transpose).** Android's `SensorManager` rotation matrix $R$
   maps device vectors to world coordinates ($V_{\text{world}} = R \cdot V_{\text{dev}}$). Transforming
   world points (sun, horizon, celestial grid) onto the camera viewport requires the orthogonal inverse
