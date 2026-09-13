@@ -457,8 +457,6 @@
     <string name="settings_debug_enable">Show debug options</string>
     <string name="settings_debug_enable_desc">Enables developer and calibration toggles across Night Sky AR and other views</string>
     <string name="settings_section_version">Version</string>
-    <string name="settings_version_title">App Version</string>
-    <string name="settings_version_subtitle">Build identifier and package version information</string>
     <string name="settings_version_name_label">Version Name</string>
     <string name="settings_version_code_label">Version Code</string>
 </resources>

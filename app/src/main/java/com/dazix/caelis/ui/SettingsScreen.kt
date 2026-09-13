@@ -384,16 +384,12 @@ fun SettingsScreen(
             text = stringResource(R.string.settings_section_version),
         )
 
-        SectionCard(
-            title = stringResource(R.string.settings_version_title),
-            subtitle = stringResource(R.string.settings_version_subtitle),
-        ) {
-            Row(
+        SectionCard {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = stringResource(R.string.settings_version_name_label),
@@ -406,12 +402,17 @@ fun SettingsScreen(
                 )
             }
 
-            Row(
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 2.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text(
                     text = stringResource(R.string.settings_version_code_label),

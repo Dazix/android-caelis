@@ -464,8 +464,6 @@
     <string name="settings_debug_enable">Zobrazit možnosti ladění</string>
     <string name="settings_debug_enable_desc">Povolí zobrazení přepínačů pro ladění a kalibraci v noční obloze a dalších obrazovkách</string>
     <string name="settings_section_version">Verze</string>
-    <string name="settings_version_title">Verze aplikace</string>
-    <string name="settings_version_subtitle">Informace o sestavení a čísle verze balíčku</string>
     <string name="settings_version_name_label">Název verze (Version Name)</string>
     <string name="settings_version_code_label">Kód verze (Version Code)</string>
 </resources>
