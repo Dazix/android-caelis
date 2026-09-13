@@ -35,6 +35,16 @@ def parse_arguments() -> argparse.Namespace:
         help="Destination track to promote to (e.g., beta, production)",
     )
     parser.add_argument(
+        "--release-name",
+        default=os.environ.get("RELEASE_NAME"),
+        help="Optional custom release name for the target track (default: keep source release name)",
+    )
+    parser.add_argument(
+        "--release-notes",
+        default=os.environ.get("RELEASE_NOTES"),
+        help="Optional release notes / changelog string for the target track",
+    )
+    parser.add_argument(
         "--key-json",
         default=os.environ.get("PLAY_STORE_JSON_KEY"),
         help="Google Play Service Account JSON key content or file path (default: $PLAY_STORE_JSON_KEY)",
@@ -93,6 +103,8 @@ def promote_release(
     from_track: str,
     to_track: str,
     credentials: Any,
+    release_name: Optional[str] = None,
+    release_notes: Optional[str] = None,
     dry_run: bool = False,
 ) -> None:
     try:
@@ -148,21 +160,32 @@ def promote_release(
             sys.exit(1)
 
         version_codes = source_release.get("versionCodes", [])
-        release_name = source_release.get("name")
-        release_notes = source_release.get("releaseNotes", [])
+        final_release_name = release_name or source_release.get("name")
+        
+        # Prepare release notes
+        final_release_notes = source_release.get("releaseNotes", [])
+        if release_notes and release_notes.strip():
+            # Truncate notes if necessary and provide for standard locales
+            trimmed_notes = release_notes.strip()[:500]
+            final_release_notes = [
+                {"language": "en-US", "text": trimmed_notes},
+                {"language": "cs-CZ", "text": trimmed_notes},
+            ]
+
         print(
-            f"Found source release: name='{release_name}', versionCodes={version_codes}, status='{source_release.get('status')}'"
+            f"Found source release: source_name='{source_release.get('name')}', versionCodes={version_codes}, status='{source_release.get('status')}'"
         )
+        print(f"Target release metadata: name='{final_release_name}'")
 
         # Step 3: Assign versionCodes to target track with status 'completed'
         target_release: Dict[str, Any] = {
             "status": "completed",
             "versionCodes": version_codes,
         }
-        if release_name:
-            target_release["name"] = release_name
-        if release_notes:
-            target_release["releaseNotes"] = release_notes
+        if final_release_name:
+            target_release["name"] = final_release_name
+        if final_release_notes:
+            target_release["releaseNotes"] = final_release_notes
 
         target_track_body = {
             "track": to_track,
@@ -189,7 +212,7 @@ def promote_release(
                 packageName=package_name, editId=edit_id
             ).execute()
             print(
-                f"SUCCESS: Release {version_codes} successfully promoted from '{from_track}' to '{to_track}'! (Commit ID: {commit_result.get('id', edit_id)})"
+                f"SUCCESS: Release {version_codes} ('{final_release_name}') successfully promoted from '{from_track}' to '{to_track}'! (Commit ID: {commit_result.get('id', edit_id)})"
             )
 
     except HttpError as err:
@@ -216,6 +239,8 @@ def main() -> None:
         from_track=args.from_track,
         to_track=args.to_track,
         credentials=credentials,
+        release_name=args.release_name,
+        release_notes=args.release_notes,
         dry_run=args.dry_run,
     )
 

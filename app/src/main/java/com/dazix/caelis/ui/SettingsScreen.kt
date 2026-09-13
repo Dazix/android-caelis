@@ -30,7 +30,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import com.dazix.caelis.BuildConfig
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -366,6 +368,61 @@ fun SettingsScreen(
                 checked = debugModeEnabled,
                 onCheckedChange = onDebugModeEnabledChange,
             )
+        }
+
+        // Higher visible divider separating Version section
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        // ---- Section 5: Version Info (Verze) ----
+        SectionHeader(
+            text = stringResource(R.string.settings_section_version),
+        )
+
+        SectionCard(
+            title = stringResource(R.string.settings_version_title),
+            subtitle = stringResource(R.string.settings_version_subtitle),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_version_name_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = BuildConfig.VERSION_NAME,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_version_code_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = BuildConfig.VERSION_CODE.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 
