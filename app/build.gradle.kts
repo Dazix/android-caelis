@@ -13,7 +13,7 @@ android {
         applicationId = "com.dazix.caelis"
         minSdk = 33
         targetSdk = 37
-        versionCode = 2
+        versionCode = System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 2
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

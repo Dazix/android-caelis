@@ -549,7 +549,11 @@ Aplikace disponuje robustním systémem automatizovaného testování, optimaliz
 - **End-to-End validace (`scripts/e2e_pixel_camera.sh`):**
   - Reálné spouštění nativní Google Camera aplikace na vyhrazeném vývojářském profilu s detekcí nově pořízených souborů v `MediaStore` a jejich následným úklidem.
 - **CI/CD a Play Store Deployment:**
-  - GitHub Actions workflow (`.github/workflows/deploy-playstore.yml`) pro automatické sestavení a nahrání podepsaného `.aab` balíčku do trasy interního testování Google Play Store při publikování GitHub Release.
+  - GitHub Actions workflow (`.github/workflows/deploy.yml`) implementující architekturu *Build Once, Promote Everywhere*:
+    1. Push do větve `main` sestaví podepsaný `.aab` balíček s inkrementálním `versionCode` (`github.run_number`) a nahraje jej do trasy interního testování Google Play Store (`internal`).
+    2. Publikování GitHub Pre-Release (`beta`) povýší existující release z `internal` do `beta` přes `scripts/promote_release.py` bez rekompilace.
+    3. Publikování plného GitHub Release povýší existující release z `beta` do produkce (`production`) přes `scripts/promote_release.py` bez rekompilace.
+  - Skript `scripts/promote_release.py` pro přímou manipulaci s trasami Google Play Developer API.
   - Lokální interaktivní skript `scripts/build_release_bundle.sh` pro bezpečné podepsání a vygenerování release bundle bez ukládání hesel na disk.
   - Aktivní Gradle Configuration Cache pro bleskovou kompilaci a nulová varování kompilátoru.
 - **Drift-Free přesnost:** Absolutní časování eliminující kumulaci chyb.

@@ -157,7 +157,10 @@ Build a signed release bundle locally with interactive password prompt and keyst
 The output `.aab` will be generated at `app/build/outputs/bundle/release/app-release.aab`.
 
 **Automated CI/CD Deployment:**
-The repository includes a GitHub Actions workflow [`.github/workflows/deploy-playstore.yml`](.github/workflows/deploy-playstore.yml) that builds and deploys signed release `.aab` bundles directly to Google Play Store (Internal Testing track) whenever a new GitHub Release is published.
+The repository includes a GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) implementing a *Build Once, Promote Everywhere* release pipeline:
+1. **Push to `main`**: Builds a signed release `.aab` bundle with an incremental `versionCode` (`${{ github.run_number }}`) and uploads it to Google Play **Internal Testing** (`track: internal`).
+2. **GitHub Pre-Release (`published` / `prereleased`)**: Promotes the active release from `internal` to `beta` (Open Testing) via `scripts/promote_release.py` without re-compilation.
+3. **GitHub Full Release (`published` / non-prerelease)**: Promotes the active release from `beta` to `production` via `scripts/promote_release.py` without re-compilation.
 
 
 ## First run
