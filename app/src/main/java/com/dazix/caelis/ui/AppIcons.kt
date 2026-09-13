@@ -178,6 +178,17 @@ object AppIcons {
         }
     }
 
+    /** Downward chevron: expandable accordion / section. */
+    val ExpandMore: ImageVector by lazy {
+        icon("ExpandMore") {
+            strokePath {
+                moveTo(4.8f, 9.4f)
+                lineTo(12f, 16.6f)
+                lineTo(19.2f, 9.4f)
+            }
+        }
+    }
+
     /** Granted / verified. Always paired with words, never the only signal. */
     val Check: ImageVector by lazy {
         icon("Check") {

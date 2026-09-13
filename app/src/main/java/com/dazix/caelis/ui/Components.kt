@@ -1,8 +1,13 @@
 package com.dazix.caelis.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,6 +66,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -765,6 +771,78 @@ fun ListRowButton(
             }
         }
         if (trailing != null) trailing()
+    }
+}
+
+/**
+ * An accordion row: an expandable header row that toggles [expanded] and animates [content] in and out.
+ * Closed by default, with a smoothly rotating chevron indicator.
+ */
+@Composable
+fun AccordionRow(
+    title: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = ExpressiveMotion.spatial(),
+        label = "accordionChevronRotation",
+    )
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .clickable(
+                    role = Role.Button,
+                    onClick = { onExpandedChange(!expanded) },
+                )
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalContentColor.current.copy(alpha = 0.75f),
+                    )
+                }
+            }
+            Icon(
+                imageVector = AppIcons.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(24.dp)
+                    .rotate(chevronRotation),
+                tint = LocalContentColor.current.copy(alpha = 0.75f),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(animationSpec = ExpressiveMotion.spatial()) + fadeIn(animationSpec = ExpressiveMotion.effects()),
+            exit = shrinkVertically(animationSpec = ExpressiveMotion.spatial()) + fadeOut(animationSpec = ExpressiveMotion.effects()),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                content()
+            }
+        }
     }
 }
 

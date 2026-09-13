@@ -8,11 +8,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,9 +39,6 @@ import com.dazix.caelis.BuildConfig
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +56,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dazix.caelis.R
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
@@ -105,6 +110,7 @@ fun SettingsScreen(
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
     var showAttribution by remember { mutableStateOf(false) }
+    var manualImportExpanded by remember { mutableStateOf(false) }
 
     ScreenScaffold(
         title = stringResource(R.string.settings_title),
@@ -118,43 +124,11 @@ fun SettingsScreen(
             title = stringResource(R.string.settings_theme_title),
             subtitle = stringResource(R.string.settings_theme_subtitle),
         ) {
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                NightVisionTheme.entries.forEachIndexed { index, item ->
-                    val isSelected = item == theme
-                    val themeColor = when (item) {
-                        NightVisionTheme.RED -> Color(0xFFFF1744)
-                        NightVisionTheme.AMBER -> Color(0xFFFFB300)
-                        NightVisionTheme.GREEN -> Color(0xFF00E676)
-                    }
-                    val labelRes = when (item) {
-                        NightVisionTheme.RED -> R.string.settings_theme_red
-                        NightVisionTheme.AMBER -> R.string.settings_theme_amber
-                        NightVisionTheme.GREEN -> R.string.settings_theme_green
-                    }
-
-                    SegmentedButton(
-                        selected = isSelected,
-                        onClick = { onThemeChange(item) },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = NightVisionTheme.entries.size),
-                        icon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(themeColor, CircleShape),
-                            )
-                        },
-                    ) {
-                        Text(
-                            text = stringResource(labelRes),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                }
-            }
+            ThemeChoiceRow(
+                currentTheme = theme,
+                onThemeChange = onThemeChange,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
         }
 
         // ---- Section 2: Night Vision Activation Mode ----
@@ -214,11 +188,6 @@ fun SettingsScreen(
         // Shared by both AR screens on purpose: the search radius, the eye height and the downloaded
         // tiles describe where you are standing, not which screen you happen to be looking at. The
         // AR screens keep only their own show/hide switch.
-        SectionHeader(
-            text = stringResource(R.string.horizon_section_title),
-            modifier = Modifier.padding(top = 8.dp),
-        )
-
         SectionCard(
             title = stringResource(R.string.horizon_section_title),
             subtitle = stringResource(R.string.horizon_enabled_desc),
@@ -315,26 +284,32 @@ fun SettingsScreen(
                 }
             }
 
-            OutlinedButton(
-                onClick = onImportTerrain,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
+            AccordionRow(
+                title = stringResource(R.string.horizon_import_title),
+                expanded = manualImportExpanded,
+                onExpandedChange = { manualImportExpanded = it },
             ) {
-                Text(stringResource(R.string.horizon_import_action))
-            }
+                OutlinedButton(
+                    onClick = onImportTerrain,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                ) {
+                    Text(stringResource(R.string.horizon_import_action))
+                }
 
-            if (missingTerrainTiles.isNotEmpty()) {
-                Text(
-                    text = stringResource(
-                        R.string.horizon_import_body,
-                        missingTerrainTiles.joinToString("\n") { "${it.fileName}.gz" },
-                        "${DemTileDownloader.DEFAULT_BASE_URL}/skadi/",
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 6.dp),
-                )
+                if (missingTerrainTiles.isNotEmpty()) {
+                    Text(
+                        text = stringResource(
+                            R.string.horizon_import_body,
+                            missingTerrainTiles.joinToString("\n") { "${it.fileName}.gz" },
+                            "${DemTileDownloader.DEFAULT_BASE_URL}/skadi/",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
             }
 
             if (cachedTerrainBytes > 0) {
@@ -596,7 +571,10 @@ private fun HorizonStatusRow(state: HorizonState) {
             val progress = when (state) {
                 is HorizonState.Downloading -> state.progress
                 is HorizonState.Computing -> state.progress
-                else -> 0f
+                is HorizonState.Idle,
+                is HorizonState.NeedsTiles,
+                is HorizonState.Ready,
+                is HorizonState.Failed -> 0f
             }
             CircularProgressIndicator(
                 progress = { progress },
@@ -656,4 +634,64 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L -> "${bytes / (1024L * 1024L)} MB"
     bytes >= 1024L -> "${bytes / 1024L} kB"
     else -> "$bytes B"
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ThemeChoiceRow(
+    currentTheme: NightVisionTheme,
+    onThemeChange: (NightVisionTheme) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        NightVisionTheme.entries.forEach { item ->
+            val isSelected = item == currentTheme
+            val themeColor = when (item) {
+                NightVisionTheme.RED -> Color(0xFFFF1744)
+                NightVisionTheme.AMBER -> Color(0xFFFFB300)
+                NightVisionTheme.GREEN -> Color(0xFF00E676)
+            }
+            val labelRes = when (item) {
+                NightVisionTheme.RED -> R.string.settings_theme_red
+                NightVisionTheme.AMBER -> R.string.settings_theme_amber
+                NightVisionTheme.GREEN -> R.string.settings_theme_green
+            }
+
+            FilledTonalToggleButton(
+                checked = isSelected,
+                onCheckedChange = { onThemeChange(item) },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .semantics {
+                        this.role = Role.RadioButton
+                        this.selected = isSelected
+                    },
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .background(themeColor, CircleShape),
+                    )
+                    Text(
+                        text = stringResource(labelRes),
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
 }
