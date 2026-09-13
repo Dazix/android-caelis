@@ -112,7 +112,7 @@ Pro výpočet siluety terénu se využívá digitální model reliéfu (**Digita
 
 ### Reprezentace v paměti (`ShortBuffer`)
 
-Dlaždice se nenačítají jako pole bajtů na haldu (heap) JVM, protože načtení 4 až 9 dlaždic by vyžadovalo přes 100–230 MB RAM a vedlo k pádům aplikace na paměť (OOM). Namísto toho třída [`HgtTile`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/domain/horizon/HgtTile.kt) mapuje soubor přímo z disku do virtuální paměti:
+Dlaždice se nenačítají jako pole bajtů na haldu (heap) JVM, protože načtení 4 až 9 dlaždic by vyžadovalo přes 100–230 MB RAM a vedlo k pádům aplikace na paměť (OOM). Namísto toho třída [`HgtTile`](../app/src/main/java/com/dazix/caelis/domain/horizon/HgtTile.kt) mapuje soubor přímo z disku do virtuální paměti:
 
 ```kotlin
 val buffer = stream.channel
@@ -200,7 +200,7 @@ Aplikace Caelis funguje v režimu maximálního soukromí a bezpečnosti, což j
 
 ## 4. Matematické základy a výpočet Ray-Marchingu
 
-Výpočet terénního profilu provádí třída [`HorizonProfileCalculator`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/domain/horizon/HorizonProfileCalculator.kt). Pro pozorovatele na dané zeměpisné šířce $\varphi$ a délce $\lambda$ provádí paprskové vzorkování (ray-marching) do všech 1440 směrů azimutu.
+Výpočet terénního profilu provádí třída [`HorizonProfileCalculator`](../app/src/main/java/com/dazix/caelis/domain/horizon/HorizonProfileCalculator.kt). Pro pozorovatele na dané zeměpisné šířce $\varphi$ a délce $\lambda$ provádí paprskové vzorkování (ray-marching) do všech 1440 směrů azimutu.
 
 ```
                           Zdánlivý úhel elevace θ
@@ -303,7 +303,7 @@ $$\lambda_2 = \lambda_1 + \Delta \lambda$$
 
 ## 5. Analytický odhad dosahu (`HorizonRangeEstimator`)
 
-Aby uživatel nemusel ručně hádat optimální poloměr hledání horizontu (a zbytečně nestahoval až 9 okolních dlaždic), modul [`HorizonRangeEstimator`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/domain/horizon/HorizonRangeEstimator.kt) počítá fyzikální dosah terénu přímo z primární dlaždice pozorovatele.
+Aby uživatel nemusel ručně hádat optimální poloměr hledání horizontu (a zbytečně nestahoval až 9 okolních dlaždic), modul [`HorizonRangeEstimator`](../app/src/main/java/com/dazix/caelis/domain/horizon/HorizonRangeEstimator.kt) počítá fyzikální dosah terénu přímo z primární dlaždice pozorovatele.
 
 ### Matematické odvození dosahu hřebene
 
@@ -373,7 +373,7 @@ Algoritmus raději odmítne provést kalibraci, než aby použil chybnou hodnotu
 
 ## 7. Východy a západy těles za skutečným terénem (`TerrainRiseSetCalculator`)
 
-Modul [`TerrainRiseSetCalculator`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/domain/solar/TerrainRiseSetCalculator.kt) porovnává vypočtené astronomické trajektorie Slunce a Měsíce s profilem terénu.
+Modul [`TerrainRiseSetCalculator`](../app/src/main/java/com/dazix/caelis/domain/solar/TerrainRiseSetCalculator.kt) porovnává vypočtené astronomické trajektorie Slunce a Měsíce s profilem terénu.
 
 ```
       Úhel elevace
@@ -414,7 +414,7 @@ Modul [`TerrainRiseSetCalculator`](file:///home/dazix/projects/intervalometer/ap
 
 ### 2. Night Sky AR (AGSL Hardware Ray-Casting Shader)
 
-V nočním režimu vykresluje terén hardwarový shader [`LandscapeShader`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/ui/nightsky/LandscapeShader.kt) běžící na GPU při 60 FPS s nulovými GC alokacemi.
+V nočním režimu vykresluje terén hardwarový shader [`LandscapeShader`](../app/src/main/java/com/dazix/caelis/ui/nightsky/LandscapeShader.kt) běžící na GPU při 60 FPS s nulovými GC alokacemi.
 
 #### Kódování profilu do 16-bitové textury ($1440 \times 1$)
 
@@ -456,7 +456,7 @@ Shader používá nezávislé mapování souřadnic, což zabraňuje otočení h
 
 ## 9. Systémová oznámení a stavová lišta (`TerrainNotifications`)
 
-Stahování dlaždic a výpočet horizontu může trvat desítky sekund a probíhá často v terénu, kdy uživatel schová telefon do kapsy. Stav operace je proto indikován systémovým oznámením třídy [`TerrainNotifications`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/notify/TerrainNotifications.kt).
+Stahování dlaždic a výpočet horizontu může trvat desítky sekund a probíhá často v terénu, kdy uživatel schová telefon do kapsy. Stav operace je proto indikován systémovým oznámením třídy [`TerrainNotifications`](../app/src/main/java/com/dazix/caelis/notify/TerrainNotifications.kt).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -506,19 +506,19 @@ Tato sada provede **179 testů** za méně než 5 sekund.
 
 ### Klíčové testovací třídy
 
-1. [`HorizonProfileCalculatorTest`](file:///home/dazix/projects/intervalometer/app/src/test/java/com/dazix/caelis/domain/horizon/HorizonProfileCalculatorTest.kt):
+1. [`HorizonProfileCalculatorTest`](../app/src/test/java/com/dazix/caelis/domain/horizon/HorizonProfileCalculatorTest.kt):
    - Ověření ray-marchingu na syntetických terénech (izolovaný kužel, dokonale plochá rovina, schodovitý zlom).
    - Test geometrického poklesu horizontu a refrakce $k = 0.13$.
    - Test invariantu povinné dlaždice pozorovatele (`MIN_USABLE_SAMPLES`).
-2. [`HorizonRangeEstimatorTest`](file:///home/dazix/projects/intervalometer/app/src/test/java/com/dazix/caelis/domain/horizon/HorizonRangeEstimatorTest.kt):
+2. [`HorizonRangeEstimatorTest`](../app/src/test/java/com/dazix/caelis/domain/horizon/HorizonRangeEstimatorTest.kt):
    - Analytické ověření kvadratického vzorce dosahu terénního reliéfu.
-3. [`SkylineMatcherTest`](file:///home/dazix/projects/intervalometer/app/src/test/java/com/dazix/caelis/domain/horizon/SkylineMatcherTest.kt):
+3. [`SkylineMatcherTest`](../app/src/test/java/com/dazix/caelis/domain/horizon/SkylineMatcherTest.kt):
    - Test konvergence křížové korelace na reálných datech hory Ještěd.
    - Test odmítnutí falešných shod (plochý horizont, mraky, nízký kontrast).
    - Ověření 20% kvantilu vertikálního offsetu.
-4. [`NetworkIsolationTest`](file:///home/dazix/projects/intervalometer/app/src/test/java/com/dazix/caelis/domain/horizon/NetworkIsolationTest.kt):
+4. [`NetworkIsolationTest`](../app/src/test/java/com/dazix/caelis/domain/horizon/NetworkIsolationTest.kt):
    - Statická analýza procházející veškeré zdrojové kódy v `app/src/main`. Zajišťuje, že `DemTileDownloader.kt` je jediným souborem otevírajícím síťové spojení.
-5. [`NightSkyHorizonOrientationTest`](file:///home/dazix/projects/intervalometer/app/src/test/java/com/dazix/caelis/ui/nightsky/NightSkyHorizonOrientationTest.kt):
+5. [`NightSkyHorizonOrientationTest`](../app/src/test/java/com/dazix/caelis/ui/nightsky/NightSkyHorizonOrientationTest.kt):
    - Renderovací test shaderu ověřující orientaci terénního proužku vůči všem 4 světovým stranám.
 
 ---

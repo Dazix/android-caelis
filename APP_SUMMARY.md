@@ -13,7 +13,7 @@ Namísto vytváření vlastního zjednodušeného fotoaparátu přes Camera2/Cam
 Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní výpočetní pipeline daného fotoaparátu – včetně **HDR+, Night Sight, Astrofotografie, pokročilého odšumování a zpracování RAW/JPEG**.
 
 ### Bezpečnost a soukromí
-- Aplikace deklaruje oprávnění `android.permission.INTERNET` výhradně pro stahování výškových DEM dlaždic terénního horizontu v AR modulech po explicitním souhlasu uživatele. Veškeré síťové volání je striktně izolováno v [`DemTileDownloader.kt`](file:///home/dazix/projects/intervalometer/app/src/main/java/com/dazix/caelis/data/horizon/DemTileDownloader.kt), což je nepřetržitě vynucováno architektonickým testem `NetworkIsolationTest`. Odstranění řádku `INTERNET` z manifestu je plně podporováno (aplikace funguje s ručním importem HGT souborů).
+- Aplikace deklaruje oprávnění `android.permission.INTERNET` výhradně pro stahování výškových DEM dlaždic terénního horizontu v AR modulech po explicitním souhlasu uživatele. Veškeré síťové volání je striktně izolováno v [`DemTileDownloader.kt`](app/src/main/java/com/dazix/caelis/data/horizon/DemTileDownloader.kt), což je nepřetržitě vynucováno architektonickým testem `NetworkIsolationTest`. Odstranění řádku `INTERNET` z manifestu je plně podporováno (aplikace funguje s ručním importem HGT souborů).
 - Žádná telemetrie, analytika, identifikátory ani poloha neopouštějí zařízení.
 - Využívá systémovou službu přístupnosti (`AccessibilityService`), což je jedno z nejvyšších oprávnění v systému Android. Kód je koncipován tak, aby byl jednoduše auditovatelný a sestavitelný přímo ze zdrojových kódů.
 
