@@ -1373,13 +1373,20 @@ internal fun SunArTopBar(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
-                if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
+                if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
+                    Text(
+                        text = "• 🛰 GPS…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                } else if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
                     horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
                 ) {
                     val pct = when (horizonState) {
                         is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
                         is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
-                        else -> 0
                     }
                     Text(
                         text = "• ⛰ $pct %",

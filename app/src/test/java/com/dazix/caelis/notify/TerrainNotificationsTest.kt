@@ -36,24 +36,53 @@ class TerrainNotificationsTest {
     }
 
     @Test
-    fun `channel is created with IMPORTANCE_DEFAULT, silent and no vibration`() {
+    fun `channels are created with correct importance, silent and no vibration`() {
         val key = DemTileKey(50, 14)
         notifications.update(HorizonState.Downloading(key, 1, 3, 0.45f))
 
-        val channel = manager.getNotificationChannel(TerrainNotifications.CHANNEL_ID)
-        assertNotNull("channel must be created", channel)
+        val activeChannel = manager.getNotificationChannel(TerrainNotifications.CHANNEL_ID_ACTIVE)
+        assertNotNull("active channel must be created", activeChannel)
         assertEquals(
-            "channel must use IMPORTANCE_DEFAULT for status bar icon with muted sound",
+            "active channel must use IMPORTANCE_DEFAULT for status bar icon with muted sound",
             NotificationManager.IMPORTANCE_DEFAULT,
-            channel.importance,
+            activeChannel.importance,
         )
-        assertNull("channel must have no audio sound", channel.sound)
-        assertFalse("channel must not vibrate", channel.shouldVibrate())
-        assertFalse("channel must not show badge", channel.canShowBadge())
+        assertNull("active channel must have no audio sound", activeChannel.sound)
+        assertFalse("active channel must not vibrate", activeChannel.shouldVibrate())
+        assertFalse("active channel must not show badge", activeChannel.canShowBadge())
+
+        val completeChannel = manager.getNotificationChannel(TerrainNotifications.CHANNEL_ID_COMPLETE)
+        assertNotNull("complete channel must be created", completeChannel)
+        assertEquals(
+            "complete channel must use IMPORTANCE_LOW for silent section",
+            NotificationManager.IMPORTANCE_LOW,
+            completeChannel.importance,
+        )
+        assertNull("complete channel must have no audio sound", completeChannel.sound)
+        assertFalse("complete channel must not vibrate", completeChannel.shouldVibrate())
+        assertFalse("complete channel must not show badge", completeChannel.canShowBadge())
     }
 
     @Test
-    fun `downloading state is ongoing, has progress, content intent, and small icon`() {
+    fun `locating state is ongoing, indeterminate, on active channel`() {
+        notifications.update(HorizonState.Locating)
+
+        val sbn = manager.activeNotifications.singleOrNull { it.id == TerrainNotifications.NOTIFICATION_ID }
+        assertNotNull("notification must be posted", sbn)
+        val notif = sbn!!.notification
+
+        assertEquals(TerrainNotifications.CHANNEL_ID_ACTIVE, notif.channelId)
+        assertTrue("notification must be ongoing during locating", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
+        assertEquals("category must be progress", Notification.CATEGORY_PROGRESS, notif.category)
+        assertNotNull("small icon must be present for system bar", notif.smallIcon)
+        assertNotNull("content intent must be present for tap to open", notif.contentIntent)
+
+        val extras = notif.extras
+        assertTrue("extras must indicate indeterminate progress", extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
+    }
+
+    @Test
+    fun `downloading state is ongoing, has progress, content intent, and small icon on active channel`() {
         val key = DemTileKey(50, 14)
         notifications.update(HorizonState.Downloading(key, 1, 3, 0.45f))
 
@@ -61,6 +90,7 @@ class TerrainNotificationsTest {
         assertNotNull("notification must be posted", sbn)
         val notif = sbn!!.notification
 
+        assertEquals(TerrainNotifications.CHANNEL_ID_ACTIVE, notif.channelId)
         assertTrue("notification must be ongoing during download", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
         assertEquals("category must be progress", Notification.CATEGORY_PROGRESS, notif.category)
         assertNotNull("small icon must be present for system bar", notif.smallIcon)
@@ -74,7 +104,7 @@ class TerrainNotificationsTest {
     }
 
     @Test
-    fun `computing state is ongoing and updates title and progress immediately`() {
+    fun `computing state is ongoing and updates title and progress immediately on active channel`() {
         val key = DemTileKey(50, 14)
         notifications.update(HorizonState.Downloading(key, 1, 1, 1.0f))
 
@@ -85,6 +115,7 @@ class TerrainNotificationsTest {
         assertNotNull(sbn)
         val notif = sbn!!.notification
 
+        assertEquals(TerrainNotifications.CHANNEL_ID_ACTIVE, notif.channelId)
         assertTrue("notification must be ongoing during skyline compute", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
         val extras = notif.extras
         val text = extras.getString(Notification.EXTRA_TEXT) ?: ""
@@ -93,7 +124,7 @@ class TerrainNotificationsTest {
     }
 
     @Test
-    fun `ready state is not ongoing and has autoCancel enabled`() {
+    fun `ready state is on complete channel, not ongoing, and has autoCancel enabled`() {
         val key = DemTileKey(50, 14)
         notifications.update(HorizonState.Downloading(key, 1, 1, 0.5f))
 
@@ -114,12 +145,13 @@ class TerrainNotificationsTest {
         assertNotNull(sbn)
         val notif = sbn!!.notification
 
+        assertEquals(TerrainNotifications.CHANNEL_ID_COMPLETE, notif.channelId)
         assertFalse("completed notification must not be ongoing", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
         assertTrue("completed notification must auto cancel on tap", (notif.flags and Notification.FLAG_AUTO_CANCEL) != 0)
     }
 
     @Test
-    fun `failed state is not ongoing and has autoCancel enabled`() {
+    fun `failed state is on complete channel, not ongoing, and has autoCancel enabled`() {
         val key = DemTileKey(50, 14)
         notifications.update(HorizonState.Downloading(key, 1, 1, 0.5f))
         notifications.update(HorizonState.Failed(HorizonState.Failed.Reason.NETWORK))
@@ -128,6 +160,21 @@ class TerrainNotificationsTest {
         assertNotNull(sbn)
         val notif = sbn!!.notification
 
+        assertEquals(TerrainNotifications.CHANNEL_ID_COMPLETE, notif.channelId)
+        assertFalse("failed notification must not be ongoing", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
+        assertTrue("failed notification must auto cancel on tap", (notif.flags and Notification.FLAG_AUTO_CANCEL) != 0)
+    }
+
+    @Test
+    fun `failed state due to location timeout is on complete channel`() {
+        notifications.update(HorizonState.Locating)
+        notifications.update(HorizonState.Failed(HorizonState.Failed.Reason.LOCATION))
+
+        val sbn = manager.activeNotifications.singleOrNull { it.id == TerrainNotifications.NOTIFICATION_ID }
+        assertNotNull(sbn)
+        val notif = sbn!!.notification
+
+        assertEquals(TerrainNotifications.CHANNEL_ID_COMPLETE, notif.channelId)
         assertFalse("failed notification must not be ongoing", (notif.flags and Notification.FLAG_ONGOING_EVENT) != 0)
         assertTrue("failed notification must auto cancel on tap", (notif.flags and Notification.FLAG_AUTO_CANCEL) != 0)
     }

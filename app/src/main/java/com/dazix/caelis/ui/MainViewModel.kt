@@ -39,6 +39,7 @@ import java.time.LocalTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.dazix.caelis.domain.solar.GeoLocation
 import kotlin.math.roundToLong
 
 /** The app is a single activity; this is the whole navigation model. */
@@ -256,6 +258,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
 
+    val horizonLocation: StateFlow<GeoLocation> = horizonLocationProvider.location
+    val horizonHasGpsFix: StateFlow<Boolean> = horizonLocationProvider.hasGpsFix
+
+    fun startHorizonLocationUpdates() {
+        horizonLocationProvider.startUpdates()
+    }
+
+    fun stopHorizonLocationUpdates() {
+        horizonLocationProvider.stopUpdates()
+    }
+
+    fun refreshHorizonLocation() {
+        horizonLocationProvider.refreshLocation()
+    }
+
     /** The radius in use once an automatic setting has worked one out; null until then. */
     val effectiveHorizonRangeKm: StateFlow<Int?> = horizonRepository.effectiveRangeKm
 
@@ -457,6 +474,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (horizonLocationProvider.hasGpsFix.value) {
                     if (recompute) horizonRepository.invalidate()
                     horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+                } else if (updated.enabled && updated.networkDownloadAllowed) {
+                    downloadTerrainForCurrentLocation(updated)
                 }
             }
         }
@@ -484,37 +503,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setHorizonNetworkConsent(granted: Boolean) = editHorizon { it.copy(networkConsent = granted) }
 
     fun answerHorizonConsent(granted: Boolean, wifiOnly: Boolean? = null) {
-        editHorizon { current ->
-            current.copy(
+        viewModelScope.launch {
+            val current = settings.currentHorizon()
+            val updated = current.copy(
                 networkConsent = granted,
                 enabled = true,
                 wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
             )
+            settings.saveHorizon(updated)
+            if (granted) {
+                downloadTerrainForCurrentLocation(updated)
+            }
         }
     }
 
     fun setRealHorizonInNightSky(enabled: Boolean) = editHorizon { it.copy(realHorizonInNightSky = enabled) }
 
     /** Fetch or recompute for wherever the phone currently thinks it is. */
-    fun downloadTerrainForCurrentLocation() {
+    fun downloadTerrainForCurrentLocation(explicitSettings: HorizonSettings? = null) {
         horizonLocationProvider.refreshLocation()
         viewModelScope.launch {
-            val current = settings.currentHorizon()
+            val current = explicitSettings ?: settings.currentHorizon()
             val updated = current.copy(enabled = true)
-            if (updated != current) {
-                settings.saveHorizon(updated)
-            }
+            settings.saveHorizon(updated)
             horizonRepository.invalidate()
             if (horizonLocationProvider.hasGpsFix.value) {
                 horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
             } else {
-                horizonLocationProvider.startUpdates()
-                val hasFix = horizonLocationProvider.hasGpsFix.firstOrNull { it } ?: false
+                horizonRepository.setLocating()
+                val hasFix = horizonLocationProvider.awaitGpsFix()
                 if (hasFix) {
                     horizonRepository.ensureProfile(
                         horizonLocationProvider.location.value,
-                        settings.currentHorizon().copy(enabled = true),
+                        updated,
                     )
+                } else {
+                    horizonRepository.setLocationFailed()
                 }
             }
         }

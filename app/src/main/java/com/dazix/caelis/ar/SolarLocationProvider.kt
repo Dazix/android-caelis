@@ -11,6 +11,8 @@ import com.dazix.caelis.ui.Permissions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Provides observer geographic coordinates from Android's LocationManager.
@@ -36,6 +38,7 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
 
         try {
             val providers = listOf(
+                LocationManager.FUSED_PROVIDER,
                 LocationManager.GPS_PROVIDER,
                 LocationManager.NETWORK_PROVIDER,
                 LocationManager.PASSIVE_PROVIDER,
@@ -46,7 +49,12 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
 
             if (best != null) {
                 locationState.value = GeoLocation(best.latitude, best.longitude, best.altitude)
-                hasGpsFixState.value = true
+                val isFresh = (System.currentTimeMillis() - best.time) < FRESH_FIX_MAX_AGE_MS
+                val isAccurate = best.hasAccuracy() && best.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
+                val isSatelliteOrFused = best.provider == LocationManager.GPS_PROVIDER || best.provider == LocationManager.FUSED_PROVIDER
+                hasGpsFixState.value = isFresh && isAccurate && isSatelliteOrFused
+            } else {
+                hasGpsFixState.value = false
             }
         } catch (_: SecurityException) {
             // Permission revoked concurrently
@@ -57,26 +65,25 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
         refreshLocation()
         val hasFine = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION)
         val hasCoarse = Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (!hasFine && !hasCoarse || locationManager == null || isUpdating) return
+        val lm = locationManager
+        if (!hasFine && !hasCoarse || lm == null || isUpdating) return
 
         try {
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER,
-                    5000L, // 5 seconds
-                    10f,   // 10 meters
-                    this,
-                )
-                isUpdating = true
-            }
-            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locationManager.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    5000L,
-                    10f,
-                    this,
-                )
-                isUpdating = true
+            val providersToRequest = listOf(
+                LocationManager.FUSED_PROVIDER,
+                LocationManager.GPS_PROVIDER,
+                LocationManager.NETWORK_PROVIDER,
+            )
+            for (p in providersToRequest) {
+                if (lm.isProviderEnabled(p)) {
+                    lm.requestLocationUpdates(
+                        p,
+                        1000L, // 1 second
+                        0f,    // 0 meters (report every fix even when stationary)
+                        this,
+                    )
+                    isUpdating = true
+                }
             }
         } catch (_: SecurityException) {
             // Permission revoked
@@ -99,11 +106,51 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
 
     override fun onLocationChanged(loc: Location) {
         locationState.value = GeoLocation(loc.latitude, loc.longitude, loc.altitude)
-        hasGpsFixState.value = true
+        val isAccurate = loc.hasAccuracy() && loc.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
+        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == LocationManager.FUSED_PROVIDER
+        if (isAccurate && isSatelliteOrFused) {
+            hasGpsFixState.value = true
+        }
+    }
+
+    /**
+     * Actively polls location providers every [pollIntervalMs] while listening for live satellite updates
+     * until a fresh, accurate GPS fix is acquired or [timeoutMs] elapses.
+     *
+     * @param timeoutMs Total timeout duration (default: 120s / 2 minutes).
+     * @param pollIntervalMs Interval between provider refreshes (default: 5s).
+     * @return True if a GPS fix was obtained, false on timeout.
+     */
+    suspend fun awaitGpsFix(
+        timeoutMs: Long = GPS_FIX_TIMEOUT_MS,
+        pollIntervalMs: Long = GPS_FIX_POLL_INTERVAL_MS,
+    ): Boolean {
+        refreshLocation()
+        if (hasGpsFixState.value) return true
+
+        startUpdates()
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            refreshLocation()
+            if (hasGpsFixState.value) return true
+
+            val fixed = withTimeoutOrNull(pollIntervalMs) {
+                hasGpsFixState.first { it }
+            } ?: false
+            if (fixed) return true
+        }
+        return false
     }
 
     override fun onProviderEnabled(provider: String) {}
     override fun onProviderDisabled(provider: String) {}
     @Deprecated("Deprecated in Java")
     override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
+    companion object {
+        const val GPS_FIX_TIMEOUT_MS = 120_000L // 2 minutes
+        const val GPS_FIX_POLL_INTERVAL_MS = 5_000L // 5 seconds
+        private const val FRESH_FIX_MAX_AGE_MS = 60_000L // 1 minute
+        private const val FRESH_FIX_MAX_ACCURACY_METERS = 100f
+    }
 }

@@ -975,7 +975,7 @@ class NightSkyRenderer {
         // the fallback honest: no profile, no bitmap, nothing drawn.
         val realHorizon = useRealHorizon && hasHorizonProfile
 
-        if (isLandscapeVisible && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
+        if ((isLandscapeVisible || realHorizon) && hasLandscapeTexture && landscapeShader != null && landscapeBrush != null && matrix.size >= 16) {
             val halfFovHRad = (fovHorizontalDegrees * 0.5f * (Math.PI / 180.0)).toFloat()
             val fovFactor = 1.0f / tan(halfFovHRad)
 

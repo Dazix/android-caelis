@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,6 +106,9 @@ fun SettingsScreen(
     onDownloadTerrain: () -> Unit = {},
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
+    onStartLocationUpdates: () -> Unit = {},
+    onStopLocationUpdates: () -> Unit = {},
+    onRefreshLocation: () -> Unit = {},
     onThemeChange: (NightVisionTheme) -> Unit,
     onActivationModeChange: (NightVisionActivationMode) -> Unit,
     onStartTimeChange: (LocalTime) -> Unit,
@@ -118,32 +122,52 @@ fun SettingsScreen(
     var showAttribution by remember { mutableStateOf(false) }
     var showConsentDialog by remember { mutableStateOf(false) }
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        onStartLocationUpdates()
+        onDispose {
+            onStopLocationUpdates()
+        }
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        // Location permission updated
+    ) { results ->
+        if (results.values.any { it }) {
+            onRefreshLocation()
+            pendingLocationAction?.invoke()
+            pendingLocationAction = null
+        }
     }
 
-    val requestLocationIfMissing = {
+    val requestLocationIfMissing = { onGranted: () -> Unit ->
         val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
             Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
         if (!hasLocation) {
+            pendingLocationAction = onGranted
             locationPermissionLauncher.launch(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             )
+        } else {
+            onGranted()
         }
     }
 
     val handleHorizonToggle: (Boolean) -> Unit = { checked ->
         if (checked) {
-            requestLocationIfMissing()
             if (!horizonSettings.networkConsentAnswered && canDownloadTerrain) {
-                pendingActionAfterConsent = { onHorizonEnabledChange(true) }
+                pendingActionAfterConsent = {
+                    requestLocationIfMissing {
+                        onHorizonEnabledChange(true)
+                    }
+                }
                 showConsentDialog = true
             } else {
-                onHorizonEnabledChange(true)
+                requestLocationIfMissing {
+                    onHorizonEnabledChange(true)
+                }
             }
         } else {
             onHorizonEnabledChange(false)
@@ -151,12 +175,17 @@ fun SettingsScreen(
     }
 
     val handleDownloadClick: () -> Unit = {
-        requestLocationIfMissing()
         if (!horizonSettings.networkConsentAnswered && canDownloadTerrain) {
-            pendingActionAfterConsent = { onDownloadTerrain() }
+            pendingActionAfterConsent = {
+                requestLocationIfMissing {
+                    onDownloadTerrain()
+                }
+            }
             showConsentDialog = true
         } else {
-            onDownloadTerrain()
+            requestLocationIfMissing {
+                onDownloadTerrain()
+            }
         }
     }
 
@@ -614,6 +643,7 @@ private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
 private fun HorizonStatusRow(state: HorizonState) {
     val text = when (state) {
         is HorizonState.Idle -> null
+        is HorizonState.Locating -> stringResource(R.string.horizon_status_locating)
         is HorizonState.NeedsTiles -> stringResource(R.string.horizon_status_needs_tiles)
         is HorizonState.Downloading -> stringResource(R.string.horizon_status_downloading, state.index, state.total)
         is HorizonState.Computing -> stringResource(R.string.horizon_status_computing)
@@ -623,10 +653,11 @@ private fun HorizonStatusRow(state: HorizonState) {
             HorizonState.Failed.Reason.METERED -> stringResource(R.string.horizon_status_failed_metered)
             HorizonState.Failed.Reason.STORAGE -> stringResource(R.string.horizon_status_failed_network)
             HorizonState.Failed.Reason.NO_DATA -> stringResource(R.string.horizon_status_failed_no_data)
+            HorizonState.Failed.Reason.LOCATION -> stringResource(R.string.horizon_status_failed_location)
         }
     } ?: return
 
-    val busy = state is HorizonState.Downloading || state is HorizonState.Computing
+    val busy = state is HorizonState.Locating || state is HorizonState.Downloading || state is HorizonState.Computing
 
     Row(
         modifier = Modifier
@@ -636,19 +667,22 @@ private fun HorizonStatusRow(state: HorizonState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (busy) {
-            val progress = when (state) {
-                is HorizonState.Downloading -> state.progress
-                is HorizonState.Computing -> state.progress
-                is HorizonState.Idle,
-                is HorizonState.NeedsTiles,
-                is HorizonState.Ready,
-                is HorizonState.Failed -> 0f
+            if (state is HorizonState.Locating) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                val progress = when (state) {
+                    is HorizonState.Downloading -> state.progress
+                    is HorizonState.Computing -> state.progress
+                }
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
             }
-            CircularProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-            )
         }
         Text(
             text = text,

@@ -38,11 +38,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -335,6 +337,15 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+        // Show consent dialog immediately if terrain is enabled but consent not answered
+        viewModelScope.launch {
+            horizonSettings.collect { cfg ->
+                if (cfg.enabled && !cfg.networkConsentAnswered && canDownloadTerrain) {
+                    showConsentDialogState.value = true
+                }
+            }
+        }
+
         // Keep a terrain profile for wherever the observer currently is.
         //
         // Debounced because the location provider emits every few seconds while the GPS settles, and
@@ -580,13 +591,25 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         showConsentDialogState.value = false
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
-            settingsStore.saveHorizon(
-                current.copy(
-                    networkConsent = granted,
-                    enabled = true,
-                    wifiOnly = if (granted && wifiOnly != null) wifiOnly else current.wifiOnly,
-                ),
+            val updated = current.copy(
+                networkConsent = granted,
+                enabled = true,
+                wifiOnly = if (granted && wifiOnly != null) wifiOnly else current.wifiOnly,
             )
+            settingsStore.saveHorizon(updated)
+            if (granted) {
+                if (locationProvider.hasGpsFix.value) {
+                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                } else {
+                    horizonRepository.setLocating()
+                    val hasFix = locationProvider.awaitGpsFix()
+                    if (hasFix) {
+                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                    } else {
+                        horizonRepository.setLocationFailed()
+                    }
+                }
+            }
         }
     }
 
@@ -594,7 +617,21 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleHorizon() {
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
-            settingsStore.saveHorizon(current.copy(enabled = !current.enabled))
+            val updated = current.copy(enabled = !current.enabled)
+            settingsStore.saveHorizon(updated)
+            if (updated.enabled && updated.networkDownloadAllowed) {
+                if (locationProvider.hasGpsFix.value) {
+                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                } else {
+                    horizonRepository.setLocating()
+                    val hasFix = locationProvider.awaitGpsFix()
+                    if (hasFix) {
+                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                    } else {
+                        horizonRepository.setLocationFailed()
+                    }
+                }
+            }
         }
     }
 

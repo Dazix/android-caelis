@@ -45,12 +45,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalTime
 
@@ -347,15 +349,27 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         showConsentDialogState.value = false
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
-            settingsStore.saveHorizon(
-                current.copy(
-                    networkConsent = granted,
-                    enabled = true,
-                    realHorizonInNightSky = true,
-                    wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
-                ),
+            val updated = current.copy(
+                networkConsent = granted,
+                enabled = true,
+                realHorizonInNightSky = true,
+                wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
             )
+            settingsStore.saveHorizon(updated)
             settingsStore.saveNightSkyLandscapeVisible(false)
+            if (granted) {
+                if (locationProvider.hasGpsFix.value) {
+                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                } else {
+                    horizonRepository.setLocating()
+                    val hasFix = locationProvider.awaitGpsFix()
+                    if (hasFix) {
+                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                    } else {
+                        horizonRepository.setLocationFailed()
+                    }
+                }
+            }
         }
     }
 
@@ -369,14 +383,26 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
-            settingsStore.saveHorizon(
-                current.copy(
-                    realHorizonInNightSky = enabled,
-                    enabled = current.enabled || enabled,
-                ),
+            val updated = current.copy(
+                realHorizonInNightSky = enabled,
+                enabled = current.enabled || enabled,
             )
+            settingsStore.saveHorizon(updated)
             if (enabled && isLandscapeVisible.value) {
                 settingsStore.saveNightSkyLandscapeVisible(false)
+            }
+            if (enabled && updated.networkDownloadAllowed) {
+                if (locationProvider.hasGpsFix.value) {
+                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                } else {
+                    horizonRepository.setLocating()
+                    val hasFix = locationProvider.awaitGpsFix()
+                    if (hasFix) {
+                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
+                    } else {
+                        horizonRepository.setLocationFailed()
+                    }
+                }
             }
         }
     }
@@ -609,6 +635,15 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 isNightState.value = SolarPositionCalculator.isNight(Instant.now(), loc)
                 if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
                     updateManualOrientation()
+                }
+            }
+        }
+
+        // Show consent dialog immediately if real horizon is enabled in night sky but consent not answered
+        viewModelScope.launch {
+            horizonSettings.collect { cfg ->
+                if (cfg.realHorizonInNightSky && !cfg.networkConsentAnswered && canDownloadTerrain) {
+                    showConsentDialogState.value = true
                 }
             }
         }

@@ -47,9 +47,23 @@ class TerrainNotifications(context: Context) {
         lastStateClass = stateClass
 
         when (state) {
+            is HorizonState.Locating -> {
+                post(
+                    channelId = CHANNEL_ID_ACTIVE,
+                    title = appContext.getString(R.string.horizon_notif_locating),
+                    text = appContext.getString(R.string.horizon_status_locating),
+                    progress = null,
+                    indeterminate = true,
+                    throttled = !isPhaseChange,
+                    ongoing = true,
+                    autoCancel = false,
+                )
+            }
+
             is HorizonState.Downloading -> {
                 val pct = (state.progress * PROGRESS_MAX).toInt()
                 post(
+                    channelId = CHANNEL_ID_ACTIVE,
                     title = appContext.getString(R.string.horizon_notif_downloading, state.index, state.total),
                     text = "${state.key.name} · $pct %",
                     progress = pct,
@@ -63,6 +77,7 @@ class TerrainNotifications(context: Context) {
             is HorizonState.Computing -> {
                 val pct = (state.progress * PROGRESS_MAX).toInt()
                 post(
+                    channelId = CHANNEL_ID_ACTIVE,
                     title = appContext.getString(R.string.horizon_notif_computing),
                     text = "$pct %",
                     progress = pct,
@@ -76,6 +91,7 @@ class TerrainNotifications(context: Context) {
             is HorizonState.Ready -> {
                 if (!visible) return
                 post(
+                    channelId = CHANNEL_ID_COMPLETE,
                     title = appContext.getString(R.string.horizon_notif_ready),
                     text = appContext.getString(
                         R.string.horizon_notif_ready_detail,
@@ -92,6 +108,7 @@ class TerrainNotifications(context: Context) {
             is HorizonState.Failed -> {
                 if (!visible) return
                 post(
+                    channelId = CHANNEL_ID_COMPLETE,
                     title = appContext.getString(R.string.horizon_notif_failed),
                     text = appContext.getString(reasonText(state.reason)),
                     progress = null,
@@ -117,6 +134,7 @@ class TerrainNotifications(context: Context) {
     }
 
     private fun post(
+        channelId: String = CHANNEL_ID_ACTIVE,
         title: String,
         text: String?,
         progress: Int?,
@@ -129,9 +147,9 @@ class TerrainNotifications(context: Context) {
         if (throttled && visible && now - lastPostUptime < MIN_POST_INTERVAL_MS) return
         lastPostUptime = now
 
-        ensureChannel()
+        ensureChannels()
 
-        val builder = Notification.Builder(appContext, CHANNEL_ID)
+        val builder = Notification.Builder(appContext, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setOngoing(ongoing)
@@ -144,7 +162,11 @@ class TerrainNotifications(context: Context) {
         contentIntent()?.let { builder.setContentIntent(it) }
 
         text?.let { builder.setContentText(it) }
-        progress?.let { builder.setProgress(PROGRESS_MAX, it.coerceIn(0, PROGRESS_MAX), indeterminate) }
+        if (indeterminate) {
+            builder.setProgress(PROGRESS_MAX, 0, true)
+        } else if (progress != null) {
+            builder.setProgress(PROGRESS_MAX, progress.coerceIn(0, PROGRESS_MAX), false)
+        }
 
         try {
             manager.notify(NOTIFICATION_ID, builder.build())
@@ -174,30 +196,48 @@ class TerrainNotifications(context: Context) {
         HorizonState.Failed.Reason.METERED -> R.string.horizon_status_failed_metered
         HorizonState.Failed.Reason.STORAGE -> R.string.horizon_status_failed_network
         HorizonState.Failed.Reason.NO_DATA -> R.string.horizon_status_failed_no_data
+        HorizonState.Failed.Reason.LOCATION -> R.string.horizon_status_failed_location
     }
 
-    private fun ensureChannel() {
+    private fun ensureChannels() {
         // Remove legacy channel with IMPORTANCE_LOW from earlier versions if present
         runCatching { manager.deleteNotificationChannel(OLD_CHANNEL_ID) }
 
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            appContext.getString(R.string.horizon_notif_channel_name),
-            NotificationManager.IMPORTANCE_DEFAULT,
-        ).apply {
-            description = appContext.getString(R.string.horizon_notif_channel_desc)
-            setShowBadge(false)
-            enableVibration(false)
-            setSound(null, null)
+        if (manager.getNotificationChannel(CHANNEL_ID_ACTIVE) == null) {
+            val activeChannel = NotificationChannel(
+                CHANNEL_ID_ACTIVE,
+                appContext.getString(R.string.horizon_notif_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = appContext.getString(R.string.horizon_notif_channel_desc)
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            manager.createNotificationChannel(activeChannel)
         }
-        manager.createNotificationChannel(channel)
+
+        if (manager.getNotificationChannel(CHANNEL_ID_COMPLETE) == null) {
+            val completeChannel = NotificationChannel(
+                CHANNEL_ID_COMPLETE,
+                appContext.getString(R.string.horizon_notif_channel_complete_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = appContext.getString(R.string.horizon_notif_channel_complete_desc)
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            manager.createNotificationChannel(completeChannel)
+        }
     }
 
     companion object {
         /** Distinct from [SessionNotifications.NOTIFICATION_ID]: a download must not replace a run. */
         const val NOTIFICATION_ID = 0x1DEB
-        const val CHANNEL_ID = "terrain_progress"
+        const val CHANNEL_ID_ACTIVE = "terrain_progress"
+        const val CHANNEL_ID_COMPLETE = "terrain_complete"
+        const val CHANNEL_ID = CHANNEL_ID_ACTIVE
         private const val OLD_CHANNEL_ID = "terrain_download"
 
         private const val REQUEST_CONTENT = 201

@@ -275,6 +275,7 @@
     <string name="horizon_consent_allow">Allow</string>
     <string name="horizon_consent_never">Not now</string>
 
+    <string name="horizon_status_locating">Waiting for GPS signal…</string>
     <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d…</string>
     <string name="horizon_status_computing">Computing the skyline…</string>
     <string name="horizon_status_ready">Terrain horizon ready</string>
@@ -282,6 +283,7 @@
     <string name="horizon_status_failed_network">Could not download the elevation data</string>
     <string name="horizon_status_failed_metered">Waiting for Wi‑Fi to download the elevation data</string>
     <string name="horizon_status_failed_no_data">No elevation data for this place</string>
+    <string name="horizon_status_failed_location">Could not determine GPS location</string>
 
     <string name="horizon_import_title">Import elevation data</string>
     <string name="horizon_import_body">Download these tiles in a browser and pick them here:\n\n%1$s\n\nFrom: %2$s</string>
@@ -299,6 +301,9 @@
     <string name="horizon_step_up">Increase %1$s</string>
     <string name="horizon_notif_channel_name">Terrain download</string>
     <string name="horizon_notif_channel_desc">Progress while elevation data for the real horizon is downloaded.</string>
+    <string name="horizon_notif_channel_complete_name">Terrain download completed</string>
+    <string name="horizon_notif_channel_complete_desc">Notification when elevation data download and computing finishes.</string>
+    <string name="horizon_notif_locating">Determining GPS location</string>
     <string name="horizon_notif_downloading">Downloading terrain %1$d of %2$d</string>
     <string name="horizon_notif_computing">Computing the skyline</string>
     <string name="horizon_notif_ready">Terrain horizon ready</string>

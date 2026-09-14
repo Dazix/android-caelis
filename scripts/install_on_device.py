@@ -22,7 +22,14 @@ def get_env():
 
 def run_cmd(cmd, cwd, check=True):
     print(f"Running: {' '.join(cmd) if isinstance(cmd, list) else cmd}")
-    res = subprocess.run(cmd, shell=isinstance(cmd, str), capture_output=True, text=True, cwd=cwd)
+    res = subprocess.run(
+        cmd,
+        shell=isinstance(cmd, str),
+        executable="/bin/bash" if isinstance(cmd, str) else None,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+    )
     if res.stdout:
         print(res.stdout.strip())
     if res.stderr:
@@ -36,7 +43,7 @@ def main():
     apk_path = os.path.join(project_dir, "app", "build", "outputs", "apk", "debug", "app-debug.apk")
 
     print("1. Building debug APK with Gradle...")
-    run_cmd("source scripts/env.sh && JAVA_HOME=\"$JAVA_HOME\" ./gradlew :app:assembleDebug", cwd=project_dir)
+    run_cmd(". scripts/env.sh && JAVA_HOME=\"$JAVA_HOME\" ./gradlew :app:assembleDebug", cwd=project_dir)
 
     if not os.path.exists(apk_path):
         raise FileNotFoundError(f"APK not found at {apk_path}")

@@ -254,6 +254,7 @@ private fun CaelisScreen(
     val context = LocalContext.current
     val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
     val horizonState by viewModel.horizonState.collectAsStateWithLifecycle()
+    val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
     val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
 
     // LocalResources, not LocalContext: a Configuration change does not invalidate LocalContext
@@ -372,7 +373,7 @@ private fun CaelisScreen(
             horizonSettings = horizonSettings,
             horizonState = horizonState,
             canDownloadTerrain = viewModel.canDownloadTerrain,
-            missingTerrainTiles = remember(horizonState, horizonSettings) { viewModel.missingTerrainTiles() },
+            missingTerrainTiles = remember(horizonState, horizonSettings, horizonLocation) { viewModel.missingTerrainTiles() },
             cachedTerrainBytes = remember(horizonState) { viewModel.cachedTerrainBytes() },
             effectiveRangeKm = effectiveHorizonRangeKm,
             onHorizonEnabledChange = viewModel::setHorizonEnabled,
@@ -386,6 +387,9 @@ private fun CaelisScreen(
             onDownloadTerrain = viewModel::downloadTerrainForCurrentLocation,
             onImportTerrain = { terrainImportLauncher.launch(arrayOf("*/*")) },
             onClearTerrainCache = viewModel::clearTerrainCache,
+            onStartLocationUpdates = viewModel::startHorizonLocationUpdates,
+            onStopLocationUpdates = viewModel::stopHorizonLocationUpdates,
+            onRefreshLocation = viewModel::refreshHorizonLocation,
             onThemeChange = viewModel::setNightVisionTheme,
             onActivationModeChange = viewModel::setNightVisionActivationMode,
             onStartTimeChange = viewModel::setCustomStartTime,
