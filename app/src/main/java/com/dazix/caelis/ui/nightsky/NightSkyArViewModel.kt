@@ -98,6 +98,7 @@ data class NightSkyArUiState(
     val isDebugFocusRegionVisible: Boolean = false,
     val debugFocusRadiusMultiplier: Float = 0.48f,
     val debugFocusDisplayThreshold: Float = 0.0f,
+    val debugPreferences: com.dazix.caelis.data.DebugPreferences = com.dazix.caelis.data.DebugPreferences(),
     val isDebugOptionsEnabled: Boolean = false,
     val horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
 )
@@ -442,11 +443,18 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val isDebugFocusRegionVisible = MutableStateFlow(false)
     val debugFocusRadiusMultiplier = MutableStateFlow(0.48f)
     val debugFocusDisplayThreshold = MutableStateFlow(0.0f)
-    val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugModeEnabled.stateIn(
+    val debugPreferences: StateFlow<com.dazix.caelis.data.DebugPreferences> = settingsStore.debugPreferences.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        false,
+        com.dazix.caelis.data.DebugPreferences(),
     )
+    val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugPreferences
+        .map { it.enableNightSkyCalibration || it.enableNightSkyFocusRegion }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            false,
+        )
 
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
@@ -494,6 +502,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             planetStates,
             selectedPlanetId,
             horizonState,
+            debugPreferences,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -540,6 +549,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val planetsList = args[38] as List<PlanetState>
         val planetId = args[39] as String?
         val horizState = args[40] as com.dazix.caelis.data.horizon.HorizonState
+        val debugPrefs = args[41] as com.dazix.caelis.data.DebugPreferences
 
         NightSkyArUiState(
             location = loc,
@@ -583,6 +593,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isDebugFocusRegionVisible = dbgFocus,
             debugFocusRadiusMultiplier = dbgRadius,
             debugFocusDisplayThreshold = dbgThresh,
+            debugPreferences = debugPrefs,
             isDebugOptionsEnabled = dbgOptions,
             horizonState = horizState,
         )

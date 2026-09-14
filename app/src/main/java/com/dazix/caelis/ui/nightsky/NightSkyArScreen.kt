@@ -386,7 +386,7 @@ fun NightSkyArScreen(
                     debugArtOffsetY = uiState.debugArtOffsetY,
                     debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
                     debugArtRotationOffset = uiState.debugArtRotationOffset,
-                    isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
+                    isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
                     debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
                     debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
                     onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
@@ -405,7 +405,7 @@ fun NightSkyArScreen(
 
             // In-App Calibration Debugger Overlay
             androidx.compose.animation.AnimatedVisibility(
-                visible = uiState.isDebugOptionsEnabled && uiState.isDebugCalibrationVisible,
+                visible = (uiState.debugPreferences.enableNightSkyCalibration || uiState.isDebugOptionsEnabled) && uiState.isDebugCalibrationVisible,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 },
                 modifier = Modifier
@@ -430,7 +430,7 @@ fun NightSkyArScreen(
 
             // In-App Focus Area Debugger Overlay
             androidx.compose.animation.AnimatedVisibility(
-                visible = uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible,
+                visible = (uiState.debugPreferences.enableNightSkyFocusRegion || uiState.isDebugOptionsEnabled) && uiState.isDebugFocusRegionVisible,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 },
                 modifier = Modifier
@@ -589,6 +589,8 @@ fun NightSkyArScreen(
                 isKeepScreenOn = uiState.keepScreenOn,
                 isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
+                enableNightSkyCalibration = uiState.debugPreferences.enableNightSkyCalibration,
+                enableNightSkyFocusRegion = uiState.debugPreferences.enableNightSkyFocusRegion,
                 isDebugOptionsEnabled = uiState.isDebugOptionsEnabled,
                 onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
                 onToggleRealHorizon = viewModel::toggleRealHorizonInNightSky,

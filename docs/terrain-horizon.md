@@ -319,6 +319,9 @@ $$d = R_{\text{eff}} \left( \sqrt{\tan^2 \theta + \frac{2 h}{R_{\text{eff}}}} - 
 
 Pokud se pozorovatel nachází na dně hlubokého údolí a horizont je tvořen blízkým hřebenem s elevací $+10^\circ$, vzdálenost $d$ vyjde např. pouhých $12\text{ km}$. Aplikace díky tomu ví, že není třeba stahovat žádné sousední dlaždice.
 
+> [!TIP]
+> Podrobný technický rozbor odvození, subsamplingu reliéfu a dvoufázového toku stahování dat naleznete v samostatném dokumentu [Automatická volba dosahu výpočtu a stahování dat](auto-range-estimation.md).
+
 ---
 
 ## 6. Automatické zarovnání s kamerou (`SkylineExtractor` & `SkylineMatcher`)

@@ -32,7 +32,10 @@ fun TerrainArScreen(
     hasCameraPermission: Boolean = true,
     displayRotation: Int = 0,
     getLiveMatrix16: () -> FloatArray = { FloatArray(16) { if (it % 5 == 0) 1f else 0f } },
-    getFovDegrees: () -> Float = { 65.0f },
+    getFovDegrees: () -> Float = { 60f },
+    debugPreferences: com.dazix.caelis.data.DebugPreferences = com.dazix.caelis.data.DebugPreferences(),
+    effectiveRangeKm: Int? = null,
+    activeTileCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -88,5 +91,17 @@ fun TerrainArScreen(
                 .statusBarsPadding()
                 .padding(top = 16.dp),
         )
+
+        // Diagnostic HUD for terrain horizon metrics (Auto-Range & DEM tiles)
+        if (debugPreferences.showTerrainMetrics) {
+            TerrainDebugOverlay(
+                effectiveRangeKm = effectiveRangeKm,
+                activeTileCount = activeTileCount,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(top = 72.dp, start = 12.dp),
+            )
+        }
     }
 }

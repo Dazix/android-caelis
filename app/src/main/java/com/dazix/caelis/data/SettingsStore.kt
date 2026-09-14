@@ -118,6 +118,8 @@ class SettingsStore(context: Context) {
 
     val debugModeEnabled: Flow<Boolean> = preferences.map { SettingsMapping.readDebugModeEnabled(it) }
 
+    val debugPreferences: Flow<DebugPreferences> = preferences.map { SettingsMapping.readDebugPreferences(it) }
+
     val horizon: Flow<HorizonSettings> = preferences.map { SettingsMapping.readHorizon(it) }
 
     suspend fun saveHorizon(settings: HorizonSettings) {
@@ -145,6 +147,10 @@ class SettingsStore(context: Context) {
 
     suspend fun saveDebugModeEnabled(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeDebugModeEnabled(it, enabled) }
+    }
+
+    suspend fun saveDebugPreferences(preferences: DebugPreferences) {
+        dataStore.edit { SettingsMapping.writeDebugPreferences(it, preferences) }
     }
 
     suspend fun saveSunArKeepScreenOn(enabled: Boolean) {
@@ -374,6 +380,9 @@ internal object SettingsMapping {
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
     private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
     private val DEBUG_MODE_ENABLED = booleanPreferencesKey("debug_mode_enabled")
+    private val DEBUG_NIGHT_SKY_CALIBRATION = booleanPreferencesKey("debug_night_sky_calibration")
+    private val DEBUG_NIGHT_SKY_FOCUS_REGION = booleanPreferencesKey("debug_night_sky_focus_region")
+    private val DEBUG_SHOW_TERRAIN_METRICS = booleanPreferencesKey("debug_show_terrain_metrics")
 
     private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
@@ -796,6 +805,21 @@ internal object SettingsMapping {
 
     fun writeDebugModeEnabled(prefs: MutablePreferences, enabled: Boolean) {
         prefs[DEBUG_MODE_ENABLED] = enabled
+    }
+
+    fun readDebugPreferences(prefs: Preferences): DebugPreferences {
+        val legacyDebug = prefs[DEBUG_MODE_ENABLED] ?: false
+        return DebugPreferences(
+            enableNightSkyCalibration = prefs[DEBUG_NIGHT_SKY_CALIBRATION] ?: legacyDebug,
+            enableNightSkyFocusRegion = prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] ?: legacyDebug,
+            showTerrainMetrics = prefs[DEBUG_SHOW_TERRAIN_METRICS] ?: false,
+        )
+    }
+
+    fun writeDebugPreferences(prefs: MutablePreferences, preferences: DebugPreferences) {
+        prefs[DEBUG_NIGHT_SKY_CALIBRATION] = preferences.enableNightSkyCalibration
+        prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] = preferences.enableNightSkyFocusRegion
+        prefs[DEBUG_SHOW_TERRAIN_METRICS] = preferences.showTerrainMetrics
     }
 
     fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(

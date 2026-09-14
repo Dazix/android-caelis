@@ -99,6 +99,57 @@ class HorizonRangeEstimatorTest {
         assertTrue("a bowl needs nothing distant, got ${suggested / 1000} km", suggested <= 25_000.0)
     }
 
+    /**
+     * A prominent peak in one direction with a steep local skyline (like Ještěd from Liberec)
+     * must not inflate the search radius in opposite directions where the horizon is flat.
+     */
+    @Test
+    fun `an isolated prominent peak with steep local skyline does not inflate range in opposite flat directions`() {
+        // Observer at (50.0, 14.0) at ground level 370 m.
+        // Peak is 5 km South (lat = 50.0 - 5 km), height 1000 m (630 m above ground).
+        // In the South, local skyline is ~7°. In the North, ground is flat 370 m (0° skyline).
+        val peakLatitude = observer.latitude - metresToDegrees(5_000.0)
+        val peakRadiusDeg = metresToDegrees(1_000.0)
+        val grid = FunctionGrid { lat, lon ->
+            val dLat = lat - peakLatitude
+            val dLon = (lon - observer.longitude) * 0.64
+            if (dLat * dLat + dLon * dLon <= peakRadiusDeg * peakRadiusDeg) 1_000.0 else 370.0
+        }
+
+        val suggested = suggest(grid, probeRangeMeters = 20_000.0, maxRangeMeters = 100_000.0)
+
+        assertTrue(
+            "azimuth-aware estimate should keep radius short for local steep peak, was ${suggested / 1000} km",
+            suggested <= 25_000.0,
+        )
+    }
+
+    @Test
+    fun `highestNearbyPerAzimuth assigns peaks to directional sectors and applies adjacent smoothing`() {
+        // Place a peak 20 km East (azimuth 90°, sector 18)
+        val peakLongitude = observer.longitude + metresToDegrees(20_000.0) / 0.64
+        val peakRadiusDeg = metresToDegrees(1_000.0)
+        val grid = FunctionGrid { lat, lon ->
+            val dLat = lat - observer.latitude
+            val dLon = (lon - peakLongitude) * 0.64
+            if (dLat * dLat + dLon * dLon <= peakRadiusDeg * peakRadiusDeg) 1_200.0 else 200.0
+        }
+
+        val peaks = HorizonRangeEstimator.highestNearbyPerAzimuth(
+            grid = grid,
+            observer = observer,
+            eyeElevation = 201.6,
+        )
+
+        // Sector 18 is 90° (East). Sector 17 is 85°-90°, Sector 19 is 90°-95°.
+        assertEquals(1_200.0, peaks[18], 1.0)
+        assertEquals("adjacent sector 17 should be smoothed with peak", 1_200.0, peaks[17], 1.0)
+        assertEquals("adjacent sector 19 should be smoothed with peak", 1_200.0, peaks[19], 1.0)
+
+        // Sector 54 is 270° (West) - should remain at eye elevation baseline
+        assertEquals(201.6, peaks[54], 1.0)
+    }
+
     @Test
     fun `the suggestion never drops below what has already been loaded`() {
         val bowl = FunctionGrid { lat, lon ->

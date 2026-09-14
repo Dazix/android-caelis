@@ -60,6 +60,8 @@ fun NightSkyLayerSettingsSheet(
     isKeepScreenOn: Boolean = false,
     isDebugCalibrationVisible: Boolean = false,
     isDebugFocusRegionVisible: Boolean = false,
+    enableNightSkyCalibration: Boolean = false,
+    enableNightSkyFocusRegion: Boolean = false,
     isDebugOptionsEnabled: Boolean = false,
     onToggleLandscapeVisible: () -> Unit,
     onToggleRealHorizon: () -> Unit = {},
@@ -241,7 +243,7 @@ fun NightSkyLayerSettingsSheet(
             onCheckedChange = { onToggleKeepScreenOn() },
         )
 
-        if (isDebugOptionsEnabled) {
+        if (enableNightSkyCalibration || (isDebugOptionsEnabled && !enableNightSkyFocusRegion)) {
             LayerToggleRow(
                 label = stringResource(R.string.night_sky_debug_calibration),
                 icon = AppIcons.Setup,
@@ -251,7 +253,9 @@ fun NightSkyLayerSettingsSheet(
                 switchColors = switchColors,
                 onCheckedChange = { onToggleDebugCalibration() },
             )
+        }
 
+        if (enableNightSkyFocusRegion || (isDebugOptionsEnabled && !enableNightSkyCalibration)) {
             LayerToggleRow(
                 label = stringResource(R.string.night_sky_debug_focus_region),
                 icon = AppIcons.FocusArea,

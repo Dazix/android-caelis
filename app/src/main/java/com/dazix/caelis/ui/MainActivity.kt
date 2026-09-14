@@ -85,7 +85,7 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
     val nightVisionActivationMode by viewModel.nightVisionActivationMode.collectAsStateWithLifecycle()
     val customStartTime by viewModel.customStartTime.collectAsStateWithLifecycle()
     val customEndTime by viewModel.customEndTime.collectAsStateWithLifecycle()
-    val debugModeEnabled by viewModel.debugModeEnabled.collectAsStateWithLifecycle()
+    val debugPreferences by viewModel.debugPreferences.collectAsStateWithLifecycle()
     val notificationPrompted by viewModel.notificationPermissionPrompted.collectAsStateWithLifecycle()
 
     // Every one of these is granted outside the app, so the state is re-read on each resume.
@@ -196,7 +196,7 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
                             nightVisionActivationMode = nightVisionActivationMode,
                             customStartTime = customStartTime,
                             customEndTime = customEndTime,
-                            debugModeEnabled = debugModeEnabled,
+                            debugPreferences = debugPreferences,
                             homeScrollState = homeScrollState,
                             startCalibration = startCalibration,
                             onRequestNotifications = {
@@ -245,7 +245,7 @@ private fun CaelisScreen(
     nightVisionActivationMode: com.dazix.caelis.domain.nightsky.NightVisionActivationMode,
     customStartTime: java.time.LocalTime,
     customEndTime: java.time.LocalTime,
-    debugModeEnabled: Boolean,
+    debugPreferences: com.dazix.caelis.data.DebugPreferences,
     homeScrollState: ScrollState,
     startCalibration: () -> Unit,
     onRequestNotifications: () -> Unit,
@@ -369,7 +369,7 @@ private fun CaelisScreen(
             activationMode = nightVisionActivationMode,
             startTime = customStartTime,
             endTime = customEndTime,
-            debugModeEnabled = debugModeEnabled,
+            debugPreferences = debugPreferences,
             horizonSettings = horizonSettings,
             horizonState = horizonState,
             canDownloadTerrain = viewModel.canDownloadTerrain,
@@ -394,7 +394,7 @@ private fun CaelisScreen(
             onActivationModeChange = viewModel::setNightVisionActivationMode,
             onStartTimeChange = viewModel::setCustomStartTime,
             onEndTimeChange = viewModel::setCustomEndTime,
-            onDebugModeEnabledChange = viewModel::setDebugModeEnabled,
+            onDebugPreferencesChange = viewModel::setDebugPreferences,
             onBack = viewModel::back,
         )
     }

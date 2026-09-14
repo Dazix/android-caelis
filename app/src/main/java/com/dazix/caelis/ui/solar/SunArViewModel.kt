@@ -131,6 +131,9 @@ data class SunArUiState(
     val canDownloadTerrain: Boolean = true,
     val terrainTimes: TerrainTimes = TerrainTimes(),
     val showConsentDialog: Boolean = false,
+    val debugPreferences: com.dazix.caelis.data.DebugPreferences = com.dazix.caelis.data.DebugPreferences(),
+    val effectiveRangeKm: Int? = null,
+    val activeTileCount: Int = 0,
 ) {
     /** Draw the terrain layer only when it is switched on *and* there is something to draw. */
     val isHorizonVisible: Boolean get() = horizonSettings.enabled && horizonProfile != null
@@ -152,6 +155,13 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
+    val effectiveRangeKm: StateFlow<Int?> = horizonRepository.effectiveRangeKm
+    val activeTileCount: StateFlow<Int> = horizonRepository.activeTileCount
+    val debugPreferences: StateFlow<com.dazix.caelis.data.DebugPreferences> = settingsStore.debugPreferences.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        com.dazix.caelis.data.DebugPreferences(),
+    )
 
     /** Whether this build declares `INTERNET` at all. Constant for the life of the process. */
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
@@ -270,6 +280,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         horizonState,
         terrainTimes,
         showConsentDialogState,
+        debugPreferences,
+        effectiveRangeKm,
+        activeTileCount,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -287,6 +300,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val horizonSt = args[13] as HorizonState
         val terrain = args[14] as TerrainTimes
         val showConsent = args[15] as Boolean
+        val debugPrefs = args[16] as com.dazix.caelis.data.DebugPreferences
+        val effRange = args[17] as Int?
+        val actTiles = args[18] as Int
 
         SunArUiState(
             selectedDate = date,
@@ -307,6 +323,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             canDownloadTerrain = canDownloadTerrain,
             terrainTimes = terrain,
             showConsentDialog = showConsent,
+            debugPreferences = debugPrefs,
+            effectiveRangeKm = effRange,
+            activeTileCount = actTiles,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 

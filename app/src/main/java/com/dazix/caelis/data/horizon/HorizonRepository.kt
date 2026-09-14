@@ -94,6 +94,11 @@ class HorizonRepository private constructor(
     /** The radius actually in use, which with an automatic setting is worked out from the terrain. */
     val effectiveRangeKm: StateFlow<Int?> = _effectiveRangeKm.asStateFlow()
 
+    private val _activeTileCount = MutableStateFlow(0)
+
+    /** The number of DEM tiles spanning the current effective search radius. */
+    val activeTileCount: StateFlow<Int> = _activeTileCount.asStateFlow()
+
     /** Automatic radius per rounded position, so a settling GPS does not re-probe every few seconds. */
     private val estimatedRangeKm = mutableMapOf<Pair<Double, Double>, Int>()
 
@@ -139,6 +144,8 @@ class HorizonRepository private constructor(
     fun invalidate() {
         lastRequest = null
         _profile.value = null
+        _effectiveRangeKm.value = null
+        _activeTileCount.value = 0
         _state.value = HorizonState.Idle
     }
 
@@ -167,13 +174,14 @@ class HorizonRepository private constructor(
         val settings = withEffectiveRange(location, requested, observerKey) ?: return
         _effectiveRangeKm.value = settings.maxRangeKm
 
+        val keys = tilesFor(location, settings)
+        _activeTileCount.value = keys.size
+
         val cached = withContext(Dispatchers.IO) { readStoredProfile(location, settings) }
         if (cached != null) {
             publish(cached)
             return
         }
-
-        val keys = tilesFor(location, settings)
 
         val (present, missing) = cache.partition(keys)
         if (missing.isNotEmpty()) {

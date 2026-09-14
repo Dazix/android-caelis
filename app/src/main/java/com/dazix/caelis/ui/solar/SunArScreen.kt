@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -316,6 +317,18 @@ fun SunArScreen(
                 .align(Alignment.TopCenter)
                 .padding(top = 36.dp, start = 12.dp, end = 12.dp),
         )
+
+        // Diagnostic HUD for terrain horizon metrics (Auto-Range & DEM tiles)
+        if (uiState.debugPreferences.showTerrainMetrics) {
+            com.dazix.caelis.ui.horizon.TerrainDebugOverlay(
+                effectiveRangeKm = uiState.effectiveRangeKm,
+                activeTileCount = uiState.activeTileCount,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(top = 92.dp, start = 12.dp),
+            )
+        }
 
         // Bottom Controls Layer
         Column(

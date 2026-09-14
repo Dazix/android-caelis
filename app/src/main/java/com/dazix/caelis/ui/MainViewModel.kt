@@ -321,6 +321,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val debugModeEnabled: StateFlow<Boolean> = settings.debugModeEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val debugPreferences: StateFlow<com.dazix.caelis.data.DebugPreferences> = settings.debugPreferences
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.dazix.caelis.data.DebugPreferences())
+
     val notificationPermissionPrompted: StateFlow<Boolean?> = settings.notificationPermissionPrompted
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -346,6 +349,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setDebugModeEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.saveDebugModeEnabled(enabled) }
+    }
+
+    fun setDebugPreferences(preferences: com.dazix.caelis.data.DebugPreferences) {
+        viewModelScope.launch { settings.saveDebugPreferences(preferences) }
     }
 
     /** The shortest interval the chosen camera app can sustain, straight from its profile. */

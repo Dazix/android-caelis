@@ -1,6 +1,8 @@
 package com.dazix.caelis.domain.horizon
 
 import com.dazix.caelis.domain.solar.GeoLocation
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.sqrt
 import kotlin.math.tan
@@ -14,10 +16,19 @@ import kotlin.math.tan
  * more tiles, a couple of hundred megabytes, to discover they changed nothing.
  *
  * The bound is a real one rather than a heuristic. Past the distance where a peak of the highest
- * elevation anywhere nearby would sink below the skyline already found, nothing further out can
- * change the answer on that azimuth, no matter what is there.
+ * elevation in that azimuth sector would sink below the skyline already found, nothing further out
+ * can change the answer on that azimuth, no matter what is there.
  */
 object HorizonRangeEstimator {
+
+    /** Number of directional sectors partitioning the 360° field (5° per sector). */
+    const val SECTOR_COUNT: Int = 72
+
+    /** Angular width of each sector in degrees. */
+    const val DEGREES_PER_SECTOR: Double = 360.0 / SECTOR_COUNT
+
+    /** Number of 0.25° horizon profile samples mapped into a single 5° sector. */
+    const val SAMPLES_PER_SECTOR: Int = HorizonProfile.SAMPLE_COUNT / SECTOR_COUNT
 
     /** Sample the grid this many times across each axis when looking for the tallest thing nearby. */
     private const val RELIEF_SAMPLES = 96
@@ -48,16 +59,17 @@ object HorizonRangeEstimator {
             maxRangeMeters = probeRangeMeters,
         )
         val eyeElevation = probe.observerGroundElevationMeters + eyeHeightMeters
-        val highest = highestNearby(grid, observer)
-
-        // Nothing around stands above the eye: no distant peak can clear the curvature either, and
-        // the useful radius is however far the probe already looked.
-        if (highest <= eyeElevation) return probeRangeMeters.coerceAtMost(maxRangeMeters)
+        val sectorPeaks = highestNearbyPerAzimuth(grid, observer, eyeElevation)
 
         var furthest = 0.0
         for (index in 0 until HorizonProfile.SAMPLE_COUNT) {
             val skyline = probe.elevationsDegrees[index].toDouble()
-            furthest = max(furthest, reachOf(highest - eyeElevation, skyline))
+            val clampedSkyline = max(0.0, skyline)
+            val sector = index / SAMPLES_PER_SECTOR
+            val sectorPeak = sectorPeaks[sector]
+            if (sectorPeak > eyeElevation) {
+                furthest = max(furthest, reachOf(sectorPeak - eyeElevation, clampedSkyline))
+            }
         }
 
         return furthest.coerceIn(probeRangeMeters.coerceAtMost(maxRangeMeters), maxRangeMeters)
@@ -78,24 +90,53 @@ object HorizonRangeEstimator {
     }
 
     /**
-     * The highest elevation on a coarse grid around the observer.
+     * Finds the highest elevation in each of the 72 directional 5° sectors around the observer,
+     * smoothed across adjacent sectors.
      *
-     * Subsampled hard on purpose: a summit is hundreds of metres across and the answer only has to be
-     * good enough to bound a distance, while reading every post of a 3601² tile would take longer
-     * than the profile itself.
+     * Subsampled on a coarse 96x96 grid: a summit is hundreds of metres across and the answer only
+     * needs to bound the distance per direction, avoiding reading every post of a 3601² tile.
      */
-    private fun highestNearby(grid: ElevationGrid, observer: GeoLocation): Double {
-        var highest = Double.NEGATIVE_INFINITY
+    internal fun highestNearbyPerAzimuth(
+        grid: ElevationGrid,
+        observer: GeoLocation,
+        eyeElevation: Double,
+    ): DoubleArray {
+        val rawPeaks = DoubleArray(SECTOR_COUNT) { eyeElevation }
         val step = RELIEF_SPAN_DEGREES / (RELIEF_SAMPLES - 1)
         val originLat = observer.latitude - RELIEF_SPAN_DEGREES / 2.0
         val originLon = observer.longitude - RELIEF_SPAN_DEGREES / 2.0
+        val cosLat = cos(observer.latitude * Math.PI / 180.0)
+
         for (row in 0 until RELIEF_SAMPLES) {
             val latitude = originLat + row * step
+            val dLat = latitude - observer.latitude
             for (column in 0 until RELIEF_SAMPLES) {
-                val value = grid.elevationAt(latitude, originLon + column * step) ?: continue
-                if (value > highest) highest = value
+                val longitude = originLon + column * step
+                val value = grid.elevationAt(latitude, longitude) ?: continue
+                if (value <= eyeElevation) continue
+
+                val dLon = longitude - observer.longitude
+                val x = dLon * cosLat
+                val y = dLat
+                if (x == 0.0 && y == 0.0) continue
+
+                var azDeg = Math.toDegrees(atan2(x, y))
+                if (azDeg < 0.0) azDeg += 360.0
+                if (azDeg >= 360.0) azDeg -= 360.0
+
+                val sector = (azDeg / DEGREES_PER_SECTOR).toInt().coerceIn(0, SECTOR_COUNT - 1)
+                if (value > rawPeaks[sector]) {
+                    rawPeaks[sector] = value
+                }
             }
         }
-        return if (highest == Double.NEGATIVE_INFINITY) 0.0 else highest
+
+        val smoothed = DoubleArray(SECTOR_COUNT)
+        for (s in 0 until SECTOR_COUNT) {
+            val prev = if (s == 0) rawPeaks[SECTOR_COUNT - 1] else rawPeaks[s - 1]
+            val next = if (s == SECTOR_COUNT - 1) rawPeaks[0] else rawPeaks[s + 1]
+            smoothed[s] = max(rawPeaks[s], max(prev, next))
+        }
+        return smoothed
     }
 }

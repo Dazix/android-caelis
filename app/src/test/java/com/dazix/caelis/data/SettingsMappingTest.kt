@@ -732,6 +732,38 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `debug preferences default to all false on empty preferences`() {
+        val defaults = SettingsMapping.readDebugPreferences(emptyPreferences())
+        assertFalse(defaults.enableNightSkyCalibration)
+        assertFalse(defaults.enableNightSkyFocusRegion)
+        assertFalse(defaults.showTerrainMetrics)
+        assertFalse(defaults.anyEnabled)
+    }
+
+    @Test
+    fun `debug preferences survive round trip when true and false`() {
+        val prefs = mutablePreferencesOf()
+        val custom = DebugPreferences(
+            enableNightSkyCalibration = true,
+            enableNightSkyFocusRegion = false,
+            showTerrainMetrics = true,
+        )
+        SettingsMapping.writeDebugPreferences(prefs, custom)
+        assertEquals(custom, SettingsMapping.readDebugPreferences(prefs))
+    }
+
+    @Test
+    fun `debug preferences fall back to legacy debug mode enabled flag when granular keys are absent`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeDebugModeEnabled(prefs, true)
+
+        val read = SettingsMapping.readDebugPreferences(prefs)
+        assertEquals(true, read.enableNightSkyCalibration)
+        assertEquals(true, read.enableNightSkyFocusRegion)
+        assertEquals(false, read.showTerrainMetrics)
+    }
+
+    @Test
     fun `night sky search history defaults to empty string and survives round trip`() {
         assertEquals("", SettingsMapping.readNightSkySearchHistory(emptyPreferences()))
 

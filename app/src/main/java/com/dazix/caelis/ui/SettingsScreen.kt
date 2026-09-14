@@ -7,6 +7,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.dazix.caelis.BuildConfig
 import com.dazix.caelis.ui.solar.HorizonConsentDialog
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dazix.caelis.R
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
+import com.dazix.caelis.data.DebugPreferences
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.horizon.DemTileDownloader
 import com.dazix.caelis.data.horizon.HorizonState
@@ -87,7 +91,7 @@ fun SettingsScreen(
     activationMode: NightVisionActivationMode,
     startTime: LocalTime,
     endTime: LocalTime,
-    debugModeEnabled: Boolean = false,
+    debugPreferences: DebugPreferences = DebugPreferences(),
     horizonSettings: HorizonSettings = HorizonSettings(),
     horizonState: HorizonState = HorizonState.Idle,
     canDownloadTerrain: Boolean = true,
@@ -113,7 +117,7 @@ fun SettingsScreen(
     onActivationModeChange: (NightVisionActivationMode) -> Unit,
     onStartTimeChange: (LocalTime) -> Unit,
     onEndTimeChange: (LocalTime) -> Unit,
-    onDebugModeEnabledChange: (Boolean) -> Unit = {},
+    onDebugPreferencesChange: (DebugPreferences) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -124,6 +128,12 @@ fun SettingsScreen(
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
+    var debugAccordionExpanded by remember { mutableStateOf(false) }
+    val debugChevronRotation by animateFloatAsState(
+        targetValue = if (debugAccordionExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "debug_chevron_rotation",
+    )
 
     DisposableEffect(Unit) {
         onStartLocationUpdates()
@@ -412,16 +422,71 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 8.dp),
         )
 
-        SectionCard(
-            title = stringResource(R.string.settings_debug_title),
-            subtitle = stringResource(R.string.settings_debug_subtitle),
-        ) {
-            SwitchRow(
-                title = stringResource(R.string.settings_debug_enable),
-                description = stringResource(R.string.settings_debug_enable_desc),
-                checked = debugModeEnabled,
-                onCheckedChange = onDebugModeEnabledChange,
-            )
+        SectionCard {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { debugAccordionExpanded = !debugAccordionExpanded }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_debug_title),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_debug_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = AppIcons.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer { rotationZ = debugChevronRotation },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            AnimatedVisibility(
+                visible = debugAccordionExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                    )
+                    SwitchRow(
+                        title = stringResource(R.string.settings_debug_night_sky_calibration),
+                        description = stringResource(R.string.settings_debug_night_sky_calibration_desc),
+                        checked = debugPreferences.enableNightSkyCalibration,
+                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(enableNightSkyCalibration = it)) },
+                    )
+                    SwitchRow(
+                        title = stringResource(R.string.settings_debug_night_sky_focus_region),
+                        description = stringResource(R.string.settings_debug_night_sky_focus_region_desc),
+                        checked = debugPreferences.enableNightSkyFocusRegion,
+                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(enableNightSkyFocusRegion = it)) },
+                    )
+                    SwitchRow(
+                        title = stringResource(R.string.settings_debug_terrain_metrics),
+                        description = stringResource(R.string.settings_debug_terrain_metrics_desc),
+                        checked = debugPreferences.showTerrainMetrics,
+                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(showTerrainMetrics = it)) },
+                    )
+                }
+            }
         }
 
         // Higher visible divider separating Version section

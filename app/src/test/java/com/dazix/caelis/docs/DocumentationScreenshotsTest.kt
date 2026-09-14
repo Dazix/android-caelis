@@ -342,12 +342,12 @@ class DocumentationScreenshotsTest {
                         activationMode = NightVisionActivationMode.CUSTOM_TIME,
                         startTime = LocalTime.of(21, 30),
                         endTime = LocalTime.of(5, 30),
-                        debugModeEnabled = false,
+                        debugPreferences = com.dazix.caelis.data.DebugPreferences(),
                         onThemeChange = {},
                         onActivationModeChange = {},
                         onStartTimeChange = {},
                         onEndTimeChange = {},
-                        onDebugModeEnabledChange = {},
+                        onDebugPreferencesChange = {},
                         onBack = {},
                     )
                 }
