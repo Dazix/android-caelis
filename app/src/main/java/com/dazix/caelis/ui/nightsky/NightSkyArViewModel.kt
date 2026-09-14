@@ -334,11 +334,50 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         cfg.enabled && cfg.realHorizonInNightSky && profile != null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun setRealHorizonInNightSky(enabled: Boolean) {
+    val canDownloadTerrain: Boolean = horizonRepository.canDownload
+
+    private val showConsentDialogState = MutableStateFlow(false)
+    val showConsentDialog: StateFlow<Boolean> = showConsentDialogState.asStateFlow()
+
+    fun dismissConsentDialog() {
+        showConsentDialogState.value = false
+    }
+
+    fun answerNetworkConsent(granted: Boolean, wifiOnly: Boolean? = null) {
+        showConsentDialogState.value = false
         viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
             settingsStore.saveHorizon(
-                settingsStore.currentHorizon().copy(realHorizonInNightSky = enabled),
+                current.copy(
+                    networkConsent = granted,
+                    enabled = true,
+                    realHorizonInNightSky = true,
+                    wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
+                ),
             )
+            settingsStore.saveNightSkyLandscapeVisible(false)
+        }
+    }
+
+    fun setRealHorizonInNightSky(enabled: Boolean) {
+        if (enabled) {
+            val current = horizonSettings.value
+            if (!current.networkConsentAnswered && canDownloadTerrain) {
+                showConsentDialogState.value = true
+                return
+            }
+        }
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(
+                current.copy(
+                    realHorizonInNightSky = enabled,
+                    enabled = current.enabled || enabled,
+                ),
+            )
+            if (enabled && isLandscapeVisible.value) {
+                settingsStore.saveNightSkyLandscapeVisible(false)
+            }
         }
     }
 
@@ -577,10 +616,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         // Keep a terrain profile for wherever the observer is, on the same terms as the Sun AR
         // screen: debounced, rounded to about 110 m, and a no-op when the layer is switched off.
         viewModelScope.launch {
-            combine(locationProvider.location, horizonSettings) { loc, cfg -> loc to cfg }
+            combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
+                Triple(loc, hasFix, cfg)
+            }
                 .debounce(1_000L)
-                .collect { (loc, cfg) ->
-                    if (cfg.realHorizonInNightSky) horizonRepository.ensureProfile(loc, cfg)
+                .collect { (loc, hasFix, cfg) ->
+                    if (hasFix && cfg.realHorizonInNightSky) {
+                        horizonRepository.ensureProfile(loc, cfg)
+                    }
                 }
         }
 
@@ -1183,6 +1226,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setLandscapeVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyLandscapeVisible(enabled)
+            if (enabled && horizonSettings.value.realHorizonInNightSky) {
+                val current = settingsStore.currentHorizon()
+                settingsStore.saveHorizon(current.copy(realHorizonInNightSky = false))
+            }
         }
     }
 

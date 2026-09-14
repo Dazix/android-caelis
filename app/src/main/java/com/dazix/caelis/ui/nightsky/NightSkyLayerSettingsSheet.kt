@@ -131,19 +131,15 @@ fun NightSkyLayerSettingsSheet(
             onCheckedChange = { onToggleLandscapeVisible() },
         )
 
-        // Offered only once the terrain layer is switched on in the app's Settings, which is also
-        // where the radius, the eye height and the download live — they are shared with Sun AR.
-        if (isRealHorizonAvailable) {
-            LayerToggleRow(
-                label = stringResource(R.string.horizon_night_sky_real),
-                icon = AppIcons.Landscape,
-                isChecked = isRealHorizonEnabled,
-                headlineColor = headlineColor,
-                iconColor = iconColor,
-                switchColors = switchColors,
-                onCheckedChange = { onToggleRealHorizon() },
-            )
-        }
+        LayerToggleRow(
+            label = stringResource(R.string.horizon_night_sky_real),
+            icon = AppIcons.Landscape,
+            isChecked = isRealHorizonEnabled,
+            headlineColor = headlineColor,
+            iconColor = iconColor,
+            switchColors = switchColors,
+            onCheckedChange = { onToggleRealHorizon() },
+        )
 
         LayerToggleRow(
             label = stringResource(R.string.night_sky_atmosphere),

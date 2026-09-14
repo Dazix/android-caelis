@@ -277,7 +277,7 @@
     <string name="horizon_night_sky_real_desc">Nahradí stylizované stromořadí okolním terénem a schová za něj hvězdy.</string>
 
     <string name="horizon_consent_title">Stáhnout výškopis terénu?</string>
-    <string name="horizon_consent_body">Aby aplikace mohla vykreslit skutečný obzor, potřebuje výšková data pro čtverec mapy, ve kterém právě stojíte. Ze zařízení odejde pouze název této jednostupňové dlaždice — žádné souřadnice, žádné identifikátory, nic o vás.\n\nSoubor můžete místo toho naimportovat ručně nebo si to později rozmyslet v Nastavení.</string>
+    <string name="horizon_consent_body">Aby aplikace mohla vykreslit skutečný obzor, potřebuje výšková data pro čtverec mapy, ve kterém právě stojíte. Po povolení se data pro aktuální polohu budou podle potřeby stahovat automaticky na pozadí a ukládat pro offline použití. Ze zařízení odejde pouze název této jednostupňové dlaždice — žádné souřadnice, žádné identifikátory, nic o vás.\n\nSoubor můžete místo toho naimportovat ručně nebo si to později rozmyslet v Nastavení.</string>
     <string name="horizon_consent_allow">Povolit</string>
     <string name="horizon_consent_never">Nyní ne</string>
 

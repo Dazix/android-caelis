@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -446,13 +447,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun editHorizon(recompute: Boolean = false, transform: (HorizonSettings) -> HorizonSettings) {
         viewModelScope.launch {
-            val updated = transform(settings.currentHorizon())
+            val current = settings.currentHorizon()
+            val updated = transform(current)
             settings.saveHorizon(updated)
-            if (recompute) {
+            if (recompute || (updated.enabled && !current.enabled)) {
                 // Range and eye height both change the skyline, so a stored profile computed with the
                 // old values is not a cache hit — it is the wrong answer under the right file name.
-                horizonRepository.invalidate()
-                horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+                horizonLocationProvider.refreshLocation()
+                if (horizonLocationProvider.hasGpsFix.value) {
+                    if (recompute) horizonRepository.invalidate()
+                    horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+                }
             }
         }
     }
@@ -478,6 +483,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setHorizonNetworkConsent(granted: Boolean) = editHorizon { it.copy(networkConsent = granted) }
 
+    fun answerHorizonConsent(granted: Boolean, wifiOnly: Boolean? = null) {
+        editHorizon { current ->
+            current.copy(
+                networkConsent = granted,
+                enabled = true,
+                wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
+            )
+        }
+    }
+
     fun setRealHorizonInNightSky(enabled: Boolean) = editHorizon { it.copy(realHorizonInNightSky = enabled) }
 
     /** Fetch or recompute for wherever the phone currently thinks it is. */
@@ -485,8 +500,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         horizonLocationProvider.refreshLocation()
         viewModelScope.launch {
             val current = settings.currentHorizon()
+            val updated = current.copy(enabled = true)
+            if (updated != current) {
+                settings.saveHorizon(updated)
+            }
             horizonRepository.invalidate()
-            horizonRepository.ensureProfile(horizonLocationProvider.location.value, current)
+            if (horizonLocationProvider.hasGpsFix.value) {
+                horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+            } else {
+                horizonLocationProvider.startUpdates()
+                val hasFix = horizonLocationProvider.hasGpsFix.firstOrNull { it } ?: false
+                if (hasFix) {
+                    horizonRepository.ensureProfile(
+                        horizonLocationProvider.location.value,
+                        settings.currentHorizon().copy(enabled = true),
+                    )
+                }
+            }
         }
     }
 

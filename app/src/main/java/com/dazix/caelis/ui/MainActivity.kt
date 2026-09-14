@@ -382,6 +382,7 @@ private fun CaelisScreen(
             onHorizonShadeOccludedChange = viewModel::setHorizonShadeOccluded,
             onHorizonWifiOnlyChange = viewModel::setHorizonWifiOnly,
             onHorizonRealInNightSkyChange = viewModel::setRealHorizonInNightSky,
+            onHorizonNetworkConsent = viewModel::answerHorizonConsent,
             onDownloadTerrain = viewModel::downloadTerrainForCurrentLocation,
             onImportTerrain = { terrainImportLauncher.launch(arrayOf("*/*")) },
             onClearTerrainCache = viewModel::clearTerrainCache,

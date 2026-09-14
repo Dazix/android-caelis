@@ -97,6 +97,7 @@ import com.dazix.caelis.domain.nightsky.StarCatalog
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.Permissions
+import com.dazix.caelis.ui.solar.HorizonConsentDialog
 
 import android.graphics.BitmapFactory
 
@@ -159,16 +160,25 @@ fun NightSkyArScreen(
         mutableStateOf(Permissions.granted(context, Manifest.permission.CAMERA))
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-    }
+    val showConsentDialog by viewModel.showConsentDialog.collectAsStateWithLifecycle()
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.refreshLocation()
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+        val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+            Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (!hasLocation) {
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
     }
 
     val view = LocalView.current
@@ -189,12 +199,14 @@ fun NightSkyArScreen(
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-        val hasFine = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION)
-        if (!hasFine) {
-            locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
+        } else {
+            val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+                Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (!hasLocation) {
+                locationPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                )
+            }
         }
     }
 
@@ -603,6 +615,15 @@ fun NightSkyArScreen(
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             )
         }
+    }
+
+    // Terrain horizon: the one-off network question, only shown when enabling.
+    if (showConsentDialog) {
+        HorizonConsentDialog(
+            initialWifiOnly = horizonSettings.wifiOnly,
+            onAllow = { wifiOnly -> viewModel.answerNetworkConsent(granted = true, wifiOnly = wifiOnly) },
+            onNever = { viewModel.answerNetworkConsent(granted = false) },
+        )
     }
 }
 

@@ -1,6 +1,11 @@
 package com.dazix.caelis.ui
 
+import android.Manifest
 import android.text.format.DateFormat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.dazix.caelis.BuildConfig
+import com.dazix.caelis.ui.solar.HorizonConsentDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -35,7 +40,6 @@ import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import com.dazix.caelis.BuildConfig
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -75,7 +79,7 @@ import java.time.format.FormatStyle
 
 private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     theme: NightVisionTheme,
@@ -97,6 +101,7 @@ fun SettingsScreen(
     onHorizonShadeOccludedChange: (Boolean) -> Unit = {},
     onHorizonWifiOnlyChange: (Boolean) -> Unit = {},
     onHorizonRealInNightSkyChange: (Boolean) -> Unit = {},
+    onHorizonNetworkConsent: (Boolean, Boolean?) -> Unit = { _, _ -> },
     onDownloadTerrain: () -> Unit = {},
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
@@ -107,10 +112,53 @@ fun SettingsScreen(
     onDebugModeEnabledChange: (Boolean) -> Unit = {},
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     var showStartTimeDialog by remember { mutableStateOf(false) }
     var showEndTimeDialog by remember { mutableStateOf(false) }
     var showAttribution by remember { mutableStateOf(false) }
+    var showConsentDialog by remember { mutableStateOf(false) }
+    var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        // Location permission updated
+    }
+
+    val requestLocationIfMissing = {
+        val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+            Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (!hasLocation) {
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
+    }
+
+    val handleHorizonToggle: (Boolean) -> Unit = { checked ->
+        if (checked) {
+            requestLocationIfMissing()
+            if (!horizonSettings.networkConsentAnswered && canDownloadTerrain) {
+                pendingActionAfterConsent = { onHorizonEnabledChange(true) }
+                showConsentDialog = true
+            } else {
+                onHorizonEnabledChange(true)
+            }
+        } else {
+            onHorizonEnabledChange(false)
+        }
+    }
+
+    val handleDownloadClick: () -> Unit = {
+        requestLocationIfMissing()
+        if (!horizonSettings.networkConsentAnswered && canDownloadTerrain) {
+            pendingActionAfterConsent = { onDownloadTerrain() }
+            showConsentDialog = true
+        } else {
+            onDownloadTerrain()
+        }
+    }
 
     ScreenScaffold(
         title = stringResource(R.string.settings_title),
@@ -198,7 +246,7 @@ fun SettingsScreen(
                 title = stringResource(R.string.horizon_enabled),
                 description = stringResource(R.string.horizon_enabled_desc),
                 checked = horizonSettings.enabled,
-                onCheckedChange = onHorizonEnabledChange,
+                onCheckedChange = handleHorizonToggle,
             )
 
             HorizonStatusRow(state = horizonState)
@@ -277,7 +325,7 @@ fun SettingsScreen(
                 )
 
                 Button(
-                    onClick = onDownloadTerrain,
+                    onClick = handleDownloadClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
@@ -445,6 +493,24 @@ fun SettingsScreen(
                 showEndTimeDialog = false
             },
             onDismiss = { showEndTimeDialog = false },
+        )
+    }
+
+    if (showConsentDialog) {
+        HorizonConsentDialog(
+            initialWifiOnly = horizonSettings.wifiOnly,
+            onAllow = { wifiOnly ->
+                showConsentDialog = false
+                onHorizonNetworkConsent(true, wifiOnly)
+                pendingActionAfterConsent?.invoke()
+                pendingActionAfterConsent = null
+            },
+            onNever = {
+                showConsentDialog = false
+                onHorizonNetworkConsent(false, null)
+                pendingActionAfterConsent?.invoke()
+                pendingActionAfterConsent = null
+            },
         )
     }
 }

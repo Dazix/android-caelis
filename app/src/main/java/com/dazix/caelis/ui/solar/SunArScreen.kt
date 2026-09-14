@@ -164,16 +164,23 @@ fun SunArScreen(
     var showDatePicker by remember { mutableStateOf(false) }
     var showInfoSheet by remember { mutableStateOf(false) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-    }
-
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         viewModel.refreshLocation()
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+        val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+            Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (!hasLocation) {
+            locationPermissionLauncher.launch(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            )
+        }
     }
 
     val view = LocalView.current
@@ -194,12 +201,14 @@ fun SunArScreen(
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-        val hasFine = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION)
-        if (!hasFine) {
-            locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
+        } else {
+            val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+                Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (!hasLocation) {
+                locationPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                )
+            }
         }
     }
 
@@ -338,7 +347,7 @@ fun SunArScreen(
                     onClose = { showInfoSheet = false },
                     terrainTimes = uiState.terrainTimes,
                     horizonEnabled = uiState.horizonSettings.enabled,
-                    onToggleHorizon = viewModel::toggleHorizon,
+                    onToggleHorizon = viewModel::requestToggleHorizon,
                     alignAzimuthOffsetDeg = alignAzimuthOffset,
                     alignElevationOffsetDeg = alignElevationOffset,
                     compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
@@ -375,8 +384,8 @@ fun SunArScreen(
             }
         }
 
-        // Terrain horizon: the one-off network question, then its own settings sheet.
-        if (uiState.shouldAskNetworkConsent) {
+        // Terrain horizon: the one-off network question, only shown when enabling.
+        if (uiState.showConsentDialog) {
             HorizonConsentDialog(
                 initialWifiOnly = uiState.horizonSettings.wifiOnly,
                 onAllow = { wifiOnly -> viewModel.answerNetworkConsent(granted = true, wifiOnly = wifiOnly) },

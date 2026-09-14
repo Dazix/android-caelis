@@ -128,16 +128,10 @@ data class SunArUiState(
     /** False in a build made from source with the `INTERNET` line removed from the manifest. */
     val canDownloadTerrain: Boolean = true,
     val terrainTimes: TerrainTimes = TerrainTimes(),
+    val showConsentDialog: Boolean = false,
 ) {
     /** Draw the terrain layer only when it is switched on *and* there is something to draw. */
     val isHorizonVisible: Boolean get() = horizonSettings.enabled && horizonProfile != null
-
-    /**
-     * Ask about the network exactly once, and only in a build that could use the answer.
-     * A user who declined is not asked again; one whose build has no `INTERNET` is never asked.
-     */
-    val shouldAskNetworkConsent: Boolean
-        get() = canDownloadTerrain && !horizonSettings.networkConsentAnswered
 }
 
 @OptIn(FlowPreview::class)
@@ -255,6 +249,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TerrainTimes())
 
+    private val showConsentDialogState = MutableStateFlow(false)
+
     val uiState: StateFlow<SunArUiState> = combine(
         selectedDateState,
         bubbleIntervalState,
@@ -271,6 +267,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         horizonProfile,
         horizonState,
         terrainTimes,
+        showConsentDialogState,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -287,6 +284,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val horizonProf = args[12] as HorizonProfile?
         val horizonSt = args[13] as HorizonState
         val terrain = args[14] as TerrainTimes
+        val showConsent = args[15] as Boolean
 
         SunArUiState(
             selectedDate = date,
@@ -306,6 +304,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             horizonState = horizonSt,
             canDownloadTerrain = canDownloadTerrain,
             terrainTimes = terrain,
+            showConsentDialog = showConsent,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
@@ -343,9 +342,15 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         // the position to about 110 m and ignores a repeat of the same request, so a stationary
         // observer resolves this exactly once.
         viewModelScope.launch {
-            combine(locationProvider.location, horizonSettings) { loc, cfg -> loc to cfg }
+            combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
+                Triple(loc, hasFix, cfg)
+            }
                 .debounce(1_000L)
-                .collect { (loc, cfg) -> horizonRepository.ensureProfile(loc, cfg) }
+                .collect { (loc, hasFix, cfg) ->
+                    if (hasFix) {
+                        horizonRepository.ensureProfile(loc, cfg)
+                    }
+                }
         }
 
         // Ticker to update sun and moon positions every 2 seconds for selected date at current time-of-day
@@ -552,6 +557,19 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     // download, the tile cache — is configured once in the app's Settings and reached through
     // MainViewModel, because it describes where you are standing rather than which screen is open.
 
+    fun requestToggleHorizon() {
+        val current = horizonSettings.value
+        if (!current.enabled && !current.networkConsentAnswered && canDownloadTerrain) {
+            showConsentDialogState.value = true
+        } else {
+            toggleHorizon()
+        }
+    }
+
+    fun dismissConsentDialog() {
+        showConsentDialogState.value = false
+    }
+
     /**
      * Records the user's answer to the network question and, on a yes, switches the layer on.
      *
@@ -559,12 +577,13 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * It leaves the layer itself alone, because the hand-import path still works without a network.
      */
     fun answerNetworkConsent(granted: Boolean, wifiOnly: Boolean? = null) {
+        showConsentDialogState.value = false
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
             settingsStore.saveHorizon(
                 current.copy(
                     networkConsent = granted,
-                    enabled = current.enabled || granted,
+                    enabled = true,
                     wifiOnly = if (granted && wifiOnly != null) wifiOnly else current.wifiOnly,
                 ),
             )
