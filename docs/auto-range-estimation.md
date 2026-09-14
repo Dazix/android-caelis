@@ -387,7 +387,7 @@ Vliv funkce Auto-Range na síťový provoz a využití úložiště je zásadní
 
 ### Ochrana aktivní pracovní sady (Working Set Protection)
 
-Při práci s více dlaždicemi správce mezipaměti [`DemTileCache`](../app/src/main/java/com/dazix/caelis/data/horizon/DemTileCache.kt) udržuje diskový limit (standardně 260 MB).
+Při práci s více dlaždicemi správce mezipaměti [`DemTileCache`](../app/src/main/java/com/dazix/caelis/data/horizon/DemTileCache.kt) udržuje diskový limit (standardně 512 MB).
 
 > [!IMPORTANT]
 > **Kritický invariant:** Metoda `DemTileCache.trim(protect: Set<DemTileKey>)` je volána až **po dokončení stahování všech chybějících dlaždic** a má striktně zakázáno smazat jakoukoliv dlaždici ze sady `protect = keys.toSet()`. Smazání dlaždice potřebné pro právě běžící výpočet by vedlo k neúplnému profilu nebo selhání výpočtu.

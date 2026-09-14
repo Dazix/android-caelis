@@ -279,6 +279,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** False in a build made from source with the `INTERNET` line removed from the manifest. */
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
 
+    private val _storageMetrics = MutableStateFlow(horizonRepository.getStorageMetrics())
+    val storageMetrics: StateFlow<com.dazix.caelis.data.horizon.StorageMetrics> = _storageMetrics.asStateFlow()
+
     private val screenState = MutableStateFlow(Screen.HOME)
     val screen: StateFlow<Screen> = screenState.asStateFlow()
 
@@ -446,6 +449,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val application = getApplication<Application>()
         permissionState.value = Permissions.read(application)
         reloadCalibration()
+        refreshStorageMetrics()
     }
 
     fun updateSetup(transform: (SetupUiState) -> SetupUiState) {
@@ -572,7 +576,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cachedTerrainBytes(): Long = horizonRepository.cachedTileBytes()
 
-    fun clearTerrainCache() = horizonRepository.clearTileCache()
+    fun refreshStorageMetrics() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _storageMetrics.value = horizonRepository.getStorageMetrics()
+        }
+    }
+
+    /** Clears all cached DEM tiles and refreshes storage metrics. */
+    fun clearDemCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            horizonRepository.clearDemCache()
+            _storageMetrics.value = horizonRepository.getStorageMetrics()
+        }
+    }
+
+    fun clearTerrainCache() = clearDemCache()
+
+    /** Clears stored horizon profiles and refreshes storage metrics. */
+    fun clearProfiles() {
+        viewModelScope.launch(Dispatchers.IO) {
+            horizonRepository.clearProfiles()
+            _storageMetrics.value = horizonRepository.getStorageMetrics()
+        }
+    }
 
     fun updateAdvanced(transform: (AdvancedSettings) -> AdvancedSettings) {
         val previous = advancedState.value

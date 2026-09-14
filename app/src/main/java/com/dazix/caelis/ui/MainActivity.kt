@@ -256,6 +256,7 @@ private fun CaelisScreen(
     val horizonState by viewModel.horizonState.collectAsStateWithLifecycle()
     val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
     val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
+    val storageMetrics by viewModel.storageMetrics.collectAsStateWithLifecycle()
 
     // LocalResources, not LocalContext: a Configuration change does not invalidate LocalContext
     // reads, so a string fetched through the context can be stale after a locale switch.
@@ -370,6 +371,7 @@ private fun CaelisScreen(
             startTime = customStartTime,
             endTime = customEndTime,
             debugPreferences = debugPreferences,
+            storageMetrics = storageMetrics,
             horizonSettings = horizonSettings,
             horizonState = horizonState,
             canDownloadTerrain = viewModel.canDownloadTerrain,
@@ -387,6 +389,7 @@ private fun CaelisScreen(
             onDownloadTerrain = viewModel::downloadTerrainForCurrentLocation,
             onImportTerrain = { terrainImportLauncher.launch(arrayOf("*/*")) },
             onClearTerrainCache = viewModel::clearTerrainCache,
+            onClearDemCache = viewModel::clearDemCache,
             onStartLocationUpdates = viewModel::startHorizonLocationUpdates,
             onStopLocationUpdates = viewModel::stopHorizonLocationUpdates,
             onRefreshLocation = viewModel::refreshHorizonLocation,

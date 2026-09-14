@@ -115,6 +115,9 @@ class DemTileCache(
 
     fun totalBytes(): Long = directory.listFiles()?.sumOf { it.length() } ?: 0L
 
+    /** Total size in bytes of all cached DEM tiles and temporary files in `cacheDir/dem/`. */
+    fun getDemCacheSizeBytes(): Long = totalBytes()
+
     fun cachedKeys(): List<DemTileKey> =
         directory.listFiles()?.mapNotNull { DemTileKey.parse(it.name) } ?: emptyList()
 
@@ -141,21 +144,23 @@ class DemTileCache(
             }
     }
 
+    /** Safely deletes all cached `.hgt` tiles and `.part` temporary download files. */
     fun clear() {
-        directory.listFiles()?.forEach { it.delete() }
+        directory.listFiles()?.forEach { file ->
+            if (file.isFile) file.delete()
+        }
     }
 
     companion object {
         private const val TAG = "DemTileCache"
 
         /**
-         * Ten 1 arcsecond tiles.
+         * Twenty 1 arcsecond tiles.
          *
-         * A 60 km radius spans up to six tiles at mid latitudes, so the previous 120 MB cap was
-         * smaller than a single working set — it could not hold the answer it was caching for.
-         * This leaves room for the current location plus the last one or two.
+         * A 60 km radius spans up to six tiles at mid latitudes, and auto-range can extend further.
+         * 512 MB leaves plenty of room for multiple locations and high-density terrain grids.
          */
-        const val DEFAULT_MAX_BYTES: Long = 260L * 1024 * 1024
+        const val DEFAULT_MAX_BYTES: Long = 512L * 1024 * 1024
 
         /** Anything smaller than a 3 arcsecond tile is a truncated transfer, not data. */
         private const val MIN_PLAUSIBLE_TILE_BYTES = 1201L * 1201L * 2L / 4

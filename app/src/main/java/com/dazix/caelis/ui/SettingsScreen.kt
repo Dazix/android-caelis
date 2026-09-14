@@ -62,11 +62,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +78,7 @@ import com.dazix.caelis.data.DebugPreferences
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.horizon.DemTileDownloader
 import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.data.horizon.StorageMetrics
 import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import java.time.LocalTime
@@ -92,6 +95,7 @@ fun SettingsScreen(
     startTime: LocalTime,
     endTime: LocalTime,
     debugPreferences: DebugPreferences = DebugPreferences(),
+    storageMetrics: StorageMetrics = StorageMetrics(),
     horizonSettings: HorizonSettings = HorizonSettings(),
     horizonState: HorizonState = HorizonState.Idle,
     canDownloadTerrain: Boolean = true,
@@ -110,6 +114,7 @@ fun SettingsScreen(
     onDownloadTerrain: () -> Unit = {},
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
+    onClearDemCache: () -> Unit = onClearTerrainCache,
     onStartLocationUpdates: () -> Unit = {},
     onStopLocationUpdates: () -> Unit = {},
     onRefreshLocation: () -> Unit = {},
@@ -125,6 +130,7 @@ fun SettingsScreen(
     var showEndTimeDialog by remember { mutableStateOf(false) }
     var showAttribution by remember { mutableStateOf(false) }
     var showConsentDialog by remember { mutableStateOf(false) }
+    var showClearCacheConfirmation by remember { mutableStateOf(false) }
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
@@ -270,7 +276,7 @@ fun SettingsScreen(
             }
         }
 
-        // ---- Terrain horizon ----
+        // ---- Section 3: Terrain horizon ----
         //
         // Shared by both AR screens on purpose: the search radius, the eye height and the downloaded
         // tiles describe where you are standing, not which screen you happen to be looking at. The
@@ -401,22 +407,89 @@ fun SettingsScreen(
                 }
             }
 
-            if (cachedTerrainBytes > 0) {
-                TextButton(onClick = onClearTerrainCache) {
-                    Text(
-                        stringResource(R.string.horizon_clear_cache) + " · " +
-                            stringResource(R.string.horizon_cache_size, formatBytes(cachedTerrainBytes)),
-                    )
-                }
-            }
-
             // Attribution is a licence condition of the elevation data, not a nicety.
             TextButton(onClick = { showAttribution = true }) {
                 Text(stringResource(R.string.horizon_attribution_title))
             }
         }
 
-        // ---- Section 4: Debug Options (Ladění) ----
+        // ---- Section 4: Data Management (Správa dat) ----
+        SectionCard(
+            title = stringResource(R.string.settings_section_storage),
+        ) {
+            // Row 1: Terénní data (Mezipaměť) - Value right-aligned on new line
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_storage_terrain_cache_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.settings_storage_terrain_cache_value,
+                        storageMetrics.demCacheFormatted,
+                        storageMetrics.demCacheLimitFormatted,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Row 2: Vypočtené horizonty - Value right-aligned on new line
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_storage_profiles_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                val profilesText = pluralStringResource(
+                    R.plurals.settings_storage_profiles_count,
+                    storageMetrics.profileCount,
+                    storageMetrics.profilesFormatted,
+                    storageMetrics.profileCount,
+                )
+                Text(
+                    text = profilesText,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Action: Vymazat mezipaměť terénu
+            OutlinedButton(
+                onClick = { showClearCacheConfirmation = true },
+                enabled = storageMetrics.demCacheSizeBytes > 0,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 4.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_storage_clear_cache_button))
+            }
+        }
+
+        // ---- Section 5: Debug Options (Ladění) ----
         SectionHeader(
             text = stringResource(R.string.settings_section_debug),
             modifier = Modifier.padding(top = 8.dp),
@@ -604,6 +677,32 @@ fun SettingsScreen(
                 onHorizonNetworkConsent(false, null)
                 pendingActionAfterConsent?.invoke()
                 pendingActionAfterConsent = null
+            },
+        )
+    }
+
+    if (showClearCacheConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirmation = false },
+            title = { Text(stringResource(R.string.settings_storage_clear_dialog_title)) },
+            text = { Text(stringResource(R.string.settings_storage_clear_dialog_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCacheConfirmation = false
+                        onClearDemCache()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_storage_clear_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheConfirmation = false }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
             },
         )
     }

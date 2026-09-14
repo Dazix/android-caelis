@@ -330,17 +330,51 @@ class HorizonRepository private constructor(
 
     fun cachedTileBytes(): Long = cache.totalBytes()
 
+    fun getDemCacheSizeBytes(): Long = cache.totalBytes()
+
+    fun getProfilesSizeBytes(): Long =
+        profileDirectory.listFiles()?.filter { it.extension == "bin" }?.sumOf { it.length() } ?: 0L
+
     fun storedProfileCount(): Int = profileDirectory.listFiles()?.count { it.extension == "bin" } ?: 0
 
+    fun getStoredProfileCount(): Int = storedProfileCount()
+
+    /** Returns a current snapshot of disk metrics for DEM tile caches and computed horizon profiles. */
+    fun getStorageMetrics(): StorageMetrics = StorageMetrics(
+        demCacheSizeBytes = getDemCacheSizeBytes(),
+        demCacheLimitBytes = DemTileCache.DEFAULT_MAX_BYTES,
+        profilesSizeBytes = getProfilesSizeBytes(),
+        profileCount = storedProfileCount(),
+    )
+
+    /**
+     * Safely drops every downloaded DEM tile. Cancels any in-flight download or calculation first
+     * to avoid race conditions or torn file reads. Computed profiles are untouched.
+     */
+    fun clearDemCache() {
+        inFlight?.cancel()
+        inFlight = null
+        cache.clear()
+        _activeTileCount.value = 0
+        _effectiveRangeKm.value = null
+        lastRequest = null
+    }
+
     /** Drops every downloaded tile. Computed profiles are untouched: they cost nothing and are the point. */
-    fun clearTileCache() = cache.clear()
+    fun clearTileCache() = clearDemCache()
+
+    /** Drops all stored .bin horizon profiles from filesDir/horizons/ and invalidates in-memory profile. */
+    fun clearProfiles() {
+        profileDirectory.listFiles()?.filter { it.extension == "bin" }?.forEach { it.delete() }
+        _profile.value = null
+        invalidate()
+    }
 
     /** Drops every computed profile as well, returning the feature to a fresh state. */
     fun clearEverything() {
-        cache.clear()
-        profileDirectory.listFiles()?.forEach { it.delete() }
+        clearDemCache()
+        clearProfiles()
         notifications.cancel()
-        invalidate()
     }
 
     private fun profileFile(location: GeoLocation, settings: HorizonSettings) = File(

@@ -474,6 +474,23 @@
     <string name="settings_debug_terrain_metrics_desc">Zobrazí v reálném čase vzdálenost Auto-Range a počet aktivních DEM dlaždic v AR</string>
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM dlaždice: %1$d</string>
+
+    <!-- Storage / Data Management -->
+    <string name="settings_section_storage">Správa dat</string>
+    <string name="settings_storage_terrain_cache_title">Terénní data (Mezipaměť)</string>
+    <string name="settings_storage_terrain_cache_value">%1$s / %2$s limit</string>
+    <string name="settings_storage_profiles_title">Vypočtené horizonty</string>
+    <plurals name="settings_storage_profiles_count">
+        <item quantity="one">%1$s (%2$d profil)</item>
+        <item quantity="few">%1$s (%2$d profily)</item>
+        <item quantity="many">%1$s (%2$d profilu)</item>
+        <item quantity="other">%1$s (%2$d profilů)</item>
+    </plurals>
+    <string name="settings_storage_clear_cache_button">Vymazat mezipaměť terénu</string>
+    <string name="settings_storage_clear_dialog_title">Vymazat mezipaměť terénu?</string>
+    <string name="settings_storage_clear_dialog_message">Opravdu chcete smazat stažená data? Pro zobrazení horizontu v nových lokalitách bude nutné je znovu stáhnout.</string>
+    <string name="settings_storage_clear_confirm">Smazat</string>
+
     <string name="settings_section_version">Verze</string>
     <string name="settings_version_name_label">Version Name</string>
     <string name="settings_version_code_label">Version Code</string>

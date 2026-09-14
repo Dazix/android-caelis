@@ -343,11 +343,17 @@ class DocumentationScreenshotsTest {
                         startTime = LocalTime.of(21, 30),
                         endTime = LocalTime.of(5, 30),
                         debugPreferences = com.dazix.caelis.data.DebugPreferences(),
+                        storageMetrics = com.dazix.caelis.data.horizon.StorageMetrics(
+                            demCacheSizeBytes = 145L * 1024L * 1024L,
+                            profilesSizeBytes = 116L * 1024L,
+                            profileCount = 20,
+                        ),
                         onThemeChange = {},
                         onActivationModeChange = {},
                         onStartTimeChange = {},
                         onEndTimeChange = {},
                         onDebugPreferencesChange = {},
+                        onClearDemCache = {},
                         onBack = {},
                     )
                 }

@@ -182,7 +182,7 @@ Aplikace Caelis funguje v režimu maximálního soukromí a bezpečnosti, což j
 
 - **Umístění cache:** Soubory dlaždic jsou ukládány do `cacheDir/dem/`. Jedná se o dočasná data, která může systém Android při nedostatku místa kdykoliv smazat.
 - **Atomický zápis:** Soubor se stahuje do dočasného souboru `{tile}.part`. Po dokončení stahování se ověří jeho celistvost metodou `HgtTile.isPlausibleGridLength(length)`. Teprve po úspěšném ověření dojde k atomickému přejmenování na cílový soubor.
-- **Ochrana aktivní pracovní sady (Working Set Protection):** Limit cache je nastaven na 260 MB (cca 10 dlaždic). Metoda `trim(protect: Set<DemTileKey>)` při promazávání nejstarších dlaždic **nikdy nesmaže dlaždice, které jsou právě potřeba pro aktuální výpočet**.
+- **Ochrana aktivní pracovní sady (Working Set Protection):** Limit cache je nastaven na 512 MB (cca 20 dlaždic). Metoda `trim(protect: Set<DemTileKey>)` při promazávání nejstarších dlaždic **nikdy nesmaže dlaždice, které jsou právě potřeba pro aktuální výpočet**.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐

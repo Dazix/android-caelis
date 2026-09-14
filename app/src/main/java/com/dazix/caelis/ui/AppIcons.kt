@@ -798,6 +798,34 @@ object AppIcons {
         }
     }
 
+    /** Trash / Delete: bin with lid and vertical ribs. */
+    val Delete: ImageVector by lazy {
+        icon("Delete") {
+            strokePath {
+                // Lid line
+                moveTo(3.5f, 6f)
+                lineTo(20.5f, 6f)
+                // Lid handle
+                moveTo(9f, 6f)
+                lineTo(9f, 3.5f)
+                lineTo(15f, 3.5f)
+                lineTo(15f, 6f)
+                // Bin body
+                moveTo(5.5f, 6f)
+                lineTo(6.5f, 19.5f)
+                arcTo(1.5f, 1.5f, 0f, false, false, 8f, 21f)
+                lineTo(16f, 21f)
+                arcTo(1.5f, 1.5f, 0f, false, false, 17.5f, 19.5f)
+                lineTo(18.5f, 6f)
+                // Vertical ribs
+                moveTo(10f, 10f)
+                lineTo(10f, 17f)
+                moveTo(14f, 10f)
+                lineTo(14f, 17f)
+            }
+        }
+    }
+
     private fun icon(name: String, paths: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

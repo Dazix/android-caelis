@@ -467,6 +467,21 @@
     <string name="settings_debug_terrain_metrics_desc">Display real-time Auto-Range distance and active DEM tiles count in AR</string>
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM Tiles: %1$d</string>
+
+    <!-- Storage / Data Management -->
+    <string name="settings_section_storage">Data management</string>
+    <string name="settings_storage_terrain_cache_title">Terrain data (Cache)</string>
+    <string name="settings_storage_terrain_cache_value">%1$s / %2$s limit</string>
+    <string name="settings_storage_profiles_title">Calculated horizons</string>
+    <plurals name="settings_storage_profiles_count">
+        <item quantity="one">%1$s (%2$d profile)</item>
+        <item quantity="other">%1$s (%2$d profiles)</item>
+    </plurals>
+    <string name="settings_storage_clear_cache_button">Clear terrain cache</string>
+    <string name="settings_storage_clear_dialog_title">Clear terrain cache?</string>
+    <string name="settings_storage_clear_dialog_message">Are you sure you want to delete cached terrain data? New locations will need to download tiles again to compute horizons.</string>
+    <string name="settings_storage_clear_confirm">Delete</string>
+
     <string name="settings_section_version">Version</string>
     <string name="settings_version_name_label">Version Name</string>
     <string name="settings_version_code_label">Version Code</string>
