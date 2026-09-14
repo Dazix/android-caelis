@@ -188,10 +188,12 @@ fun SettingsScreen(
         // Shared by both AR screens on purpose: the search radius, the eye height and the downloaded
         // tiles describe where you are standing, not which screen you happen to be looking at. The
         // AR screens keep only their own show/hide switch.
-        SectionCard(
-            title = stringResource(R.string.horizon_section_title),
-            subtitle = stringResource(R.string.horizon_enabled_desc),
-        ) {
+        SectionHeader(
+            text = stringResource(R.string.horizon_section_title),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SectionCard {
             SwitchRow(
                 title = stringResource(R.string.horizon_enabled),
                 description = stringResource(R.string.horizon_enabled_desc),

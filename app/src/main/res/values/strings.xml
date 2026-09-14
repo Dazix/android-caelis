@@ -273,7 +273,7 @@
     <string name="horizon_consent_title">Download terrain elevation?</string>
     <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. All that leaves the device is the name of that one-degree tile — no coordinates, no identifiers, nothing about you.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
     <string name="horizon_consent_allow">Allow</string>
-    <string name="horizon_consent_never">Never</string>
+    <string name="horizon_consent_never">Not now</string>
 
     <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d…</string>
     <string name="horizon_status_computing">Computing the skyline…</string>

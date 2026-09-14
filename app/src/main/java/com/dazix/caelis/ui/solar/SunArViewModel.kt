@@ -558,13 +558,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * A "no" is stored just as durably as a yes: the prompt must not come back on the next launch.
      * It leaves the layer itself alone, because the hand-import path still works without a network.
      */
-    fun answerNetworkConsent(granted: Boolean) {
+    fun answerNetworkConsent(granted: Boolean, wifiOnly: Boolean? = null) {
         viewModelScope.launch {
             val current = settingsStore.currentHorizon()
             settingsStore.saveHorizon(
                 current.copy(
                     networkConsent = granted,
                     enabled = current.enabled || granted,
+                    wifiOnly = if (granted && wifiOnly != null) wifiOnly else current.wifiOnly,
                 ),
             )
         }

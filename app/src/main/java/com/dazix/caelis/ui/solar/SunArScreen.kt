@@ -378,8 +378,9 @@ fun SunArScreen(
         // Terrain horizon: the one-off network question, then its own settings sheet.
         if (uiState.shouldAskNetworkConsent) {
             HorizonConsentDialog(
-                onAllow = { viewModel.answerNetworkConsent(true) },
-                onNever = { viewModel.answerNetworkConsent(false) },
+                initialWifiOnly = uiState.horizonSettings.wifiOnly,
+                onAllow = { wifiOnly -> viewModel.answerNetworkConsent(granted = true, wifiOnly = wifiOnly) },
+                onNever = { viewModel.answerNetworkConsent(granted = false) },
             )
         }
 
