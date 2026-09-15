@@ -24,13 +24,13 @@ fi
 info "current user is ${USER_ID}"
 
 info "building the debug APK"
-(cd "$PROJECT_DIR" && ./gradlew :app:assembleDebug)
+(cd "$PROJECT_DIR" && ANDROID_VERSION_CODE="${ANDROID_VERSION_CODE:-999}" ./gradlew :app:assembleDebug)
 
 APK="${PROJECT_DIR}/app/build/outputs/apk/debug/app-debug.apk"
 [ -f "$APK" ] || die "no debug APK at ${APK} after assembleDebug"
 
 info "installing ${APK} for user ${USER_ID} only"
-"$ADB" install -r --user "$USER_ID" "$APK"
+"$ADB" install -r -d --user "$USER_ID" "$APK"
 
 if ! "$ADB" shell pm list packages --user "$USER_ID" "$PKG" | grep -q "package:${PKG}"; then
     die "${PKG} is not installed for user ${USER_ID} after 'adb install -r --user ${USER_ID}'."

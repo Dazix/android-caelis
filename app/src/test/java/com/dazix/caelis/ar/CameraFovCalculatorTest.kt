@@ -1,6 +1,8 @@
 package com.dazix.caelis.ar
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CameraFovCalculatorTest {
@@ -192,6 +194,10 @@ class CameraFovCalculatorTest {
 
         // focalLengthPx = 540 / tan(35.38° / 2) = 540 / tan(17.69°) = 540 / 0.3190 = 1692.8 px
         assertEquals(1692.8f, focalLengthPx, 5.0f)
+
+        val fovResult = FovResult(effectiveFov, isDynamicStreamCalculated = true)
+        val focalLengthPxFromResult = CameraFovCalculator.computeEffectiveFocalLengthPx(fovResult, viewportW)
+        assertEquals(1692.8f, focalLengthPxFromResult, 5.0f)
     }
 
     /**
@@ -230,10 +236,12 @@ class CameraFovCalculatorTest {
             isPortrait = true,
         )
 
-        assertEquals(37.27f, withoutCrop, 0.3f)
-        assertEquals(32.1f, withCrop, 0.3f)
+        assertTrue(withoutCrop.isDynamicStreamCalculated)
+        assertTrue(withCrop.isDynamicStreamCalculated)
+        assertEquals(37.27f, withoutCrop.horizontalDegrees, 0.3f)
+        assertEquals(32.1f, withCrop.horizontalDegrees, 0.3f)
         // The crop scales the tangent of the half angle, not the angle.
-        val ratio = tanHalf(withCrop) / tanHalf(withoutCrop)
+        val ratio = tanHalf(withCrop.horizontalDegrees) / tanHalf(withoutCrop.horizontalDegrees)
         assertEquals(0.856f, ratio, 0.005f)
     }
 
@@ -257,7 +265,7 @@ class CameraFovCalculatorTest {
             viewportWidth = 1080f,
             viewportHeight = 2340f,
             isPortrait = true,
-        )
+        ).horizontalDegrees
 
         assertEquals(fovFor(4032, 3024), fovFor(1920, 1080), 0.15f)
     }
@@ -280,7 +288,8 @@ class CameraFovCalculatorTest {
             isPortrait = true,
         )
 
-        assertEquals(57.44f, fov, 0.4f)
+        assertTrue(fov.isDynamicStreamCalculated)
+        assertEquals(57.44f, fov.horizontalDegrees, 0.4f)
     }
 
     @Test
@@ -300,8 +309,9 @@ class CameraFovCalculatorTest {
             isPortrait = false,
         )
 
+        assertTrue(fov.isDynamicStreamCalculated)
         // Landscape raw FOV is 72.3°; halving the sensor extent halves the tangent.
-        assertEquals(0.5f, tanHalf(fov) / tanHalf(72.3f), 0.01f)
+        assertEquals(0.5f, tanHalf(fov.horizontalDegrees) / tanHalf(72.3f), 0.01f)
     }
 
     /**
@@ -335,12 +345,26 @@ class CameraFovCalculatorTest {
                 isPortrait = true,
             )
 
-        assertEquals(geometry, fovWith(0, 0, 0, 0, 0, 0), 0.001f)
-        assertEquals(geometry, fovWith(4080, 3072, 0, 0, 4032, 3024), 0.001f)
-        assertEquals(geometry, fovWith(4080, 3072, 4080, 3072, 0, 0), 0.001f)
-        assertEquals(geometry, fovWith(4080, 3072, -10, -10, 4032, 3024), 0.001f)
+        val res0 = fovWith(0, 0, 0, 0, 0, 0)
+        assertFalse(res0.isDynamicStreamCalculated)
+        assertEquals(geometry, res0.horizontalDegrees, 0.001f)
+
+        val res1 = fovWith(4080, 3072, 0, 0, 4032, 3024)
+        assertFalse(res1.isDynamicStreamCalculated)
+        assertEquals(geometry, res1.horizontalDegrees, 0.001f)
+
+        val res2 = fovWith(4080, 3072, 4080, 3072, 0, 0)
+        assertFalse(res2.isDynamicStreamCalculated)
+        assertEquals(geometry, res2.horizontalDegrees, 0.001f)
+
+        val res3 = fovWith(4080, 3072, -10, -10, 4032, 3024)
+        assertFalse(res3.isDynamicStreamCalculated)
+        assertEquals(geometry, res3.horizontalDegrees, 0.001f)
+
         // A crop region bigger than the array it lives in is not a wider lens.
-        assertEquals(geometry, fovWith(4080, 3072, 8000, 6000, 4032, 3024), 0.001f)
+        val res4 = fovWith(4080, 3072, 8000, 6000, 4032, 3024)
+        assertFalse(res4.isDynamicStreamCalculated)
+        assertEquals(geometry, res4.horizontalDegrees, 0.001f)
     }
 
     @Test
@@ -361,7 +385,8 @@ class CameraFovCalculatorTest {
             fallbackFovDegrees = 56f,
         )
 
-        assertEquals(35.38f, fov, 0.5f)
+        assertFalse(fov.isDynamicStreamCalculated)
+        assertEquals(35.38f, fov.horizontalDegrees, 0.5f)
     }
 
     private fun tanHalf(fovDegrees: Float): Float =

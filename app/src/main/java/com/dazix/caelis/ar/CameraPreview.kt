@@ -31,10 +31,7 @@ import androidx.lifecycle.LifecycleOwner
  * the FOV from the lens alone made the AR overlay 14 % too wide on a Pixel, which squeezes the
  * terrain silhouette towards the centre of the frame — an error no amount of panning can correct.
  *
- * @param onFovCalculated receives the horizontal FOV and whether it was *measured*. A measured value
- *   already contains the sensor crop the current zoom produced, so a caller must use it as it is;
- *   an unmeasured one is the unzoomed geometry and still has to be divided by the zoom ratio.
- *   Getting that backwards counts the zoom twice.
+ * @param onFovCalculated receives the [FovResult] containing the calculated FOV and calculation status.
  * @param onCameraBound receives the bound camera's [CameraControl] and supported zoom range so a
  *   pinch can reach the camera. A zoom that never arrives at the camera shrinks the overlay while
  *   the image stays put.
@@ -48,7 +45,7 @@ fun CameraPreview(
     modifier: Modifier = Modifier,
     lifecycleOwner: LifecycleOwner,
     isPortrait: Boolean,
-    onFovCalculated: (fovDegrees: Float, includesZoom: Boolean) -> Unit,
+    onFovCalculated: (fovResult: FovResult) -> Unit,
     onCameraBound: (control: CameraControl?, minZoomRatio: Float, maxZoomRatio: Float) -> Unit = { _, _, _ -> },
     analyzeFrames: Boolean = false,
     onFrameGrabber: (FrameGrabber?) -> Unit = {},
@@ -171,8 +168,6 @@ fun CameraPreview(
                 fun calculateAndDispatchFov(w: Float, h: Float) {
                     if (w > 10f && h > 10f) {
                         val resolution = preview.resolutionInfo?.resolution
-                        val measured = activeArraySize != null && resolution != null &&
-                            cropWidthPx > 0 && cropHeightPx > 0
                         val dynamicFov = CameraFovCalculator.computeStreamHorizontalFov(
                             sensorWidthMm = effectiveSensorW,
                             sensorHeightMm = effectiveSensorH,
@@ -187,7 +182,7 @@ fun CameraPreview(
                             viewportHeight = h,
                             isPortrait = isPortrait,
                         )
-                        onFovCalculated(dynamicFov, measured)
+                        onFovCalculated(dynamicFov)
                     }
                 }
 

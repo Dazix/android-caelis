@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.CameraFovCalculator
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SolarLocationProvider
 import com.dazix.caelis.data.HorizonSettings
@@ -66,6 +67,7 @@ data class NightSkyArUiState(
     val isRedVisionOverridden: Boolean = false,
     val isCalibrated: Boolean = false,
     val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    val isDynamicStreamCalculated: Boolean = false,
     val zoomRatio: Float = 1.0f,
     val lstDegrees: Double = 0.0,
     val lstFormatted: String = "00h 00m 00s",
@@ -169,6 +171,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
+    private val isDynamicStreamCalculatedState = MutableStateFlow(false)
+    val isDynamicStreamCalculated: StateFlow<Boolean> = isDynamicStreamCalculatedState.asStateFlow()
     private val zoomRatioState = MutableStateFlow(1.0f)
     val zoomRatio: StateFlow<Float> = zoomRatioState.asStateFlow()
 
@@ -469,6 +473,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             manualRedVisionOverride,
             isCalibrated,
             cameraFovHorizontal,
+            isDynamicStreamCalculatedState,
             zoomRatioState,
             lstDegreesState,
             lstFormattedState,
@@ -513,43 +518,44 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val redOverride = args[5] as Boolean?
         val calib = args[6] as Boolean
         val fov = args[7] as Float
-        val zoom = args[8] as Float
-        val lstDeg = args[9] as Double
-        val lstFmt = args[10] as String
-        val visibleStars = args[11] as Int
-        val cat = args[12] as NightSkyCatalog?
-        val opaque = args[13] as Boolean
-        val milkyWay = args[14] as Boolean
-        val atmosphere = args[15] as Boolean
-        val landscape = args[16] as Boolean
-        val grid = args[17] as Boolean
-        val planetsVisible = args[18] as Boolean
-        val constellations = args[19] as Boolean
-        val constellationArt = args[20] as Boolean
-        val selected = args[21] as CelestialBodyDetails?
-        val sensorTracking = args[22] as Boolean
-        val query = args[23] as String
+        val isDynamicFov = args[8] as Boolean
+        val zoom = args[9] as Float
+        val lstDeg = args[10] as Double
+        val lstFmt = args[11] as String
+        val visibleStars = args[12] as Int
+        val cat = args[13] as NightSkyCatalog?
+        val opaque = args[14] as Boolean
+        val milkyWay = args[15] as Boolean
+        val atmosphere = args[16] as Boolean
+        val landscape = args[17] as Boolean
+        val grid = args[18] as Boolean
+        val planetsVisible = args[19] as Boolean
+        val constellations = args[20] as Boolean
+        val constellationArt = args[21] as Boolean
+        val selected = args[22] as CelestialBodyDetails?
+        val sensorTracking = args[23] as Boolean
+        val query = args[24] as String
         @Suppress("UNCHECKED_CAST")
-        val results = args[24] as List<SearchResultItem>
+        val results = args[25] as List<SearchResultItem>
         @Suppress("UNCHECKED_CAST")
-        val history = args[25] as List<SearchResultItem>
-        val searchActive = args[26] as Boolean
-        val starIdx = args[27] as Int
-        val constIdx = args[28] as Int
-        val dbgOffsetX = args[29] as Float
-        val dbgOffsetY = args[30] as Float
-        val dbgScale = args[31] as Float
-        val dbgRot = args[32] as Float
-        val dbgVis = args[33] as Boolean
-        val dbgFocus = args[34] as Boolean
-        val dbgRadius = args[35] as Float
-        val dbgThresh = args[36] as Float
-        val dbgOptions = args[37] as Boolean
+        val history = args[26] as List<SearchResultItem>
+        val searchActive = args[27] as Boolean
+        val starIdx = args[28] as Int
+        val constIdx = args[29] as Int
+        val dbgOffsetX = args[30] as Float
+        val dbgOffsetY = args[31] as Float
+        val dbgScale = args[32] as Float
+        val dbgRot = args[33] as Float
+        val dbgVis = args[34] as Boolean
+        val dbgFocus = args[35] as Boolean
+        val dbgRadius = args[36] as Float
+        val dbgThresh = args[37] as Float
+        val dbgOptions = args[38] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val planetsList = args[38] as List<PlanetState>
-        val planetId = args[39] as String?
-        val horizState = args[40] as com.dazix.caelis.data.horizon.HorizonState
-        val debugPrefs = args[41] as com.dazix.caelis.data.DebugPreferences
+        val planetsList = args[39] as List<PlanetState>
+        val planetId = args[40] as String?
+        val horizState = args[41] as com.dazix.caelis.data.horizon.HorizonState
+        val debugPrefs = args[42] as com.dazix.caelis.data.DebugPreferences
 
         NightSkyArUiState(
             location = loc,
@@ -561,6 +567,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isRedVisionOverridden = redOverride != null,
             isCalibrated = calib,
             cameraFovHorizontal = fov,
+            isDynamicStreamCalculated = isDynamicFov,
             zoomRatio = zoom,
             lstDegrees = lstDeg,
             lstFormatted = lstFmt,
@@ -726,11 +733,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
-        fovIncludesZoomState.value = includesZoom
-        if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
-            baseCameraFovState.value = fovDeg
+    fun setCameraFov(fovResult: FovResult) {
+        fovIncludesZoomState.value = fovResult.isDynamicStreamCalculated
+        isDynamicStreamCalculatedState.value = fovResult.isDynamicStreamCalculated
+        if (kotlin.math.abs(baseCameraFovState.value - fovResult.horizontalDegrees) > 0.1f) {
+            baseCameraFovState.value = fovResult.horizontalDegrees
         }
+    }
+
+    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
+        setCameraFov(FovResult(horizontalDegrees = fovDeg, isDynamicStreamCalculated = includesZoom))
     }
 
     fun updateVisibleStarCount(count: Int) {

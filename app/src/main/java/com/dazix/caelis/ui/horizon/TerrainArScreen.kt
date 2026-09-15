@@ -63,7 +63,7 @@ fun TerrainArScreen(
                 modifier = Modifier.fillMaxSize(),
                 lifecycleOwner = lifecycleOwner,
                 isPortrait = true,
-                onFovCalculated = { fov, includesZoom -> /* FOV callback */ },
+                onFovCalculated = { _ -> /* FOV callback */ },
                 onCameraBound = { control, minZoom, maxZoom -> /* Camera control binding */ },
             )
         }

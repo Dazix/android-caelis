@@ -4,6 +4,15 @@ import kotlin.math.atan
 import kotlin.math.tan
 
 /**
+ * Result of field of view calculation containing the horizontal angle in degrees
+ * and whether the calculation was dynamically derived from live Camera2 stream and crop metadata.
+ */
+data class FovResult(
+    val horizontalDegrees: Float,
+    val isDynamicStreamCalculated: Boolean,
+)
+
+/**
  * Calculates the exact optical Field of View (FOV) of a camera lens from physical sensor dimensions,
  * focal length, and viewport crop factor (accounting for CameraX PreviewView FILL_CENTER).
  */
@@ -118,8 +127,7 @@ object CameraFovCalculator {
      * @param cropRegionHeightPx height of the same rectangle.
      * @param streamWidthPx width of the buffer the `Preview` use case receives.
      * @param streamHeightPx height of that buffer.
-     * @return the horizontal FOV visible in the viewport, or the geometry-only answer from
-     *   [computeEffectiveHorizontalFov] when any of the measured values is missing or degenerate.
+     * @return [FovResult] with the horizontal FOV visible in the viewport and calculation status flag.
      */
     fun computeStreamHorizontalFov(
         sensorWidthMm: Float?,
@@ -135,7 +143,7 @@ object CameraFovCalculator {
         viewportHeight: Float,
         isPortrait: Boolean,
         fallbackFovDegrees: Float = DEFAULT_PORTRAIT_FOV_DEGREES,
-    ): Float {
+    ): FovResult {
         val geometryOnly = computeEffectiveHorizontalFov(
             sensorWidthMm,
             sensorHeightMm,
@@ -150,7 +158,7 @@ object CameraFovCalculator {
             cropRegionWidthPx > 0 && cropRegionHeightPx > 0 &&
             streamWidthPx > 0 && streamHeightPx > 0 &&
             viewportWidth > 1f && viewportHeight > 1f
-        if (!measurable) return geometryOnly
+        if (!measurable) return FovResult(geometryOnly, isDynamicStreamCalculated = false)
 
         val activeShort = minOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
         val activeLong = maxOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
@@ -163,7 +171,7 @@ object CameraFovCalculator {
         if (cropFractionShort <= 0.0 || cropFractionShort > 1.01 ||
             cropFractionLong <= 0.0 || cropFractionLong > 1.01
         ) {
-            return geometryOnly
+            return FovResult(geometryOnly, isDynamicStreamCalculated = false)
         }
 
         // Everything below works in tangents, because a crop scales the extent on the sensor plane —
@@ -192,7 +200,7 @@ object CameraFovCalculator {
 
         val tanHorizontal = if (isPortrait) tanShort else tanLong
         val tanVertical = if (isPortrait) tanLong else tanShort
-        if (tanVertical <= 0.0) return geometryOnly
+        if (tanVertical <= 0.0) return FovResult(geometryOnly, isDynamicStreamCalculated = false)
 
         // PreviewView FILL_CENTER scales the stream until it covers the viewport, so the axis that
         // stays whole is the one the viewport is relatively longer in.
@@ -204,7 +212,8 @@ object CameraFovCalculator {
             tanHorizontal
         }
 
-        return (2.0 * atan(tanVisible) * RAD_TO_DEG).toFloat().coerceIn(1.0f, 150.0f)
+        val fov = (2.0 * atan(tanVisible) * RAD_TO_DEG).toFloat().coerceIn(1.0f, 150.0f)
+        return FovResult(horizontalDegrees = fov, isDynamicStreamCalculated = true)
     }
 
     /**
@@ -221,6 +230,14 @@ object CameraFovCalculator {
         val halfAngleRad = effectiveFovHorizontalDegrees * 0.5 * DEG_TO_RAD
         return ((viewportWidth * 0.5f) / tan(halfAngleRad)).toFloat()
     }
+
+    /**
+     * Computes the effective focal length in pixels from a [FovResult].
+     */
+    fun computeEffectiveFocalLengthPx(
+        fov: FovResult,
+        viewportWidth: Float,
+    ): Float = computeEffectiveFocalLengthPx(fov.horizontalDegrees, viewportWidth)
 
     /**
      * Calculates the zoomed horizontal Field of View visible in the viewport given an optical/digital zoom factor.

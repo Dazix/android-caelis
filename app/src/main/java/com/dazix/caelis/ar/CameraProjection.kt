@@ -32,6 +32,28 @@ object CameraProjection {
 
     /**
      * Projects a celestial direction (azimuth, elevation) on the unit Sky Dome
+     * into 2D screen pixel coordinates using [FovResult].
+     */
+    fun project(
+        azimuthDegrees: Double,
+        elevationDegrees: Double,
+        rotationMatrix: FloatArray,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        displayRotation: Int = Surface.ROTATION_0,
+        fov: FovResult,
+    ): ProjectedPoint = project(
+        azimuthDegrees = azimuthDegrees,
+        elevationDegrees = elevationDegrees,
+        rotationMatrix = rotationMatrix,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+        displayRotation = displayRotation,
+        fovHorizontalDegrees = fov.horizontalDegrees,
+    )
+
+    /**
+     * Projects a celestial direction (azimuth, elevation) on the unit Sky Dome
      * into 2D screen pixel coordinates $(x, y)$ given the device orientation matrix,
      * display rotation, and camera horizontal field of view.
      *
@@ -132,6 +154,31 @@ object CameraProjection {
     }
 
     /**
+     * In-place zero-allocation perspective projection using [FovResult].
+     */
+    fun projectFast(
+        azimuthDegrees: Double,
+        elevationDegrees: Double,
+        rotationMatrix: FloatArray,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        displayRotation: Int = Surface.ROTATION_0,
+        fov: FovResult,
+        outBuffer: FloatArray,
+        offset: Int = 0,
+    ): Boolean = projectFast(
+        azimuthDegrees = azimuthDegrees,
+        elevationDegrees = elevationDegrees,
+        rotationMatrix = rotationMatrix,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+        displayRotation = displayRotation,
+        fovHorizontalDegrees = fov.horizontalDegrees,
+        outBuffer = outBuffer,
+        offset = offset,
+    )
+
+    /**
      * In-place zero-allocation perspective projection writing $(x, y, z_s)$ directly into [outBuffer]
      * to ensure sustained 60 FPS performance without GC pressure.
      *
@@ -210,6 +257,31 @@ object CameraProjection {
 
         return isInFront
     }
+
+    /**
+     * Inverse projection using [FovResult].
+     */
+    fun unprojectFast(
+        screenX: Float,
+        screenY: Float,
+        rotationMatrix: FloatArray,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        displayRotation: Int = Surface.ROTATION_0,
+        fov: FovResult,
+        outAzEl: DoubleArray,
+        offset: Int = 0,
+    ) = unprojectFast(
+        screenX = screenX,
+        screenY = screenY,
+        rotationMatrix = rotationMatrix,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+        displayRotation = displayRotation,
+        fovHorizontalDegrees = fov.horizontalDegrees,
+        outAzEl = outAzEl,
+        offset = offset,
+    )
 
     /**
      * The exact inverse of [projectFast]: which direction in the world a screen pixel looks at.

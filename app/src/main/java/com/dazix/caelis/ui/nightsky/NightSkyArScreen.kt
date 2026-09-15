@@ -473,6 +473,7 @@ fun NightSkyArScreen(
                     locationText = uiState.location.formatShort(),
                     orientation = orientation,
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
+                    isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
                     zoomRatio = uiState.zoomRatio,
                     isCalibrated = uiState.isCalibrated,
                     horizonState = uiState.horizonState,
@@ -853,6 +854,7 @@ internal fun NightSkyTopBar(
     locationText: String,
     orientation: DeviceOrientation?,
     cameraFovHorizontal: Float,
+    isDynamicStreamCalculated: Boolean = true,
     zoomRatio: Float,
     isCalibrated: Boolean,
     redVisionMode: Boolean,
@@ -991,10 +993,16 @@ internal fun NightSkyTopBar(
                 } else {
                     stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
                 }
+                val fovColor = when {
+                    isZoomed -> accentColor
+                    redVisionMode -> if (isDynamicStreamCalculated) palette.primary else Color(0xFFFF5252)
+                    isDynamicStreamCalculated -> Color(0xFF81C784)
+                    else -> MaterialTheme.colorScheme.error
+                }
                 Text(
                     text = "📐 $fovLabel",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isZoomed) accentColor else subTextColor,
+                    color = fovColor,
                     fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
                     modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
                 )

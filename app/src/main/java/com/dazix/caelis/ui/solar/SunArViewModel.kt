@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.ar.CameraFovCalculator
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.FrameGrabber
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SkylineAligner
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -122,7 +124,10 @@ data class SunArUiState(
     ),
     val keepScreenOn: Boolean = false,
     val isCalibrated: Boolean = false,
-    val cameraFovHorizontal: Float = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    val cameraFov: FovResult = FovResult(
+        horizontalDegrees = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+        isDynamicStreamCalculated = false,
+    ),
     val horizonSettings: HorizonSettings = HorizonSettings(),
     /** `null` until a profile exists for where the observer is standing. */
     val horizonProfile: HorizonProfile? = null,
@@ -135,6 +140,8 @@ data class SunArUiState(
     val effectiveRangeKm: Int? = null,
     val activeTileCount: Int = 0,
 ) {
+    val cameraFovHorizontal: Float get() = cameraFov.horizontalDegrees
+    val isDynamicStreamCalculated: Boolean get() = cameraFov.isDynamicStreamCalculated
     /** Draw the terrain layer only when it is switched on *and* there is something to draw. */
     val isHorizonVisible: Boolean get() = horizonSettings.enabled && horizonProfile != null
 }
@@ -178,8 +185,18 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * There is no zoom on this screen, so this is simply what [CameraPreview] measured — no division
      * by a zoom ratio, and no way for the image and the overlay to end up at different scales.
      */
-    private val baseCameraFovState = MutableStateFlow(CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
-    val cameraFovHorizontal: StateFlow<Float> = baseCameraFovState.asStateFlow()
+    private val baseCameraFovState = MutableStateFlow(
+        FovResult(
+            horizontalDegrees = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+            isDynamicStreamCalculated = false,
+        ),
+    )
+    val cameraFov: StateFlow<FovResult> = baseCameraFovState.asStateFlow()
+    val cameraFovHorizontal: StateFlow<Float> = baseCameraFovState.map { it.horizontalDegrees }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
+    )
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
     val location: StateFlow<GeoLocation> = locationProvider.location
@@ -274,7 +291,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         currentMoonPosState,
         keepScreenOn,
         isCalibrated,
-        cameraFovHorizontal,
+        cameraFov,
         horizonSettings,
         horizonProfile,
         horizonState,
@@ -294,7 +311,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val moonPos = args[7] as LunarCoordinates
         val keepOn = args[8] as Boolean
         val calib = args[9] as Boolean
-        val fov = args[10] as Float
+        val fov = args[10] as FovResult
         val horizonCfg = args[11] as HorizonSettings
         val horizonProf = args[12] as HorizonProfile?
         val horizonSt = args[13] as HorizonState
@@ -316,7 +333,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             currentMoonPosition = moonPos,
             keepScreenOn = keepOn,
             isCalibrated = calib,
-            cameraFovHorizontal = fov,
+            cameraFov = fov,
             horizonSettings = horizonCfg,
             horizonProfile = horizonProf,
             horizonState = horizonSt,
@@ -398,14 +415,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * @param includesZoom accepted and ignored: this screen has no zoom, so a measured FOV and a
-     *   geometry-only one are both simply the field of view in front of the camera.
-     */
-    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
-        if (kotlin.math.abs(baseCameraFovState.value - fovDeg) > 0.1f) {
-            baseCameraFovState.value = fovDeg
+    fun setCameraFov(fovResult: FovResult) {
+        if (baseCameraFovState.value != fovResult) {
+            baseCameraFovState.value = fovResult
         }
+    }
+
+    fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
+        setCameraFov(FovResult(horizontalDegrees = fovDeg, isDynamicStreamCalculated = includesZoom))
     }
 
     /**

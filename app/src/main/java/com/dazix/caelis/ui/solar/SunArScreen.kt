@@ -301,6 +301,7 @@ fun SunArScreen(
             locationText = uiState.location.formatShort(),
             orientation = orientation,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
+            isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
             isCalibrated = uiState.isCalibrated,
             horizonState = uiState.horizonState,
             onBack = onBack,
@@ -1329,6 +1330,7 @@ internal fun SunArTopBar(
     locationText: String,
     orientation: DeviceOrientation?,
     cameraFovHorizontal: Float,
+    isDynamicStreamCalculated: Boolean = true,
     isCalibrated: Boolean,
     onBack: () -> Unit,
     onToggleInfo: () -> Unit,
@@ -1438,12 +1440,15 @@ internal fun SunArTopBar(
                     style = MaterialTheme.typography.labelSmall,
                     color = subTextColor,
                 )
-                // One number, because there is no zoom on this screen: the FOV shown is the one the
-                // camera is actually delivering, measured from its crop region.
+                val fovColor = if (isDynamicStreamCalculated) {
+                    Color(0xFF81C784)
+                } else {
+                    MaterialTheme.colorScheme.error
+                }
                 Text(
                     text = "📐 " + stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal),
                     style = MaterialTheme.typography.labelSmall,
-                    color = subTextColor,
+                    color = fovColor,
                     fontWeight = FontWeight.Medium,
                 )
             }
