@@ -11,7 +11,7 @@ on:
       - 'gradle.properties'
       - 'gradlew'
       - 'gradlew.bat'
-      - '.github/workflows/deploy.yml'
+      - '.github/**'
   release:
     types: [published, prereleased]
 
