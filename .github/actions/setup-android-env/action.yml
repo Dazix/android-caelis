@@ -20,6 +20,8 @@ runs:
     # build-tools it wants. compileSdkMinor = 1 means it needs android-37.1 specifically.
     - name: Set up Android SDK
       uses: android-actions/setup-android@v4
+      with:
+        packages: 'platform-tools'
 
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v6
