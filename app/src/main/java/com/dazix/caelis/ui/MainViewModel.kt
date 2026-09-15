@@ -313,7 +313,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionTheme.AMBER)
 
     val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settings.nightVisionActivationMode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionActivationMode.AUTO_SOLAR)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, NightVisionActivationMode.OFF)
 
     val customStartTime: StateFlow<LocalTime> = settings.customStartTime
         .stateIn(viewModelScope, SharingStarted.Eagerly, LocalTime.of(22, 0))

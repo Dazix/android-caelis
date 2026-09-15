@@ -770,8 +770,8 @@ internal object SettingsMapping {
     }
 
     fun readNightVisionActivationMode(prefs: Preferences): NightVisionActivationMode {
-        val name = prefs[NIGHT_VISION_MODE_KEY] ?: return NightVisionActivationMode.AUTO_SOLAR
-        return runCatching { NightVisionActivationMode.valueOf(name) }.getOrDefault(NightVisionActivationMode.AUTO_SOLAR)
+        val name = prefs[NIGHT_VISION_MODE_KEY] ?: return NightVisionActivationMode.OFF
+        return runCatching { NightVisionActivationMode.valueOf(name) }.getOrDefault(NightVisionActivationMode.OFF)
     }
 
     fun writeNightVisionActivationMode(prefs: MutablePreferences, mode: NightVisionActivationMode) {

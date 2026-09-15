@@ -434,15 +434,15 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_subtitle">App preferences and night vision</string>
-    <string name="settings_section_display">Display</string>
+    <string name="settings_section_display">Display (Night Sky AR)</string>
     <string name="settings_section_debug">Debugging</string>
     <string name="settings_theme_title">Night Vision Theme</string>
-    <string name="settings_theme_subtitle">Monochromatic color palette for scotopic eye adaptation on AMOLED displays</string>
+    <string name="settings_theme_subtitle">Monochromatic color palette for scotopic eye adaptation in Night Sky AR on AMOLED displays</string>
     <string name="settings_theme_red">Red</string>
     <string name="settings_theme_amber">Amber</string>
     <string name="settings_theme_green">NVG Green</string>
     <string name="settings_activation_title">Activation Mode</string>
-    <string name="settings_activation_subtitle">Control when night vision automatically activates</string>
+    <string name="settings_activation_subtitle">Control when night vision automatically activates in Night Sky AR</string>
     <string name="settings_activation_off">Always Off</string>
     <string name="settings_activation_off_desc">Standard full-color interface</string>
     <string name="settings_activation_auto_solar">Auto (Solar)</string>

@@ -224,7 +224,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val nightVisionActivationMode: StateFlow<NightVisionActivationMode> = settingsStore.nightVisionActivationMode.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        NightVisionActivationMode.AUTO_SOLAR,
+        NightVisionActivationMode.OFF,
     )
 
     val customStartTime: StateFlow<LocalTime> = settingsStore.customStartTime.stateIn(
@@ -267,7 +267,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val redVisionMode: StateFlow<Boolean> = nightVisionState.map { it.isActive }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
-        true,
+        false,
     )
 
     val isSensorTrackingPaused: StateFlow<Boolean> = orientationTracker.isSensorTrackingPaused.asStateFlow()

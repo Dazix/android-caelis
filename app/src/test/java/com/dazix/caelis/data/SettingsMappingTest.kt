@@ -683,16 +683,16 @@ class SettingsMappingTest {
     }
 
     @Test
-    fun `night vision activation mode defaults to AUTO_SOLAR and survives round trip`() {
+    fun `night vision activation mode defaults to OFF and survives round trip`() {
         assertEquals(
-            com.dazix.caelis.domain.nightsky.NightVisionActivationMode.AUTO_SOLAR,
+            com.dazix.caelis.domain.nightsky.NightVisionActivationMode.OFF,
             SettingsMapping.readNightVisionActivationMode(emptyPreferences()),
         )
 
         val prefs = mutablePreferencesOf()
-        SettingsMapping.writeNightVisionActivationMode(prefs, com.dazix.caelis.domain.nightsky.NightVisionActivationMode.OFF)
+        SettingsMapping.writeNightVisionActivationMode(prefs, com.dazix.caelis.domain.nightsky.NightVisionActivationMode.AUTO_SOLAR)
         assertEquals(
-            com.dazix.caelis.domain.nightsky.NightVisionActivationMode.OFF,
+            com.dazix.caelis.domain.nightsky.NightVisionActivationMode.AUTO_SOLAR,
             SettingsMapping.readNightVisionActivationMode(prefs),
         )
 

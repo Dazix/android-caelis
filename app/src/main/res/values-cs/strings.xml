@@ -441,15 +441,15 @@
     <!-- Settings -->
     <string name="settings_title">Nastavení</string>
     <string name="settings_subtitle">Předvolby aplikace a noční vidění</string>
-    <string name="settings_section_display">Zobrazení</string>
+    <string name="settings_section_display">Zobrazení (AR noční obloha)</string>
     <string name="settings_section_debug">Ladění</string>
     <string name="settings_theme_title">Barevný motiv nočního vidění</string>
-    <string name="settings_theme_subtitle">Monochromatická paleta pro ochranu adaptace očí na tmu na AMOLED displeji</string>
+    <string name="settings_theme_subtitle">Monochromatická paleta pro ochranu adaptace očí na tmu v AR noční obloze na AMOLED displeji</string>
     <string name="settings_theme_red">Červená</string>
     <string name="settings_theme_amber">Jantarová</string>
     <string name="settings_theme_green">NVG Zelená</string>
     <string name="settings_activation_title">Režim aktivace</string>
-    <string name="settings_activation_subtitle">Určete, kdy se noční vidění automaticky zapne</string>
+    <string name="settings_activation_subtitle">Určete, kdy se noční vidění automaticky zapne v AR noční obloze</string>
     <string name="settings_activation_off">Vždy vypnuto</string>
     <string name="settings_activation_off_desc">Běžné plnobarevné rozhraní</string>
     <string name="settings_activation_auto_solar">Automaticky (podle slunce)</string>

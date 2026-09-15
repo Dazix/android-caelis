@@ -16,7 +16,7 @@ enum class NightVisionActivationMode { OFF, AUTO_SOLAR, CUSTOM_TIME }
  * Combined immutable state representing the active Night Vision configuration.
  */
 data class NightVisionState(
-    val isActive: Boolean = true,
+    val isActive: Boolean = false,
     val theme: NightVisionTheme = NightVisionTheme.AMBER,
 )
 
