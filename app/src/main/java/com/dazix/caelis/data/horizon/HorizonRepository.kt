@@ -76,6 +76,9 @@ class HorizonRepository private constructor(
     private val profileDirectory = File(appContext.filesDir, "horizons")
     private val notifications = TerrainNotifications(appContext)
 
+    val offlineRegionRepository = OfflineRegionRepository(appContext)
+    val offlineDownloader = OfflineTerrainDownloader(appContext, offlineRegionRepository, cache, downloader)
+
     private val _state = MutableStateFlow<HorizonState>(HorizonState.Idle)
     val state: StateFlow<HorizonState> = _state.asStateFlow()
 
@@ -339,12 +342,18 @@ class HorizonRepository private constructor(
 
     fun getStoredProfileCount(): Int = storedProfileCount()
 
-    /** Returns a current snapshot of disk metrics for DEM tile caches and computed horizon profiles. */
+    fun getDemOfflineSizeBytes(): Long = offlineRegionRepository.getOfflineSizeBytes()
+
+    fun getOfflineRegionCount(): Int = offlineRegionRepository.getRegionCount()
+
+    /** Returns a current snapshot of disk metrics for DEM tile caches, offline regions, and computed horizon profiles. */
     fun getStorageMetrics(): StorageMetrics = StorageMetrics(
         demCacheSizeBytes = getDemCacheSizeBytes(),
         demCacheLimitBytes = DemTileCache.DEFAULT_MAX_BYTES,
         profilesSizeBytes = getProfilesSizeBytes(),
         profileCount = storedProfileCount(),
+        demOfflineSizeBytes = getDemOfflineSizeBytes(),
+        offlineRegionCount = getOfflineRegionCount(),
     )
 
     /**

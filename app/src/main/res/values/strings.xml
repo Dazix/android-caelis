@@ -468,8 +468,41 @@
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM Tiles: %1$d</string>
 
+    <!-- Offline Terrain -->
+    <string name="offline_terrain_title">Offline terrain</string>
+    <string name="offline_terrain_subtitle">Pre-download elevation data for trips and expeditions</string>
+    <string name="offline_terrain_new_region">New offline region</string>
+    <string name="offline_terrain_name_label">Region name</string>
+    <string name="offline_terrain_name_hint">e.g. Senja - Norway</string>
+    <string name="offline_terrain_lat_label">Latitude</string>
+    <string name="offline_terrain_lon_label">Longitude</string>
+    <string name="offline_terrain_use_current_location">Use current GPS</string>
+    <string name="offline_terrain_radius_label">Radius</string>
+    <string name="offline_terrain_radius_km">%1$d km</string>
+    <string name="offline_terrain_estimate_summary">%1$d tiles · %2$s total (%3$s to download)</string>
+    <string name="offline_terrain_estimate_all_cached">%1$d tiles · %2$s (all already on device)</string>
+    <string name="offline_terrain_download_btn">Download offline region</string>
+    <string name="offline_terrain_downloading">Downloading %1$s: tile %2$d of %3$d (%4$d%%)…</string>
+    <string name="offline_terrain_download_complete">Region \"%1$s\" saved successfully</string>
+    <string name="offline_terrain_download_failed">Download failed: %1$s</string>
+    <string name="offline_terrain_cancel_download">Cancel</string>
+    <string name="offline_terrain_saved_regions_title">Saved offline regions</string>
+    <string name="offline_terrain_saved_empty">No offline regions saved yet. Pre-download terrain above for trips with no signal.</string>
+    <string name="offline_terrain_region_details">%1$.2f°, %2$.2f° · %3$d km radius</string>
+    <string name="offline_terrain_region_tiles_info">%1$d tiles · %2$s</string>
+    <string name="offline_terrain_delete_title">Delete offline region?</string>
+    <string name="offline_terrain_delete_message">Delete region \"%1$s\"? Elevation tiles not shared by other regions will be removed.</string>
+    <string name="offline_terrain_delete_confirm">Delete</string>
+    <string name="offline_terrain_delete_cancel">Cancel</string>
+
     <!-- Storage / Data Management -->
     <string name="settings_section_storage">Data management</string>
+    <string name="settings_storage_offline_regions_title">Offline terrain (Permanent)</string>
+    <plurals name="settings_storage_offline_regions_count">
+        <item quantity="one">%1$s (%2$d region)</item>
+        <item quantity="other">%1$s (%2$d regions)</item>
+    </plurals>
+    <string name="settings_storage_manage_offline_button">Manage offline terrain</string>
     <string name="settings_storage_terrain_cache_title">Terrain data (Cache)</string>
     <string name="settings_storage_terrain_cache_value">%1$s / %2$s limit</string>
     <string name="settings_storage_profiles_title">Calculated horizons</string>

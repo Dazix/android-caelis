@@ -257,6 +257,8 @@ private fun CaelisScreen(
     val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
     val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
     val storageMetrics by viewModel.storageMetrics.collectAsStateWithLifecycle()
+    val offlineRegions by viewModel.offlineRegions.collectAsStateWithLifecycle()
+    val offlineDownloadState by viewModel.offlineDownloadState.collectAsStateWithLifecycle()
 
     // LocalResources, not LocalContext: a Configuration change does not invalidate LocalContext
     // reads, so a string fetched through the context can be stale after a locale switch.
@@ -398,6 +400,19 @@ private fun CaelisScreen(
             onStartTimeChange = viewModel::setCustomStartTime,
             onEndTimeChange = viewModel::setCustomEndTime,
             onDebugPreferencesChange = viewModel::setDebugPreferences,
+            onNavigateToOfflineTerrain = { viewModel.navigate(Screen.OFFLINE_TERRAIN) },
+            onBack = viewModel::back,
+        )
+
+        Screen.OFFLINE_TERRAIN -> com.dazix.caelis.ui.horizon.OfflineTerrainScreen(
+            savedRegions = offlineRegions,
+            downloadState = offlineDownloadState,
+            currentLocation = horizonLocation,
+            onEstimate = viewModel::estimateOfflineRegion,
+            onDownloadRegion = viewModel::downloadOfflineRegion,
+            onCancelDownload = viewModel::cancelOfflineDownload,
+            onResetDownloadState = viewModel::resetOfflineDownloadState,
+            onDeleteRegion = viewModel::deleteOfflineRegion,
             onBack = viewModel::back,
         )
     }

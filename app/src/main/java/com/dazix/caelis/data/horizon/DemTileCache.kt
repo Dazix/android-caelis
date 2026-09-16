@@ -15,12 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Holds decompressed elevation tiles on disk, under `cacheDir`.
+ * Holds decompressed elevation tiles on disk.
  *
- * `cacheDir` and not `filesDir` on purpose. A tile is 26 MB of data that can always be fetched or
- * imported again, and its only job is to produce a 5.8 kB horizon profile which *is* kept
- * permanently. Letting Android reclaim the tiles under storage pressure is the correct trade: the
- * user loses a download, never a computed horizon.
+ * Volatile tiles live in `cacheDir/dem/` and can be evicted under storage pressure.
+ * Permanent offline pre-downloaded tiles live in `filesDir/dem_offline/` and are never evicted.
  *
  * Tiles are read through a memory mapping rather than onto the heap — 26 MB per tile, up to four
  * tiles for one observer, would be an obvious way to be killed for memory on a mid-range phone.
@@ -31,8 +29,16 @@ class DemTileCache(
 ) {
 
     private val directory = File(context.cacheDir, "dem")
+    private val offlineDirectory = File(context.filesDir, OfflineRegionRepository.OFFLINE_DIR_NAME)
 
-    fun fileFor(key: DemTileKey): File = File(directory, key.fileName)
+    fun fileFor(key: DemTileKey): File {
+        val offlineFile = File(offlineDirectory, key.fileName)
+        if (offlineFile.isFile && offlineFile.length() > 0) return offlineFile
+        return File(directory, key.fileName)
+    }
+
+    /** Direct reference to volatile cache tile file. */
+    fun cacheFileFor(key: DemTileKey): File = File(directory, key.fileName)
 
     fun contains(key: DemTileKey): Boolean = fileFor(key).let { it.isFile && it.length() > 0 }
 
@@ -41,10 +47,9 @@ class DemTileCache(
         keys.partition { contains(it) }
 
     /**
-     * Opens [key] for reading, or returns `null` when it is not cached or cannot be mapped.
+     * Opens [key] for reading, or returns `null` when it is not cached/offline or cannot be mapped.
      *
-     * Touches the file's timestamp first, so the eviction order below reflects use and not download
-     * order: the tile for the place you keep going back to should outlive the one you visited once.
+     * Touches the file's timestamp first if it lives in volatile cache, so the eviction order reflects use.
      */
     fun open(key: DemTileKey): HgtTile? {
         val file = fileFor(key)
@@ -73,24 +78,17 @@ class DemTileCache(
     }
 
     /**
-     * Writes a tile through [body], atomically: the destination name appears only once the whole
-     * payload is on disk, so an interrupted download cannot be mistaken for a complete tile.
-     *
-     * [body] is suspending so the download can be chained straight into the temporary file. Making
-     * it a plain lambda would force the caller to bridge back with `runBlocking`, which both blocks
-     * a dispatcher thread and — worse — puts the atomic rename on the far side of that bridge.
+     * Writes a tile to volatile cache through [body], atomically: the destination name appears only
+     * once the whole payload is on disk, so an interrupted download cannot be mistaken for a complete tile.
      */
     @Throws(IOException::class)
     suspend fun store(key: DemTileKey, body: suspend (OutputStream) -> Unit) = withContext(Dispatchers.IO) {
         directory.mkdirs()
-        val destination = fileFor(key)
+        val destination = cacheFileFor(key)
         val temporary = File(directory, "${key.name}.part")
 
         try {
             temporary.outputStream().use { body(it) }
-            // A truncated transfer is the failure mode worth catching here rather than three screens
-            // later: a half tile is still a square-ish blob that maps fine and quietly invents a
-            // horizon made of whatever the missing rows decoded to.
             val length = temporary.length()
             if (length < MIN_PLAUSIBLE_TILE_BYTES || !HgtTile.isPlausibleGridLength(length)) {
                 throw IOException("tile ${key.name} came back as $length bytes, which is not a whole grid")
@@ -102,11 +100,6 @@ class DemTileCache(
         } finally {
             temporary.delete()
         }
-        // Deliberately no trim() here. Trimming after every tile is how a working set larger than
-        // the cap ate itself: a 60 km radius needs up to six tiles, and evicting tile three while
-        // tile five is still downloading left the observer's own square missing at compute time,
-        // which produced a perfectly flat "terrain" that looked like a feature rather than a bug.
-        // The caller trims once, at the end, with the working set protected.
     }
 
     /** Copies an already-decompressed tile in from a stream the caller owns. */
@@ -122,11 +115,8 @@ class DemTileCache(
         directory.listFiles()?.mapNotNull { DemTileKey.parse(it.name) } ?: emptyList()
 
     /**
-     * Drops the least recently used tiles until the folder is back under [maxBytes].
-     *
-     * [protect] is never evicted, whatever that does to the total. A tile the current computation
-     * needs is not a candidate for reclaiming space: dropping it does not save a download, it
-     * silently corrupts the answer. If the working set alone is over the cap, the cap loses.
+     * Drops the least recently used tiles from volatile `cacheDir/dem/` until the folder is back under [maxBytes].
+     * Never touches `filesDir/dem_offline/`.
      */
     fun trim(protect: Set<DemTileKey> = emptySet()) {
         val files = directory.listFiles()?.filter { it.isFile } ?: return
@@ -144,7 +134,7 @@ class DemTileCache(
             }
     }
 
-    /** Safely deletes all cached `.hgt` tiles and `.part` temporary download files. */
+    /** Safely deletes all volatile cached `.hgt` tiles and `.part` temporary download files in `cacheDir/dem/`. */
     fun clear() {
         directory.listFiles()?.forEach { file ->
             if (file.isFile) file.delete()
@@ -163,7 +153,7 @@ class DemTileCache(
         const val DEFAULT_MAX_BYTES: Long = 512L * 1024 * 1024
 
         /** Anything smaller than a 3 arcsecond tile is a truncated transfer, not data. */
-        private const val MIN_PLAUSIBLE_TILE_BYTES = 1201L * 1201L * 2L / 4
+        const val MIN_PLAUSIBLE_TILE_BYTES = 1201L * 1201L * 2L / 4
 
         private const val COPY_BUFFER = 64 * 1024
     }

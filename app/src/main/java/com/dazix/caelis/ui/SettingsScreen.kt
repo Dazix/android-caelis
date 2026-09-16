@@ -123,6 +123,7 @@ fun SettingsScreen(
     onStartTimeChange: (LocalTime) -> Unit,
     onEndTimeChange: (LocalTime) -> Unit,
     onDebugPreferencesChange: (DebugPreferences) -> Unit = {},
+    onNavigateToOfflineTerrain: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -417,6 +418,52 @@ fun SettingsScreen(
         SectionCard(
             title = stringResource(R.string.settings_section_storage),
         ) {
+            // Row 0: Trvalá offline data (Offline Regions)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_storage_offline_regions_title),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                val offlineText = pluralStringResource(
+                    R.plurals.settings_storage_offline_regions_count,
+                    storageMetrics.offlineRegionCount,
+                    storageMetrics.demOfflineFormatted,
+                    storageMetrics.offlineRegionCount,
+                )
+                Text(
+                    text = offlineText,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Action: Spravovat offline terén
+            OutlinedButton(
+                onClick = onNavigateToOfflineTerrain,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 6.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.TerrainHorizon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_storage_manage_offline_button))
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
             // Row 1: Terénní data (Mezipaměť) - Value right-aligned on new line
             Column(
                 modifier = Modifier

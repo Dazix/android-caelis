@@ -29,10 +29,10 @@ class NavigationDestinationTest {
         val covered = NavigationDestination.entries.map { it.screen }.toSet()
         val uncovered = Screen.entries.filterNot { it in covered }
 
-        // Home and Sun AR are top-level destinations. All other screens (setup, ramp, advanced,
-        // onboarding, app picker) are sub-screens navigated to from Home and leave by Back.
+        // Home, Sun AR, Night Sky AR and Settings are top-level destinations. All other screens
+        // (setup, ramp, advanced, onboarding, app picker, offline terrain) are sub-screens and leave by Back.
         assertEquals(
-            listOf(Screen.SETUP, Screen.RAMP, Screen.ADVANCED, Screen.ONBOARDING, Screen.APP_PICKER),
+            listOf(Screen.SETUP, Screen.RAMP, Screen.ADVANCED, Screen.ONBOARDING, Screen.APP_PICKER, Screen.OFFLINE_TERRAIN),
             uncovered,
         )
     }
@@ -44,6 +44,7 @@ class NavigationDestinationTest {
         assertNull(NavigationDestination.forScreen(Screen.ADVANCED))
         assertNull(NavigationDestination.forScreen(Screen.ONBOARDING))
         assertNull(NavigationDestination.forScreen(Screen.APP_PICKER))
+        assertNull(NavigationDestination.forScreen(Screen.OFFLINE_TERRAIN))
     }
 
     @Test

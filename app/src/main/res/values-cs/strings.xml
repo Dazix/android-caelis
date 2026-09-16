@@ -475,8 +475,43 @@
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM dlaždice: %1$d</string>
 
+    <!-- Offline Terrain -->
+    <string name="offline_terrain_title">Offline terén</string>
+    <string name="offline_terrain_subtitle">Předstažení výškových dat pro výpravy a cesty</string>
+    <string name="offline_terrain_new_region">Nová offline oblast</string>
+    <string name="offline_terrain_name_label">Název oblasti</string>
+    <string name="offline_terrain_name_hint">např. Senja - Norsko</string>
+    <string name="offline_terrain_lat_label">Zeměpisná šířka</string>
+    <string name="offline_terrain_lon_label">Zeměpisná délka</string>
+    <string name="offline_terrain_use_current_location">Použít GPS</string>
+    <string name="offline_terrain_radius_label">Dosah</string>
+    <string name="offline_terrain_radius_km">%1$d km</string>
+    <string name="offline_terrain_estimate_summary">%1$d dlaždic · celkem %2$s (ke stažení %3$s)</string>
+    <string name="offline_terrain_estimate_all_cached">%1$d dlaždic · %2$s (vše již uloženo v zařízení)</string>
+    <string name="offline_terrain_download_btn">Stáhnout offline oblast</string>
+    <string name="offline_terrain_downloading">Stahuji %1$s: dlaždice %2$d z %3$d (%4$d%%)…</string>
+    <string name="offline_terrain_download_complete">Oblast „%1$s“ byla úspěšně uložena</string>
+    <string name="offline_terrain_download_failed">Stahování selhalo: %1$s</string>
+    <string name="offline_terrain_cancel_download">Zrušit</string>
+    <string name="offline_terrain_saved_regions_title">Uložené offline oblasti</string>
+    <string name="offline_terrain_saved_empty">Zatím nejsou uloženy žádné offline oblasti. Předstáhněte si terén výše pro cesty mimo signál.</string>
+    <string name="offline_terrain_region_details">%1$.2f°, %2$.2f° · dosah %3$d km</string>
+    <string name="offline_terrain_region_tiles_info">%1$d dlaždic · %2$s</string>
+    <string name="offline_terrain_delete_title">Smazat offline oblast?</string>
+    <string name="offline_terrain_delete_message">Smazat oblast „%1$s“? Výškové dlaždice, které nesdílí jiná offline oblast, budou odstraněny ze zařízení.</string>
+    <string name="offline_terrain_delete_confirm">Smazat</string>
+    <string name="offline_terrain_delete_cancel">Zrušit</string>
+
     <!-- Storage / Data Management -->
     <string name="settings_section_storage">Správa dat</string>
+    <string name="settings_storage_offline_regions_title">Offline terén (Trvale)</string>
+    <plurals name="settings_storage_offline_regions_count">
+        <item quantity="one">%1$s (%2$d oblast)</item>
+        <item quantity="few">%1$s (%2$d oblasti)</item>
+        <item quantity="many">%1$s (%2$d oblasti)</item>
+        <item quantity="other">%1$s (%2$d oblastí)</item>
+    </plurals>
+    <string name="settings_storage_manage_offline_button">Spravovat offline terén</string>
     <string name="settings_storage_terrain_cache_title">Terénní data (Mezipaměť)</string>
     <string name="settings_storage_terrain_cache_value">%1$s / %2$s limit</string>
     <string name="settings_storage_profiles_title">Vypočtené horizonty</string>

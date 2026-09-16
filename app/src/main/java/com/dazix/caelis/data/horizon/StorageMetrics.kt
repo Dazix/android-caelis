@@ -1,7 +1,7 @@
 package com.dazix.caelis.data.horizon
 
 /**
- * Snapshot of disk space used by DEM elevation tile caches and computed horizon profiles.
+ * Snapshot of disk space used by DEM elevation tile caches, permanent offline regions, and computed horizon profiles.
  */
 data class StorageMetrics(
     /** Current size of decompressed `.hgt` and `.part` files in `cacheDir/dem/` (in bytes). */
@@ -12,10 +12,15 @@ data class StorageMetrics(
     val profilesSizeBytes: Long = 0L,
     /** Number of stored `.bin` profiles available for offline reuse. */
     val profileCount: Int = 0,
+    /** Current size of permanent `.hgt` files in `filesDir/dem_offline/` (in bytes). */
+    val demOfflineSizeBytes: Long = 0L,
+    /** Number of saved offline regions. */
+    val offlineRegionCount: Int = 0,
 ) {
     val demCacheFormatted: String get() = formatBytes(demCacheSizeBytes)
     val demCacheLimitFormatted: String get() = formatBytes(demCacheLimitBytes)
     val profilesFormatted: String get() = formatBytes(profilesSizeBytes)
+    val demOfflineFormatted: String get() = formatBytes(demOfflineSizeBytes)
 
     companion object {
         fun formatBytes(bytes: Long): String = when {

@@ -29,7 +29,7 @@ import java.util.zip.GZIPInputStream
  *
  * @param consent answers whether the user has agreed to network use. Checked per call.
  */
-class DemTileDownloader(
+open class DemTileDownloader(
     private val consent: suspend () -> Boolean,
     private val baseUrl: String = DEFAULT_BASE_URL,
 ) {
@@ -49,7 +49,7 @@ class DemTileDownloader(
      * @param onProgress 0..1, driven by compressed bytes received against `Content-Length`. Absent
      *   when the server does not send a length, in which case it is never called.
      */
-    suspend fun download(
+    open suspend fun download(
         key: DemTileKey,
         out: OutputStream,
         onProgress: ((Float) -> Unit)? = null,

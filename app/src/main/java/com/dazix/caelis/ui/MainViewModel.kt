@@ -47,6 +47,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import com.dazix.caelis.data.horizon.DownloadEstimate
+import com.dazix.caelis.data.horizon.OfflineDownloadState
+import com.dazix.caelis.domain.horizon.OfflineRegion
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -55,7 +58,7 @@ import com.dazix.caelis.domain.solar.GeoLocation
 import kotlin.math.roundToLong
 
 /** The app is a single activity; this is the whole navigation model. */
-enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER, SUN_AR, NIGHT_SKY_AR, SETTINGS }
+enum class Screen { HOME, SETUP, RAMP, ADVANCED, ONBOARDING, APP_PICKER, SUN_AR, NIGHT_SKY_AR, SETTINGS, OFFLINE_TERRAIN }
 
 enum class ModeChoice { TIMELAPSE, PERIODIC_TAP }
 
@@ -591,6 +594,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearTerrainCache() = clearDemCache()
+
+    // ==== Offline terrain region management ====
+
+    val offlineRegions: StateFlow<List<OfflineRegion>> =
+        horizonRepository.offlineRegionRepository.offlineRegions
+
+    val offlineDownloadState: StateFlow<OfflineDownloadState> =
+        horizonRepository.offlineDownloader.state
+
+    private var offlineDownloadJob: Job? = null
+
+    fun estimateOfflineRegion(lat: Double, lon: Double, radiusKm: Int): DownloadEstimate =
+        horizonRepository.offlineDownloader.estimate(lat, lon, radiusKm)
+
+    fun downloadOfflineRegion(name: String, lat: Double, lon: Double, radiusKm: Int) {
+        offlineDownloadJob?.cancel()
+        offlineDownloadJob = viewModelScope.launch {
+            horizonRepository.offlineDownloader.downloadRegion(name, lat, lon, radiusKm)
+            refreshStorageMetrics()
+        }
+    }
+
+    fun cancelOfflineDownload() {
+        offlineDownloadJob?.cancel()
+        offlineDownloadJob = null
+        horizonRepository.offlineDownloader.resetState()
+    }
+
+    fun resetOfflineDownloadState() {
+        horizonRepository.offlineDownloader.resetState()
+    }
+
+    fun deleteOfflineRegion(regionId: String) {
+        viewModelScope.launch {
+            horizonRepository.offlineRegionRepository.deleteRegion(regionId)
+            refreshStorageMetrics()
+        }
+    }
 
     /** Clears stored horizon profiles and refreshes storage metrics. */
     fun clearProfiles() {
