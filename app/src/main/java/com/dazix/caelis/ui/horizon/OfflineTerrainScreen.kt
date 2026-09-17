@@ -56,6 +56,9 @@ import com.dazix.caelis.data.horizon.DownloadEstimate
 import com.dazix.caelis.data.horizon.OfflineDownloadState
 import com.dazix.caelis.data.horizon.StorageMetrics
 import com.dazix.caelis.domain.horizon.OfflineRegion
+import com.dazix.caelis.domain.solar.CoordinateFormat
+import com.dazix.caelis.domain.solar.CoordinateParseResult
+import com.dazix.caelis.domain.solar.GeoCoordinateParser
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.ExpressiveMotion
@@ -77,22 +80,19 @@ fun OfflineTerrainScreen(
     onBack: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
-    var latText by remember {
-        mutableStateOf(currentLocation?.let { "%.4f".format(it.latitude).replace(',', '.') } ?: "")
-    }
-    var lonText by remember {
-        mutableStateOf(currentLocation?.let { "%.4f".format(it.longitude).replace(',', '.') } ?: "")
+    var coordsText by remember {
+        mutableStateOf(currentLocation?.let { "%.4f, %.4f".format(it.latitude, it.longitude) } ?: "")
     }
     var selectedRadius by remember { mutableIntStateOf(RADIUS_OPTIONS.first()) }
     var deleteCandidate by remember { mutableStateOf<OfflineRegion?>(null) }
 
-    val parsedLat = remember(latText) { latText.toDoubleOrNull()?.takeIf { it in -90.0..90.0 } }
-    val parsedLon = remember(lonText) { lonText.toDoubleOrNull()?.takeIf { it in -180.0..180.0 } }
-    val hasValidCoordinates = parsedLat != null && parsedLon != null
+    val parseResult = remember(coordsText) { GeoCoordinateParser.parse(coordsText) }
+    val parsedLocation = (parseResult as? CoordinateParseResult.Success)?.location
+    val hasValidCoordinates = parsedLocation != null
 
-    val estimate = remember(parsedLat, parsedLon, selectedRadius) {
-        if (parsedLat != null && parsedLon != null) {
-            onEstimate(parsedLat, parsedLon, selectedRadius)
+    val estimate = remember(parsedLocation, selectedRadius) {
+        if (parsedLocation != null) {
+            onEstimate(parsedLocation.latitude, parsedLocation.longitude, selectedRadius)
         } else {
             null
         }
@@ -117,43 +117,151 @@ fun OfflineTerrainScreen(
                 enabled = !isDownloading,
             )
 
-            Row(
+            OutlinedTextField(
+                value = coordsText,
+                onValueChange = { coordsText = it },
+                label = { Text(stringResource(R.string.offline_terrain_coords_label)) },
+                placeholder = { Text(stringResource(R.string.offline_terrain_coords_hint)) },
+                isError = parseResult is CoordinateParseResult.Failure && parseResult !is CoordinateParseResult.Failure.Empty,
+                trailingIcon = {
+                    if (coordsText.isNotEmpty()) {
+                        IconButton(onClick = { coordsText = "" }, enabled = !isDownloading) {
+                            Icon(AppIcons.Clear, contentDescription = stringResource(R.string.action_clear))
+                        }
+                    } else if (currentLocation != null) {
+                        IconButton(
+                            onClick = {
+                                coordsText = "%.4f, %.4f".format(currentLocation.latitude, currentLocation.longitude)
+                            },
+                            enabled = !isDownloading,
+                        ) {
+                            Icon(AppIcons.Compass, contentDescription = stringResource(R.string.offline_terrain_use_current_location))
+                        }
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = latText,
-                    onValueChange = { latText = it.replace(',', '.') },
-                    label = { Text(stringResource(R.string.offline_terrain_lat_label)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    enabled = !isDownloading,
-                )
+                singleLine = false,
+                maxLines = 2,
+                enabled = !isDownloading,
+            )
 
-                OutlinedTextField(
-                    value = lonText,
-                    onValueChange = { lonText = it.replace(',', '.') },
-                    label = { Text(stringResource(R.string.offline_terrain_lon_label)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    enabled = !isDownloading,
-                )
-            }
+            // Coordinate parser status indicator & format badge
+            when (parseResult) {
+                is CoordinateParseResult.Success -> {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            val formatBadge = when (parseResult.format) {
+                                CoordinateFormat.DECIMAL_DEGREES -> stringResource(R.string.offline_terrain_format_dd)
+                                CoordinateFormat.DEGREES_MINUTES_SECONDS -> stringResource(R.string.offline_terrain_format_dms)
+                                CoordinateFormat.DEGREES_DECIMAL_MINUTES -> stringResource(R.string.offline_terrain_format_ddm)
+                                CoordinateFormat.MAP_LINK -> stringResource(R.string.offline_terrain_format_link)
+                            }
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            ) {
+                                Text(
+                                    text = formatBadge,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                            Text(
+                                text = stringResource(
+                                    R.string.offline_terrain_coords_parsed_preview,
+                                    parseResult.location.latitude,
+                                    parseResult.location.longitude,
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
 
-            if (currentLocation != null) {
-                OutlinedButton(
-                    onClick = {
-                        latText = "%.4f".format(currentLocation.latitude).replace(',', '.')
-                        lonText = "%.4f".format(currentLocation.longitude).replace(',', '.')
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isDownloading,
-                ) {
-                    Icon(AppIcons.Compass, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.offline_terrain_use_current_location))
+                is CoordinateParseResult.Failure.OutOfBounds -> {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.offline_terrain_coords_out_of_bounds),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+
+                is CoordinateParseResult.Failure.InvalidFormat -> {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.offline_terrain_coords_invalid),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = stringResource(R.string.offline_terrain_coords_examples_title),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(
+                                text = "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
+                                    "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
+                                    "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm) + "\n" +
+                                    "• " + stringResource(R.string.offline_terrain_coords_example_link),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+
+                is CoordinateParseResult.Failure.Empty -> {
+                    if (currentLocation != null) {
+                        OutlinedButton(
+                            onClick = {
+                                coordsText = "%.4f, %.4f".format(currentLocation.latitude, currentLocation.longitude)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isDownloading,
+                        ) {
+                            Icon(AppIcons.Compass, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.offline_terrain_use_current_location))
+                        }
+                    }
                 }
             }
 
@@ -226,8 +334,8 @@ fun OfflineTerrainScreen(
             } else {
                 Button(
                     onClick = {
-                        if (name.isNotBlank() && parsedLat != null && parsedLon != null) {
-                            onDownloadRegion(name.trim(), parsedLat, parsedLon, selectedRadius)
+                        if (name.isNotBlank() && parsedLocation != null) {
+                            onDownloadRegion(name.trim(), parsedLocation.latitude, parsedLocation.longitude, selectedRadius)
                         }
                     },
                     enabled = name.isNotBlank() && hasValidCoordinates,

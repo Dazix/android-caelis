@@ -7,6 +7,7 @@
 
     <!-- Shared -->
     <string name="action_back">Back</string>
+    <string name="action_clear">Clear</string>
     <string name="action_fix">Fix</string>
     <string name="action_grant">Allow</string>
     <string name="action_dismiss">Dismiss</string>
@@ -476,6 +477,21 @@
     <string name="offline_terrain_name_hint">e.g. Senja - Norway</string>
     <string name="offline_terrain_lat_label">Latitude</string>
     <string name="offline_terrain_lon_label">Longitude</string>
+    <string name="offline_terrain_coords_label">Coordinates (GPS)</string>
+    <string name="offline_terrain_coords_hint">e.g. 50.0755, 14.4378 or 50°04\'31\"N 14°26\'16\"E</string>
+    <string name="offline_terrain_coords_valid">Valid coordinate format</string>
+    <string name="offline_terrain_coords_invalid">Unrecognized coordinate format</string>
+    <string name="offline_terrain_coords_out_of_bounds">Coordinates are out of bounds (latitude ±90°, longitude ±180°)</string>
+    <string name="offline_terrain_format_dd">DD</string>
+    <string name="offline_terrain_format_dms">DMS</string>
+    <string name="offline_terrain_format_ddm">DDM</string>
+    <string name="offline_terrain_format_link">Link</string>
+    <string name="offline_terrain_coords_examples_title">Supported format examples</string>
+    <string name="offline_terrain_coords_example_dd">50.0755, 14.4378 (or 50.0755° N, 14.4378° E)</string>
+    <string name="offline_terrain_coords_example_dms">50° 4\' 31.8\" N, 14° 26\' 16.1\" E</string>
+    <string name="offline_terrain_coords_example_ddm">50° 04.530\' N, 14° 26.268\' E</string>
+    <string name="offline_terrain_coords_example_link">Google Maps / Mapy.cz / OSM link</string>
+    <string name="offline_terrain_coords_parsed_preview">Lat: %1$.4f° · Lon: %2$.4f°</string>
     <string name="offline_terrain_use_current_location">Use current GPS</string>
     <string name="offline_terrain_radius_label">Radius</string>
     <string name="offline_terrain_radius_km">%1$d km</string>

@@ -285,6 +285,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _storageMetrics = MutableStateFlow(horizonRepository.getStorageMetrics())
     val storageMetrics: StateFlow<com.dazix.caelis.data.horizon.StorageMetrics> = _storageMetrics.asStateFlow()
 
+    private val backStack = mutableListOf(Screen.HOME)
     private val screenState = MutableStateFlow(Screen.HOME)
     val screen: StateFlow<Screen> = screenState.asStateFlow()
 
@@ -440,11 +441,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigate(target: Screen) {
+        if (target == screenState.value) return
+        if (target == Screen.HOME) {
+            backStack.clear()
+            backStack.add(Screen.HOME)
+        } else {
+            val isTopLevel = NavigationDestination.forScreen(target) != null
+            if (isTopLevel) {
+                backStack.clear()
+                backStack.add(Screen.HOME)
+                backStack.add(target)
+            } else {
+                val existingIndex = backStack.lastIndexOf(target)
+                if (existingIndex >= 0) {
+                    while (backStack.size > existingIndex + 1) {
+                        backStack.removeAt(backStack.lastIndex)
+                    }
+                } else {
+                    backStack.add(target)
+                }
+            }
+        }
         screenState.value = target
     }
 
     fun back() {
-        screenState.value = Screen.HOME
+        if (backStack.size > 1) {
+            backStack.removeAt(backStack.lastIndex)
+            screenState.value = backStack.last()
+        } else {
+            backStack.clear()
+            backStack.add(Screen.HOME)
+            screenState.value = Screen.HOME
+        }
     }
 
     /** Called on every resume: Settings toggles change behind our back. */
@@ -664,7 +693,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectApp(entry: AppEntry) {
         updateSetup { it.copy(targetPackage = entry.packageName, targetLabel = entry.label) }
-        screenState.value = Screen.HOME
+        back()
     }
 
     fun clearApp() {

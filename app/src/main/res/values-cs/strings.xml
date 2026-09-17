@@ -7,6 +7,7 @@
 
     <!-- Shared -->
     <string name="action_back">Zpět</string>
+    <string name="action_clear">Vymazat</string>
     <string name="action_fix">Vyřešit</string>
     <string name="action_grant">Povolit</string>
     <string name="action_dismiss">Zavřít</string>
@@ -483,6 +484,21 @@
     <string name="offline_terrain_name_hint">např. Senja - Norsko</string>
     <string name="offline_terrain_lat_label">Zeměpisná šířka</string>
     <string name="offline_terrain_lon_label">Zeměpisná délka</string>
+    <string name="offline_terrain_coords_label">Souřadnice (GPS)</string>
+    <string name="offline_terrain_coords_hint">např. 50.0755, 14.4378 nebo 50°04\'31\"N 14°26\'16\"E</string>
+    <string name="offline_terrain_coords_valid">Platný formát souřadnic</string>
+    <string name="offline_terrain_coords_invalid">Nerozpoznaný formát souřadnic</string>
+    <string name="offline_terrain_coords_out_of_bounds">Souřadnice jsou mimo platný rozsah (šířka ±90°, délka ±180°)</string>
+    <string name="offline_terrain_format_dd">DD</string>
+    <string name="offline_terrain_format_dms">DMS</string>
+    <string name="offline_terrain_format_ddm">DDM</string>
+    <string name="offline_terrain_format_link">Odkaz</string>
+    <string name="offline_terrain_coords_examples_title">Příklady podporovaných formátů</string>
+    <string name="offline_terrain_coords_example_dd">50.0755, 14.4378 (nebo 50.0755° N, 14.4378° E)</string>
+    <string name="offline_terrain_coords_example_dms">50° 4\' 31.8\" N, 14° 26\' 16.1\" E</string>
+    <string name="offline_terrain_coords_example_ddm">50° 04.530\' N, 14° 26.268\' E</string>
+    <string name="offline_terrain_coords_example_link">Odkaz z Google Maps / Mapy.cz / OSM</string>
+    <string name="offline_terrain_coords_parsed_preview">Šířka: %1$.4f° · Délka: %2$.4f°</string>
     <string name="offline_terrain_use_current_location">Použít GPS</string>
     <string name="offline_terrain_radius_label">Dosah</string>
     <string name="offline_terrain_radius_km">%1$d km</string>
