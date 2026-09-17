@@ -36,4 +36,7 @@ if ! "$ADB" shell pm list packages --user "$USER_ID" "$PKG" | grep -q "package:$
     die "${PKG} is not installed for user ${USER_ID} after 'adb install -r --user ${USER_ID}'."
 fi
 
+# Terminate any running stale process so the next launch uses the fresh code
+"$ADB" shell am force-stop --user "$USER_ID" "$PKG"
+
 info "Successfully installed ${PKG} for user ${USER_ID}"
