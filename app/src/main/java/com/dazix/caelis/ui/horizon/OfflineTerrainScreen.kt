@@ -140,8 +140,7 @@ fun OfflineTerrainScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = false,
-                maxLines = 2,
+                singleLine = true,
                 enabled = !isDownloading,
             )
 
@@ -157,7 +156,7 @@ fun OfflineTerrainScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -196,72 +195,47 @@ fun OfflineTerrainScreen(
                 }
 
                 is CoordinateParseResult.Failure.OutOfBounds -> {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.offline_terrain_coords_out_of_bounds),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
+                    Text(
+                        text = stringResource(R.string.offline_terrain_coords_out_of_bounds),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
                 }
 
                 is CoordinateParseResult.Failure.InvalidFormat -> {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.fillMaxWidth(),
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.offline_terrain_coords_invalid),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = stringResource(R.string.offline_terrain_coords_examples_title),
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                            Text(
-                                text = "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
-                                    "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
-                                    "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm) + "\n" +
-                                    "• " + stringResource(R.string.offline_terrain_coords_example_link),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.offline_terrain_coords_invalid),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            text = stringResource(R.string.offline_terrain_coords_examples_title) + ":\n" +
+                                "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
+                                "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
+                                "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm) + "\n" +
+                                "• " + stringResource(R.string.offline_terrain_coords_example_link),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
 
                 is CoordinateParseResult.Failure.Empty -> {
-                    if (currentLocation != null) {
-                        OutlinedButton(
-                            onClick = {
-                                coordsText = "%.4f, %.4f".format(currentLocation.latitude, currentLocation.longitude)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isDownloading,
-                        ) {
-                            Icon(AppIcons.Compass, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.offline_terrain_use_current_location))
-                        }
-                    }
+                    Text(
+                        text = "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
+                            "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
+                            "• " + stringResource(R.string.offline_terrain_coords_example_link),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
                 }
             }
 
