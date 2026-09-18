@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.dazix.caelis.R
@@ -121,7 +122,13 @@ fun OfflineTerrainScreen(
                 value = coordsText,
                 onValueChange = { coordsText = it },
                 label = { Text(stringResource(R.string.offline_terrain_coords_label)) },
-                placeholder = { Text(stringResource(R.string.offline_terrain_coords_hint)) },
+                placeholder = {
+                    Text(
+                        text = stringResource(R.string.offline_terrain_coords_hint),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 isError = parseResult is CoordinateParseResult.Failure && parseResult !is CoordinateParseResult.Failure.Empty,
                 trailingIcon = {
                     if (coordsText.isNotEmpty()) {
@@ -219,8 +226,7 @@ fun OfflineTerrainScreen(
                             text = stringResource(R.string.offline_terrain_coords_examples_title) + ":\n" +
                                 "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
                                 "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
-                                "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm) + "\n" +
-                                "• " + stringResource(R.string.offline_terrain_coords_example_link),
+                                "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -231,7 +237,7 @@ fun OfflineTerrainScreen(
                     Text(
                         text = "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
                             "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
-                            "• " + stringResource(R.string.offline_terrain_coords_example_link),
+                            "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 4.dp),

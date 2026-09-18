@@ -485,7 +485,7 @@
     <string name="offline_terrain_lat_label">Zeměpisná šířka</string>
     <string name="offline_terrain_lon_label">Zeměpisná délka</string>
     <string name="offline_terrain_coords_label">Souřadnice (GPS)</string>
-    <string name="offline_terrain_coords_hint">např. 50.0755, 14.4378 nebo 50°04\'31\"N 14°26\'16\"E</string>
+    <string name="offline_terrain_coords_hint">např. 50.0755, 14.4378</string>
     <string name="offline_terrain_coords_valid">Platný formát souřadnic</string>
     <string name="offline_terrain_coords_invalid">Nerozpoznaný formát souřadnic</string>
     <string name="offline_terrain_coords_out_of_bounds">Souřadnice jsou mimo platný rozsah (šířka ±90°, délka ±180°)</string>
@@ -497,7 +497,6 @@
     <string name="offline_terrain_coords_example_dd">50.0755, 14.4378 (nebo 50.0755° N, 14.4378° E)</string>
     <string name="offline_terrain_coords_example_dms">50° 4\' 31.8\" N, 14° 26\' 16.1\" E</string>
     <string name="offline_terrain_coords_example_ddm">50° 04.530\' N, 14° 26.268\' E</string>
-    <string name="offline_terrain_coords_example_link">Odkaz z Google Maps / Mapy.cz / OSM</string>
     <string name="offline_terrain_coords_parsed_preview">Šířka: %1$.4f° · Délka: %2$.4f°</string>
     <string name="offline_terrain_use_current_location">Použít GPS</string>
     <string name="offline_terrain_radius_label">Dosah</string>

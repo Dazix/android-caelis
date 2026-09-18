@@ -31,7 +31,6 @@ sealed interface CoordinateParseResult {
  * - Decimal Degrees (DD): e.g. "50.0755, 14.4378", "-22.9068, -43.1729", "50.0755° N, 14.4378° E"
  * - Degrees Minutes Seconds (DMS): e.g. "50° 4' 31.8\" N, 14° 26' 16.1\" E", "50°04'31\"N 14°26'16\"E"
  * - Degrees Decimal Minutes (DDM): e.g. "50° 04.530' N, 14° 26.268' E", "N 50 04.530, E 014 26.268"
- * - Map URLs & Geo URIs: Google Maps, Mapy.cz, OpenStreetMap, Apple Maps, geo: URIs
  */
 object GeoCoordinateParser {
 
