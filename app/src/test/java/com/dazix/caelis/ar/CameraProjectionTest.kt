@@ -409,4 +409,139 @@ class CameraProjectionTest {
         assertEquals(0.0, out[0], 0.01)
         assertEquals(0.0, out[1], 0.01)
     }
+
+    @Test
+    fun `verifies projection screen offset scales strictly linearly with total zoom factor`() {
+        // Star at Azimuth 3.0°, Elevation 4.0° (in field of view)
+        val proj1x = CameraProjection.project(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            zoomFactor = 1.0f,
+        )
+
+        val centerDx1x = proj1x.x - screenW / 2f
+        val centerDy1x = proj1x.y - screenH / 2f
+
+        assertTrue("1x offset must be non-zero", kotlin.math.abs(centerDx1x) > 10f)
+        assertTrue("1x offset must be non-zero", kotlin.math.abs(centerDy1x) > 10f)
+
+        // 2x zoom
+        val proj2x = CameraProjection.project(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            zoomFactor = 2.0f,
+        )
+        val centerDx2x = proj2x.x - screenW / 2f
+        val centerDy2x = proj2x.y - screenH / 2f
+        assertEquals("2x zoom must scale deltaX by exactly 2.0", centerDx1x * 2.0f, centerDx2x, 0.001f)
+        assertEquals("2x zoom must scale deltaY by exactly 2.0", centerDy1x * 2.0f, centerDy2x, 0.001f)
+
+        // 5x zoom with projectFast
+        val buf1x = FloatArray(3)
+        val buf5x = FloatArray(3)
+        CameraProjection.projectFast(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            outBuffer = buf1x,
+            zoomFactor = 1.0f,
+        )
+        CameraProjection.projectFast(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            outBuffer = buf5x,
+            zoomFactor = 5.0f,
+        )
+        val fastDx1x = buf1x[0] - screenW / 2f
+        val fastDy1x = buf1x[1] - screenH / 2f
+        val fastDx5x = buf5x[0] - screenW / 2f
+        val fastDy5x = buf5x[1] - screenH / 2f
+        assertEquals(fastDx1x * 5.0f, fastDx5x, 0.001f)
+        assertEquals(fastDy1x * 5.0f, fastDy5x, 0.001f)
+
+        // 30x hardware max threshold test
+        val proj30x = CameraProjection.project(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            zoomFactor = 30.0f,
+        )
+        assertEquals(centerDx1x * 30.0f, proj30x.x - screenW / 2f, 0.005f)
+        assertEquals(centerDy1x * 30.0f, proj30x.y - screenH / 2f, 0.005f)
+
+        // 100x deep zoom test with FovResult overload
+        val fovResult = FovResult(horizontalDegrees = 32f, isDynamicStreamCalculated = true, baseHorizontalDegrees = fovH)
+        val proj100x = CameraProjection.project(
+            azimuthDegrees = 3.0,
+            elevationDegrees = 4.0,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fov = fovResult,
+            zoomFactor = 100.0f,
+        )
+        assertEquals(centerDx1x * 100.0f, proj100x.x - screenW / 2f, 0.01f)
+        assertEquals(centerDy1x * 100.0f, proj100x.y - screenH / 2f, 0.01f)
+    }
+
+    @Test
+    fun `verifies unprojectFast roundtrip with zoom factor`() {
+        val outAzEl = DoubleArray(2)
+        val buf = FloatArray(3)
+
+        val az = 4.5
+        val el = 3.2
+        val zoom = 8.0f
+
+        CameraProjection.projectFast(
+            azimuthDegrees = az,
+            elevationDegrees = el,
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            outBuffer = buf,
+            zoomFactor = zoom,
+        )
+
+        CameraProjection.unprojectFast(
+            screenX = buf[0],
+            screenY = buf[1],
+            rotationMatrix = northPortraitMatrix,
+            viewportWidth = screenW,
+            viewportHeight = screenH,
+            displayRotation = Surface.ROTATION_0,
+            fovHorizontalDegrees = fovH,
+            outAzEl = outAzEl,
+            zoomFactor = zoom,
+        )
+
+        assertEquals(az, outAzEl[0], 0.01)
+        assertEquals(el, outAzEl[1], 0.01)
+    }
 }

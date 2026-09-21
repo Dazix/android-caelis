@@ -195,9 +195,13 @@ class CameraFovCalculatorTest {
         // focalLengthPx = 540 / tan(35.38° / 2) = 540 / tan(17.69°) = 540 / 0.3190 = 1692.8 px
         assertEquals(1692.8f, focalLengthPx, 5.0f)
 
-        val fovResult = FovResult(effectiveFov, isDynamicStreamCalculated = true)
+        val fovResult = FovResult(effectiveFov, isDynamicStreamCalculated = true, baseHorizontalDegrees = effectiveFov)
         val focalLengthPxFromResult = CameraFovCalculator.computeEffectiveFocalLengthPx(fovResult, viewportW)
         assertEquals(1692.8f, focalLengthPxFromResult, 5.0f)
+
+        // Verifies zoomFactor directly scales focal length
+        val zoomedFocalLengthPx = CameraFovCalculator.computeEffectiveFocalLengthPx(fovResult, viewportW, zoomFactor = 2.5f)
+        assertEquals(1692.8f * 2.5f, zoomedFocalLengthPx, 10.0f)
     }
 
     /**
@@ -240,6 +244,9 @@ class CameraFovCalculatorTest {
         assertTrue(withCrop.isDynamicStreamCalculated)
         assertEquals(37.27f, withoutCrop.horizontalDegrees, 0.3f)
         assertEquals(32.1f, withCrop.horizontalDegrees, 0.3f)
+        // Baseline 1.0x unzoomed FOV remains invariant across crop changes
+        assertEquals(37.27f, withoutCrop.baseHorizontalDegrees, 0.3f)
+        assertEquals(37.27f, withCrop.baseHorizontalDegrees, 0.3f)
         // The crop scales the tangent of the half angle, not the angle.
         val ratio = tanHalf(withCrop.horizontalDegrees) / tanHalf(withoutCrop.horizontalDegrees)
         assertEquals(0.856f, ratio, 0.005f)
@@ -393,15 +400,42 @@ class CameraFovCalculatorTest {
         kotlin.math.tan(fovDegrees * 0.5f * (Math.PI / 180.0).toFloat())
 
     @Test
-    fun `calculates zoomed FOV correctly and clamps within valid bounds`() {
+    fun `calculates zoomed FOV correctly using exact optical tangent lens geometry`() {
         val baseFov = 56.0f
+        val w = 1080f
+        val baseFocalLengthPx = (w * 0.5f) / kotlin.math.tan(Math.toRadians(baseFov.toDouble() / 2.0)).toFloat()
 
-        assertEquals(56.0f, CameraFovCalculator.computeZoomedFov(baseFov, 1.0f), 0.001f)
-        assertEquals(28.0f, CameraFovCalculator.computeZoomedFov(baseFov, 2.0f), 0.001f)
-        assertEquals(14.0f, CameraFovCalculator.computeZoomedFov(baseFov, 4.0f), 0.001f)
-        assertEquals(5.6f, CameraFovCalculator.computeZoomedFov(baseFov, 10.0f), 0.001f)
-        assertEquals(1.12f, CameraFovCalculator.computeZoomedFov(baseFov, 50.0f), 0.001f)
-        assertEquals(0.56f, CameraFovCalculator.computeZoomedFov(baseFov, 100.0f), 0.001f)
-        assertEquals(0.28f, CameraFovCalculator.computeZoomedFov(baseFov, 200.0f), 0.001f)
+        // 1.0x zoom
+        val fov1x = CameraFovCalculator.computeZoomedFov(baseFov, 1.0f)
+        assertEquals(56.0f, fov1x, 0.001f)
+        val focalLength1x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov1x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 1.0f, focalLength1x, 0.01f)
+
+        // 2.0x zoom: tan(fov/2) must be exactly tan(baseFov/2) / 2
+        val fov2x = CameraFovCalculator.computeZoomedFov(baseFov, 2.0f)
+        assertEquals(29.77f, fov2x, 0.05f)
+        val focalLength2x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov2x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 2.0f, focalLength2x, 0.01f)
+
+        // 10.0x zoom
+        val fov10x = CameraFovCalculator.computeZoomedFov(baseFov, 10.0f)
+        assertEquals(6.09f, fov10x, 0.05f)
+        val focalLength10x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov10x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 10.0f, focalLength10x, 0.05f)
+
+        // 50.0x zoom
+        val fov50x = CameraFovCalculator.computeZoomedFov(baseFov, 50.0f)
+        val focalLength50x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov50x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 50.0f, focalLength50x, 0.1f)
+
+        // 100.0x zoom
+        val fov100x = CameraFovCalculator.computeZoomedFov(baseFov, 100.0f)
+        val focalLength100x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov100x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 100.0f, focalLength100x, 0.2f)
+
+        // 2500.0x deep planetarium zoom
+        val fov2500x = CameraFovCalculator.computeZoomedFov(baseFov, 2500.0f)
+        val focalLength2500x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov2500x.toDouble() / 2.0)).toFloat()
+        assertEquals(baseFocalLengthPx * 2500.0f, focalLength2500x, 5.0f)
     }
 }

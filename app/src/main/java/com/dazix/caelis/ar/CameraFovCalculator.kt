@@ -10,6 +10,7 @@ import kotlin.math.tan
 data class FovResult(
     val horizontalDegrees: Float,
     val isDynamicStreamCalculated: Boolean,
+    val baseHorizontalDegrees: Float = horizontalDegrees,
 )
 
 /**
@@ -158,7 +159,7 @@ object CameraFovCalculator {
             cropRegionWidthPx > 0 && cropRegionHeightPx > 0 &&
             streamWidthPx > 0 && streamHeightPx > 0 &&
             viewportWidth > 1f && viewportHeight > 1f
-        if (!measurable) return FovResult(geometryOnly, isDynamicStreamCalculated = false)
+        if (!measurable) return FovResult(geometryOnly, isDynamicStreamCalculated = false, baseHorizontalDegrees = geometryOnly)
 
         val activeShort = minOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
         val activeLong = maxOf(activeArrayWidthPx, activeArrayHeightPx).toDouble()
@@ -171,7 +172,7 @@ object CameraFovCalculator {
         if (cropFractionShort <= 0.0 || cropFractionShort > 1.01 ||
             cropFractionLong <= 0.0 || cropFractionLong > 1.01
         ) {
-            return FovResult(geometryOnly, isDynamicStreamCalculated = false)
+            return FovResult(geometryOnly, isDynamicStreamCalculated = false, baseHorizontalDegrees = geometryOnly)
         }
 
         // Everything below works in tangents, because a crop scales the extent on the sensor plane —
@@ -184,14 +185,35 @@ object CameraFovCalculator {
         // long one more reliably than the two millimetre figures do.
         val rawTanLong = rawTanShort * (activeLong / activeShort)
 
+        // 1. Baseline unzoomed stream FOV (1.0x baseline with full active array)
+        var baseTanLong = rawTanLong
+        var baseTanShort = rawTanShort
+        val activeAspect = activeLong / activeShort
+        val streamAspect = maxOf(streamWidthPx, streamHeightPx).toDouble() /
+            minOf(streamWidthPx, streamHeightPx).toDouble()
+        if (streamAspect >= activeAspect) {
+            baseTanShort = baseTanLong / streamAspect
+        } else {
+            baseTanLong = baseTanShort * streamAspect
+        }
+        val baseTanHorizontal = if (isPortrait) baseTanShort else baseTanLong
+        val baseTanVertical = if (isPortrait) baseTanLong else baseTanShort
+        val viewportAspect = (viewportWidth / viewportHeight).toDouble()
+        val baseStreamAspectOnScreen = baseTanHorizontal / baseTanVertical
+        val baseTanVisible = if (viewportAspect < baseStreamAspectOnScreen) {
+            baseTanVertical * viewportAspect
+        } else {
+            baseTanHorizontal
+        }
+        val baseFov = (2.0 * atan(baseTanVisible) * RAD_TO_DEG).toFloat().coerceIn(1.0f, 150.0f)
+
+        // 2. Dynamic stream FOV with real-time crop region applied
         var tanLong = rawTanLong * cropFractionLong
         var tanShort = rawTanShort * cropFractionShort
 
         // The stream is a centre crop of the crop region: whichever axis is relatively longer in the
         // stream survives whole and the other one is trimmed to match.
         val cropAspect = cropLong / cropShort
-        val streamAspect = maxOf(streamWidthPx, streamHeightPx).toDouble() /
-            minOf(streamWidthPx, streamHeightPx).toDouble()
         if (streamAspect >= cropAspect) {
             tanShort = tanLong / streamAspect
         } else {
@@ -200,11 +222,10 @@ object CameraFovCalculator {
 
         val tanHorizontal = if (isPortrait) tanShort else tanLong
         val tanVertical = if (isPortrait) tanLong else tanShort
-        if (tanVertical <= 0.0) return FovResult(geometryOnly, isDynamicStreamCalculated = false)
+        if (tanVertical <= 0.0) return FovResult(geometryOnly, isDynamicStreamCalculated = false, baseHorizontalDegrees = geometryOnly)
 
         // PreviewView FILL_CENTER scales the stream until it covers the viewport, so the axis that
         // stays whole is the one the viewport is relatively longer in.
-        val viewportAspect = (viewportWidth / viewportHeight).toDouble()
         val streamAspectOnScreen = tanHorizontal / tanVertical
         val tanVisible = if (viewportAspect < streamAspectOnScreen) {
             tanVertical * viewportAspect
@@ -213,7 +234,11 @@ object CameraFovCalculator {
         }
 
         val fov = (2.0 * atan(tanVisible) * RAD_TO_DEG).toFloat().coerceIn(1.0f, 150.0f)
-        return FovResult(horizontalDegrees = fov, isDynamicStreamCalculated = true)
+        return FovResult(
+            horizontalDegrees = fov,
+            isDynamicStreamCalculated = true,
+            baseHorizontalDegrees = baseFov,
+        )
     }
 
     /**
@@ -221,14 +246,17 @@ object CameraFovCalculator {
      *
      * @param effectiveFovHorizontalDegrees Effective horizontal field of view in degrees.
      * @param viewportWidth Width of the preview viewport in pixels.
+     * @param zoomFactor Total magnification factor (defaults to 1.0f).
      * @return Focal length in screen pixels.
      */
     fun computeEffectiveFocalLengthPx(
         effectiveFovHorizontalDegrees: Float,
         viewportWidth: Float,
+        zoomFactor: Float = 1.0f,
     ): Float {
         val halfAngleRad = effectiveFovHorizontalDegrees * 0.5 * DEG_TO_RAD
-        return ((viewportWidth * 0.5f) / tan(halfAngleRad)).toFloat()
+        val baseFocalLength = ((viewportWidth * 0.5f) / tan(halfAngleRad)).toFloat()
+        return baseFocalLength * zoomFactor
     }
 
     /**
@@ -237,22 +265,27 @@ object CameraFovCalculator {
     fun computeEffectiveFocalLengthPx(
         fov: FovResult,
         viewportWidth: Float,
-    ): Float = computeEffectiveFocalLengthPx(fov.horizontalDegrees, viewportWidth)
+        zoomFactor: Float = 1.0f,
+    ): Float = computeEffectiveFocalLengthPx(fov.baseHorizontalDegrees, viewportWidth, zoomFactor)
 
     /**
-     * Calculates the zoomed horizontal Field of View visible in the viewport given an optical/digital zoom factor.
+     * Calculates the zoomed horizontal Field of View visible in the viewport given a total zoom factor,
+     * using exact physical lens optics:
+     * $$\text{FOV}_{\text{zoomed}} = 2 \cdot \arctan\left(\frac{\tan(\text{FOV}_{\text{base}} / 2)}{\text{zoomFactor}}\right)$$
      *
      * @param baseEffectiveFovDegrees Base effective horizontal FOV at 1.0x zoom.
-     * @param zoomFactor Magnification factor (>= 1.0x).
-     * @return Narrowed horizontal FOV in degrees.
+     * @param zoomFactor Total magnification factor (>= 0.0001x).
+     * @return Narrowed horizontal FOV in degrees matching strict focal length scaling.
      */
     fun computeZoomedFov(
         baseEffectiveFovDegrees: Float,
         zoomFactor: Float,
     ): Float {
-        val safeZoom = zoomFactor.coerceAtLeast(0.01f)
+        val safeZoom = zoomFactor.coerceAtLeast(0.0001f)
         val safeBaseFov = baseEffectiveFovDegrees.coerceIn(0.1f, 160.0f)
-        return (safeBaseFov / safeZoom).coerceIn(0.0005f, 150.0f)
+        val halfAngleRad = safeBaseFov * 0.5 * DEG_TO_RAD
+        val zoomedHalfAngleRad = atan(tan(halfAngleRad) / safeZoom.toDouble())
+        return (2.0 * zoomedHalfAngleRad * RAD_TO_DEG).toFloat().coerceIn(0.0005f, 160.0f)
     }
 
     /**

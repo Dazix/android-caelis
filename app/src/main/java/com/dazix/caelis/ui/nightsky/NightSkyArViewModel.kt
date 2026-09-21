@@ -185,15 +185,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     /** The zoom the camera accepted. Deep zoom goes far past any lens, so the rest stays virtual. */
     private val appliedCameraZoomState = MutableStateFlow(1.0f)
 
-    // Dynamic effective FOV factoring in pinch-to-zoom (supports deep zoom down to 0.0005°)
+    // Dynamic effective FOV factoring in user pinch-to-zoom (supports deep zoom down to 0.0005°)
+    // Directly scaled from the 1.0x baseline hardware FOV by total user zoom, eliminating
+    // camera metadata latency and ensuring instantaneous visual geometric scaling across all layers.
     val cameraFovHorizontal: StateFlow<Float> = combine(
         baseCameraFovState,
         zoomRatioState,
-        fovIncludesZoomState,
-        appliedCameraZoomState,
-    ) { baseFov, zoom, includesZoom, appliedZoom ->
-        val residualZoom = if (includesZoom) zoom / appliedZoom.coerceAtLeast(0.0001f) else zoom
-        CameraFovCalculator.computeZoomedFov(baseFov, residualZoom).coerceIn(0.0005f, 140.0f)
+    ) { baseFov, zoom ->
+        CameraFovCalculator.computeZoomedFov(baseFov, zoom).coerceIn(0.0005f, 140.0f)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES)
 
     private val lstDegreesState = MutableStateFlow(0.0)
@@ -736,13 +735,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setCameraFov(fovResult: FovResult) {
         fovIncludesZoomState.value = fovResult.isDynamicStreamCalculated
         isDynamicStreamCalculatedState.value = fovResult.isDynamicStreamCalculated
-        if (kotlin.math.abs(baseCameraFovState.value - fovResult.horizontalDegrees) > 0.1f) {
-            baseCameraFovState.value = fovResult.horizontalDegrees
+        val targetBaseFov = fovResult.baseHorizontalDegrees
+        if (kotlin.math.abs(baseCameraFovState.value - targetBaseFov) > 0.1f) {
+            baseCameraFovState.value = targetBaseFov
         }
     }
 
     fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
-        setCameraFov(FovResult(horizontalDegrees = fovDeg, isDynamicStreamCalculated = includesZoom))
+        setCameraFov(FovResult(horizontalDegrees = fovDeg, isDynamicStreamCalculated = includesZoom, baseHorizontalDegrees = fovDeg))
     }
 
     fun updateVisibleStarCount(count: Int) {

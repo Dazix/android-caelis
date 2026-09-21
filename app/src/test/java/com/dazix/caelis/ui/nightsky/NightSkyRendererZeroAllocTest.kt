@@ -1612,4 +1612,96 @@ class NightSkyRendererZeroAllocTest {
         renderer.applyTheme(theme = com.dazix.caelis.domain.nightsky.NightVisionTheme.RED, isNightVision = true)
         renderer.applyTheme(theme = com.dazix.caelis.domain.nightsky.NightVisionTheme.RED, isNightVision = false)
     }
+
+    @Test
+    fun `verifies direct total zoom immediately scales star field and constellation projection coordinates geometrically`() {
+        val fbb = FlatBufferBuilder(1024)
+
+        // Single star at RA = 0.0°, Dec = 70.0°, Mag = 1.2f (20° elevation in front of camera facing North at Lat 0°)
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 70.0f, 1.2f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+        val renderer = NightSkyRenderer()
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        val baseFov = 56.0f
+        val w = 1080f
+        val h = 2400f
+
+        // Pass 1: 1.0x Zoom
+        val fov1x = com.dazix.caelis.ar.CameraFovCalculator.computeZoomedFov(baseFov, 1.0f)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(w, h),
+        ) {
+            val visible1x = renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = fov1x,
+                w = w,
+                h = h,
+                zoomFactor = 1.0f,
+                isAtmosphereVisible = false,
+            )
+            assertEquals("Star must be visible at 1x", 1, visible1x)
+        }
+        val starX1x = renderer.bucketPoints[1][0]
+        val starY1x = renderer.bucketPoints[1][1]
+        val dy1x = starY1x - h * 0.5f
+
+        assertTrue("Star offset Y at 1x must be non-zero", kotlin.math.abs(dy1x) > 20f)
+
+        // Pass 2: 3.0x Zoom (Simulating pinch gesture)
+        val fov3x = com.dazix.caelis.ar.CameraFovCalculator.computeZoomedFov(baseFov, 3.0f)
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(w, h),
+        ) {
+            val visible3x = renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = fov3x,
+                w = w,
+                h = h,
+                zoomFactor = 3.0f,
+                isAtmosphereVisible = false,
+            )
+            assertEquals("Star must be visible at 3x", 1, visible3x)
+        }
+        val starX3x = renderer.bucketPoints[1][0]
+        val starY3x = renderer.bucketPoints[1][1]
+        val dy3x = starY3x - h * 0.5f
+
+        assertEquals("Star screen offset Y must scale by exactly 3.0x", dy1x * 3.0f, dy3x, 0.01f)
+    }
 }

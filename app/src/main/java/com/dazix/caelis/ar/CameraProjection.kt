@@ -42,6 +42,7 @@ object CameraProjection {
         viewportHeight: Float,
         displayRotation: Int = Surface.ROTATION_0,
         fov: FovResult,
+        zoomFactor: Float = 1.0f,
     ): ProjectedPoint = project(
         azimuthDegrees = azimuthDegrees,
         elevationDegrees = elevationDegrees,
@@ -49,13 +50,14 @@ object CameraProjection {
         viewportWidth = viewportWidth,
         viewportHeight = viewportHeight,
         displayRotation = displayRotation,
-        fovHorizontalDegrees = fov.horizontalDegrees,
+        fovHorizontalDegrees = fov.baseHorizontalDegrees,
+        zoomFactor = zoomFactor,
     )
 
     /**
      * Projects a celestial direction (azimuth, elevation) on the unit Sky Dome
      * into 2D screen pixel coordinates $(x, y)$ given the device orientation matrix,
-     * display rotation, and camera horizontal field of view.
+     * display rotation, camera horizontal field of view, and total user zoom factor.
      *
      * @param azimuthDegrees Bearing clockwise from North [0.0, 360.0).
      * @param elevationDegrees Altitude above horizon in degrees [-90.0, +90.0].
@@ -64,6 +66,7 @@ object CameraProjection {
      * @param viewportWidth Screen width in pixels.
      * @param viewportHeight Screen height in pixels.
      * @param fovHorizontalDegrees Camera horizontal field of view in degrees (default 56° for smartphone back cameras).
+     * @param zoomFactor Total magnification factor (defaults to 1.0f).
      */
     fun project(
         azimuthDegrees: Double,
@@ -73,6 +76,7 @@ object CameraProjection {
         viewportHeight: Float,
         displayRotation: Int = Surface.ROTATION_0,
         fovHorizontalDegrees: Float = 56f,
+        zoomFactor: Float = 1.0f,
     ): ProjectedPoint {
         val azRad = azimuthDegrees * RAD
         val elRad = elevationDegrees * RAD
@@ -112,9 +116,10 @@ object CameraProjection {
 
         val isInFront = zs > 0.001f
 
-        // 4. Perspective projection on the Sky Dome
+        // 4. Perspective projection on the Sky Dome with direct total zoom scaling
         val halfFovHRad = (fovHorizontalDegrees * 0.5f * RAD.toFloat())
-        val focalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val baseFocalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val focalLengthPixels = baseFocalLengthPixels * zoomFactor
 
         val screenX: Float
         val screenY: Float
@@ -166,6 +171,7 @@ object CameraProjection {
         fov: FovResult,
         outBuffer: FloatArray,
         offset: Int = 0,
+        zoomFactor: Float = 1.0f,
     ): Boolean = projectFast(
         azimuthDegrees = azimuthDegrees,
         elevationDegrees = elevationDegrees,
@@ -173,9 +179,10 @@ object CameraProjection {
         viewportWidth = viewportWidth,
         viewportHeight = viewportHeight,
         displayRotation = displayRotation,
-        fovHorizontalDegrees = fov.horizontalDegrees,
+        fovHorizontalDegrees = fov.baseHorizontalDegrees,
         outBuffer = outBuffer,
         offset = offset,
+        zoomFactor = zoomFactor,
     )
 
     /**
@@ -186,6 +193,7 @@ object CameraProjection {
      *   `outBuffer[offset + 0]` = screenX in pixels
      *   `outBuffer[offset + 1]` = screenY in pixels
      *   `outBuffer[offset + 2]` = zCamera (> 0 in front of camera, < 0 behind)
+     * @param zoomFactor Total magnification factor (defaults to 1.0f).
      * @return true if point is in front of the camera plane (zCamera > 0.001f).
      */
     fun projectFast(
@@ -198,6 +206,7 @@ object CameraProjection {
         fovHorizontalDegrees: Float = 56f,
         outBuffer: FloatArray,
         offset: Int = 0,
+        zoomFactor: Float = 1.0f,
     ): Boolean {
         val azRad = azimuthDegrees * RAD
         val elRad = elevationDegrees * RAD
@@ -239,7 +248,8 @@ object CameraProjection {
         val isInFront = zs > 0.001f
 
         val halfFovHRad = (fovHorizontalDegrees * 0.5f * RAD.toFloat())
-        val focalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val baseFocalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val focalLengthPixels = baseFocalLengthPixels * zoomFactor
 
         val screenX: Float
         val screenY: Float
@@ -271,6 +281,7 @@ object CameraProjection {
         fov: FovResult,
         outAzEl: DoubleArray,
         offset: Int = 0,
+        zoomFactor: Float = 1.0f,
     ) = unprojectFast(
         screenX = screenX,
         screenY = screenY,
@@ -278,9 +289,10 @@ object CameraProjection {
         viewportWidth = viewportWidth,
         viewportHeight = viewportHeight,
         displayRotation = displayRotation,
-        fovHorizontalDegrees = fov.horizontalDegrees,
+        fovHorizontalDegrees = fov.baseHorizontalDegrees,
         outAzEl = outAzEl,
         offset = offset,
+        zoomFactor = zoomFactor,
     )
 
     /**
@@ -291,6 +303,7 @@ object CameraProjection {
      * is pointing at before it can compare them with the terrain profile.
      *
      * @param outAzEl receives `[azimuthDegrees, elevationDegrees]`; azimuth is in [0, 360).
+     * @param zoomFactor Total magnification factor (defaults to 1.0f).
      */
     fun unprojectFast(
         screenX: Float,
@@ -302,9 +315,11 @@ object CameraProjection {
         fovHorizontalDegrees: Float = 56f,
         outAzEl: DoubleArray,
         offset: Int = 0,
+        zoomFactor: Float = 1.0f,
     ) {
         val halfFovHRad = fovHorizontalDegrees * 0.5f * RAD.toFloat()
-        val focalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val baseFocalLengthPixels = (viewportWidth * 0.5f) / tan(halfFovHRad)
+        val focalLengthPixels = baseFocalLengthPixels * zoomFactor
 
         // Undo the perspective divide by fixing the camera-axis component at 1: only the direction
         // matters, and the ray through a pixel is the same at any distance.

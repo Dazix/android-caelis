@@ -51,7 +51,7 @@ system with it. Do not "fix" the pin back to the BOM.
 
 ## The gates and scoped test suites
 
-To keep iteration fast (6-7s), unit test suites are partitioned by functional domain. **Always run only the test suite(s) relevant to the current changes during development:**
+To keep iteration fast (6-7s), unit test suites are partitioned by functional domain. **Always run only the test suite(s) relevant to the current changes during development** (pro vytváření a úpravy pouze Markdown/dokumentačních souborů není potřeba pouštět testy):
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
