@@ -73,7 +73,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **587 JVM tests (283 intervalometer, 191 solar & horizon, 92 night sky, plus docs/UI), 31
+`skipped`), not from the console. Current baseline: **646 JVM tests (293 intervalometer, 232 solar & horizon, 100 night sky, plus docs/UI), 31
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -268,6 +268,23 @@ Each of these was found by review or on the device and is now covered by a test.
   `POST_NOTIFICATIONS` is prompted once on first launch and remembered in DataStore
   (`notification_permission_prompted`). The app never nags the user again on subsequent opens
   regardless of whether they accepted or declined.
+- **AR projections scale immediately on zoom without waiting for camera metadata.** CameraX capture
+  results and crop regions lag behind `setZoomRatio` by tens of milliseconds. Decoupling the AR geometry
+  scaling via `zoomFactor` computed directly from the requested zoom ensures instant 60/120 Hz response
+  without overlay tearing or lag.
+- **Edge back gestures in AR must not be consumed by pointerInput.** The 28dp horizontal edge margins in
+  Sun AR and Night Sky AR allow system predictive back and edge swipes to pass through to the OS without
+  triggering accidental pan, calibration, or false tap selections.
+- **Contextual back handler in AR screens prioritizes dismissing active overlays.** Pressing back must
+  dismiss open bottom sheets (layer settings, object details), search bar, or disambiguation dialogs
+  before navigating out of the AR screen.
+- **Planetarium mode memorizes and restores prior Milky Way state.** Toggling Planetarium mode (opaque
+  background) temporarily turns off the procedural Milky Way for a clean star map, and restoring the
+  normal AR camera background restores the Milky Way to its previous state unless explicitly changed by
+  the user.
+- **Celestial hit-testing scores both brightness and proximity.** In dense star fields, Euclidean distance
+  alone selects faint background stars over prominent navigation stars. `StarHitTester` combines
+  normalized distance and magnitude weights with a disambiguation popup for close candidate targets.
 
 ## Conventions
 

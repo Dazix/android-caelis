@@ -99,9 +99,14 @@ Augmented reality planetarium for night sky framing, astrophotography alignment,
 - **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (Czech / Latin / IAU names) and
   search history. Features animated camera routing in AR mode (freeze-frame accelerate-decelerate re-calibration) and
   interactive manual virtual planetarium pan mode (FastOutSlowIn S-curve).
-- **Procedural GPU AGSL Shaders**: Procedural volumetric Milky Way galaxy shader, Rayleigh/Mie atmospheric scattering,
-  and horizon landscape silhouette - optionally the **real** terrain around you, read per-pixel from a 1440x1
-  profile strip so stars are genuinely occluded by the ridge instead of shining through a painted tree line.
+- **Adaptive Celestial Hit-Testing & Disambiguation**: Weighted brightness and proximity scoring (`StarHitTester`),
+  interactive disambiguation popup card for selecting between close candidate objects, configurable tap radius (16–120 dp),
+  and animated touch indicator.
+- **Fluid Gestures & Immersive Fullscreen AR**: Touch-slop aware 60/120 Hz pinch zoom and drag pan, 28dp edge exclusion
+  zones preserving system back gestures, contextual back handling (dismisses sheets/search first), and immersive mode
+  hiding system bars with transient swipe reveal.
+- **Procedural GPU AGSL Shaders & Planetarium Mode**: Procedural volumetric Milky Way galaxy shader, Rayleigh/Mie atmospheric
+  scattering, horizon landscape silhouette (real 1440x1 terrain strip), and Planetarium mode with automatic Milky Way state memorization and restoration.
 - **Layer Controls & Detail Sheets**: Layer toggles (stars, constellations, artwork, planets, grid, atmosphere), visual
   magnitude cutoff slider, and rich celestial body bottom sheet with astronomical distance, magnitude, and rise/set times.
 
@@ -248,9 +253,9 @@ camera, and the broadcast entry points that start a session from a shell.
 
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
-scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (283 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (179 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog (92 tests)
+scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (293 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (232 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (100 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -266,7 +271,7 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **587 JVM tests (283 intervalometer/caelis, 191 solar & horizon, 92 night sky, plus docs/UI), 31 instrumented
+what a dead accessibility service produces. Current baseline: **646 JVM tests (293 intervalometer/caelis, 232 solar & horizon, 100 night sky, plus docs/UI), 31 instrumented
 tests, no failures, no skips, lint clean.**
 
 ---

@@ -28,8 +28,8 @@ Díky tomu si každý jednotlivý snímek časosběru zachovává kompletní vý
    - Nemá žádnou minimální prodlevu fotoaparátu (podlaha je pouze 70 ms délka dotykového gesta).
 
 ### Integrované moduly Rozšířené Reality (AR)
-- **Sun & Moon AR (Solární a lunární plánovač):** 3D projekce sluneční a měsíční trajektorie, poloh těles v průběhu dne, fází Měsíce, časových značek, východu, západu, zlaté hodinky, fází soumraku (občanský, nautický, astronomický) a reálného terénního horizontu na živý obraz kamery s kompenzací True-North a zorného pole (FOV).
-- **Night Sky AR (Noční obloha a planetárium):** 3D projekce nebeské sféry, 60 FPS vykreslování hvězdného pole přímo z binárního FlatBuffers katalogu (`catalog.bin`) s nulovými alokacemi paměti, 88 IAU souhvězdí a asterismů s artworky přes 4-bodovou homografii, dynamické planety Sluneční soustavy s dvoustavovým vykreslováním (optické bodové světlo vs fototextura), globální astronomické vyhledávání s chytrým směrováním kamery, reálný terénní profil v AGSL shaderu a procedurální GPU shadery (Mléčná dráha, atmosféra, krajina).
+- **Sun & Moon AR (Solární a lunární plánovač):** 3D projekce sluneční a měsíční trajektorie, poloh těles v průběhu dne, fází Měsíce, časových značek, východu, západu, zlaté hodinky, fází soumraku (občanský, nautický, astronomický) a reálného terénního horizontu na živý obraz kamery s kompenzací True-North, zorného pole (FOV), celoobrazovkového Immersive režimu a ochrany okrajů pro systémová gesta (28 dp).
+- **Night Sky AR (Noční obloha a planetárium):** 3D projekce nebeské sféry, 60 FPS vykreslování hvězdného pole přímo z binárního FlatBuffers katalogu (`catalog.bin`) s nulovými alokacemi paměti, 88 IAU souhvězdí a asterismů s artworky přes 4-bodovou homografii, dynamické planety Sluneční soustavy s dvoustavovým vykreslováním (optické bodové světlo vs fototextura), adaptivní hit-testing s váženým skórováním jasu a vzdálenosti (`StarHitTester`) a disambiguačním panelem, plynulý 60/120 Hz pinch zoom a drag pan s ochranou okrajů pro systémová gesta (28 dp), globální astronomické vyhledávání s chytrým směrováním kamery, reálný terénní profil v AGSL shaderu, procedurální GPU shadery (Mléčná dráha s automatickou obnovou v Planetáriu, atmosféra, krajina) a celoobrazovkový Immersive režim.
 
 ---
 
@@ -301,6 +301,13 @@ Pro eliminaci blikání při chvění ruky na okraji zorného pole:
 #### 3. Perspektivní homografie 4 rohů ilustrace (`Matrix.setPolyToPoly`)
 Každé souhvězdí nese souřadnice 4 rohů své mytologické ilustrace $(\alpha_k, \delta_k)_{k=0}^3$. Tyto rohy jsou transformovány na obrazovku $(x_k, y_k)_{k=0}^3$ a pomocí maticové homografie `Matrix.setPolyToPoly()` je rastrový artwork přesně namapován na hvězdné pozadí se správnou perspektivou a rotací.
 
+#### 4. Adaptivní výběr těles a Disambiguace (`StarHitTester`)
+Pro přesný výběr těles i v hustých hvězdných polích se nehodnotí pouze čistá Euklidovská vzdálenost od bodu dotyku, ale kombinované vážené skóre vzdálenosti a jasu:
+$$\text{Score} = w_d \cdot \left(1.0 - \frac{d}{R_{\text{max}}}\right) + w_m \cdot \left(1.0 - \frac{m - m_{\text{min}}}{m_{\text{max}} - m_{\text{min}}}\right)$$
+kde $w_d = 0.55$, $w_m = 0.45$. Tento model zajišťuje, že výrazná navigační hvězda dostane přednost před slabou hvězdou na pozadí ležící o zlomek pixelu blíže.
+- **Disambiguační popup:** Pokud je v okolí dotyku nalezeno více blízkých těles s podobným skóre, systém otevře interaktivní kartu pro jednoznačnou volbu cíle.
+- **Konfigurovatelný poloměr zásahu:** Uživatelsky nastavitelný v rozsahu $16 \dots 120\,\text{dp}$ s možností vizuálního animovaného zobrazení zóny dotyku.
+
 ---
 
 ### 4.5. Dynamická tělesa Sluneční soustavy (Planetary Ephemeris)
@@ -330,11 +337,12 @@ Implementováno v [`CelestialSearchIndex.kt`](app/src/main/java/com/dazix/caelis
 
 ---
 
-### 4.7. Procedurální GPU AGSL Shadery
+### 4.7. Procedurální GPU AGSL Shadery a Režim Planetárium
 
 Implementováno v [`MilkyWayShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/MilkyWayShader.kt), [`AtmosphereShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/AtmosphereShader.kt) a [`LandscapeShader.kt`](app/src/main/java/com/dazix/caelis/ui/nightsky/LandscapeShader.kt).
 
 - **Procedurální Mléčná dráha (`MilkyWayShader`):** AGSL fragment shader počítající v reálném čase galaktické souřadnice $(l, b)$ z $R^T$ matice. Vykresluje galaktické jádro, spirální ramena a prachové pásy s volumetrickým šumem (FBM).
+- **Automatická správa stavu v Planetáriu:** Při zapnutí neprůhledného pozadí (Planetárium) se Mléčná dráha dočasně vypne pro maximální kontrast a přehlednost hvězdné mapy; při návratu do průhledného AR režimu se původní preference automaticky obnoví.
 - **Atmosférický rozptyl (`AtmosphereShader`):** Simulace Rayleighova a Mieova rozptylu s gradientem horizontu a plynulým přechodem do noční černě.
 - **Silueta horizontu (`LandscapeShader`):** Vykreslení horizontální linie oddělující pozemní krajinu od oblohy – v reálném režimu vzorkuje 1440-vzorkový terénní profil přes NEAREST filtr a shaderovou interpolaci.
 
@@ -533,17 +541,27 @@ flowchart TD
 - **Jednorázová výzva k notifikacím (`POST_NOTIFICATIONS`):**
   - Na Androidu 13+ se při prvním spuštění aplikace jednorázově vyžádá oprávnění k oznámením a stav se uloží do DataStore (`notification_permission_prompted`). Aplikace uživatele nikdy znovu automaticky neobtěžuje.
 
+### 5.4. Celoobrazovkový Immersive režim a Ochrana navigačních gest v AR
+
+- **Immersive Mode (`ImmersiveModeEffect`):**
+  - V AR režimech (Sun AR, Night Sky AR) automaticky skrývá stavovou a navigační lištu pomocí `WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`.
+  - Lišty se zobrazí pouze dočasně po přejetí od okraje a po chvíli opět samy zmizí.
+- **Edge-Safe Back Gestures (28 dp okrajová zóna):**
+  - Horizontální okraje obrazovky (28 dp vlevo i vpravo) jsou vyjmuty ze zpracování dotykových gest AR plátna. Systémová prediktivní gesta "Zpět" (Back swipe) a systémové animace tak prochází přímo do OS bez nechtěného posunu scény nebo falešného klepnutí na těleso.
+- **Kontextový BackHandler:**
+  - V AR obrazovkách zachycuje první stisk gesta Zpět a přednostně zavírá otevřené spodní listy (vrstvy, detaily), vyhledávací pole či disambiguační dialogy. Teprve po jejich zavření další stisk opustí AR obrazovku.
+
 ---
 
 ## 6. Souhrnný přehled, testovací architektura a CI/CD
 
 Aplikace disponuje robustním systémem automatizovaného testování, optimalizací sestavení a nasazování:
 
-- **587 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
-  - `scripts/run_tests.sh caelis` (283 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence nastavení, perzistence `notification_permission_prompted`, lokalizace, `TerrainNotificationsTest` a `NetworkIsolationTest`.
-  - `scripts/run_tests.sh solar` (191 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor, terénní horizont (`HorizonProfile`, `HgtTile`, `DemTileCache`, `DemTileDownloader`, `SkylineMatcher`, `TerrainRiseSetCalculator`), eliminace AR driftu (`SensorTimestampRingBuffer`, `QuaternionSlerp`, `DynamicMatrixCalculator`, `HorizonViewModel`).
-  - `scripts/run_tests.sh nightsky` (92 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, vyhledávání, zero-alloc renderer, screenshotové testy.
-  - plus dokumentační a screenshotové testy.
+- **646 JVM Unit testů (100% pass, 0 chyb, 0 přeskočení):**
+  - `scripts/run_tests.sh caelis` (293 testů): Jádro intervalometru, state machine, plánovač, rampování, overlay layout, perzistence nastavení, perzistence `notification_permission_prompted`, lokalizace, `TerrainNotificationsTest` a `NetworkIsolationTest`.
+  - `scripts/run_tests.sh solar` (232 testů): Solární a lunární efemeridy, PSA/Meeus algoritmy, AR projekce, FOV kalkulátor, terénní horizont (`HorizonProfile`, `HgtTile`, `DemTileCache`, `DemTileDownloader`, `SkylineMatcher`, `TerrainRiseSetCalculator`), eliminace AR driftu (`SensorTimestampRingBuffer`, `QuaternionSlerp`, `DynamicMatrixCalculator`, `HorizonViewModel`).
+  - `scripts/run_tests.sh nightsky` (100 testů): Rovníková astronomie, FlatBuffers katalog, Frustum Culling, optika hvězd, adaptivní hit-testing s váženým skórováním (`StarHitTesterTest`), vyhledávání, zero-alloc renderer (`NightSkyRendererZeroAllocTest`), screenshotové testy.
+  - plus dokumentační a screenshotové testy (21 testů).
 - **31 Instrumentovaných testů na reálném zařízení / ART:**
   - Pokrývají přesnost časování bez driftu, automatické pozastavení při zhasnutí obrazovky (`ScreenOffTest`), foreground ochranu (`ForegroundGuardTest`), čtení a vykreslení FlatBuffers katalogu na reálném Android plátně (`StarCatalogDeviceTest`), pipeline terénního horizontu (`HorizonPipelineDeviceTest`) a orientaci horizontu v nočním shaderu (`NightSkyHorizonOrientationTest`).
 - **End-to-End validace (`scripts/e2e_pixel_camera.sh`):**

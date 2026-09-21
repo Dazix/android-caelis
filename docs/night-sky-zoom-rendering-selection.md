@@ -295,8 +295,18 @@ $$\frac{(X_{\text{tap}} - X_{\text{centroid}})^2}{R_x^2} + \frac{(Y_{\text{tap}}
 kde $R_x = 75\,\text{dp} \cdot \text{density}$ a $R_y = 30\,\text{dp} \cdot \text{density}$.
 *Podmínka*: Souhvězdí musí být alespoň z 30 % rozvinuté animací ($\text{progress} \ge 0.3$).
 
-#### 3. Priorita 2: Hvězdy ([`StarHitTester.findClosestVisibleStar`](file:///home/dazix/projects/caelis-mobile-app/app/src/main/java/com/dazix/caelis/domain/nightsky/StarHitTester.kt#L280-L309))
-Prochází pole předpočítaných souřadnic `starScreenX` a `starScreenY` pro hvězdy před kamerou ($z_{\text{camera}} > 0$). Hledá hvězdu s minimální kvadratickou vzdáleností do limitu $R_{\text{max}} = 48\,\text{dp} \cdot \text{density}$.
+#### 3. Priorita 2: Hvězdy a adaptivní skórování ([`StarHitTester.findClosestVisibleStar`](file:///home/dazix/projects/caelis-mobile-app/app/src/main/java/com/dazix/caelis/domain/nightsky/StarHitTester.kt#L280-L330))
+Prochází pole předpočítaných souřadnic `starScreenX` a `starScreenY` pro hvězdy před kamerou ($z_{\text{camera}} > 0$). V hustých hvězdných polích nestačí vybrat hvězdu s minimální Euklidovskou vzdáleností, protože slabá hvězda na pozadí (např. 6. magnitudy) může ležet o pixel blíže než zářivý navigační orientační bod (např. Vega či Sirius).
+
+[`StarHitTester.computeSelectionScore`](file:///home/dazix/projects/caelis-mobile-app/app/src/main/java/com/dazix/caelis/domain/nightsky/StarHitTester.kt) proto hodnotí každého kandidáta v okruhu $R_{\text{max}}$ kombinovaným skóre $S \in [0.0, 1.0]$:
+$$S = w_d \cdot \left(1.0 - \frac{d}{R_{\text{max}}}\right) + w_m \cdot \left(1.0 - \frac{m - m_{\text{min}}}{m_{\text{max}} - m_{\text{min}}}\right)$$
+kde:
+- $w_d = 0.55$ (váha normalizované vzdálenosti od středu dotyku)
+- $w_m = 0.45$ (váha normalizovaného jasu / vizuální magnitudy)
+- $R_{\text{max}}$ je uživatelsky nastavitelný poloměr zásahu ($16 \dots 120\,\text{dp}$)
+
+#### 4. Disambiguační popup (`HitDisambiguationCard`)
+Pokud metoda [`findHitCandidatesAt`](file:///home/dazix/projects/caelis-mobile-app/app/src/main/java/com/dazix/caelis/domain/nightsky/StarHitTester.kt) detekuje v dotykové oblasti více než jedno těleso s vysokým skóre (např. těsné seskupení hvězd nebo planeta blízko hvězdy), zobrazí se interaktivní výběrový dialog `HitDisambiguationCard`. Uživatel může kliknutím přímo vybrat zamýšlený cíl ze seřazeného seznamu kandidátů bez nutnosti přesného míření prstem.
 
 ---
 
