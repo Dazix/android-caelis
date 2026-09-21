@@ -383,6 +383,8 @@ internal object SettingsMapping {
     private val DEBUG_NIGHT_SKY_CALIBRATION = booleanPreferencesKey("debug_night_sky_calibration")
     private val DEBUG_NIGHT_SKY_FOCUS_REGION = booleanPreferencesKey("debug_night_sky_focus_region")
     private val DEBUG_SHOW_TERRAIN_METRICS = booleanPreferencesKey("debug_show_terrain_metrics")
+    private val DEBUG_STAR_TAP_RADIUS = intPreferencesKey("debug_star_tap_radius")
+    private val DEBUG_SHOW_TAP_RADIUS_INDICATOR = booleanPreferencesKey("debug_show_tap_radius_indicator")
 
     private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
@@ -813,6 +815,8 @@ internal object SettingsMapping {
             enableNightSkyCalibration = prefs[DEBUG_NIGHT_SKY_CALIBRATION] ?: legacyDebug,
             enableNightSkyFocusRegion = prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] ?: legacyDebug,
             showTerrainMetrics = prefs[DEBUG_SHOW_TERRAIN_METRICS] ?: false,
+            starTapRadiusDp = prefs[DEBUG_STAR_TAP_RADIUS] ?: DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP,
+            showTapRadiusIndicator = prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] ?: false,
         )
     }
 
@@ -820,6 +824,8 @@ internal object SettingsMapping {
         prefs[DEBUG_NIGHT_SKY_CALIBRATION] = preferences.enableNightSkyCalibration
         prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] = preferences.enableNightSkyFocusRegion
         prefs[DEBUG_SHOW_TERRAIN_METRICS] = preferences.showTerrainMetrics
+        prefs[DEBUG_STAR_TAP_RADIUS] = preferences.starTapRadiusDp
+        prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] = preferences.showTapRadiusIndicator
     }
 
     fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(

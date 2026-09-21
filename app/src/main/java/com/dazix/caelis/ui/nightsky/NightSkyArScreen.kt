@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,8 +19,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
@@ -40,6 +44,7 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +53,8 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberBottomSheetState
@@ -59,19 +66,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
-import com.dazix.caelis.ui.AppToastHost
-import com.dazix.caelis.ui.AppToastHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -79,8 +86,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import com.dazix.caelis.ui.AppToastHost
+import com.dazix.caelis.ui.AppToastHostState
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -128,7 +150,7 @@ fun NightSkyArScreen(
 
     val density = LocalDensity.current
     val renderer = remember { NightSkyRenderer() }
-    val maxTouchRadiusPx = with(density) { 48.dp.toPx() }
+    val maxTouchRadiusPx = with(density) { uiState.debugPreferences.starTapRadiusDp.dp.toPx() }
 
     // Synchronize ViewModel State with UI State
     LaunchedEffect(uiState.selectedBody, uiState.selectedPlanetId, uiState.selectedStarIndex, uiState.selectedConstellationIndex) {
@@ -251,6 +273,13 @@ fun NightSkyArScreen(
         label = "bottomControlsOffset",
     )
 
+    val currentCatalog by rememberUpdatedState(catalog)
+    val currentPlanets by rememberUpdatedState(if (uiState.isPlanetsVisible) uiState.planetStates else emptyList())
+    val currentMaxTouchRadiusPx by rememberUpdatedState(maxTouchRadiusPx)
+    val currentDensity by rememberUpdatedState(density.density)
+    val currentCameraFovH by rememberUpdatedState(uiState.cameraFovHorizontal)
+    val currentDebugPreferences by rememberUpdatedState(uiState.debugPreferences)
+
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = sheetPeekHeight,
@@ -284,56 +313,51 @@ fun NightSkyArScreen(
                 .fillMaxSize()
                 .background(bgColor)
                 .pointerInput(Unit) {
-                    detectTransformGestures(
-                        panZoomLock = false,
-                        onGesture = { _, pan, zoom, _ ->
-                            val viewWidth = size.width.toFloat().coerceAtLeast(1f)
-                            val hasPan = pan.x != 0f || pan.y != 0f
-                            if (hasPan) {
-                                viewModel.onPanGesture(
-                                    deltaX = pan.x,
-                                    deltaY = pan.y,
-                                    viewWidth = viewWidth,
-                                    fovDeg = uiState.cameraFovHorizontal,
+                    detectArSkyGestures(
+                        onTap = { offset ->
+                            if (currentDebugPreferences.showTapRadiusIndicator) {
+                                renderer.triggerTapIndicator(
+                                    tapX = offset.x,
+                                    tapY = offset.y,
+                                    radiusPx = currentMaxTouchRadiusPx,
+                                    radiusDp = currentDebugPreferences.starTapRadiusDp,
                                 )
                             }
-                            if (zoom != 1.0f) {
-                                viewModel.adjustZoomBy(zoom)
-                            }
-                        }
-                    )
-                }
-                .pointerInput(catalog, uiState.planetStates, uiState.isPlanetsVisible, maxTouchRadiusPx, density) {
-                    detectTapGestures(
-                        onTap = { offset ->
                             val hitTarget = renderer.findHitAt(
                                 tapX = offset.x,
                                 tapY = offset.y,
-                                maxStarRadiusPx = maxTouchRadiusPx,
-                                density = density.density,
-                                catalog = catalog,
-                                planets = if (uiState.isPlanetsVisible) uiState.planetStates else emptyList(),
+                                maxStarRadiusPx = currentMaxTouchRadiusPx,
+                                density = currentDensity,
+                                catalog = currentCatalog,
+                                planets = currentPlanets,
                             )
                             when (hitTarget) {
                                 is NightSkyRenderer.HitTarget.ConstellationHit -> {
+                                    viewModel.dismissDisambiguation()
                                     renderer.selectedConstellationIndex = hitTarget.index
                                     renderer.selectedStarIndex = -1
                                     renderer.selectedPlanetId = null
                                     viewModel.selectConstellationByIndex(hitTarget.index)
                                 }
                                 is NightSkyRenderer.HitTarget.StarHit -> {
+                                    viewModel.dismissDisambiguation()
                                     renderer.selectedStarIndex = hitTarget.index
                                     renderer.selectedConstellationIndex = -1
                                     renderer.selectedPlanetId = null
                                     viewModel.selectStarByIndex(hitTarget.index)
                                 }
                                 is NightSkyRenderer.HitTarget.PlanetHit -> {
+                                    viewModel.dismissDisambiguation()
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedPlanetId = null
                                     renderer.selectedConstellationIndex = -1
-                                    renderer.selectedPlanetId = hitTarget.planetId
                                     viewModel.selectPlanetById(hitTarget.planetId)
                                 }
+                                is NightSkyRenderer.HitTarget.MultipleHits -> {
+                                    viewModel.showDisambiguation(hitTarget)
+                                }
                                 is NightSkyRenderer.HitTarget.Miss -> {
+                                    viewModel.dismissDisambiguation()
                                     renderer.selectedConstellationIndex = -1
                                     renderer.selectedStarIndex = -1
                                     renderer.selectedPlanetId = null
@@ -343,7 +367,21 @@ fun NightSkyArScreen(
                         },
                         onDoubleTap = {
                             viewModel.resetZoom()
-                        }
+                        },
+                        onPan = { deltaX, deltaY ->
+                            val viewWidth = size.width.toFloat().coerceAtLeast(1f)
+                            viewModel.onPanGesture(
+                                deltaX = deltaX,
+                                deltaY = deltaY,
+                                viewWidth = viewWidth,
+                                fovDeg = currentCameraFovH,
+                            )
+                        },
+                        onZoom = { zoom ->
+                            if (zoom != 1.0f) {
+                                viewModel.adjustZoomBy(zoom)
+                            }
+                        },
                     )
                 }
         ) {
@@ -389,6 +427,7 @@ fun NightSkyArScreen(
                     isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
                     debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
                     debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
+                    showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
                     onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -440,9 +479,13 @@ fun NightSkyArScreen(
                 FocusRegionDebugOverlay(
                     radiusMultiplier = uiState.debugFocusRadiusMultiplier,
                     displayThreshold = uiState.debugFocusDisplayThreshold,
+                    tapRadiusDp = uiState.debugPreferences.starTapRadiusDp,
+                    showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
                     redVisionMode = uiState.redVisionMode,
                     onRadiusMultiplierChange = viewModel::setDebugFocusRadiusMultiplier,
                     onDisplayThresholdChange = viewModel::setDebugFocusDisplayThreshold,
+                    onTapRadiusDpChange = viewModel::setDebugStarTapRadius,
+                    onShowTapRadiusIndicatorChange = viewModel::setShowTapRadiusIndicator,
                     onReset = viewModel::resetDebugFocusRegion,
                     onClose = { viewModel.setDebugFocusRegionVisible(false) },
                     nightVisionTheme = uiState.nightVisionState.theme,
@@ -557,6 +600,38 @@ fun NightSkyArScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = animatedBottomPadding + 64.dp),
             )
+
+            // Disambiguation Floating Menu for Multiple Hits
+            uiState.multipleHitsTarget?.let { multipleHits ->
+                CelestialDisambiguationMenu(
+                    target = multipleHits,
+                    redVisionMode = uiState.redVisionMode,
+                    nightVisionTheme = uiState.nightVisionState.theme,
+                    onSelectCandidate = { candidate ->
+                        when (candidate) {
+                            is NightSkyRenderer.CelestialCandidate.Planet -> {
+                                renderer.selectedStarIndex = -1
+                                renderer.selectedConstellationIndex = -1
+                                renderer.selectedPlanetId = candidate.planetId
+                                viewModel.selectPlanetById(candidate.planetId)
+                            }
+                            is NightSkyRenderer.CelestialCandidate.Star -> {
+                                renderer.selectedStarIndex = candidate.starIndex
+                                renderer.selectedConstellationIndex = -1
+                                renderer.selectedPlanetId = null
+                                viewModel.selectStarByIndex(candidate.starIndex)
+                            }
+                            is NightSkyRenderer.CelestialCandidate.Constellation -> {
+                                renderer.selectedConstellationIndex = candidate.constellationIndex
+                                renderer.selectedStarIndex = -1
+                                renderer.selectedPlanetId = null
+                                viewModel.selectConstellationByIndex(candidate.constellationIndex)
+                            }
+                        }
+                    },
+                    onDismiss = viewModel::dismissDisambiguation,
+                )
+            }
         }
     }
 
@@ -662,6 +737,7 @@ internal fun NightSkyOverlayCanvas(
     isDebugFocusRegionVisible: Boolean = false,
     debugFocusRadiusMultiplier: Float = 0.48f,
     debugFocusDisplayThreshold: Float = 0.0f,
+    showTapRadiusIndicator: Boolean = false,
     onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -843,6 +919,15 @@ internal fun NightSkyOverlayCanvas(
             h = h,
             density = density,
         )
+
+        // Layer 6: Debug Hit-Test Tap Radius Indicator
+        if (showTapRadiusIndicator) {
+            renderer.drawTapRadiusIndicator(
+                drawScope = this,
+                theme = nightVisionState.theme,
+                isNightVision = nightVisionState.isActive,
+            )
+        }
 
         onVisibleStarsUpdated(visibleCount)
     }
@@ -1331,9 +1416,13 @@ private fun CalibrationDebugOverlay(
 private fun FocusRegionDebugOverlay(
     radiusMultiplier: Float,
     displayThreshold: Float,
+    tapRadiusDp: Int,
+    showTapRadiusIndicator: Boolean,
     redVisionMode: Boolean,
     onRadiusMultiplierChange: (Float) -> Unit,
     onDisplayThresholdChange: (Float) -> Unit,
+    onTapRadiusDpChange: (Int) -> Unit,
+    onShowTapRadiusIndicatorChange: (Boolean) -> Unit,
     onReset: () -> Unit,
     onClose: () -> Unit,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
@@ -1450,6 +1539,308 @@ private fun FocusRegionDebugOverlay(
                     colors = sliderColors,
                     modifier = Modifier.height(24.dp),
                 )
+            }
+
+            // Tap Hit Radius Slider
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_tap_radius, tapRadiusDp),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Slider(
+                    value = tapRadiusDp.toFloat(),
+                    onValueChange = { onTapRadiusDpChange(it.toInt()) },
+                    valueRange = com.dazix.caelis.data.DebugPreferences.MIN_STAR_TAP_RADIUS_DP.toFloat()..com.dazix.caelis.data.DebugPreferences.MAX_STAR_TAP_RADIUS_DP.toFloat(),
+                    steps = (com.dazix.caelis.data.DebugPreferences.MAX_STAR_TAP_RADIUS_DP - com.dazix.caelis.data.DebugPreferences.MIN_STAR_TAP_RADIUS_DP) / com.dazix.caelis.data.DebugPreferences.STEP_STAR_TAP_RADIUS_DP - 1,
+                    colors = sliderColors,
+                    modifier = Modifier.height(24.dp),
+                )
+            }
+
+            // Visual Tap Indicator Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.night_sky_debug_show_tap_indicator),
+                    color = labelColor,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Switch(
+                    checked = showTapRadiusIndicator,
+                    onCheckedChange = onShowTapRadiusIndicatorChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                        checkedTrackColor = if (redVisionMode) palette.primary.copy(alpha = 0.5f) else Color(0xFF00ACC1),
+                        uncheckedThumbColor = labelColor,
+                        uncheckedTrackColor = Color(0xFF1E293B),
+                    ),
+                    modifier = Modifier.scale(0.8f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Positions floating disambiguation popup near tap coordinates clamped within window bounds.
+ */
+private class DisambiguationPopupPositionProvider(
+    private val tapX: Float,
+    private val tapY: Float,
+    private val marginPx: Int = 16,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        var x = tapX.roundToInt()
+        var y = tapY.roundToInt() + 16
+
+        // If popup overflows bottom edge, place above the tap point
+        if (y + popupContentSize.height > windowSize.height - marginPx) {
+            y = (tapY.roundToInt() - popupContentSize.height - 16).coerceAtLeast(marginPx)
+        }
+        // If popup overflows right edge, shift left
+        if (x + popupContentSize.width > windowSize.width - marginPx) {
+            x = (windowSize.width - popupContentSize.width - marginPx).coerceAtLeast(marginPx)
+        }
+        if (x < marginPx) {
+            x = marginPx
+        }
+        return IntOffset(x, y)
+    }
+}
+
+/**
+ * Floating contextual disambiguation menu anchored near tap coordinates.
+ */
+@Composable
+private fun CelestialDisambiguationMenu(
+    target: NightSkyRenderer.HitTarget.MultipleHits,
+    redVisionMode: Boolean,
+    nightVisionTheme: NightVisionTheme,
+    onSelectCandidate: (NightSkyRenderer.CelestialCandidate) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = paletteForTheme(nightVisionTheme)
+    val containerBg = if (redVisionMode) Color(0xFF140000) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val borderColor = if (redVisionMode) palette.primary.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outlineVariant
+    val textColor = if (redVisionMode) palette.primary else MaterialTheme.colorScheme.onSurface
+    val subtitleColor = if (redVisionMode) palette.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+
+    val positionProvider = remember(target.tapX, target.tapY) {
+        DisambiguationPopupPositionProvider(target.tapX, target.tapY)
+    }
+
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = containerBg,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, borderColor),
+            modifier = modifier
+                .widthIn(min = 180.dp, max = 260.dp)
+                .wrapContentHeight(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(vertical = 6.dp)
+                    .animateContentSize(),
+            ) {
+                Text(
+                    text = stringResource(R.string.celestial_disambiguation_title),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = subtitleColor,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                )
+                HorizontalDivider(
+                    color = borderColor.copy(alpha = 0.5f),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+
+                target.candidates.forEach { candidate ->
+                    val icon = when (candidate) {
+                        is NightSkyRenderer.CelestialCandidate.Planet -> AppIcons.Planet
+                        is NightSkyRenderer.CelestialCandidate.Star -> AppIcons.Star
+                        is NightSkyRenderer.CelestialCandidate.Constellation -> AppIcons.Constellation
+                    }
+                    val iconTint = when (candidate) {
+                        is NightSkyRenderer.CelestialCandidate.Planet -> if (redVisionMode) palette.primary else Color(0xFFFFB74D)
+                        is NightSkyRenderer.CelestialCandidate.Star -> if (redVisionMode) palette.primary else Color(0xFF4DD0E1)
+                        is NightSkyRenderer.CelestialCandidate.Constellation -> if (redVisionMode) palette.secondary else Color(0xFF81C784)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSelectCandidate(candidate)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(1.dp),
+                        ) {
+                            Text(
+                                text = candidate.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val subtitleText = candidate.subtitle ?: when (candidate) {
+                                is NightSkyRenderer.CelestialCandidate.Planet -> stringResource(R.string.celestial_planet_subtitle)
+                                is NightSkyRenderer.CelestialCandidate.Star -> String.format(java.util.Locale.US, "mag %.1f", candidate.magnitude)
+                                is NightSkyRenderer.CelestialCandidate.Constellation -> stringResource(R.string.celestial_constellation_subtitle)
+                            }
+                            Text(
+                                text = subtitleText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = subtitleColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Unified, touch-slop aware gesture detector for the Night Sky AR viewport.
+ * Dispatches Tap, Double Tap, Pan (Drag), and Pinch Zoom without event conflicts, drops, or stutter.
+ * Zero GC allocations during event processing.
+ *
+ * Slop protection:
+ * - Natural finger roll or minor micro-movement within [viewConfiguration.touchSlop] is preserved as a Tap.
+ * - Intentional movement exceeding [touchSlop] engages Pan mode.
+ * - Multi-touch (2+ pointers) immediately engages Pinch Zoom and Centroid Pan via standard Compose gestures.
+ */
+internal suspend fun PointerInputScope.detectArSkyGestures(
+    onTap: (Offset) -> Unit,
+    onDoubleTap: () -> Unit,
+    onPan: (deltaX: Float, deltaY: Float) -> Unit,
+    onZoom: (zoomRatio: Float) -> Unit,
+) {
+    val touchSlop = viewConfiguration.touchSlop
+    val touchSlopSq = touchSlop * touchSlop
+    val doubleTapTimeout = viewConfiguration.doubleTapTimeoutMillis
+    val doubleTapMinTime = viewConfiguration.doubleTapMinTimeMillis
+    var lastTapTime = 0L
+    var lastTapX = 0f
+    var lastTapY = 0f
+
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val downX = down.position.x
+        val downY = down.position.y
+        var isPanning = false
+        var isTransforming = false
+        var pastTouchSlop = false
+
+        while (true) {
+            val event = awaitPointerEvent()
+            val changes = event.changes
+            var pressedCount = 0
+            for (i in changes.indices) {
+                if (changes[i].pressed) pressedCount++
+            }
+
+            if (pressedCount == 0) {
+                // All pointers lifted -> check for Tap / DoubleTap
+                if (!pastTouchSlop && !isTransforming) {
+                    val upChange = changes.firstOrNull()
+                    val upX = upChange?.position?.x ?: downX
+                    val upY = upChange?.position?.y ?: downY
+                    val distSq = (upX - downX) * (upX - downX) + (upY - downY) * (upY - downY)
+                    if (distSq <= touchSlopSq) {
+                        val currentTime = System.currentTimeMillis()
+                        val dt = currentTime - lastTapTime
+                        val doubleDistSq = (downX - lastTapX) * (downX - lastTapX) + (downY - lastTapY) * (downY - lastTapY)
+                        if (dt in doubleTapMinTime..doubleTapTimeout && doubleDistSq <= touchSlopSq) {
+                            onDoubleTap()
+                            lastTapTime = 0L
+                        } else {
+                            onTap(Offset(downX, downY))
+                            lastTapTime = currentTime
+                            lastTapX = downX
+                            lastTapY = downY
+                        }
+                    }
+                }
+                break
+            }
+
+            if (pressedCount >= 2) {
+                // Multi-touch: 2+ pointers -> pinch zoom and two-finger pan
+                isTransforming = true
+                pastTouchSlop = true
+
+                val zoomChange = event.calculateZoom()
+                val panChange = event.calculatePan()
+
+                if (zoomChange != 1.0f) {
+                    onZoom(zoomChange)
+                }
+
+                if (panChange.x != 0f || panChange.y != 0f) {
+                    onPan(panChange.x, panChange.y)
+                }
+
+                for (i in changes.indices) {
+                    if (changes[i].pressed && changes[i].positionChanged()) {
+                        changes[i].consume()
+                    }
+                }
+            } else if (pressedCount == 1 && !isTransforming) {
+                // Single pointer: check touch slop before engaging pan
+                val change = changes.firstOrNull { it.pressed } ?: break
+                val totalDistSq = (change.position.x - downX) * (change.position.x - downX) +
+                    (change.position.y - downY) * (change.position.y - downY)
+
+                if (!pastTouchSlop && totalDistSq > touchSlopSq) {
+                    pastTouchSlop = true
+                    isPanning = true
+                }
+
+                if (isPanning) {
+                    val deltaX = change.position.x - change.previousPosition.x
+                    val deltaY = change.position.y - change.previousPosition.y
+                    if (deltaX != 0f || deltaY != 0f) {
+                        onPan(deltaX, deltaY)
+                    }
+                    if (change.positionChanged()) {
+                        change.consume()
+                    }
+                }
             }
         }
     }

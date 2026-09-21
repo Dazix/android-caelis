@@ -587,6 +587,51 @@ fun SettingsScreen(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     )
+
+                    // ---- Group 1: Touch & Selection ----
+                    Text(
+                        text = stringResource(R.string.settings_debug_group_touch),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    )
+                    StepperRow(
+                        title = stringResource(R.string.settings_debug_star_tap_radius),
+                        description = stringResource(R.string.settings_debug_star_tap_radius_desc),
+                        value = "${debugPreferences.starTapRadiusDp} dp",
+                        canDecrease = debugPreferences.starTapRadiusDp > DebugPreferences.MIN_STAR_TAP_RADIUS_DP,
+                        canIncrease = debugPreferences.starTapRadiusDp < DebugPreferences.MAX_STAR_TAP_RADIUS_DP,
+                        onDecrease = {
+                            val next = (debugPreferences.starTapRadiusDp - DebugPreferences.STEP_STAR_TAP_RADIUS_DP)
+                                .coerceAtLeast(DebugPreferences.MIN_STAR_TAP_RADIUS_DP)
+                            onDebugPreferencesChange(debugPreferences.copy(starTapRadiusDp = next))
+                        },
+                        onIncrease = {
+                            val next = (debugPreferences.starTapRadiusDp + DebugPreferences.STEP_STAR_TAP_RADIUS_DP)
+                                .coerceAtMost(DebugPreferences.MAX_STAR_TAP_RADIUS_DP)
+                            onDebugPreferencesChange(debugPreferences.copy(starTapRadiusDp = next))
+                        },
+                    )
+                    SwitchRow(
+                        title = stringResource(R.string.settings_debug_show_tap_indicator),
+                        description = stringResource(R.string.settings_debug_show_tap_indicator_desc),
+                        checked = debugPreferences.showTapRadiusIndicator,
+                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(showTapRadiusIndicator = it)) },
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                    )
+
+                    // ---- Group 2: Night Sky AR ----
+                    Text(
+                        text = stringResource(R.string.settings_debug_group_night_sky),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    )
                     SwitchRow(
                         title = stringResource(R.string.settings_debug_night_sky_calibration),
                         description = stringResource(R.string.settings_debug_night_sky_calibration_desc),
@@ -598,6 +643,20 @@ fun SettingsScreen(
                         description = stringResource(R.string.settings_debug_night_sky_focus_region_desc),
                         checked = debugPreferences.enableNightSkyFocusRegion,
                         onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(enableNightSkyFocusRegion = it)) },
+                    )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                    )
+
+                    // ---- Group 3: Terrain Horizon ----
+                    Text(
+                        text = stringResource(R.string.settings_debug_group_terrain),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
                     )
                     SwitchRow(
                         title = stringResource(R.string.settings_debug_terrain_metrics),
@@ -907,7 +966,6 @@ private fun HorizonStatusRow(state: HorizonState) {
     }
 }
 
-/** A value with a minus and a plus, both full 48dp touch targets. */
 @Composable
 private fun StepperRow(
     title: String,
@@ -916,6 +974,7 @@ private fun StepperRow(
     canIncrease: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
+    description: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -926,6 +985,13 @@ private fun StepperRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.bodyMedium)
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodySmall,

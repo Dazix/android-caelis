@@ -103,6 +103,7 @@ data class NightSkyArUiState(
     val debugPreferences: com.dazix.caelis.data.DebugPreferences = com.dazix.caelis.data.DebugPreferences(),
     val isDebugOptionsEnabled: Boolean = false,
     val horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
+    val multipleHitsTarget: NightSkyRenderer.HitTarget.MultipleHits? = null,
 )
 
 @OptIn(FlowPreview::class)
@@ -462,6 +463,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
 
+    private val multipleHitsTargetState = MutableStateFlow<NightSkyRenderer.HitTarget.MultipleHits?>(null)
+    val multipleHitsTarget: StateFlow<NightSkyRenderer.HitTarget.MultipleHits?> = multipleHitsTargetState.asStateFlow()
+
     val uiState: StateFlow<NightSkyArUiState> = combine(
         listOf(
             locationProvider.location,
@@ -507,6 +511,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedPlanetId,
             horizonState,
             debugPreferences,
+            multipleHitsTargetState,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -555,6 +560,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val planetId = args[40] as String?
         val horizState = args[41] as com.dazix.caelis.data.horizon.HorizonState
         val debugPrefs = args[42] as com.dazix.caelis.data.DebugPreferences
+        val multipleHits = args[43] as NightSkyRenderer.HitTarget.MultipleHits?
 
         NightSkyArUiState(
             location = loc,
@@ -602,6 +608,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             debugPreferences = debugPrefs,
             isDebugOptionsEnabled = dbgOptions,
             horizonState = horizState,
+            multipleHitsTarget = multipleHits,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -755,6 +762,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves metadata for the tapped star from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectStarByIndex(starIndex: Int) {
+        dismissDisambiguation()
         val cat = catalogState.value ?: return
         val totalStars = cat.starsLength()
         if (starIndex !in 0 until totalStars) {
@@ -817,6 +825,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves astronomical metadata for the tapped constellation from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectConstellationByIndex(constellationIndex: Int) {
+        dismissDisambiguation()
         val cat = catalogState.value ?: return
         val totalConstellations = cat.constellationsLength()
         if (constellationIndex !in 0 until totalConstellations) {
@@ -989,9 +998,36 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
+     * Shows the disambiguation menu for multiple hit candidates.
+     */
+    fun showDisambiguation(hit: NightSkyRenderer.HitTarget.MultipleHits) {
+        multipleHitsTargetState.value = hit
+    }
+
+    /**
+     * Dismisses the disambiguation menu.
+     */
+    fun dismissDisambiguation() {
+        multipleHitsTargetState.value = null
+    }
+
+    /**
+     * Selects a candidate chosen from the disambiguation menu.
+     */
+    fun selectCandidate(candidate: NightSkyRenderer.CelestialCandidate) {
+        dismissDisambiguation()
+        when (candidate) {
+            is NightSkyRenderer.CelestialCandidate.Planet -> selectPlanetById(candidate.planetId)
+            is NightSkyRenderer.CelestialCandidate.Star -> selectStarByIndex(candidate.starIndex)
+            is NightSkyRenderer.CelestialCandidate.Constellation -> selectConstellationByIndex(candidate.constellationIndex)
+        }
+    }
+
+    /**
      * Selects a dynamic planet or Moon by its ID string and populates [selectedBodyState].
      */
     fun selectPlanetById(planetId: String) {
+        dismissDisambiguation()
         val planet = planetStates.value.firstOrNull { it.id.equals(planetId, ignoreCase = true) } ?: return
         selectedPlanetId.value = planet.id
         selectedStarIndex.value = -1
@@ -1003,6 +1039,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Dismisses the celestial object selection.
      */
     fun clearSelectedBody() {
+        dismissDisambiguation()
         selectedStarIndex.value = -1
         selectedConstellationIndex.value = -1
         selectedPlanetId.value = null
@@ -1017,6 +1054,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * updates equatorial (RA, Dec) coordinates, and regenerates 100% orthonormal leveled matrix.
      */
     fun onPanGesture(deltaX: Float, deltaY: Float, viewWidth: Float, fovDeg: Float) {
+        dismissDisambiguation()
         routingAnimationJob?.cancel()
         routingAnimationJob = null
 
@@ -1372,9 +1410,29 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         debugFocusDisplayThreshold.value = v.coerceIn(0.0f, 1.0f)
     }
 
+    fun setDebugStarTapRadius(dp: Int) {
+        val current = debugPreferences.value
+        val clamped = dp.coerceIn(
+            com.dazix.caelis.data.DebugPreferences.MIN_STAR_TAP_RADIUS_DP,
+            com.dazix.caelis.data.DebugPreferences.MAX_STAR_TAP_RADIUS_DP,
+        )
+        viewModelScope.launch {
+            settingsStore.saveDebugPreferences(current.copy(starTapRadiusDp = clamped))
+        }
+    }
+
+    fun setShowTapRadiusIndicator(enabled: Boolean) {
+        val current = debugPreferences.value
+        viewModelScope.launch {
+            settingsStore.saveDebugPreferences(current.copy(showTapRadiusIndicator = enabled))
+        }
+    }
+
     fun resetDebugFocusRegion() {
         debugFocusRadiusMultiplier.value = 0.48f
         debugFocusDisplayThreshold.value = 0.0f
+        setDebugStarTapRadius(com.dazix.caelis.data.DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP)
+        setShowTapRadiusIndicator(false)
     }
 
     fun resetDebugCalibration() {

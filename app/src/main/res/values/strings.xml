@@ -421,6 +421,7 @@
     <string name="celestial_parent_constellation">Parent constellation</string>
     <string name="celestial_route_to_target">Center in viewport</string>
     <string name="celestial_close">Close details</string>
+    <string name="celestial_disambiguation_title">Select celestial object</string>
 
     <!-- Calibration Debugger -->
     <string name="night_sky_debug_calibration">Artwork alignment debug</string>
@@ -431,6 +432,8 @@
     <string name="night_sky_debug_offset_y">Y Offset: %1$.1f px</string>
     <string name="night_sky_debug_scale">Scale: %1$.2fx</string>
     <string name="night_sky_debug_rotation">Rotation: %1$.1f°</string>
+    <string name="night_sky_debug_tap_radius">Tap radius: %1$d dp</string>
+    <string name="night_sky_debug_show_tap_indicator">Show tap indicator</string>
     <string name="night_sky_debug_reset">Reset</string>
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -460,12 +463,19 @@
     <string name="settings_cancel">Cancel</string>
     <string name="settings_debug_title">Debug Options</string>
     <string name="settings_debug_subtitle">Diagnostic and experimental tools</string>
+    <string name="settings_debug_group_touch">Touch &amp; Selection</string>
+    <string name="settings_debug_group_night_sky">Night Sky AR</string>
+    <string name="settings_debug_group_terrain">Terrain Horizon</string>
     <string name="settings_debug_night_sky_calibration">Artwork alignment debug</string>
     <string name="settings_debug_night_sky_calibration_desc">Enable constellation illustration alignment debug controls in Night Sky AR</string>
     <string name="settings_debug_night_sky_focus_region">Constellation focus area</string>
     <string name="settings_debug_night_sky_focus_region_desc">Highlight active constellation focus area and threshold in Night Sky AR</string>
     <string name="settings_debug_terrain_metrics">Terrain horizon metrics</string>
     <string name="settings_debug_terrain_metrics_desc">Display real-time Auto-Range distance and active DEM tiles count in AR</string>
+    <string name="settings_debug_star_tap_radius">Touch hit-test radius</string>
+    <string name="settings_debug_star_tap_radius_desc">Search radius for selecting celestial bodies. Objects within this radius are evaluated based on distance and brightness (default 48 dp).</string>
+    <string name="settings_debug_show_tap_indicator">Show tap search radius</string>
+    <string name="settings_debug_show_tap_indicator_desc">Draws a target circle at the tap location showing the active hit-test search radius in Night Sky AR</string>
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM Tiles: %1$d</string>
 

@@ -26,6 +26,7 @@ import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
+import com.dazix.caelis.data.nightsky.StarMetadata
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.EquatorialCoordinates
@@ -134,6 +135,11 @@ class NightSkyRenderer {
 
     private val tempWorldVec = FloatArray(3)
     private val reusableConstellation = Constellation()
+    private val reusableMeta = StarMetadata()
+    private val topStarIndices = IntArray(5)
+    private val topStarScores = FloatArray(5)
+    private val topPlanetIndices = IntArray(5)
+    private val topPlanetScores = FloatArray(5)
 
     companion object {
         /** Fill below the real skyline. Near-black, never pure black — see [drawLandscape]. */
@@ -510,6 +516,30 @@ class NightSkyRenderer {
     var debugCentroidOutOfFocusColor = AndroidColor.argb(120, 255, 82, 82)
         private set
 
+    // Pre-allocated buffers and paints for Debug Tap Radius Indicator
+    private var tapIndicatorX = 0f
+    private var tapIndicatorY = 0f
+    private var tapIndicatorRadiusPx = 0f
+    private var tapIndicatorRadiusDp = 0
+    private var tapIndicatorTimestamp = 0L
+
+    val debugTapCirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f
+    }
+    val debugTapFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    val debugTapCenterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    val debugTapLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        setShadowLayer(6f, 0f, 0f, AndroidColor.BLACK)
+    }
+
     /**
      * Projects a 3D World (ENU) vector directly into screen pixel coordinates and camera Z.
      * Writes results into [outBuffer] starting at [offset]:
@@ -788,6 +818,9 @@ class NightSkyRenderer {
 
         skyDomeRenderer.horizonTextPaint.textSize = 10.5f * densityScale
         skyDomeRenderer.gridTextPaint.textSize = 9.0f * densityScale
+
+        debugTapCirclePaint.strokeWidth = 2.2f * densityScale
+        debugTapLabelPaint.textSize = 12.0f * densityScale
     }
 
     /**
@@ -1012,20 +1045,79 @@ class NightSkyRenderer {
         }
     }
 
+    sealed interface CelestialCandidate {
+        val name: String
+        val subtitle: String?
+        val magnitude: Float
+        val score: Float
+        val target: HitTarget
+
+        data class Planet(
+            val planetId: String,
+            override val name: String,
+            override val magnitude: Float,
+            override val score: Float,
+            override val subtitle: String? = null,
+        ) : CelestialCandidate {
+            override val target: HitTarget get() = HitTarget.PlanetHit(planetId)
+        }
+
+        data class Star(
+            val starIndex: Int,
+            override val name: String,
+            override val magnitude: Float,
+            override val score: Float,
+            override val subtitle: String? = null,
+        ) : CelestialCandidate {
+            override val target: HitTarget get() = HitTarget.StarHit(starIndex)
+        }
+
+        data class Constellation(
+            val constellationIndex: Int,
+            override val name: String,
+            override val score: Float,
+            override val magnitude: Float = 0f,
+            override val subtitle: String? = null,
+        ) : CelestialCandidate {
+            override val target: HitTarget get() = HitTarget.ConstellationHit(constellationIndex)
+        }
+    }
+
     sealed interface HitTarget {
         data class ConstellationHit(val index: Int) : HitTarget
         data class StarHit(val index: Int) : HitTarget
         data class PlanetHit(val planetId: String) : HitTarget
+        data class MultipleHits(
+            val tapX: Float,
+            val tapY: Float,
+            val candidates: List<CelestialCandidate>,
+        ) : HitTarget
         data object Miss : HitTarget
     }
 
+    private fun getStarDisplayName(catalog: NightSkyCatalog, starIndex: Int): Pair<String, String?> {
+        val metaLen = catalog.metadataLength()
+        for (m in 0 until metaLen) {
+            catalog.metadata(reusableMeta, m)
+            if (reusableMeta.starIndex() == starIndex) {
+                val name = reusableMeta.name() ?: "HIP ${starIndex + 1}"
+                val subtitle = reusableMeta.bodyType() ?: reusableMeta.constellation()
+                return Pair(name, subtitle)
+            }
+        }
+        return Pair("HIP ${starIndex + 1}", null)
+    }
+
+    private fun getConstellationDisplayName(catalog: NightSkyCatalog, constellationIndex: Int): Pair<String, String?> {
+        catalog.constellations(reusableConstellation, constellationIndex)
+        val name = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: "Constellation"
+        val subtitle = if (reusableConstellation.isAsterism()) "Asterism" else "Constellation"
+        return Pair(name, subtitle)
+    }
+
     /**
-     * Performs prioritized 2D screen-space hit testing:
-     * 0. Dynamic Planets and Moon (Priority 0)
-     * 1. In-focus constellation name text (progress > 0.3f)
-     * 2. Visible stars within maxRadiusPx touch radius
-     * 3. Miss
-     * Zero heap allocations on the hit sweep.
+     * Performs adaptive 2D screen-space hit testing with brightness-distance weighting
+     * and disambiguation for close celestial objects.
      */
     fun findHitAt(
         tapX: Float,
@@ -1035,28 +1127,12 @@ class NightSkyRenderer {
         catalog: NightSkyCatalog?,
         planets: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
     ): HitTarget {
-        // Priority 0: Dynamic Planets & Moon
+        val bodyCandidates = ArrayList<CelestialCandidate>(8)
+
+        // 1. Candidate Planets & Moon
         val totalPlanetsToCheck = minOf(planets.size, maxPlanets)
-        val minRadiusPx = maxOf(120f, maxStarRadiusPx)
-
-        // Debug logging for planet hit testing
-        for (i in 0 until minOf(totalPlanetsToCheck, planetInFront.size, planets.size)) {
-            if (planetInFront[i]) {
-                val pX = planetScreenX[i]
-                val pY = planetScreenY[i]
-                val pRad = maxOf(minRadiusPx, planetRadiusPx[i])
-                val dx = tapX - pX
-                val dy = tapY - pY
-                val distSq = dx * dx + dy * dy
-                val radSq = pRad * pRad
-                android.util.Log.d(
-                    "HitTest",
-                    "Planet: ${planets[i].id}, Screen(X:$pX, Y:$pY), Touch(X:$tapX, Y:$tapY), DistSq:$distSq, AllowedRadSq:$radSq, Hit:${distSq <= radSq}"
-                )
-            }
-        }
-
-        val hitPlanet = StarHitTester.findPlanetHit(
+        val minPlanetRadiusPx = maxOf(120f, maxStarRadiusPx)
+        val planetCount = StarHitTester.findTopPlanets(
             tapX = tapX,
             tapY = tapY,
             planetScreenX = planetScreenX,
@@ -1065,49 +1141,103 @@ class NightSkyRenderer {
             planetInFront = planetInFront,
             totalPlanets = totalPlanetsToCheck,
             planets = planets,
-            minTouchRadiusPx = minRadiusPx,
+            minTouchRadiusPx = minPlanetRadiusPx,
+            outIndices = topPlanetIndices,
+            outScores = topPlanetScores,
+            maxCandidates = 5,
         )
-        if (hitPlanet != null) {
-            android.util.Log.i("HitTest", "Selected planet: ${hitPlanet.id}")
-            return HitTarget.PlanetHit(hitPlanet.id)
+        val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
+        for (i in 0 until planetCount) {
+            val p = planets[topPlanetIndices[i]]
+            val sub = if (p.isMoon || p.id.equals("Moon", ignoreCase = true)) "Natural Satellite" else "Planet"
+            bodyCandidates.add(
+                CelestialCandidate.Planet(
+                    planetId = p.id,
+                    name = p.localizedName(isCzech),
+                    magnitude = p.magnitude,
+                    score = topPlanetScores[i],
+                    subtitle = sub,
+                )
+            )
         }
 
-        if (catalog == null) return HitTarget.Miss
+        // 2. Candidate Stars
+        if (catalog != null) {
+            val starCount = StarHitTester.findTopStarsFromCatalog(
+                tapX = tapX,
+                tapY = tapY,
+                starScreenX = starScreenX,
+                starScreenY = starScreenY,
+                starInFront = starInFront,
+                catalog = catalog,
+                totalStars = catalog.starsLength(),
+                maxRadiusPx = maxStarRadiusPx,
+                outIndices = topStarIndices,
+                outScores = topStarScores,
+                maxCandidates = 5,
+            )
+            for (i in 0 until starCount) {
+                val sIdx = topStarIndices[i]
+                val sMag = catalog.byteBuffer.getFloat(catalog.starsVectorOffset() + sIdx * 12 + 8)
+                val (starName, starSubtitle) = getStarDisplayName(catalog, sIdx)
+                bodyCandidates.add(
+                    CelestialCandidate.Star(
+                        starIndex = sIdx,
+                        name = starName,
+                        magnitude = sMag,
+                        score = topStarScores[i],
+                        subtitle = starSubtitle,
+                    )
+                )
+            }
+        }
 
-        // Priority 1: Constellations (Only IAU constellations 0..87 render text labels)
-        val constCount = minOf(catalog.constellationsLength(), 88)
-        val constHit = StarHitTester.findConstellationTextHit(
-            tapX = tapX,
-            tapY = tapY,
-            centroidScreenX = constellationCentroidScreenX,
-            centroidScreenY = constellationCentroidScreenY,
-            centroidInFront = constellationCentroidInFront,
-            constellationProgress = constellationProgress,
-            totalConstellations = constCount,
-            textOffsetYPx = 40f * density,
-            halfWidthPx = 75f * density,
-            halfHeightPx = 30f * density,
-            minProgress = 0.3f,
-        )
-        if (constHit >= 0) {
+        // 3. Constellation text labels (priority when in focus, unless planet is hit)
+        val constCount = if (catalog != null) minOf(catalog.constellationsLength(), maxConstellations) else 0
+        val constHit = if (catalog != null && constCount > 0) {
+            StarHitTester.findConstellationTextHit(
+                tapX = tapX,
+                tapY = tapY,
+                centroidScreenX = constellationCentroidScreenX,
+                centroidScreenY = constellationCentroidScreenY,
+                centroidInFront = constellationCentroidInFront,
+                constellationProgress = constellationProgress,
+                totalConstellations = constCount,
+                textOffsetYPx = 40f * density,
+                halfWidthPx = 75f * density,
+                halfHeightPx = 30f * density,
+                minProgress = 0.3f,
+            )
+        } else -1
+
+        if (constHit >= 0 && bodyCandidates.none { it is CelestialCandidate.Planet }) {
             return HitTarget.ConstellationHit(constHit)
         }
 
-        // Priority 2: Stars
-        val starHit = StarHitTester.findClosestVisibleStar(
-            tapX = tapX,
-            tapY = tapY,
-            starScreenX = starScreenX,
-            starScreenY = starScreenY,
-            starInFront = starInFront,
-            totalStars = catalog.starsLength(),
-            maxRadiusPx = maxStarRadiusPx,
-        )
-        if (starHit >= 0) {
-            return HitTarget.StarHit(starHit)
+        if (bodyCandidates.isEmpty()) {
+            if (constHit >= 0) return HitTarget.ConstellationHit(constHit)
+            return HitTarget.Miss
         }
 
-        return HitTarget.Miss
+        // Sort all body candidates by score ascending (lowest/best score first)
+        bodyCandidates.sortBy { it.score }
+
+        if (bodyCandidates.size == 1) {
+            return bodyCandidates[0].target
+        }
+
+        val bestScore = bodyCandidates[0].score
+        val competitiveCandidates = bodyCandidates.filter { it.score <= maxOf(bestScore * 4.0f, bestScore + 50f) }
+
+        return if (competitiveCandidates.size == 1) {
+            competitiveCandidates[0].target
+        } else {
+            HitTarget.MultipleHits(
+                tapX = tapX,
+                tapY = tapY,
+                candidates = competitiveCandidates.take(5),
+            )
+        }
     }
 
     /**
@@ -2092,5 +2222,76 @@ class NightSkyRenderer {
         nativeCanvas.rotate(angleDeg)
         nativeCanvas.drawPath(arrowPath, arrowPaint)
         nativeCanvas.restore()
+    }
+
+    /**
+     * Triggers a temporary animated debug visual circle at the tap point showing the exact hit-test radius.
+     * Zero heap allocations.
+     */
+    fun triggerTapIndicator(tapX: Float, tapY: Float, radiusPx: Float, radiusDp: Int) {
+        tapIndicatorX = tapX
+        tapIndicatorY = tapY
+        tapIndicatorRadiusPx = radiusPx
+        tapIndicatorRadiusDp = radiusDp
+        tapIndicatorTimestamp = System.currentTimeMillis()
+    }
+
+    /**
+     * Draws the animated debug tap search radius circle if recently triggered.
+     * Zero heap allocations per frame.
+     */
+    fun drawTapRadiusIndicator(
+        drawScope: DrawScope,
+        theme: com.dazix.caelis.domain.nightsky.NightVisionTheme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER,
+        isNightVision: Boolean,
+    ) {
+        if (tapIndicatorTimestamp == 0L) return
+        val elapsed = System.currentTimeMillis() - tapIndicatorTimestamp
+        val durationMs = 1200L
+        if (elapsed >= durationMs) return
+
+        val fraction = (elapsed.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        val alpha = 1.0f - fraction
+
+        val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
+
+        val baseColor = if (isNightVision) {
+            val palette = paletteForTheme(theme)
+            AndroidColor.rgb(
+                (palette.primary.red * 255).toInt(),
+                (palette.primary.green * 255).toInt(),
+                (palette.primary.blue * 255).toInt(),
+            )
+        } else {
+            AndroidColor.rgb(0, 229, 255) // Electric Cyan in standard mode
+        }
+
+        val r = AndroidColor.red(baseColor)
+        val g = AndroidColor.green(baseColor)
+        val b = AndroidColor.blue(baseColor)
+
+        val strokeAlpha = (alpha * 220).toInt().coerceIn(0, 255)
+        val fillAlpha = (alpha * 32).toInt().coerceIn(0, 255)
+        val textAlpha = (alpha * 240).toInt().coerceIn(0, 255)
+
+        debugTapCirclePaint.color = AndroidColor.argb(strokeAlpha, r, g, b)
+        debugTapFillPaint.color = AndroidColor.argb(fillAlpha, r, g, b)
+        debugTapCenterPaint.color = AndroidColor.argb(strokeAlpha, r, g, b)
+        debugTapLabelPaint.color = AndroidColor.argb(textAlpha, r, g, b)
+
+        val x = tapIndicatorX
+        val y = tapIndicatorY
+        val radius = tapIndicatorRadiusPx
+
+        // Outer Search Boundary Ring & Disc Fill
+        nativeCanvas.drawCircle(x, y, radius, debugTapFillPaint)
+        nativeCanvas.drawCircle(x, y, radius, debugTapCirclePaint)
+
+        // Center Target Crosshair / Pinpoint Dot
+        nativeCanvas.drawCircle(x, y, 4f, debugTapCenterPaint)
+
+        // Radius Label
+        val label = "SEARCH RADIUS: ${tapIndicatorRadiusDp} dp (${radius.toInt()} px)"
+        nativeCanvas.drawText(label, x, y - radius - 12f, debugTapLabelPaint)
     }
 }

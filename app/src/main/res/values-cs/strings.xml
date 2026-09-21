@@ -427,6 +427,7 @@
     <string name="celestial_parent_constellation">Mateřské souhvězdí</string>
     <string name="celestial_route_to_target">Vycentrovat v zorném poli</string>
     <string name="celestial_close">Zavřít podrobnosti</string>
+    <string name="celestial_disambiguation_title">Vyberte nebeské těleso</string>
 
     <!-- Calibration Debugger -->
     <string name="night_sky_debug_calibration">Ladění zarovnání ilustrací</string>
@@ -437,6 +438,8 @@
     <string name="night_sky_debug_offset_y">Posun Y: %1$.1f px</string>
     <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
     <string name="night_sky_debug_rotation">Rotace: %1$.1f°</string>
+    <string name="night_sky_debug_tap_radius">Rádius dotyku: %1$d dp</string>
+    <string name="night_sky_debug_show_tap_indicator">Zobrazit kroužek dotyku</string>
     <string name="night_sky_debug_reset">Obnovit</string>
 
     <!-- Settings -->
@@ -467,12 +470,19 @@
     <string name="settings_cancel">Zrušit</string>
     <string name="settings_debug_title">Možnosti ladění</string>
     <string name="settings_debug_subtitle">Diagnostické a experimentální nástroje</string>
+    <string name="settings_debug_group_touch">Detekce dotyku a výběr</string>
+    <string name="settings_debug_group_night_sky">Noční obloha AR</string>
+    <string name="settings_debug_group_terrain">Terénní horizont</string>
     <string name="settings_debug_night_sky_calibration">Ladění zarovnání ilustrací</string>
     <string name="settings_debug_night_sky_calibration_desc">Povolí ovládací prvky ladění zarovnání souhvězdí v noční obloze</string>
     <string name="settings_debug_night_sky_focus_region">Oblast aktivace souhvězdí</string>
     <string name="settings_debug_night_sky_focus_region_desc">Zobrazí aktivní oblast zaměření a práh zobrazení souhvězdí v noční obloze</string>
     <string name="settings_debug_terrain_metrics">Metriky terénního horizontu</string>
     <string name="settings_debug_terrain_metrics_desc">Zobrazí v reálném čase vzdálenost Auto-Range a počet aktivních DEM dlaždic v AR</string>
+    <string name="settings_debug_star_tap_radius">Rádius detekce dotyku</string>
+    <string name="settings_debug_star_tap_radius_desc">Fyzický poloměr hledání v dp pro výběr nebeských těles. Tělesa v tomto kruhu se vyhodnocují podle vzdálenosti a jasnosti (výchozí 48 dp).</string>
+    <string name="settings_debug_show_tap_indicator">Zobrazit rádius dotyku</string>
+    <string name="settings_debug_show_tap_indicator_desc">Po kliknutí na oblohu vykreslí vizuální kružnici znázorňující přesnou oblast detekce a vyhledávání hvězd</string>
     <string name="terrain_debug_auto_range">Auto-Range: %1$s</string>
     <string name="terrain_debug_dem_tiles">DEM dlaždice: %1$d</string>
 

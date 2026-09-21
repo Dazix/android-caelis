@@ -1,5 +1,8 @@
 package com.dazix.caelis.domain.nightsky
 
+import com.dazix.caelis.data.nightsky.NightSkyCatalog
+import kotlin.math.pow
+
 /**
  * High-performance 2D screen-space hit testing for celestial objects (Constellations and Stars).
  * Pure Kotlin, zero heap allocations, O(N) linear sweep with early rejection.
@@ -266,7 +269,245 @@ object StarHitTester {
     }
 
     /**
-     * Finds the index of the closest visible star to the user's tap coordinates within a maximum touch radius.
+     * Calculates a perceptual brightness weight based on astronomical apparent magnitude.
+     * Brighter objects (lower or negative magnitude) receive higher weights.
+     *
+     * Example weights:
+     * - Sirius (mag -1.46): ~13.5
+     * - Vega (mag 0.0): ~8.0
+     * - Polaris (mag 2.0): ~4.0
+     * - Mag 4.0: ~2.0
+     * - Mag 6.0 (naked eye limit): ~1.0
+     * - Mag 8.0: ~0.5
+     * - Mag 10.0+: ~0.25
+     */
+    fun computeMagnitudeWeight(magnitude: Float): Float {
+        val clampedMag = magnitude.coerceIn(-5.0f, 15.0f)
+        return 2.0f.pow((6.0f - clampedMag) * 0.5f)
+    }
+
+    /**
+     * Calculates a weighted distance-magnitude score for celestial hit testing.
+     * Lower score represents a better hit candidate (closer distance and brighter magnitude).
+     *
+     * @param distanceSq Squared distance from tap to projected coordinates in screen pixels.
+     * @param magnitude Apparent astronomical magnitude.
+     * @param epsilon Constant offset in px^2 to prevent 0-distance division artifacts.
+     */
+    fun computeHitScore(distanceSq: Float, magnitude: Float, epsilon: Float = 25f): Float {
+        val weight = computeMagnitudeWeight(magnitude)
+        return (distanceSq + epsilon) / weight
+    }
+
+    /**
+     * Inserts a candidate into a pre-allocated fixed-capacity top-K array sorted ascending by score.
+     * Zero heap allocations.
+     *
+     * @param candidateIndex Item index to insert.
+     * @param score Lower is better.
+     * @param outIndices Pre-allocated IntArray to hold candidate indices.
+     * @param outScores Pre-allocated FloatArray to hold candidate scores.
+     * @param currentCount Number of valid candidates currently in the buffer.
+     * @param maxCapacity Maximum capacity (e.g. 5).
+     * @return New count of valid candidates (up to maxCapacity).
+     */
+    fun insertCandidate(
+        candidateIndex: Int,
+        score: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        currentCount: Int,
+        maxCapacity: Int = outIndices.size,
+    ): Int {
+        var insertPos = currentCount
+        for (i in 0 until currentCount) {
+            if (score < outScores[i]) {
+                insertPos = i
+                break
+            }
+        }
+        if (insertPos >= maxCapacity) {
+            return currentCount
+        }
+        val newCount = minOf(currentCount + 1, maxCapacity)
+        for (i in newCount - 1 downTo insertPos + 1) {
+            outIndices[i] = outIndices[i - 1]
+            outScores[i] = outScores[i - 1]
+        }
+        outIndices[insertPos] = candidateIndex
+        outScores[insertPos] = score
+        return newCount
+    }
+
+    /**
+     * Collects top candidate visible stars within [maxRadiusPx] sorted by weighted distance-magnitude score.
+     * Zero heap allocations.
+     *
+     * @param tapX Touch X coordinate in viewport pixels.
+     * @param tapY Touch Y coordinate in viewport pixels.
+     * @param starScreenX Pre-projected screen X coordinates array.
+     * @param starScreenY Pre-projected screen Y coordinates array.
+     * @param starInFront Boolean array tracking whether each star is in front of the camera plane (zCamera > 0).
+     * @param starMagnitudes Apparent magnitudes array (or null to use default magnitude).
+     * @param totalStars Total count of stars in the catalog.
+     * @param maxRadiusPx Maximum touch hit radius in pixels (e.g. 48dp converted to px).
+     * @param outIndices Pre-allocated IntArray to store result star indices.
+     * @param outScores Pre-allocated FloatArray to store result star scores.
+     * @param maxCandidates Maximum number of candidates to return (default is outIndices.size).
+     * @return Number of candidate stars placed into [outIndices] and [outScores].
+     */
+    fun findTopVisibleStars(
+        tapX: Float,
+        tapY: Float,
+        starScreenX: FloatArray,
+        starScreenY: FloatArray,
+        starInFront: BooleanArray,
+        starMagnitudes: FloatArray?,
+        totalStars: Int,
+        maxRadiusPx: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        maxCandidates: Int = minOf(outIndices.size, outScores.size),
+    ): Int {
+        if (totalStars <= 0 || maxRadiusPx <= 0.0f || maxCandidates <= 0) return 0
+
+        val maxRadiusSq = maxRadiusPx * maxRadiusPx
+        val limit = minOf(totalStars, starScreenX.size, starScreenY.size, starInFront.size)
+        var candidateCount = 0
+
+        for (i in 0 until limit) {
+            if (!starInFront[i]) continue
+
+            val dx = tapX - starScreenX[i]
+            val dy = tapY - starScreenY[i]
+            val distSq = dx * dx + dy * dy
+
+            if (distSq <= maxRadiusSq) {
+                val mag = starMagnitudes?.getOrNull(i) ?: 4.0f
+                val score = computeHitScore(distSq, mag)
+                candidateCount = insertCandidate(
+                    candidateIndex = i,
+                    score = score,
+                    outIndices = outIndices,
+                    outScores = outScores,
+                    currentCount = candidateCount,
+                    maxCapacity = maxCandidates,
+                )
+            }
+        }
+
+        return candidateCount
+    }
+
+    /**
+     * Collects top candidate visible stars directly reading magnitudes from FlatBuffers catalog without allocations.
+     * Zero heap allocations.
+     */
+    fun findTopStarsFromCatalog(
+        tapX: Float,
+        tapY: Float,
+        starScreenX: FloatArray,
+        starScreenY: FloatArray,
+        starInFront: BooleanArray,
+        catalog: NightSkyCatalog,
+        totalStars: Int,
+        maxRadiusPx: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        maxCandidates: Int = minOf(outIndices.size, outScores.size),
+    ): Int {
+        if (totalStars <= 0 || maxRadiusPx <= 0.0f || maxCandidates <= 0) return 0
+
+        val bb = catalog.byteBuffer
+        val starsVectorOffset = catalog.starsVectorOffset()
+        val maxRadiusSq = maxRadiusPx * maxRadiusPx
+        val limit = minOf(totalStars, starScreenX.size, starScreenY.size, starInFront.size)
+        var candidateCount = 0
+
+        for (i in 0 until limit) {
+            if (!starInFront[i]) continue
+
+            val dx = tapX - starScreenX[i]
+            val dy = tapY - starScreenY[i]
+            val distSq = dx * dx + dy * dy
+
+            if (distSq <= maxRadiusSq) {
+                val mag = bb.getFloat(starsVectorOffset + i * 12 + 8)
+                val score = computeHitScore(distSq, mag)
+                candidateCount = insertCandidate(
+                    candidateIndex = i,
+                    score = score,
+                    outIndices = outIndices,
+                    outScores = outScores,
+                    currentCount = candidateCount,
+                    maxCapacity = maxCandidates,
+                )
+            }
+        }
+
+        return candidateCount
+    }
+
+    /**
+     * Collects all candidate Planets and Moon intersecting the tap area sorted by score.
+     * Zero heap allocations.
+     */
+    fun findTopPlanets(
+        tapX: Float,
+        tapY: Float,
+        planetScreenX: FloatArray,
+        planetScreenY: FloatArray,
+        planetRadiusPx: FloatArray,
+        planetInFront: BooleanArray,
+        totalPlanets: Int,
+        planets: List<PlanetState>,
+        minTouchRadiusPx: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        maxCandidates: Int = minOf(outIndices.size, outScores.size),
+    ): Int {
+        if (totalPlanets <= 0 || minTouchRadiusPx <= 0.0f || planets.isEmpty() || maxCandidates <= 0) return 0
+
+        val limit = minOf(
+            totalPlanets,
+            planetScreenX.size,
+            planetScreenY.size,
+            planetRadiusPx.size,
+            planetInFront.size,
+            planets.size,
+        )
+        var candidateCount = 0
+
+        for (i in 0 until limit) {
+            if (!planetInFront[i]) continue
+
+            val px = planetScreenX[i]
+            val py = planetScreenY[i]
+            val hitRadius = maxOf(120f, minTouchRadiusPx, planetRadiusPx[i])
+            val dx = tapX - px
+            val dy = tapY - py
+            val distanceSq = dx * dx + dy * dy
+
+            if (distanceSq <= hitRadius * hitRadius) {
+                val score = computeHitScore(distanceSq, planets[i].magnitude)
+                candidateCount = insertCandidate(
+                    candidateIndex = i,
+                    score = score,
+                    outIndices = outIndices,
+                    outScores = outScores,
+                    currentCount = candidateCount,
+                    maxCapacity = maxCandidates,
+                )
+            }
+        }
+
+        return candidateCount
+    }
+
+    /**
+     * Finds the index of the best visible star to the user's tap coordinates within a maximum touch radius.
+     * If [starMagnitudes] is provided, scores stars based on weighted distance and brightness.
+     * If [starMagnitudes] is null, falls back to pure distance comparison.
      *
      * @param tapX Touch X coordinate in viewport pixels.
      * @param tapY Touch Y coordinate in viewport pixels.
@@ -275,7 +516,8 @@ object StarHitTester {
      * @param starInFront Boolean array tracking whether each star is in front of the camera plane (zCamera > 0).
      * @param totalStars Total count of stars in the catalog to search.
      * @param maxRadiusPx Maximum touch hit radius in pixels (e.g. 48dp converted to px).
-     * @return Star index [0, totalStars - 1] of the closest star within radius, or -1 if no star was hit.
+     * @param starMagnitudes Optional star magnitudes array for weighted scoring.
+     * @return Star index [0, totalStars - 1] of the best star within radius, or -1 if no star was hit.
      */
     fun findClosestVisibleStar(
         tapX: Float,
@@ -285,12 +527,14 @@ object StarHitTester {
         starInFront: BooleanArray,
         totalStars: Int,
         maxRadiusPx: Float,
+        starMagnitudes: FloatArray? = null,
     ): Int {
         if (totalStars <= 0 || maxRadiusPx <= 0.0f) return -1
 
-        var closestIndex = -1
-        var minDistanceSq = maxRadiusPx * maxRadiusPx
+        val maxRadiusSq = maxRadiusPx * maxRadiusPx
         val limit = minOf(totalStars, starScreenX.size, starScreenY.size, starInFront.size)
+        var bestIndex = -1
+        var bestScore = Float.MAX_VALUE
 
         for (i in 0 until limit) {
             if (!starInFront[i]) continue
@@ -299,12 +543,20 @@ object StarHitTester {
             val dy = tapY - starScreenY[i]
             val distSq = dx * dx + dy * dy
 
-            if (distSq < minDistanceSq) {
-                minDistanceSq = distSq
-                closestIndex = i
+            if (distSq <= maxRadiusSq) {
+                val score = if (starMagnitudes != null && i < starMagnitudes.size) {
+                    computeHitScore(distSq, starMagnitudes[i])
+                } else {
+                    distSq
+                }
+
+                if (score < bestScore) {
+                    bestScore = score
+                    bestIndex = i
+                }
             }
         }
 
-        return closestIndex
+        return bestIndex
     }
 }

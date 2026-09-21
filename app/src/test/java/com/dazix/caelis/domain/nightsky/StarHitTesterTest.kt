@@ -496,4 +496,196 @@ class StarHitTesterTest {
         )
         org.junit.Assert.assertNull(missHit)
     }
+
+    @Test
+    fun `bright star at radius edge beats dim star near center`() {
+        val tapX = 100f
+        val tapY = 100f
+
+        // Star 0: Dim star (mag 6.5) at distance 12px -> (112, 100)
+        // Star 1: Sirius (mag -1.46) at distance 38px -> (100, 138)
+        val screenX = floatArrayOf(112f, 100f)
+        val screenY = floatArrayOf(100f, 138f)
+        val inFront = booleanArrayOf(true, true)
+        val magnitudes = floatArrayOf(6.5f, -1.46f)
+
+        // With magnitude weighting, Sirius (index 1) must win despite being further away
+        val bestStarIndex = StarHitTester.findClosestVisibleStar(
+            tapX = tapX,
+            tapY = tapY,
+            starScreenX = screenX,
+            starScreenY = screenY,
+            starInFront = inFront,
+            totalStars = 2,
+            maxRadiusPx = 48f,
+            starMagnitudes = magnitudes,
+        )
+
+        assertEquals(1, bestStarIndex)
+
+        // Without magnitude weighting (distance only), dim star 0 wins because 12px < 38px
+        val distanceOnlyWinner = StarHitTester.findClosestVisibleStar(
+            tapX = tapX,
+            tapY = tapY,
+            starScreenX = screenX,
+            starScreenY = screenY,
+            starInFront = inFront,
+            totalStars = 2,
+            maxRadiusPx = 48f,
+            starMagnitudes = null,
+        )
+        assertEquals(0, distanceOnlyWinner)
+    }
+
+    @Test
+    fun `computeMagnitudeWeight increases monotonically with brightness`() {
+        val wVenus = StarHitTester.computeMagnitudeWeight(-4.0f)
+        val wSirius = StarHitTester.computeMagnitudeWeight(-1.46f)
+        val wVega = StarHitTester.computeMagnitudeWeight(0.0f)
+        val wPolaris = StarHitTester.computeMagnitudeWeight(2.0f)
+        val wNakedEye = StarHitTester.computeMagnitudeWeight(6.0f)
+        val wTelescopic = StarHitTester.computeMagnitudeWeight(10.0f)
+
+        org.junit.Assert.assertTrue("Venus > Sirius", wVenus > wSirius)
+        org.junit.Assert.assertTrue("Sirius > Vega", wSirius > wVega)
+        org.junit.Assert.assertTrue("Vega > Polaris", wVega > wPolaris)
+        org.junit.Assert.assertTrue("Polaris > NakedEye", wPolaris > wNakedEye)
+        org.junit.Assert.assertTrue("NakedEye > Telescopic", wNakedEye > wTelescopic)
+    }
+
+    @Test
+    fun `insertCandidate maintains sorted order and enforces capacity`() {
+        val outIndices = IntArray(3)
+        val outScores = FloatArray(3)
+        var count = 0
+
+        // Insert index 10 with score 50.0
+        count = StarHitTester.insertCandidate(10, 50.0f, outIndices, outScores, count, 3)
+        assertEquals(1, count)
+        assertEquals(10, outIndices[0])
+        assertEquals(50.0f, outScores[0], 0.001f)
+
+        // Insert index 20 with score 10.0 (should go to position 0)
+        count = StarHitTester.insertCandidate(20, 10.0f, outIndices, outScores, count, 3)
+        assertEquals(2, count)
+        assertEquals(20, outIndices[0])
+        assertEquals(10, outIndices[1])
+        assertEquals(10.0f, outScores[0], 0.001f)
+        assertEquals(50.0f, outScores[1], 0.001f)
+
+        // Insert index 30 with score 30.0 (should go to position 1)
+        count = StarHitTester.insertCandidate(30, 30.0f, outIndices, outScores, count, 3)
+        assertEquals(3, count)
+        assertEquals(20, outIndices[0])
+        assertEquals(30, outIndices[1])
+        assertEquals(10, outIndices[2])
+
+        // Insert index 40 with score 25.0 (should replace index 10 at the end)
+        count = StarHitTester.insertCandidate(40, 25.0f, outIndices, outScores, count, 3)
+        assertEquals(3, count)
+        assertEquals(20, outIndices[0]) // score 10.0
+        assertEquals(40, outIndices[1]) // score 25.0
+        assertEquals(30, outIndices[2]) // score 30.0
+
+        // Insert index 50 with score 100.0 (worse than capacity -> rejected)
+        count = StarHitTester.insertCandidate(50, 100.0f, outIndices, outScores, count, 3)
+        assertEquals(3, count)
+        assertEquals(20, outIndices[0])
+        assertEquals(40, outIndices[1])
+        assertEquals(30, outIndices[2])
+    }
+
+    @Test
+    fun `findTopVisibleStars collects multiple candidates in dense cluster`() {
+        val tapX = 200f
+        val tapY = 200f
+
+        // 4 stars within 48dp radius
+        val screenX = floatArrayOf(205f, 195f, 220f, 210f, 400f) // 5th star is far away
+        val screenY = floatArrayOf(205f, 205f, 210f, 190f, 400f)
+        val inFront = booleanArrayOf(true, true, true, true, true)
+        val mags = floatArrayOf(2.0f, 2.5f, 1.0f, 3.0f, 0.0f)
+
+        val outIndices = IntArray(5)
+        val outScores = FloatArray(5)
+
+        val candidateCount = StarHitTester.findTopVisibleStars(
+            tapX = tapX,
+            tapY = tapY,
+            starScreenX = screenX,
+            starScreenY = screenY,
+            starInFront = inFront,
+            starMagnitudes = mags,
+            totalStars = 5,
+            maxRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            maxCandidates = 5,
+        )
+
+        assertEquals(4, candidateCount) // 4 stars inside radius, 5th rejected
+        // Top candidate should be star 2 (mag 1.0f) or star 0 (mag 2.0 at 7px)
+        org.junit.Assert.assertTrue(outScores[0] < outScores[1])
+        org.junit.Assert.assertTrue(outScores[1] < outScores[2])
+        org.junit.Assert.assertTrue(outScores[2] < outScores[3])
+    }
+
+    @Test
+    fun `findTopPlanets collects candidate planets sorted by score`() {
+        val tapX = 300f
+        val tapY = 300f
+
+        val jupiter = PlanetState(
+            id = "Jupiter",
+            nameEn = "Jupiter",
+            nameCs = "Jupiter",
+            raDegrees = 0.0,
+            decDegrees = 0.0,
+            magnitude = -2.5f,
+            angularDiameterDeg = 0.01f,
+            distanceFormatted = "5.2 AU",
+            colorRgb = 0xFFFFD54F.toInt(),
+            isMoon = false,
+        )
+        val mars = PlanetState(
+            id = "Mars",
+            nameEn = "Mars",
+            nameCs = "Mars",
+            raDegrees = 0.0,
+            decDegrees = 0.0,
+            magnitude = -0.5f,
+            angularDiameterDeg = 0.005f,
+            distanceFormatted = "1.5 AU",
+            colorRgb = 0xFFFF5722.toInt(),
+            isMoon = false,
+        )
+
+        val screenX = floatArrayOf(305f, 315f)
+        val screenY = floatArrayOf(305f, 310f)
+        val radiusPx = floatArrayOf(40f, 30f)
+        val inFront = booleanArrayOf(true, true)
+
+        val outIndices = IntArray(5)
+        val outScores = FloatArray(5)
+
+        val count = StarHitTester.findTopPlanets(
+            tapX = tapX,
+            tapY = tapY,
+            planetScreenX = screenX,
+            planetScreenY = screenY,
+            planetRadiusPx = radiusPx,
+            planetInFront = inFront,
+            totalPlanets = 2,
+            planets = listOf(jupiter, mars),
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            maxCandidates = 5,
+        )
+
+        assertEquals(2, count)
+        assertEquals(0, outIndices[0]) // Jupiter should be first due to brighter magnitude (-2.5 vs -0.5)
+        assertEquals(1, outIndices[1])
+        org.junit.Assert.assertTrue(outScores[0] < outScores[1])
+    }
 }

@@ -15,6 +15,7 @@ import com.dazix.caelis.overlay.OverlayOptions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -737,6 +738,8 @@ class SettingsMappingTest {
         assertFalse(defaults.enableNightSkyCalibration)
         assertFalse(defaults.enableNightSkyFocusRegion)
         assertFalse(defaults.showTerrainMetrics)
+        assertFalse(defaults.showTapRadiusIndicator)
+        assertEquals(DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP, defaults.starTapRadiusDp)
         assertFalse(defaults.anyEnabled)
     }
 
@@ -747,9 +750,12 @@ class SettingsMappingTest {
             enableNightSkyCalibration = true,
             enableNightSkyFocusRegion = false,
             showTerrainMetrics = true,
+            starTapRadiusDp = 64,
+            showTapRadiusIndicator = true,
         )
         SettingsMapping.writeDebugPreferences(prefs, custom)
         assertEquals(custom, SettingsMapping.readDebugPreferences(prefs))
+        assertTrue(custom.anyEnabled)
     }
 
     @Test
@@ -761,6 +767,8 @@ class SettingsMappingTest {
         assertEquals(true, read.enableNightSkyCalibration)
         assertEquals(true, read.enableNightSkyFocusRegion)
         assertEquals(false, read.showTerrainMetrics)
+        assertEquals(false, read.showTapRadiusIndicator)
+        assertEquals(DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP, read.starTapRadiusDp)
     }
 
     @Test

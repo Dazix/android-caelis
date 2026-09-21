@@ -1704,4 +1704,160 @@ class NightSkyRendererZeroAllocTest {
 
         assertEquals("Star screen offset Y must scale by exactly 3.0x", dy1x * 3.0f, dy3x, 0.01f)
     }
+
+    @Test
+    fun `findHitAt returns MultipleHits when planet and star are close together`() {
+        val fbb = FlatBufferBuilder(1024)
+        val nameOff = fbb.createString("Spica")
+        val metaOff = StarMetadata.createStarMetadata(fbb, 0, nameOff, 0, 0, 250f)
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf(metaOff))
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 0.98f) // Spica (mag 0.98)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val jupiter = com.dazix.caelis.domain.nightsky.PlanetState(
+            id = "Jupiter",
+            nameEn = "Jupiter",
+            nameCs = "Jupiter",
+            raDegrees = 0.0,
+            decDegrees = 90.0,
+            magnitude = -2.5f,
+            angularDiameterDeg = 0.01f,
+            distanceFormatted = "5.2 AU",
+            colorRgb = 0xFFFFD54F.toInt(),
+            isMoon = false,
+        )
+
+        val renderer = NightSkyRenderer()
+
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+                planets = listOf(jupiter),
+            )
+        }
+
+        // Tap between Spica and Jupiter (e.g. at 550, 1205)
+        val hit = renderer.findHitAt(
+            tapX = 550f,
+            tapY = 1205f,
+            maxStarRadiusPx = 48f * 2.5f,
+            density = 2.5f,
+            catalog = catalog,
+            planets = listOf(jupiter),
+        )
+
+        assertTrue("Hit must be MultipleHits when Jupiter and Spica are in conjunction", hit is NightSkyRenderer.HitTarget.MultipleHits)
+        val multi = hit as NightSkyRenderer.HitTarget.MultipleHits
+        assertEquals(2, multi.candidates.size)
+
+        val candidateTypes = multi.candidates.map { it::class }
+        assertTrue("Must contain Planet candidate", candidateTypes.contains(NightSkyRenderer.CelestialCandidate.Planet::class))
+        assertTrue("Must contain Star candidate", candidateTypes.contains(NightSkyRenderer.CelestialCandidate.Star::class))
+
+        val jupiterCandidate = multi.candidates.first { it is NightSkyRenderer.CelestialCandidate.Planet }
+        assertEquals("Jupiter", (jupiterCandidate as NightSkyRenderer.CelestialCandidate.Planet).planetId)
+        assertTrue(jupiterCandidate.target is NightSkyRenderer.HitTarget.PlanetHit)
+
+        val starCandidate = multi.candidates.first { it is NightSkyRenderer.CelestialCandidate.Star }
+        assertEquals("Spica", starCandidate.name)
+        assertTrue(starCandidate.target is NightSkyRenderer.HitTarget.StarHit)
+    }
+
+    @Test
+    fun `findHitAt returns MultipleHits for dense star cluster`() {
+        val fbb = FlatBufferBuilder(1024)
+        val meta1 = StarMetadata.createStarMetadata(fbb, 0, fbb.createString("Alcyone"), 0, 0, 440f)
+        val meta2 = StarMetadata.createStarMetadata(fbb, 1, fbb.createString("Maia"), 0, 0, 360f)
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf(meta1, meta2))
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 2)
+        Star.createStar(fbb, 0.0f, 90.0f, 2.8f) // Alcyone
+        Star.createStar(fbb, 0.2f, 90.0f, 3.8f) // Maia
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        val androidCanvas = android.graphics.Canvas()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(androidCanvas)
+        val drawScope = CanvasDrawScope()
+
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        drawScope.draw(
+            density = Density(2.5f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = composeCanvas,
+            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
+        ) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                zoomFactor = 1.0f,
+            )
+        }
+
+        val hit = renderer.findHitAt(
+            tapX = 542f,
+            tapY = 1200f,
+            maxStarRadiusPx = 48f * 2.5f,
+            density = 2.5f,
+            catalog = catalog,
+            planets = emptyList(),
+        )
+
+        assertTrue("Hit must be MultipleHits for cluster stars", hit is NightSkyRenderer.HitTarget.MultipleHits)
+        val multi = hit as NightSkyRenderer.HitTarget.MultipleHits
+        assertEquals(2, multi.candidates.size)
+        val names = multi.candidates.map { it.name }
+        assertTrue(names.contains("Alcyone"))
+        assertTrue(names.contains("Maia"))
+    }
 }
