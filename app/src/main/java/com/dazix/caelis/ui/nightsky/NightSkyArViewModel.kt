@@ -1285,12 +1285,31 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    // Transient memory for Milky Way state restoration when Planetarium (opaque background) mode is active
+    private var milkyWayStateBeforePlanetarium: Boolean = false
+
     fun toggleSkyBackgroundOpaque() {
         setSkyBackgroundOpaque(!isSkyBackgroundOpaque.value)
     }
 
     fun setSkyBackgroundOpaque(enabled: Boolean) {
         viewModelScope.launch {
+            if (enabled) {
+                // Planetarium is turning ON:
+                // 1. Memorize current Milky Way state
+                milkyWayStateBeforePlanetarium = isMilkyWayVisible.value
+
+                // 2. Force turn off Milky Way if it is currently ON
+                if (isMilkyWayVisible.value) {
+                    settingsStore.saveNightSkyMilkyWayVisible(false)
+                }
+            } else {
+                // Planetarium is turning OFF:
+                // Restore Milky Way if it was ON prior to entering Planetarium mode
+                if (milkyWayStateBeforePlanetarium && !isMilkyWayVisible.value) {
+                    settingsStore.saveNightSkyMilkyWayVisible(true)
+                }
+            }
             settingsStore.saveNightSkyOpaqueBackground(enabled)
         }
     }
@@ -1301,6 +1320,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setMilkyWayVisible(enabled: Boolean) {
         viewModelScope.launch {
+            if (isSkyBackgroundOpaque.value) {
+                // If the user manually changes Milky Way while Planetarium is active,
+                // update the memorized state so their explicit choice persists after exiting.
+                milkyWayStateBeforePlanetarium = enabled
+            }
             settingsStore.saveNightSkyMilkyWayVisible(enabled)
         }
     }
