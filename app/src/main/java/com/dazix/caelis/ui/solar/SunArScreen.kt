@@ -5,6 +5,7 @@ import android.content.Context
 import android.hardware.SensorManager
 import android.hardware.camera2.CameraCharacteristics
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.camera2.interop.Camera2CameraInfo
@@ -22,8 +23,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +79,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
@@ -111,6 +113,7 @@ import com.dazix.caelis.domain.solar.SolarTimeBubble
 import com.dazix.caelis.domain.solar.SolarTrajectory
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
 import com.dazix.caelis.ui.formatOffsetDegrees
@@ -184,6 +187,16 @@ fun SunArScreen(
         }
     }
 
+    BackHandler {
+        when {
+            showDatePicker -> showDatePicker = false
+            showInfoSheet -> showInfoSheet = false
+            else -> onBack()
+        }
+    }
+
+    ImmersiveModeEffect()
+
     val view = LocalView.current
     DisposableEffect(view, uiState.keepScreenOn) {
         view.keepScreenOn = uiState.keepScreenOn
@@ -249,15 +262,47 @@ fun SunArScreen(
             // compass error and nothing else. There is deliberately no zoom here: it would scale the
             // image and the overlay together and only add a variable to the alignment.
             .pointerInput(Unit) {
-                detectDragGestures { change, drag ->
-                    change.consume()
-                    if (drag.x != 0f || drag.y != 0f) {
-                        viewModel.onPanGesture(
-                            deltaX = drag.x,
-                            deltaY = drag.y,
-                            viewWidth = size.width.toFloat().coerceAtLeast(1f),
-                            fovDeg = uiState.cameraFovHorizontal,
-                        )
+                val edgeSlop = 28.dp.toPx()
+                val touchSlop = viewConfiguration.touchSlop
+                val touchSlopSq = touchSlop * touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = true)
+                    val downX = down.position.x
+                    val downY = down.position.y
+                    val isEdgeStart = downX < edgeSlop || downX > size.width - edgeSlop
+                    var isPanning = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val changes = event.changes
+                        if (changes.any { it.isConsumed }) break
+                        val change = changes.firstOrNull { it.pressed } ?: break
+
+                        val deltaX = change.position.x - change.previousPosition.x
+                        val deltaY = change.position.y - change.previousPosition.y
+
+                        if (!isPanning) {
+                            val totalDistSq = (change.position.x - downX) * (change.position.x - downX) +
+                                (change.position.y - downY) * (change.position.y - downY)
+                            if (totalDistSq > touchSlopSq) {
+                                isPanning = true
+                            }
+                        }
+
+                        if (isPanning) {
+                            if (deltaX != 0f || deltaY != 0f) {
+                                viewModel.onPanGesture(
+                                    deltaX = deltaX,
+                                    deltaY = deltaY,
+                                    viewWidth = size.width.toFloat().coerceAtLeast(1f),
+                                    fovDeg = uiState.cameraFovHorizontal,
+                                )
+                            }
+                            val isEdgeBackSwipe = isEdgeStart && kotlin.math.abs(deltaX) >= kotlin.math.abs(deltaY)
+                            if (!isEdgeBackSwipe && change.positionChanged()) {
+                                change.consume()
+                            }
+                        }
                     }
                 }
             }

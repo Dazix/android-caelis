@@ -3,6 +3,7 @@ package com.dazix.caelis.ui.nightsky
 import android.Manifest
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -118,6 +119,7 @@ import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.StarCatalog
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.solar.HorizonConsentDialog
 
@@ -202,6 +204,20 @@ fun NightSkyArScreen(
             )
         }
     }
+
+    BackHandler {
+        when {
+            uiState.isSearchActive -> viewModel.setSearchActive(false)
+            uiState.selectedBody != null -> viewModel.clearSelectedBody()
+            uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
+            isLayerSheetOpen -> isLayerSheetOpen = false
+            uiState.isDebugOptionsEnabled && uiState.isDebugCalibrationVisible -> viewModel.setDebugCalibrationVisible(false)
+            uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible -> viewModel.setDebugFocusRegionVisible(false)
+            else -> onBack()
+        }
+    }
+
+    ImmersiveModeEffect()
 
     val view = LocalView.current
     DisposableEffect(view, uiState.keepScreenOn) {
@@ -1752,6 +1768,7 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
 ) {
     val touchSlop = viewConfiguration.touchSlop
     val touchSlopSq = touchSlop * touchSlop
+    val edgeSlop = 28.dp.toPx()
     val doubleTapTimeout = viewConfiguration.doubleTapTimeoutMillis
     val doubleTapMinTime = viewConfiguration.doubleTapMinTimeMillis
     var lastTapTime = 0L
@@ -1759,9 +1776,10 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
     var lastTapY = 0f
 
     awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
+        val down = awaitFirstDown(requireUnconsumed = true)
         val downX = down.position.x
         val downY = down.position.y
+        val isEdgeStart = downX < edgeSlop || downX > size.width - edgeSlop
         var isPanning = false
         var isTransforming = false
         var pastTouchSlop = false
@@ -1770,16 +1788,19 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
             val event = awaitPointerEvent()
             val changes = event.changes
             var pressedCount = 0
+            var anyConsumed = false
             for (i in changes.indices) {
                 if (changes[i].pressed) pressedCount++
+                if (changes[i].isConsumed) anyConsumed = true
             }
 
             if (pressedCount == 0) {
                 // All pointers lifted -> check for Tap / DoubleTap
-                if (!pastTouchSlop && !isTransforming) {
-                    val upChange = changes.firstOrNull()
-                    val upX = upChange?.position?.x ?: downX
-                    val upY = upChange?.position?.y ?: downY
+                val upChange = changes.firstOrNull()
+                val isCancelledOrConsumed = upChange == null || upChange.isConsumed || anyConsumed
+                if (!isCancelledOrConsumed && !pastTouchSlop && !isTransforming) {
+                    val upX = upChange.position.x
+                    val upY = upChange.position.y
                     val distSq = (upX - downX) * (upX - downX) + (upY - downY) * (upY - downY)
                     if (distSq <= touchSlopSq) {
                         val currentTime = System.currentTimeMillis()
@@ -1794,8 +1815,14 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
                             lastTapX = downX
                             lastTapY = downY
                         }
+                        upChange.consume()
                     }
                 }
+                break
+            }
+
+            if (anyConsumed && !isTransforming && !isPanning) {
+                // System or parent intercepted the gesture
                 break
             }
 
@@ -1823,6 +1850,8 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
             } else if (pressedCount == 1 && !isTransforming) {
                 // Single pointer: check touch slop before engaging pan
                 val change = changes.firstOrNull { it.pressed } ?: break
+                if (change.isConsumed) break
+
                 val totalDistSq = (change.position.x - downX) * (change.position.x - downX) +
                     (change.position.y - downY) * (change.position.y - downY)
 
@@ -1837,7 +1866,10 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
                     if (deltaX != 0f || deltaY != 0f) {
                         onPan(deltaX, deltaY)
                     }
-                    if (change.positionChanged()) {
+                    // For gestures starting at the screen edge, allow horizontal back navigation
+                    // by not consuming horizontal movement towards the interior.
+                    val isEdgeBackSwipe = isEdgeStart && kotlin.math.abs(deltaX) >= kotlin.math.abs(deltaY)
+                    if (!isEdgeBackSwipe && change.positionChanged()) {
                         change.consume()
                     }
                 }
