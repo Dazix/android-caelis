@@ -537,6 +537,18 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky dsos visible defaults to false and survives round trip`() {
+        assertEquals(false, SettingsMapping.readNightSkyDsosVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyDsosVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyDsosVisible(prefs))
+
+        SettingsMapping.writeNightSkyDsosVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyDsosVisible(prefs))
+    }
+
+    @Test
     fun `sun ar elevation offset defaults to zero and survives round trip`() {
         assertEquals(0.0f, SettingsMapping.readSunArElevationOffset(emptyPreferences()))
 

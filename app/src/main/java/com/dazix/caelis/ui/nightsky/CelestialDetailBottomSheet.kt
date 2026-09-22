@@ -52,6 +52,7 @@ fun CelestialDetailSheetContent(
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
     onRouteToTarget: (() -> Unit)? = null,
+    onShowDsoLegend: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
@@ -120,6 +121,20 @@ fun CelestialDetailSheetContent(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
+                    if (onShowDsoLegend != null) {
+                        IconButton(
+                            onClick = onShowDsoLegend,
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Icon(
+                                imageVector = AppIcons.Info,
+                                contentDescription = stringResource(R.string.dso_legend_button),
+                                tint = accentColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+
                     if (onRouteToTarget != null) {
                         IconButton(
                             onClick = onRouteToTarget,

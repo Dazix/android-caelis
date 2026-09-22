@@ -33,6 +33,27 @@ table Constellation {
   art_corner_dec: [float];
 }
 
+enum DsoType : byte {
+  Galaxy = 0,
+  GlobularCluster = 1,
+  OpenCluster = 2,
+  Nebula = 3,
+  PlanetaryNebula = 4
+}
+
+table DeepSkyObject {
+  messier_id: short;         // e.g., 31 for M31
+  ra: float;                 // Right Ascension in degrees (0.0 - 360.0)
+  dec: float;                // Declination in degrees (-90.0 - +90.0)
+  mag: float;                // Visual magnitude
+  size_arcmin: float;        // Angular size in arcminutes (for rendering scale)
+  type: DsoType;
+  localized_name: string;    // e.g., "Galaxie v Andromedě"
+  constellation_id: string;  // IAU 3-letter code (e.g., "And")
+  english_name: string;      // e.g., "Andromeda Galaxy"
+  ngc_id: string;            // e.g., "NGC 224"
+}
+
 table NightSkyCatalog {
   // Fast loop data: Tightly packed contiguous memory block
   stars: [Star];
@@ -40,6 +61,7 @@ table NightSkyCatalog {
   // Slower metadata: Accessed only when needed
   metadata: [StarMetadata];
   constellations: [Constellation];
+  dsos: [DeepSkyObject];
 }
 
 root_type NightSkyCatalog;

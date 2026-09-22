@@ -12,6 +12,7 @@ import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import com.dazix.caelis.ar.SkyDomeRenderer
 import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.data.nightsky.Constellation
+import com.dazix.caelis.data.nightsky.DeepSkyObject
+import com.dazix.caelis.data.nightsky.DsoType
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.data.nightsky.StarMetadata
@@ -122,8 +125,12 @@ class NightSkyRenderer {
     val constellationCentroidScreenX = FloatArray(maxConstellations)
     val constellationCentroidScreenY = FloatArray(maxConstellations)
     val constellationCentroidInFront = BooleanArray(maxConstellations)
+    val constellationCentroidWorldX = FloatArray(maxConstellations)
+    val constellationCentroidWorldY = FloatArray(maxConstellations)
+    val constellationCentroidWorldZ = FloatArray(maxConstellations)
     val constellationIsFocused = BooleanArray(maxConstellations)
     private val tempCentroidWorldVec = FloatArray(3)
+    var currentHorizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null
     private var lastFrameTimeMs: Long = 0L
 
     var selectedConstellationIndex: Int = -1
@@ -140,6 +147,51 @@ class NightSkyRenderer {
     private val topStarScores = FloatArray(5)
     private val topPlanetIndices = IntArray(5)
     private val topPlanetScores = FloatArray(5)
+    private val topDsoIndices = IntArray(5)
+    private val topDsoScores = FloatArray(5)
+
+    // Pre-allocated buffers for Deep Sky Objects (Messier Catalog)
+    val dsoWorldX = FloatArray(MAX_DSOS)
+    val dsoWorldY = FloatArray(MAX_DSOS)
+    val dsoWorldZ = FloatArray(MAX_DSOS)
+    val dsoScreenX = FloatArray(MAX_DSOS)
+    val dsoScreenY = FloatArray(MAX_DSOS)
+    val dsoRadiusPx = FloatArray(MAX_DSOS)
+    val dsoInFront = BooleanArray(MAX_DSOS)
+    val dsoMagnitudes = FloatArray(MAX_DSOS)
+
+    var selectedDsoIndex: Int = -1
+
+    private val reusableDso = DeepSkyObject()
+    private val dsoRectF = RectF()
+
+    val dsoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 2.0f
+    }
+    val dsoDashedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.8f
+        pathEffect = DashPathEffect(floatArrayOf(6f, 4f), 0f)
+    }
+    val dsoHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4.5f
+    }
+    val dsoCorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    val dsoLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    val dsoHighlightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
+    }
 
     companion object {
         /** Fill below the real skyline. Near-black, never pure black — see [drawLandscape]. */
@@ -148,6 +200,7 @@ class NightSkyRenderer {
         private const val TERRAIN_FILL_B = 0.043f
 
         const val MAX_STARS = 100_000
+        const val MAX_DSOS = 128
 
         data class IndicatorTransform(
             val arrowX: Float,
@@ -397,6 +450,9 @@ class NightSkyRenderer {
     val planetRadiusPx = FloatArray(maxPlanets)
     val planetInFront = BooleanArray(maxPlanets)
     val planetIds = Array(maxPlanets) { "" }
+    val planetWorldX = FloatArray(maxPlanets)
+    val planetWorldY = FloatArray(maxPlanets)
+    val planetWorldZ = FloatArray(maxPlanets)
     var activePlanetsCount = 0
 
     var selectedPlanetId: String? = null
@@ -720,6 +776,13 @@ class NightSkyRenderer {
             asterismLabelPaint.color = AndroidColor.argb(170, sr, sg, sb)
             asterismHighlightLabelPaint.color = secondaryInt
 
+            dsoPaint.color = AndroidColor.argb(200, pr, pg, pb)
+            dsoDashedPaint.color = AndroidColor.argb(200, pr, pg, pb)
+            dsoHaloPaint.color = AndroidColor.argb(40, pr, pg, pb)
+            dsoCorePaint.color = AndroidColor.argb(255, sr, sg, sb)
+            dsoLabelPaint.color = AndroidColor.argb(210, pr, pg, pb)
+            dsoHighlightLabelPaint.color = primaryInt
+
             reticlePaint.color = primaryInt
             reticleTextPaint.color = primaryInt
             arrowPaint.color = primaryInt
@@ -756,6 +819,13 @@ class NightSkyRenderer {
             asterismCorePaint.color = AndroidColor.argb(240, 240, 248, 255)
             asterismLabelPaint.color = AndroidColor.argb(180, 176, 190, 197)
             asterismHighlightLabelPaint.color = AndroidColor.rgb(129, 212, 250)
+
+            dsoPaint.color = AndroidColor.argb(220, 255, 183, 77)
+            dsoDashedPaint.color = AndroidColor.argb(220, 255, 183, 77)
+            dsoHaloPaint.color = AndroidColor.argb(45, 255, 183, 77)
+            dsoCorePaint.color = AndroidColor.WHITE
+            dsoLabelPaint.color = AndroidColor.argb(220, 255, 204, 128)
+            dsoHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
 
             reticlePaint.color = AndroidColor.WHITE
             reticleTextPaint.color = AndroidColor.WHITE
@@ -870,6 +940,7 @@ class NightSkyRenderer {
      * Does nothing when [profile] has not changed, so this is safe to call from a recomposition.
      */
     fun setHorizonProfile(profile: com.dazix.caelis.domain.horizon.HorizonProfile?) {
+        currentHorizonProfile = profile
         val shader = landscapeShader ?: return
 
         if (profile == null) {
@@ -1072,6 +1143,17 @@ class NightSkyRenderer {
             override val target: HitTarget get() = HitTarget.StarHit(starIndex)
         }
 
+        data class Dso(
+            val dsoIndex: Int,
+            val messierId: String,
+            override val name: String,
+            override val magnitude: Float,
+            override val score: Float,
+            override val subtitle: String? = null,
+        ) : CelestialCandidate {
+            override val target: HitTarget get() = HitTarget.DsoHit(dsoIndex)
+        }
+
         data class Constellation(
             val constellationIndex: Int,
             override val name: String,
@@ -1086,6 +1168,7 @@ class NightSkyRenderer {
     sealed interface HitTarget {
         data class ConstellationHit(val index: Int) : HitTarget
         data class StarHit(val index: Int) : HitTarget
+        data class DsoHit(val index: Int) : HitTarget
         data class PlanetHit(val planetId: String) : HitTarget
         data class MultipleHits(
             val tapX: Float,
@@ -1126,8 +1209,14 @@ class NightSkyRenderer {
         density: Float,
         catalog: NightSkyCatalog?,
         planets: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = currentHorizonProfile,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
     ): HitTarget {
         val bodyCandidates = ArrayList<CelestialCandidate>(8)
+        val activeProfile = horizonProfile ?: currentHorizonProfile
 
         // 1. Candidate Planets & Moon
         val totalPlanetsToCheck = minOf(planets.size, maxPlanets)
@@ -1145,6 +1234,14 @@ class NightSkyRenderer {
             outIndices = topPlanetIndices,
             outScores = topPlanetScores,
             maxCandidates = 5,
+            planetWorldX = planetWorldX,
+            planetWorldY = planetWorldY,
+            planetWorldZ = planetWorldZ,
+            isLandscapeVisible = isLandscapeVisible,
+            useRealHorizon = useRealHorizon,
+            horizonProfile = activeProfile,
+            alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
+            alignElevationOffsetDeg = alignElevationOffsetDeg,
         )
         val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
         for (i in 0 until planetCount) {
@@ -1161,7 +1258,53 @@ class NightSkyRenderer {
             )
         }
 
-        // 2. Candidate Stars
+        // 2. Candidate DSOs (Messier Objects)
+        if (catalog != null) {
+            val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+            val dsoTopCount = StarHitTester.findTopDsos(
+                tapX = tapX,
+                tapY = tapY,
+                dsoScreenX = dsoScreenX,
+                dsoScreenY = dsoScreenY,
+                dsoRadiusPx = dsoRadiusPx,
+                dsoInFront = dsoInFront,
+                dsoMagnitudes = dsoMagnitudes,
+                totalDsos = dsoCount,
+                minTouchRadiusPx = maxStarRadiusPx,
+                outIndices = topDsoIndices,
+                outScores = topDsoScores,
+                maxCandidates = 5,
+                dsoWorldX = dsoWorldX,
+                dsoWorldY = dsoWorldY,
+                dsoWorldZ = dsoWorldZ,
+                isLandscapeVisible = isLandscapeVisible,
+                useRealHorizon = useRealHorizon,
+                horizonProfile = activeProfile,
+                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
+                alignElevationOffsetDeg = alignElevationOffsetDeg,
+            )
+            for (i in 0 until dsoTopCount) {
+                val dIdx = topDsoIndices[i]
+                catalog.dsos(reusableDso, dIdx)
+                val mNum = reusableDso.messierId()
+                val mId = "M$mNum"
+                val dName = reusableDso.englishName()
+                val displayName = if (!dName.isNullOrEmpty()) "$mId ($dName)" else mId
+                val sub = reusableDso.ngcId() ?: "Deep Sky Object"
+                bodyCandidates.add(
+                    CelestialCandidate.Dso(
+                        dsoIndex = dIdx,
+                        messierId = mId,
+                        name = displayName,
+                        magnitude = reusableDso.mag(),
+                        score = topDsoScores[i],
+                        subtitle = sub,
+                    )
+                )
+            }
+        }
+
+        // 3. Candidate Stars
         if (catalog != null) {
             val starCount = StarHitTester.findTopStarsFromCatalog(
                 tapX = tapX,
@@ -1175,6 +1318,14 @@ class NightSkyRenderer {
                 outIndices = topStarIndices,
                 outScores = topStarScores,
                 maxCandidates = 5,
+                starWorldX = starWorldX,
+                starWorldY = starWorldY,
+                starWorldZ = starWorldZ,
+                isLandscapeVisible = isLandscapeVisible,
+                useRealHorizon = useRealHorizon,
+                horizonProfile = activeProfile,
+                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
+                alignElevationOffsetDeg = alignElevationOffsetDeg,
             )
             for (i in 0 until starCount) {
                 val sIdx = topStarIndices[i]
@@ -1207,6 +1358,14 @@ class NightSkyRenderer {
                 halfWidthPx = 75f * density,
                 halfHeightPx = 30f * density,
                 minProgress = 0.3f,
+                centroidWorldX = constellationCentroidWorldX,
+                centroidWorldY = constellationCentroidWorldY,
+                centroidWorldZ = constellationCentroidWorldZ,
+                isLandscapeVisible = isLandscapeVisible,
+                useRealHorizon = useRealHorizon,
+                horizonProfile = activeProfile,
+                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
+                alignElevationOffsetDeg = alignElevationOffsetDeg,
             )
         } else -1
 
@@ -1292,6 +1451,19 @@ class NightSkyRenderer {
             }
         }
 
+        // Precompute world vectors for Deep Sky Objects (Messier Catalog)
+        val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+        for (d in 0 until dsoCount) {
+            catalog.dsos(reusableDso, d)
+            val ra = reusableDso.ra().toDouble()
+            val dec = reusableDso.dec().toDouble()
+            EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+            dsoWorldX[d] = tempWorldVec[0]
+            dsoWorldY[d] = tempWorldVec[1]
+            dsoWorldZ[d] = tempWorldVec[2]
+            dsoMagnitudes[d] = reusableDso.mag()
+        }
+
         cachedLstDegrees = lstDegrees
         cachedLatitudeDegrees = latitudeDegrees
         cachedStarCount = totalStars
@@ -1363,6 +1535,7 @@ class NightSkyRenderer {
         showConstellations: Boolean = true,
         showConstellationArt: Boolean = true,
         showPlanets: Boolean = true,
+        showDsos: Boolean = true,
         isAtmosphereVisible: Boolean = true,
         context: Context? = null,
         debugOffsetX: Float = 0f,
@@ -1436,6 +1609,9 @@ class NightSkyRenderer {
             val cvx = tempCentroidWorldVec[0]
             val cvy = tempCentroidWorldVec[1]
             val cvz = tempCentroidWorldVec[2]
+            constellationCentroidWorldX[c] = cvx
+            constellationCentroidWorldY[c] = cvy
+            constellationCentroidWorldZ[c] = cvz
 
             val cxDev = matrix[0] * cvx + matrix[4] * cvy + matrix[8] * cvz
             val cyDev = matrix[1] * cvx + matrix[5] * cvy + matrix[9] * cvz
@@ -1835,6 +2011,9 @@ class NightSkyRenderer {
                 val vx = planetWorldVec[0]
                 val vy = planetWorldVec[1]
                 val vz = planetWorldVec[2]
+                planetWorldX[pIdx] = vx
+                planetWorldY[pIdx] = vy
+                planetWorldZ[pIdx] = vz
 
                 // Transform World -> Device coordinates: V_dev = R^T * V_world
                 val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
@@ -2004,6 +2183,125 @@ class NightSkyRenderer {
             }
         }
 
+        // 7c. Deep Sky Objects (Messier Catalog: Galaxies, Clusters, Nebulae)
+        if (showDsos) {
+            val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+            val density = drawScope.density
+            val opticScale = StarOptics.computeOpticScale(zoomFactor)
+
+            for (d in 0 until dsoCount) {
+                catalog.dsos(reusableDso, d)
+                val vx = dsoWorldX[d]
+                val vy = dsoWorldY[d]
+                val vz = dsoWorldZ[d]
+
+                // Transform World -> Device coordinates: V_dev = R^T * V_world
+                val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
+                val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
+                val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+
+                val xs: Float
+                val ys: Float
+                when (displayRotation) {
+                    Surface.ROTATION_0 -> { xs = xDev; ys = yDev }
+                    Surface.ROTATION_90 -> { xs = yDev; ys = -xDev }
+                    Surface.ROTATION_180 -> { xs = -xDev; ys = -yDev }
+                    Surface.ROTATION_270 -> { xs = -yDev; ys = xDev }
+                    else -> { xs = xDev; ys = yDev }
+                }
+                val zs = -zDev
+
+                if (zs <= 0.001f) {
+                    dsoInFront[d] = false
+                    continue
+                }
+
+                val pX = halfW + focalLengthPixels * (xs / zs)
+                val pY = halfH - focalLengthPixels * (ys / zs)
+
+                dsoScreenX[d] = pX
+                dsoScreenY[d] = pY
+                dsoInFront[d] = true
+
+                // Viewport culling
+                val marginDso = 100.0f
+                if (pX !in -marginDso..(w + marginDso) || pY !in -marginDso..(h + marginDso)) {
+                    continue
+                }
+
+                // Compute dynamic screen radius based on angular size or default
+                val sizeArcmin = reusableDso.sizeArcmin()
+                val baseSizeRad = if (sizeArcmin > 0f) Math.toRadians((sizeArcmin / 60.0)).toFloat() else 0.004f
+                val physicalRadiusPx = (focalLengthPixels * kotlin.math.tan(baseSizeRad * 0.5f))
+                val renderedRadiusPx = physicalRadiusPx.coerceIn(8f * density * opticScale, 70f * density * opticScale)
+                dsoRadiusPx[d] = renderedRadiusPx
+
+                val isSelected = (d == selectedDsoIndex)
+                val dsoType = reusableDso.type()
+                val mNum = reusableDso.messierId()
+                val messierId = "M$mNum"
+
+                // Draw type-specific glyph
+                when (dsoType) {
+                    DsoType.GALAXY -> {
+                        // Tilted ellipse (major:minor = 2:1)
+                        nativeCanvas.save()
+                        nativeCanvas.translate(pX, pY)
+                        nativeCanvas.rotate(-35f)
+                        dsoRectF.set(-renderedRadiusPx, -renderedRadiusPx * 0.5f, renderedRadiusPx, renderedRadiusPx * 0.5f)
+                        nativeCanvas.drawOval(dsoRectF, dsoHaloPaint)
+                        nativeCanvas.drawOval(dsoRectF, dsoPaint)
+                        nativeCanvas.drawCircle(0f, 0f, 1.8f * density, dsoCorePaint)
+                        nativeCanvas.restore()
+                    }
+                    DsoType.GLOBULAR_CLUSTER -> {
+                        // Circle with inscribed crosshair
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                        nativeCanvas.drawLine(pX - renderedRadiusPx, pY, pX + renderedRadiusPx, pY, dsoPaint)
+                        nativeCanvas.drawLine(pX, pY - renderedRadiusPx, pX, pY + renderedRadiusPx, dsoPaint)
+                        nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                    }
+                    DsoType.OPEN_CLUSTER -> {
+                        // Dashed circle with center core
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoDashedPaint)
+                        nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                    }
+                    DsoType.NEBULA -> {
+                        // Rounded square bounding frame
+                        val r = renderedRadiusPx * 0.85f
+                        dsoRectF.set(pX - r, pY - r, pX + r, pY + r)
+                        nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoHaloPaint)
+                        nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoPaint)
+                        nativeCanvas.drawCircle(pX, pY, 1.5f * density, dsoCorePaint)
+                    }
+                    DsoType.PLANETARY_NEBULA -> {
+                        // Circle with 4 outward tick marks
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                        val tick = 4f * density
+                        nativeCanvas.drawLine(pX - renderedRadiusPx - tick, pY, pX - renderedRadiusPx, pY, dsoPaint)
+                        nativeCanvas.drawLine(pX + renderedRadiusPx, pY, pX + renderedRadiusPx + tick, pY, dsoPaint)
+                        nativeCanvas.drawLine(pX, pY - renderedRadiusPx - tick, pX, pY - renderedRadiusPx, dsoPaint)
+                        nativeCanvas.drawLine(pX, pY + renderedRadiusPx, pX, pY + renderedRadiusPx + tick, dsoPaint)
+                    }
+                    else -> {
+                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                    }
+                }
+
+                // Draw Messier ID Label below symbol
+                val labelPaint = if (isSelected) dsoHighlightLabelPaint else dsoLabelPaint
+                val labelY = pY + renderedRadiusPx + (14f * density)
+                nativeCanvas.drawText(messierId, pX, labelY, labelPaint)
+            }
+        } else {
+            for (d in 0 until MAX_DSOS) {
+                dsoInFront[d] = false
+            }
+        }
+
         // 8. Hybrid Optical Star Rendering:
         // Pass 1: Continuous Radial Gradient Sprite Glow for Bright Stars (Buckets 0, 1, 2: mag < 3.0)
         val sprite = starSpriteBitmap
@@ -2130,8 +2428,8 @@ class NightSkyRenderer {
             return
         }
 
-        // Only draw broken crosshair if a Star or Planet is selected (not a Constellation)
-        if (selectedStarIndex >= 0 || selectedPlanetId != null) {
+        // Only draw broken crosshair if a Star, Planet, or DSO is selected (not a Constellation)
+        if (selectedStarIndex >= 0 || selectedPlanetId != null || selectedDsoIndex >= 0) {
             // Scaled to 75% of original radii (r1: 13dp -> 9.75dp, r2: 24dp -> 18dp):
             val r1 = 9.75f * density
             val r2 = 18.0f * density

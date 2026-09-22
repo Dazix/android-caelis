@@ -10,6 +10,56 @@ import kotlin.math.pow
 object StarHitTester {
 
     /**
+     * Checks if a celestial body at Earth ENU coordinates ([vx], [vy], [vz]) is occluded
+     * behind the ground landscape or terrain horizon.
+     *
+     * @param vx East component of World ENU unit vector.
+     * @param vy North component of World ENU unit vector.
+     * @param vz Up component of World ENU unit vector.
+     * @param isLandscapeVisible True if the photorealistic ground landscape panorama is enabled.
+     * @param useRealHorizon True if real DEM terrain horizon profile is enabled.
+     * @param horizonProfile Active [com.dazix.caelis.domain.horizon.HorizonProfile] if available.
+     * @param alignAzimuthOffsetDeg Alignment compass azimuth offset in degrees.
+     * @param alignElevationOffsetDeg Alignment elevation pitch offset in degrees.
+     * @return True if the celestial body is occluded behind the landscape horizon, false if visible in open sky.
+     */
+    fun isOccludedByLandscape(
+        vx: Float,
+        vy: Float,
+        vz: Float,
+        isLandscapeVisible: Boolean,
+        useRealHorizon: Boolean,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile?,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
+    ): Boolean {
+        if (!isLandscapeVisible && !(useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) {
+            return false
+        }
+
+        if (useRealHorizon && horizonProfile != null && horizonProfile.isUsable) {
+            val rawAzimuthDeg = Math.toDegrees(kotlin.math.atan2(vx.toDouble(), vy.toDouble()))
+            val normAzimuthDeg = if (rawAzimuthDeg < 0.0) rawAzimuthDeg + 360.0 else rawAzimuthDeg
+            val alignedAzimuthDeg = (normAzimuthDeg + alignAzimuthOffsetDeg).let {
+                val m = it % 360.0
+                if (m < 0.0) m + 360.0 else m
+            }
+            val rawElevationDeg = Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))
+            val alignedElevationDeg = rawElevationDeg + alignElevationOffsetDeg
+            val terrainAlt = horizonProfile.elevationAt(alignedAzimuthDeg)
+            return alignedElevationDeg < terrainAlt
+        }
+
+        if (isLandscapeVisible) {
+            val rawElevationDeg = Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))
+            val alignedElevationDeg = rawElevationDeg + alignElevationOffsetDeg
+            return alignedElevationDeg < 0.0
+        }
+
+        return false
+    }
+
+    /**
      * Calculates the dynamic hit target radius in pixels based on the planet's angular diameter,
      * perspective distance, the "Planetarium Trick" visual boost factor, and minimum touch target size.
      *
@@ -235,6 +285,14 @@ object StarHitTester {
         halfWidthPx: Float,
         halfHeightPx: Float,
         minProgress: Float = 0.3f,
+        centroidWorldX: FloatArray? = null,
+        centroidWorldY: FloatArray? = null,
+        centroidWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
     ): Int {
         if (totalConstellations <= 0 || halfWidthPx <= 0f || halfHeightPx <= 0f) return -1
 
@@ -246,12 +304,29 @@ object StarHitTester {
             constellationProgress.size,
         )
 
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            centroidWorldX != null && centroidWorldY != null && centroidWorldZ != null
+
         val invRx2 = 1.0f / (halfWidthPx * halfWidthPx)
         val invRy2 = 1.0f / (halfHeightPx * halfHeightPx)
 
         for (i in 0 until limit) {
             val progress = constellationProgress[i]
             if (progress <= minProgress || !centroidInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    centroidWorldX[i],
+                    centroidWorldY[i],
+                    centroidWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
 
             val cx = centroidScreenX[i]
             val cy = centroidScreenY[i] - (textOffsetYPx * (1.0f - progress))
@@ -368,6 +443,14 @@ object StarHitTester {
         outIndices: IntArray,
         outScores: FloatArray,
         maxCandidates: Int = minOf(outIndices.size, outScores.size),
+        starWorldX: FloatArray? = null,
+        starWorldY: FloatArray? = null,
+        starWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
     ): Int {
         if (totalStars <= 0 || maxRadiusPx <= 0.0f || maxCandidates <= 0) return 0
 
@@ -375,8 +458,25 @@ object StarHitTester {
         val limit = minOf(totalStars, starScreenX.size, starScreenY.size, starInFront.size)
         var candidateCount = 0
 
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            starWorldX != null && starWorldY != null && starWorldZ != null
+
         for (i in 0 until limit) {
             if (!starInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    starWorldX[i],
+                    starWorldY[i],
+                    starWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
 
             val dx = tapX - starScreenX[i]
             val dy = tapY - starScreenY[i]
@@ -415,6 +515,14 @@ object StarHitTester {
         outIndices: IntArray,
         outScores: FloatArray,
         maxCandidates: Int = minOf(outIndices.size, outScores.size),
+        starWorldX: FloatArray? = null,
+        starWorldY: FloatArray? = null,
+        starWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
     ): Int {
         if (totalStars <= 0 || maxRadiusPx <= 0.0f || maxCandidates <= 0) return 0
 
@@ -424,8 +532,25 @@ object StarHitTester {
         val limit = minOf(totalStars, starScreenX.size, starScreenY.size, starInFront.size)
         var candidateCount = 0
 
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            starWorldX != null && starWorldY != null && starWorldZ != null
+
         for (i in 0 until limit) {
             if (!starInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    starWorldX[i],
+                    starWorldY[i],
+                    starWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
 
             val dx = tapX - starScreenX[i]
             val dy = tapY - starScreenY[i]
@@ -434,6 +559,87 @@ object StarHitTester {
             if (distSq <= maxRadiusSq) {
                 val mag = bb.getFloat(starsVectorOffset + i * 12 + 8)
                 val score = computeHitScore(distSq, mag)
+                candidateCount = insertCandidate(
+                    candidateIndex = i,
+                    score = score,
+                    outIndices = outIndices,
+                    outScores = outScores,
+                    currentCount = candidateCount,
+                    maxCapacity = maxCandidates,
+                )
+            }
+        }
+
+        return candidateCount
+    }
+
+    /**
+     * Collects top candidate visible Deep Sky Objects intersecting the tap area sorted by score.
+     * Zero heap allocations.
+     */
+    fun findTopDsos(
+        tapX: Float,
+        tapY: Float,
+        dsoScreenX: FloatArray,
+        dsoScreenY: FloatArray,
+        dsoRadiusPx: FloatArray,
+        dsoInFront: BooleanArray,
+        dsoMagnitudes: FloatArray?,
+        totalDsos: Int,
+        minTouchRadiusPx: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        maxCandidates: Int = minOf(outIndices.size, outScores.size),
+        dsoWorldX: FloatArray? = null,
+        dsoWorldY: FloatArray? = null,
+        dsoWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
+    ): Int {
+        if (totalDsos <= 0 || minTouchRadiusPx <= 0.0f || maxCandidates <= 0) return 0
+
+        val limit = minOf(
+            totalDsos,
+            dsoScreenX.size,
+            dsoScreenY.size,
+            dsoRadiusPx.size,
+            dsoInFront.size,
+        )
+        var candidateCount = 0
+
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            dsoWorldX != null && dsoWorldY != null && dsoWorldZ != null
+
+        for (i in 0 until limit) {
+            if (!dsoInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    dsoWorldX[i],
+                    dsoWorldY[i],
+                    dsoWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
+
+            val px = dsoScreenX[i]
+            val py = dsoScreenY[i]
+            val hitRadius = maxOf(minTouchRadiusPx, dsoRadiusPx[i] * 1.25f, 40f)
+            val dx = tapX - px
+            val dy = tapY - py
+            val distanceSq = dx * dx + dy * dy
+
+            if (distanceSq <= hitRadius * hitRadius) {
+                val mag = dsoMagnitudes?.getOrNull(i) ?: 6.0f
+                val score = computeHitScore(distanceSq, mag)
                 candidateCount = insertCandidate(
                     candidateIndex = i,
                     score = score,
@@ -465,6 +671,14 @@ object StarHitTester {
         outIndices: IntArray,
         outScores: FloatArray,
         maxCandidates: Int = minOf(outIndices.size, outScores.size),
+        planetWorldX: FloatArray? = null,
+        planetWorldY: FloatArray? = null,
+        planetWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
     ): Int {
         if (totalPlanets <= 0 || minTouchRadiusPx <= 0.0f || planets.isEmpty() || maxCandidates <= 0) return 0
 
@@ -478,8 +692,25 @@ object StarHitTester {
         )
         var candidateCount = 0
 
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            planetWorldX != null && planetWorldY != null && planetWorldZ != null
+
         for (i in 0 until limit) {
             if (!planetInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    planetWorldX[i],
+                    planetWorldY[i],
+                    planetWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
 
             val px = planetScreenX[i]
             val py = planetScreenY[i]

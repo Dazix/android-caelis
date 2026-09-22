@@ -540,6 +540,25 @@ object AppIcons {
         }
     }
 
+    /** DeepSky: Messier deep sky objects (galaxies, nebulae, star clusters). */
+    val DeepSky: ImageVector by lazy {
+        icon("DeepSky") {
+            strokePath {
+                moveTo(12f, 4.5f)
+                curveTo(18.5f, 4.5f, 21.5f, 8.5f, 21.5f, 12f)
+                curveTo(21.5f, 15.5f, 18.5f, 19.5f, 12f, 19.5f)
+                curveTo(5.5f, 19.5f, 2.5f, 15.5f, 2.5f, 12f)
+                curveTo(2.5f, 8.5f, 5.5f, 4.5f, 12f, 4.5f)
+                close()
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 12f, radius = 2.4f)
+                circle(centerX = 7.5f, centerY = 10.5f, radius = 1.0f)
+                circle(centerX = 16.5f, centerY = 13.5f, radius = 1.0f)
+            }
+        }
+    }
+
     /** History: clock circle with clock hands. */
     val History: ImageVector by lazy {
         icon("History") {
@@ -845,6 +864,20 @@ object AppIcons {
                 lineTo(10f, 17f)
                 moveTo(14f, 10f)
                 lineTo(14f, 17f)
+            }
+        }
+    }
+
+    /** Info: circle outline with central 'i' stem and dot. */
+    val Info: ImageVector by lazy {
+        icon("Info") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 9f)
+                moveTo(12f, 10.5f)
+                lineTo(12f, 16.5f)
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 7.5f, radius = 1.2f)
             }
         }
     }

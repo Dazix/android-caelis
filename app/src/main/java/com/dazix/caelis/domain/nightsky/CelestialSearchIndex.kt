@@ -8,6 +8,35 @@ import java.text.Normalizer
 
 private val DIACRITICS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
 
+val CZECH_DSO_NAMES: Map<String, String> = mapOf(
+    "M1" to "Krabí mlhovina",
+    "M6" to "Motýlí hvězdokupa",
+    "M7" to "Ptolemaiova hvězdokupa",
+    "M8" to "Mlhovina Lagun",
+    "M11" to "Hvězdokupa Divoká kachna",
+    "M13" to "Velká kulová hvězdokupa v Herkulovi",
+    "M16" to "Orlí mlhovina",
+    "M17" to "Mlhovina Omega / Labuť",
+    "M20" to "Mlhovina Trifid",
+    "M22" to "Velká kulová hvězdokupa ve Střelci",
+    "M24" to "Hvězdný oblak ve Střelci",
+    "M27" to "Mlhovina Činka",
+    "M31" to "Galaxie v Andromedě",
+    "M33" to "Galaxie v Trojúhelníku",
+    "M42" to "Velká mlhovina v Orionu",
+    "M43" to "De Mairanova mlhovina",
+    "M44" to "Jesličky / Praesepe",
+    "M45" to "Plejády / Kuřátka",
+    "M51" to "Vírová galaxie",
+    "M57" to "Prstencová mlhovina",
+    "M64" to "Galaxie Černé oko",
+    "M81" to "Bodeova galaxie",
+    "M82" to "Doutníková galaxie",
+    "M97" to "Soví mlhovina",
+    "M101" to "Galaxie Větrník",
+    "M104" to "Galaxie Sombrero",
+)
+
 /**
  * Strips diacritics, converts to lowercase, and trims whitespace.
  * Example: "Velká medvědice" -> "velka medvedice"
@@ -22,6 +51,7 @@ enum class CelestialType {
     CONSTELLATION,
     ASTERISM,
     PLANET,
+    DSO,
 }
 
 data class SearchResultItem(
@@ -138,6 +168,42 @@ object CelestialSearchIndex {
                     )
                 )
             }
+        }
+
+        // 3. Index Deep Sky Objects (Messier Catalog)
+        val dsoCount = catalog.dsosLength()
+        val reusableDso = com.dazix.caelis.data.nightsky.DeepSkyObject()
+        for (d in 0 until dsoCount) {
+            catalog.dsos(reusableDso, d)
+            val mNum = reusableDso.messierId()
+            val messierId = "M$mNum"
+            val name = reusableDso.englishName()
+            val ngc = reusableDso.ngcId()
+            val czechName = CZECH_DSO_NAMES[messierId] ?: reusableDso.localizedName()
+
+            val primaryName = when {
+                !czechName.isNullOrEmpty() -> "$messierId ($czechName)"
+                !name.isNullOrEmpty() -> "$messierId ($name)"
+                else -> messierId
+            }
+            val secondaryName = if (ngc != null && name != null) "$name • $ngc" else ngc ?: name
+
+            val spacedMessier = messierId.replace("M", "M ")
+            val unspacedNgc = ngc?.replace(" ", "") ?: ""
+            val combinedForSearch = "$messierId $spacedMessier $primaryName ${secondaryName ?: ""} ${name ?: ""} ${czechName ?: ""} $unspacedNgc".normalizeForSearch()
+
+            result.add(
+                SearchResultItem(
+                    indexId = d,
+                    primaryName = primaryName,
+                    secondaryName = secondaryName,
+                    type = CelestialType.DSO,
+                    ra = reusableDso.ra(),
+                    dec = reusableDso.dec(),
+                    magnitude = reusableDso.mag(),
+                    searchableText = combinedForSearch,
+                )
+            )
         }
 
         return result

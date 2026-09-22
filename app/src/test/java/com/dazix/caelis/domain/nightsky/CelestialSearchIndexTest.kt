@@ -206,4 +206,47 @@ class CelestialSearchIndexTest {
         assertEquals("Velká medvědice", velkResults[1].primaryName)
         assertEquals("Sirius", velkResults[2].primaryName)
     }
+
+    @Test
+    fun `buildSearchIndex correctly indexes 110 Messier DSOs with multilingual matching`() {
+        val binFile = File("src/main/res/raw/catalog.bin")
+        val targetFile = if (binFile.exists()) binFile else File("app/src/main/res/raw/catalog.bin")
+        assertTrue("catalog.bin must exist on disk", targetFile.exists())
+
+        val catalog = FileInputStream(targetFile).use { stream ->
+            NightSkyCatalogLoader.loadFromStream(stream)
+        }
+
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog)
+        val dsoItems = searchIndex.filter { it.type == CelestialType.DSO }
+        assertEquals("Must have 110 indexed DSOs", 110, dsoItems.size)
+
+        // 1. Search by exact Messier ID "M31"
+        val m31Matches = CelestialSearchIndex.filter(searchIndex, "M31")
+        assertTrue("Must find M31", m31Matches.any { it.type == CelestialType.DSO && it.searchableText.contains("m31") })
+
+        // 2. Search with space "M 31"
+        val mSpace31Matches = CelestialSearchIndex.filter(searchIndex, "M 31")
+        assertTrue("Must find M 31 with space", mSpace31Matches.any { it.type == CelestialType.DSO && it.searchableText.contains("m31") })
+
+        // 3. Search by NGC "NGC 224"
+        val ngcMatches = CelestialSearchIndex.filter(searchIndex, "NGC 224")
+        assertTrue("Must find by NGC 224", ngcMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("ngc 224") })
+
+        // 4. Search by Czech name "Plejády" / "plejady"
+        val pleiadesMatches = CelestialSearchIndex.filter(searchIndex, "plejady")
+        assertTrue("Must find Pleiades by Czech name", pleiadesMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("m45") })
+
+        // 5. Search by Czech name "Krabí mlhovina" / "krabi"
+        val crabMatches = CelestialSearchIndex.filter(searchIndex, "krabi")
+        assertTrue("Must find Crab Nebula by Czech name", crabMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("m1") })
+
+        // 6. Search "Orion" matches constellation and M42
+        val orionMatches = CelestialSearchIndex.filter(searchIndex, "Orion", limit = 50)
+        assertTrue("Must contain Orion constellation", orionMatches.any { it.type == CelestialType.CONSTELLATION })
+        assertTrue("Must contain Orion nebula DSO", orionMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("m42") })
+
+        val orionNebulaMatches = CelestialSearchIndex.filter(searchIndex, "Orion Nebula")
+        assertTrue("Must find M42 by Orion Nebula", orionNebulaMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("m42") })
+    }
 }

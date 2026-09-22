@@ -98,6 +98,7 @@ class SettingsStore(context: Context) {
     val nightSkyGridVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyGridVisible(it) }
 
     val nightSkyPlanetsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyPlanetsVisible(it) }
+    val nightSkyDsosVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyDsosVisible(it) }
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
@@ -250,6 +251,10 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyPlanetsVisible(it, enabled) }
     }
 
+    suspend fun saveNightSkyDsosVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyDsosVisible(it, enabled) }
+    }
+
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyConstellationsVisible(it, enabled) }
     }
@@ -371,6 +376,7 @@ internal object SettingsMapping {
     private val NIGHT_SKY_LANDSCAPE_VISIBLE = booleanPreferencesKey("night_sky_landscape_visible")
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_PLANETS_VISIBLE = booleanPreferencesKey("night_sky_planets_visible")
+    private val NIGHT_SKY_DSOS_VISIBLE = booleanPreferencesKey("night_sky_dsos_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
     private val NIGHT_SKY_SENSOR_TRACKING = booleanPreferencesKey("night_sky_sensor_tracking")
@@ -732,6 +738,13 @@ internal object SettingsMapping {
 
     fun writeNightSkyPlanetsVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_PLANETS_VISIBLE] = enabled
+    }
+
+    fun readNightSkyDsosVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_DSOS_VISIBLE] ?: false
+
+    fun writeNightSkyDsosVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_DSOS_VISIBLE] = enabled
     }
 
     fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =

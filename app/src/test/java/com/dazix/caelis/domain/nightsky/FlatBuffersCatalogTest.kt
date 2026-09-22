@@ -1,6 +1,8 @@
 package com.dazix.caelis.domain.nightsky
 
 import com.dazix.caelis.data.nightsky.Constellation
+import com.dazix.caelis.data.nightsky.DeepSkyObject
+import com.dazix.caelis.data.nightsky.DsoType
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.data.nightsky.StarMetadata
@@ -52,8 +54,28 @@ class FlatBuffersCatalogTest {
         Star.createStar(fbb, 101.28f, -16.71f, -1.44f) // Sirius
         val starsVec = fbb.endVector()
 
-        // 4. Root NightSkyCatalog
-        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec)
+        // 4. DeepSkyObjects
+        val m31NameOff = fbb.createString("Andromeda Galaxy")
+        val m31LocOff = fbb.createString("Galaxie v Andromedě")
+        val m31ConstOff = fbb.createString("And")
+        val m31NgcOff = fbb.createString("NGC 224")
+        val dsoOff = DeepSkyObject.createDeepSkyObject(
+            fbb,
+            31.toShort(),
+            10.68f,
+            41.27f,
+            3.44f,
+            178.0f,
+            DsoType.GALAXY,
+            m31LocOff,
+            m31ConstOff,
+            m31NameOff,
+            m31NgcOff,
+        )
+        val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf(dsoOff))
+
+        // 5. Root NightSkyCatalog
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec)
         NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
 
         val bb = fbb.dataBuffer()
@@ -62,6 +84,20 @@ class FlatBuffersCatalogTest {
         assertEquals(2, catalog.starsLength())
         assertEquals(1, catalog.metadataLength())
         assertEquals(2, catalog.constellationsLength())
+        assertEquals(1, catalog.dsosLength())
+
+        // Verify DSO
+        val dsoObj = catalog.dsos(0)
+        assertNotNull(dsoObj)
+        assertEquals(31.toShort(), dsoObj.messierId())
+        assertEquals("Andromeda Galaxy", dsoObj.englishName())
+        assertEquals("Galaxie v Andromedě", dsoObj.localizedName())
+        assertEquals("NGC 224", dsoObj.ngcId())
+        assertEquals(DsoType.GALAXY, dsoObj.type())
+        assertEquals(10.68f, dsoObj.ra(), 0.01f)
+        assertEquals(41.27f, dsoObj.dec(), 0.01f)
+        assertEquals(3.44f, dsoObj.mag(), 0.01f)
+        assertEquals(178.0f, dsoObj.sizeArcmin(), 0.01f)
 
         // Verify zero-allocation reused struct access
         val starReusable = Star()
@@ -221,5 +257,35 @@ class FlatBuffersCatalogTest {
         assertEquals("Vega", summerTriangle.brightestStar())
         assertEquals("Lyra / Cygnus / Aquila", summerTriangle.family())
         assertEquals(true, summerTriangle.isAsterism())
+
+        // Check Deep Sky Objects (110 Messier Objects)
+        assertEquals("Must have exactly 110 Messier Deep Sky Objects", 110, catalog.dsosLength())
+
+        val allDsos = (0 until catalog.dsosLength()).map { catalog.dsos(it) }
+        val m31 = allDsos.first { it.messierId() == 31.toShort() }
+        assertEquals("Andromeda Galaxy", m31.englishName())
+        assertEquals("NGC 224", m31.ngcId())
+        assertEquals(DsoType.GALAXY, m31.type())
+        assertEquals(10.68f, m31.ra(), 0.1f)
+        assertEquals(41.27f, m31.dec(), 0.1f)
+        assertEquals(3.44f, m31.mag(), 0.1f)
+        assertTrue("M31 size should be >= 100 arcmin", m31.sizeArcmin() >= 100f)
+
+        val m42 = allDsos.first { it.messierId() == 42.toShort() }
+        assertEquals("Great Orion Nebula", m42.englishName())
+        assertEquals(DsoType.NEBULA, m42.type())
+
+        val m45 = allDsos.first { it.messierId() == 45.toShort() }
+        assertEquals("Pleiades / Seven Sisters", m45.englishName())
+        assertEquals(DsoType.OPEN_CLUSTER, m45.type())
+
+        val m13 = allDsos.first { it.messierId() == 13.toShort() }
+        assertEquals(DsoType.GLOBULAR_CLUSTER, m13.type())
+
+        val m57 = allDsos.first { it.messierId() == 57.toShort() }
+        assertEquals(DsoType.PLANETARY_NEBULA, m57.type())
+
+        val m1 = allDsos.first { it.messierId() == 1.toShort() }
+        assertEquals(DsoType.NEBULA, m1.type())
     }
 }

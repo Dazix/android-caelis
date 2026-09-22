@@ -84,6 +84,7 @@ data class NightSkyArUiState(
     val isLandscapeVisible: Boolean = true,
     val isGridVisible: Boolean = true,
     val isPlanetsVisible: Boolean = true,
+    val isDsosVisible: Boolean = true,
     val isConstellationsVisible: Boolean = true,
     val isConstellationArtVisible: Boolean = true,
     val isSensorTrackingEnabled: Boolean = true,
@@ -93,6 +94,7 @@ data class NightSkyArUiState(
     val isSearchActive: Boolean = false,
     val selectedStarIndex: Int = -1,
     val selectedConstellationIndex: Int = -1,
+    val selectedDsoIndex: Int = -1,
     val selectedPlanetId: String? = null,
     val selectedBody: CelestialBodyDetails? = null,
     val planetStates: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
@@ -139,6 +141,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val selectedStarIndex = MutableStateFlow(-1)
     val selectedConstellationIndex = MutableStateFlow(-1)
+    val selectedDsoIndex = MutableStateFlow(-1)
     val selectedPlanetId = MutableStateFlow<String?>(null)
     val planetStates = MutableStateFlow<List<PlanetState>>(PlanetaryEphemerisCalculator.computeAll(Instant.now()))
 
@@ -433,6 +436,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    val isDsosVisible: StateFlow<Boolean> = settingsStore.nightSkyDsosVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        false,
+    )
+
     val isConstellationsVisible: StateFlow<Boolean> = settingsStore.nightSkyConstellationsVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -495,6 +504,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isLandscapeVisible,
             isGridVisible,
             isPlanetsVisible,
+            isDsosVisible,
             isConstellationsVisible,
             isConstellationArtVisible,
             selectedBodyState,
@@ -505,6 +515,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isSearchActive,
             selectedStarIndex,
             selectedConstellationIndex,
+            selectedDsoIndex,
             debugArtOffsetX,
             debugArtOffsetY,
             debugArtScaleMultiplier,
@@ -542,34 +553,36 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val landscape = args[17] as Boolean
         val grid = args[18] as Boolean
         val planetsVisible = args[19] as Boolean
-        val constellations = args[20] as Boolean
-        val constellationArt = args[21] as Boolean
-        val selected = args[22] as CelestialBodyDetails?
-        val sensorTracking = args[23] as Boolean
-        val query = args[24] as String
+        val dsosVisible = args[20] as Boolean
+        val constellations = args[21] as Boolean
+        val constellationArt = args[22] as Boolean
+        val selected = args[23] as CelestialBodyDetails?
+        val sensorTracking = args[24] as Boolean
+        val query = args[25] as String
         @Suppress("UNCHECKED_CAST")
-        val results = args[25] as List<SearchResultItem>
+        val results = args[26] as List<SearchResultItem>
         @Suppress("UNCHECKED_CAST")
-        val history = args[26] as List<SearchResultItem>
-        val searchActive = args[27] as Boolean
-        val starIdx = args[28] as Int
-        val constIdx = args[29] as Int
-        val dbgOffsetX = args[30] as Float
-        val dbgOffsetY = args[31] as Float
-        val dbgScale = args[32] as Float
-        val dbgRot = args[33] as Float
-        val dbgVis = args[34] as Boolean
-        val dbgFocus = args[35] as Boolean
-        val dbgRadius = args[36] as Float
-        val dbgThresh = args[37] as Float
-        val dbgOptions = args[38] as Boolean
+        val history = args[27] as List<SearchResultItem>
+        val searchActive = args[28] as Boolean
+        val starIdx = args[29] as Int
+        val constIdx = args[30] as Int
+        val dsoIdx = args[31] as Int
+        val dbgOffsetX = args[32] as Float
+        val dbgOffsetY = args[33] as Float
+        val dbgScale = args[34] as Float
+        val dbgRot = args[35] as Float
+        val dbgVis = args[36] as Boolean
+        val dbgFocus = args[37] as Boolean
+        val dbgRadius = args[38] as Float
+        val dbgThresh = args[39] as Float
+        val dbgOptions = args[40] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val planetsList = args[39] as List<PlanetState>
-        val planetId = args[40] as String?
-        val horizState = args[41] as com.dazix.caelis.data.horizon.HorizonState
-        val debugPrefs = args[42] as com.dazix.caelis.data.DebugPreferences
-        val multipleHits = args[43] as NightSkyRenderer.HitTarget.MultipleHits?
-        val tState = args[44] as TimeState
+        val planetsList = args[41] as List<PlanetState>
+        val planetId = args[42] as String?
+        val horizState = args[43] as com.dazix.caelis.data.horizon.HorizonState
+        val debugPrefs = args[44] as com.dazix.caelis.data.DebugPreferences
+        val multipleHits = args[45] as NightSkyRenderer.HitTarget.MultipleHits?
+        val tState = args[46] as TimeState
 
         NightSkyArUiState(
             timeState = tState,
@@ -595,6 +608,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isLandscapeVisible = landscape,
             isGridVisible = grid,
             isPlanetsVisible = planetsVisible,
+            isDsosVisible = dsosVisible,
             isConstellationsVisible = constellations,
             isConstellationArtVisible = constellationArt,
             isSensorTrackingEnabled = sensorTracking,
@@ -604,6 +618,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isSearchActive = searchActive,
             selectedStarIndex = starIdx,
             selectedConstellationIndex = constIdx,
+            selectedDsoIndex = dsoIdx,
             selectedPlanetId = planetId,
             selectedBody = selected,
             planetStates = planetsList,
@@ -837,6 +852,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         selectedStarIndex.value = starIndex
         selectedConstellationIndex.value = -1
+        selectedDsoIndex.value = -1
+        selectedPlanetId.value = null
 
         val star = Star()
         cat.stars(star, starIndex)
@@ -900,6 +917,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         selectedConstellationIndex.value = constellationIndex
         selectedStarIndex.value = -1
+        selectedDsoIndex.value = -1
+        selectedPlanetId.value = null
 
         val reusableConst = com.dazix.caelis.data.nightsky.Constellation()
         cat.constellations(reusableConst, constellationIndex)
@@ -934,6 +953,69 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
+     * Resolves metadata for the tapped Deep Sky Object from FlatBuffers catalog and updates [selectedBody].
+     */
+    fun selectDsoByIndex(dsoIndex: Int) {
+        dismissDisambiguation()
+        val cat = catalogState.value ?: return
+        val totalDsos = cat.dsosLength()
+        if (dsoIndex !in 0 until totalDsos) {
+            selectedDsoIndex.value = -1
+            selectedBodyState.value = null
+            return
+        }
+
+        selectedDsoIndex.value = dsoIndex
+        selectedStarIndex.value = -1
+        selectedConstellationIndex.value = -1
+        selectedPlanetId.value = null
+
+        val reusableDso = com.dazix.caelis.data.nightsky.DeepSkyObject()
+        cat.dsos(reusableDso, dsoIndex)
+
+        val app = getApplication<Application>()
+        val mNum = reusableDso.messierId()
+        val messierId = "M$mNum"
+        val dsoName = reusableDso.englishName()
+        val czechName = com.dazix.caelis.domain.nightsky.CZECH_DSO_NAMES[messierId] ?: reusableDso.localizedName()
+        val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
+        val name = when {
+            isCzech && !czechName.isNullOrEmpty() -> "$messierId ($czechName)"
+            !dsoName.isNullOrEmpty() -> "$messierId ($dsoName)"
+            else -> messierId
+        }
+
+        val dsoTypeStr = when (reusableDso.type()) {
+            com.dazix.caelis.data.nightsky.DsoType.GALAXY -> app.getString(R.string.dso_type_galaxy)
+            com.dazix.caelis.data.nightsky.DsoType.OPEN_CLUSTER -> app.getString(R.string.dso_type_open_cluster)
+            com.dazix.caelis.data.nightsky.DsoType.GLOBULAR_CLUSTER -> app.getString(R.string.dso_type_globular_cluster)
+            com.dazix.caelis.data.nightsky.DsoType.NEBULA -> app.getString(R.string.dso_type_diffuse_nebula)
+            com.dazix.caelis.data.nightsky.DsoType.PLANETARY_NEBULA -> app.getString(R.string.dso_type_planetary_nebula)
+            else -> app.getString(R.string.dso_type_generic)
+        }
+
+        val ngc = reusableDso.ngcId()
+        val sizeArcmin = reusableDso.sizeArcmin()
+        val sizeFormatted = if (sizeArcmin > 0f) {
+            if (sizeArcmin >= 60f) String.format(java.util.Locale.US, "%.1f°", sizeArcmin / 60f)
+            else String.format(java.util.Locale.US, "%.1f'", sizeArcmin)
+        } else "—"
+
+        val prop1: Pair<String, String>? = if (ngc != null) Pair(app.getString(R.string.celestial_catalog_id), ngc) else null
+        val prop2: Pair<String, String>? = Pair(app.getString(R.string.celestial_angular_size), sizeFormatted)
+
+        selectedBodyState.value = CelestialBodyDetails(
+            name = name,
+            subtitle = dsoTypeStr,
+            property1 = prop1,
+            property2 = prop2,
+            magnitude = reusableDso.mag(),
+            raDegrees = reusableDso.ra().toDouble(),
+            decDegrees = reusableDso.dec().toDouble(),
+        )
+    }
+
+    /**
      * Selects a celestial body from search results, updates selection state,
      * and smoothly pans the camera to the target's coordinates.
      */
@@ -941,6 +1023,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         when (item.type) {
             CelestialType.STAR -> selectStarByIndex(item.indexId)
             CelestialType.CONSTELLATION, CelestialType.ASTERISM -> selectConstellationByIndex(item.indexId)
+            CelestialType.DSO -> selectDsoByIndex(item.indexId)
             CelestialType.PLANET -> item.planetId?.let { selectPlanetById(it) }
         }
         isSearchActive.value = false
@@ -1082,6 +1165,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         dismissDisambiguation()
         when (candidate) {
             is NightSkyRenderer.CelestialCandidate.Planet -> selectPlanetById(candidate.planetId)
+            is NightSkyRenderer.CelestialCandidate.Dso -> selectDsoByIndex(candidate.dsoIndex)
             is NightSkyRenderer.CelestialCandidate.Star -> selectStarByIndex(candidate.starIndex)
             is NightSkyRenderer.CelestialCandidate.Constellation -> selectConstellationByIndex(candidate.constellationIndex)
         }
@@ -1096,6 +1180,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedPlanetId.value = planet.id
         selectedStarIndex.value = -1
         selectedConstellationIndex.value = -1
+        selectedDsoIndex.value = -1
         selectedBodyState.value = createPlanetDetails(planet)
     }
 
@@ -1106,6 +1191,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         dismissDisambiguation()
         selectedStarIndex.value = -1
         selectedConstellationIndex.value = -1
+        selectedDsoIndex.value = -1
         selectedPlanetId.value = null
         selectedBodyState.value = null
     }
@@ -1434,6 +1520,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setPlanetsVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyPlanetsVisible(enabled)
+        }
+    }
+
+    fun toggleDsosVisible() {
+        setDsosVisible(!isDsosVisible.value)
+    }
+
+    fun setDsosVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyDsosVisible(enabled)
         }
     }
 

@@ -149,6 +149,7 @@ fun NightSkyArScreen(
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
     var isLayerSheetOpen by remember { mutableStateOf(false) }
+    var showDsoLegendInAr by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
     val renderer = remember { NightSkyRenderer() }
@@ -207,6 +208,7 @@ fun NightSkyArScreen(
 
     BackHandler {
         when {
+            showDsoLegendInAr -> showDsoLegendInAr = false
             uiState.isSearchActive -> viewModel.setSearchActive(false)
             uiState.selectedBody != null -> viewModel.clearSelectedBody()
             uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
@@ -295,6 +297,11 @@ fun NightSkyArScreen(
     val currentDensity by rememberUpdatedState(density.density)
     val currentCameraFovH by rememberUpdatedState(uiState.cameraFovHorizontal)
     val currentDebugPreferences by rememberUpdatedState(uiState.debugPreferences)
+    val currentLandscapeVisible by rememberUpdatedState(uiState.isLandscapeVisible)
+    val currentUseRealHorizon by rememberUpdatedState(horizonSettings.realHorizonInNightSky && horizonSettings.enabled)
+    val currentHorizonProfile by rememberUpdatedState(horizonProfile)
+    val currentAlignAzimuthOffset by rememberUpdatedState(alignAzimuthOffset)
+    val currentAlignElevationOffset by rememberUpdatedState(alignElevationOffset)
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
@@ -318,6 +325,9 @@ fun NightSkyArScreen(
                     }
                 },
                 onRouteToTarget = { viewModel.routeCameraToSelection(displayRotation) },
+                onShowDsoLegend = if (uiState.selectedDsoIndex != -1) {
+                    { showDsoLegendInAr = true }
+                } else null,
                 onClose = viewModel::clearSelectedBody,
                 nightVisionTheme = uiState.nightVisionState.theme,
             )
@@ -346,12 +356,18 @@ fun NightSkyArScreen(
                                 density = currentDensity,
                                 catalog = currentCatalog,
                                 planets = currentPlanets,
+                                isLandscapeVisible = currentLandscapeVisible,
+                                useRealHorizon = currentUseRealHorizon,
+                                horizonProfile = currentHorizonProfile,
+                                alignAzimuthOffsetDeg = currentAlignAzimuthOffset,
+                                alignElevationOffsetDeg = currentAlignElevationOffset,
                             )
                             when (hitTarget) {
                                 is NightSkyRenderer.HitTarget.ConstellationHit -> {
                                     viewModel.dismissDisambiguation()
                                     renderer.selectedConstellationIndex = hitTarget.index
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedDsoIndex = -1
                                     renderer.selectedPlanetId = null
                                     viewModel.selectConstellationByIndex(hitTarget.index)
                                 }
@@ -359,12 +375,22 @@ fun NightSkyArScreen(
                                     viewModel.dismissDisambiguation()
                                     renderer.selectedStarIndex = hitTarget.index
                                     renderer.selectedConstellationIndex = -1
+                                    renderer.selectedDsoIndex = -1
                                     renderer.selectedPlanetId = null
                                     viewModel.selectStarByIndex(hitTarget.index)
+                                }
+                                is NightSkyRenderer.HitTarget.DsoHit -> {
+                                    viewModel.dismissDisambiguation()
+                                    renderer.selectedDsoIndex = hitTarget.index
+                                    renderer.selectedStarIndex = -1
+                                    renderer.selectedConstellationIndex = -1
+                                    renderer.selectedPlanetId = null
+                                    viewModel.selectDsoByIndex(hitTarget.index)
                                 }
                                 is NightSkyRenderer.HitTarget.PlanetHit -> {
                                     viewModel.dismissDisambiguation()
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedDsoIndex = -1
                                     renderer.selectedPlanetId = null
                                     renderer.selectedConstellationIndex = -1
                                     viewModel.selectPlanetById(hitTarget.planetId)
@@ -376,6 +402,7 @@ fun NightSkyArScreen(
                                     viewModel.dismissDisambiguation()
                                     renderer.selectedConstellationIndex = -1
                                     renderer.selectedStarIndex = -1
+                                    renderer.selectedDsoIndex = -1
                                     renderer.selectedPlanetId = null
                                     viewModel.clearSelectedBody()
                                 }
@@ -431,6 +458,7 @@ fun NightSkyArScreen(
                     horizonProfile = horizonProfile,
                     useRealHorizon = useRealHorizon,
                     isPlanetsVisible = uiState.isPlanetsVisible,
+                    isDsosVisible = uiState.isDsosVisible,
                     isConstellationsVisible = uiState.isConstellationsVisible,
                     isConstellationArtVisible = uiState.isConstellationArtVisible,
                     selectedBody = uiState.selectedBody,
@@ -631,19 +659,29 @@ fun NightSkyArScreen(
                                 renderer.selectedStarIndex = -1
                                 renderer.selectedConstellationIndex = -1
                                 renderer.selectedPlanetId = candidate.planetId
+                                renderer.selectedDsoIndex = -1
                                 viewModel.selectPlanetById(candidate.planetId)
                             }
                             is NightSkyRenderer.CelestialCandidate.Star -> {
                                 renderer.selectedStarIndex = candidate.starIndex
                                 renderer.selectedConstellationIndex = -1
                                 renderer.selectedPlanetId = null
+                                renderer.selectedDsoIndex = -1
                                 viewModel.selectStarByIndex(candidate.starIndex)
                             }
                             is NightSkyRenderer.CelestialCandidate.Constellation -> {
                                 renderer.selectedConstellationIndex = candidate.constellationIndex
                                 renderer.selectedStarIndex = -1
                                 renderer.selectedPlanetId = null
+                                renderer.selectedDsoIndex = -1
                                 viewModel.selectConstellationByIndex(candidate.constellationIndex)
+                            }
+                            is NightSkyRenderer.CelestialCandidate.Dso -> {
+                                renderer.selectedDsoIndex = candidate.dsoIndex
+                                renderer.selectedStarIndex = -1
+                                renderer.selectedConstellationIndex = -1
+                                renderer.selectedPlanetId = null
+                                viewModel.selectDsoByIndex(candidate.dsoIndex)
                             }
                         }
                     },
@@ -674,6 +712,7 @@ fun NightSkyArScreen(
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isPlanetsVisible = uiState.isPlanetsVisible,
+                isDsosVisible = uiState.isDsosVisible,
                 isConstellationsVisible = uiState.isConstellationsVisible,
                 isConstellationArtVisible = uiState.isConstellationArtVisible,
                 isGridVisible = uiState.isGridVisible,
@@ -695,6 +734,7 @@ fun NightSkyArScreen(
                 onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
                 onToggleMilkyWayVisible = viewModel::toggleMilkyWayVisible,
                 onTogglePlanetsVisible = viewModel::togglePlanetsVisible,
+                onToggleDsosVisible = viewModel::toggleDsosVisible,
                 onToggleConstellationsVisible = viewModel::toggleConstellationsVisible,
                 onToggleConstellationArtVisible = viewModel::toggleConstellationArtVisible,
                 onToggleGridVisible = viewModel::toggleGridVisible,
@@ -725,6 +765,14 @@ fun NightSkyArScreen(
             onNever = { viewModel.answerNetworkConsent(granted = false) },
         )
     }
+
+    if (showDsoLegendInAr) {
+        DsoLegendDialog(
+            onDismiss = { showDsoLegendInAr = false },
+            redVisionMode = uiState.redVisionMode,
+            nightVisionTheme = uiState.nightVisionState.theme,
+        )
+    }
 }
 
 @Composable
@@ -747,6 +795,7 @@ internal fun NightSkyOverlayCanvas(
     horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
     useRealHorizon: Boolean = false,
     isPlanetsVisible: Boolean = true,
+    isDsosVisible: Boolean = true,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     selectedBody: CelestialBodyDetails? = null,
@@ -888,6 +937,7 @@ internal fun NightSkyOverlayCanvas(
             showConstellations = isConstellationsVisible,
             showConstellationArt = isConstellationArtVisible,
             showPlanets = isPlanetsVisible,
+            showDsos = isDsosVisible,
             isAtmosphereVisible = isAtmosphereVisible,
             context = context,
             debugOffsetX = debugArtOffsetX,
@@ -1740,11 +1790,13 @@ private fun CelestialDisambiguationMenu(
                         is NightSkyRenderer.CelestialCandidate.Planet -> AppIcons.Planet
                         is NightSkyRenderer.CelestialCandidate.Star -> AppIcons.Star
                         is NightSkyRenderer.CelestialCandidate.Constellation -> AppIcons.Constellation
+                        is NightSkyRenderer.CelestialCandidate.Dso -> AppIcons.DeepSky
                     }
                     val iconTint = when (candidate) {
                         is NightSkyRenderer.CelestialCandidate.Planet -> if (redVisionMode) palette.primary else Color(0xFFFFB74D)
                         is NightSkyRenderer.CelestialCandidate.Star -> if (redVisionMode) palette.primary else Color(0xFF4DD0E1)
                         is NightSkyRenderer.CelestialCandidate.Constellation -> if (redVisionMode) palette.secondary else Color(0xFF81C784)
+                        is NightSkyRenderer.CelestialCandidate.Dso -> if (redVisionMode) palette.primary else Color(0xFFBA68C8)
                     }
 
                     Row(
@@ -1779,6 +1831,7 @@ private fun CelestialDisambiguationMenu(
                                 is NightSkyRenderer.CelestialCandidate.Planet -> stringResource(R.string.celestial_planet_subtitle)
                                 is NightSkyRenderer.CelestialCandidate.Star -> String.format(java.util.Locale.US, "mag %.1f", candidate.magnitude)
                                 is NightSkyRenderer.CelestialCandidate.Constellation -> stringResource(R.string.celestial_constellation_subtitle)
+                                is NightSkyRenderer.CelestialCandidate.Dso -> stringResource(R.string.dso_type_generic)
                             }
                             Text(
                                 text = subtitleText,

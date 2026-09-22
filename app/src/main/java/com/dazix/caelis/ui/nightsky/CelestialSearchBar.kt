@@ -281,6 +281,7 @@ private fun CelestialSearchResultRow(
         CelestialType.CONSTELLATION -> AppIcons.Constellation
         CelestialType.ASTERISM -> AppIcons.AutoAwesome
         CelestialType.PLANET -> AppIcons.Planet
+        CelestialType.DSO -> AppIcons.DeepSky
     }
 
     val typeLabel = when (item.type) {
@@ -288,6 +289,7 @@ private fun CelestialSearchResultRow(
         CelestialType.CONSTELLATION -> stringResource(R.string.celestial_constellation_subtitle)
         CelestialType.ASTERISM -> stringResource(R.string.celestial_asterism_subtitle)
         CelestialType.PLANET -> stringResource(R.string.celestial_planet_subtitle)
+        CelestialType.DSO -> stringResource(R.string.dso_type_generic)
     }
 
     ListItem(
@@ -310,7 +312,7 @@ private fun CelestialSearchResultRow(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (item.type == CelestialType.STAR && item.magnitude != null) {
+                if ((item.type == CelestialType.STAR || item.type == CelestialType.DSO) && item.magnitude != null) {
                     Text(
                         text = String.format(Locale.US, "mag %+.1f", item.magnitude),
                         color = subTextColor,

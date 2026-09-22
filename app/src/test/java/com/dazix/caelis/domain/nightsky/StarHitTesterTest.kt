@@ -688,4 +688,289 @@ class StarHitTesterTest {
         assertEquals(1, outIndices[1])
         org.junit.Assert.assertTrue(outScores[0] < outScores[1])
     }
+
+    @Test
+    fun `findTopDsos collects candidate DSOs sorted by score`() {
+        val tapX = 400f
+        val tapY = 400f
+
+        // DSO 0: M31 Andromeda (mag 3.44, radius 25px) at (405, 405)
+        // DSO 1: M32 Satellite (mag 8.08, radius 10px) at (402, 402)
+        // DSO 2: M110 (mag 8.92, radius 12px) at (600, 600) - far away
+        val screenX = floatArrayOf(405f, 402f, 600f)
+        val screenY = floatArrayOf(405f, 402f, 600f)
+        val radiusPx = floatArrayOf(25f, 10f, 12f)
+        val inFront = booleanArrayOf(true, true, true)
+        val mags = floatArrayOf(3.44f, 8.08f, 8.92f)
+
+        val outIndices = IntArray(5)
+        val outScores = FloatArray(5)
+
+        val count = StarHitTester.findTopDsos(
+            tapX = tapX,
+            tapY = tapY,
+            dsoScreenX = screenX,
+            dsoScreenY = screenY,
+            dsoRadiusPx = radiusPx,
+            dsoInFront = inFront,
+            dsoMagnitudes = mags,
+            totalDsos = 3,
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            maxCandidates = 5,
+        )
+
+        assertEquals(2, count)
+        // DSO 0 (M31, mag 3.44) should score better than DSO 1 (M32, mag 8.08) despite DSO 1 being slightly closer
+        assertEquals(0, outIndices[0])
+        assertEquals(1, outIndices[1])
+        org.junit.Assert.assertTrue(outScores[0] < outScores[1])
+    }
+
+    @Test
+    fun `findTopDsos ignores DSOs behind camera or outside hit radius`() {
+        val screenX = floatArrayOf(500f, 500f)
+        val screenY = floatArrayOf(500f, 500f)
+        val radiusPx = floatArrayOf(20f, 20f)
+        val inFront = booleanArrayOf(false, true) // 0 is behind camera
+        val mags = floatArrayOf(4.0f, 4.0f)
+
+        val outIndices = IntArray(3)
+        val outScores = FloatArray(3)
+
+        // Tap at (500, 500) hits DSO 1 (inFront=true), ignores DSO 0 (inFront=false)
+        val count = StarHitTester.findTopDsos(
+            tapX = 500f,
+            tapY = 500f,
+            dsoScreenX = screenX,
+            dsoScreenY = screenY,
+            dsoRadiusPx = radiusPx,
+            dsoInFront = inFront,
+            dsoMagnitudes = mags,
+            totalDsos = 2,
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            maxCandidates = 3,
+        )
+
+        assertEquals(1, count)
+        assertEquals(1, outIndices[0])
+
+        // Tap far away (800, 800) misses both
+        val missCount = StarHitTester.findTopDsos(
+            tapX = 800f,
+            tapY = 800f,
+            dsoScreenX = screenX,
+            dsoScreenY = screenY,
+            dsoRadiusPx = radiusPx,
+            dsoInFront = inFront,
+            dsoMagnitudes = mags,
+            totalDsos = 2,
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            maxCandidates = 3,
+        )
+
+        assertEquals(0, missCount)
+    }
+
+    @Test
+    fun `findTopDsos handles empty arguments gracefully`() {
+        val outIndices = IntArray(3)
+        val outScores = FloatArray(3)
+        val screenX = floatArrayOf(100f)
+        val screenY = floatArrayOf(100f)
+        val radiusPx = floatArrayOf(20f)
+        val inFront = booleanArrayOf(true)
+
+        assertEquals(0, StarHitTester.findTopDsos(100f, 100f, screenX, screenY, radiusPx, inFront, null, 0, 48f, outIndices, outScores))
+        assertEquals(0, StarHitTester.findTopDsos(100f, 100f, screenX, screenY, radiusPx, inFront, null, 1, 0f, outIndices, outScores))
+        assertEquals(0, StarHitTester.findTopDsos(100f, 100f, screenX, screenY, radiusPx, inFront, null, 1, -10f, outIndices, outScores))
+    }
+
+    @Test
+    fun `isOccludedByLandscape correctly identifies objects above and below stylized horizon`() {
+        // Star above horizon (vz = +0.5, alt ~ +30 deg)
+        org.junit.Assert.assertFalse(
+            StarHitTester.isOccludedByLandscape(
+                vx = 0f, vy = 1f, vz = 0.5f,
+                isLandscapeVisible = true,
+                useRealHorizon = false,
+                horizonProfile = null,
+            )
+        )
+
+        // Star below horizon (vz = -0.2, alt ~ -11.5 deg)
+        org.junit.Assert.assertTrue(
+            StarHitTester.isOccludedByLandscape(
+                vx = 0f, vy = 1f, vz = -0.2f,
+                isLandscapeVisible = true,
+                useRealHorizon = false,
+                horizonProfile = null,
+            )
+        )
+
+        // Star below horizon but landscape layer is OFF
+        org.junit.Assert.assertFalse(
+            StarHitTester.isOccludedByLandscape(
+                vx = 0f, vy = 1f, vz = -0.2f,
+                isLandscapeVisible = false,
+                useRealHorizon = false,
+                horizonProfile = null,
+            )
+        )
+    }
+
+    @Test
+    fun `isOccludedByLandscape correctly checks against real DEM horizon profile`() {
+        val elevations = FloatArray(com.dazix.caelis.domain.horizon.HorizonProfile.SAMPLE_COUNT) { 5.0f } // 5 deg ridge all around
+        val profile = com.dazix.caelis.domain.horizon.HorizonProfile(
+            elevationsDegrees = elevations,
+            observer = com.dazix.caelis.domain.solar.GeoLocation(50.0, 15.0),
+            observerGroundElevationMeters = 300.0,
+            eyeHeightMeters = 1.7,
+            maxRangeMeters = 50000.0,
+            generatedAtEpochMillis = 1000L,
+            coveredSamples = com.dazix.caelis.domain.horizon.HorizonProfile.SAMPLE_COUNT,
+        )
+
+        // Star at altitude +10 deg (vz = sin(10 deg) ~ 0.1736) -> Above ridge (5 deg)
+        org.junit.Assert.assertFalse(
+            StarHitTester.isOccludedByLandscape(
+                vx = 0f, vy = 1f, vz = 0.1736f,
+                isLandscapeVisible = false,
+                useRealHorizon = true,
+                horizonProfile = profile,
+            )
+        )
+
+        // Star at altitude +2 deg (vz = sin(2 deg) ~ 0.0349) -> Below ridge (5 deg)
+        org.junit.Assert.assertTrue(
+            StarHitTester.isOccludedByLandscape(
+                vx = 0f, vy = 1f, vz = 0.0349f,
+                isLandscapeVisible = false,
+                useRealHorizon = true,
+                horizonProfile = profile,
+            )
+        )
+    }
+
+    @Test
+    fun `findTopVisibleStars filters out stars below landscape when landscape is active`() {
+        val screenX = floatArrayOf(200f, 200f)
+        val screenY = floatArrayOf(200f, 200f)
+        val inFront = booleanArrayOf(true, true)
+        val worldX = floatArrayOf(0f, 0f)
+        val worldY = floatArrayOf(1f, 1f)
+        val worldZ = floatArrayOf(0.5f, -0.5f) // Star 0 is above horizon, star 1 is below horizon
+
+        val outIndices = IntArray(2)
+        val outScores = FloatArray(2)
+
+        // When landscape is ON, only star 0 is found
+        val countOn = StarHitTester.findTopVisibleStars(
+            tapX = 200f,
+            tapY = 200f,
+            starScreenX = screenX,
+            starScreenY = screenY,
+            starInFront = inFront,
+            starMagnitudes = floatArrayOf(0f, 0f),
+            totalStars = 2,
+            maxRadiusPx = 50f,
+            outIndices = outIndices,
+            outScores = outScores,
+            starWorldX = worldX,
+            starWorldY = worldY,
+            starWorldZ = worldZ,
+            isLandscapeVisible = true,
+        )
+        assertEquals(1, countOn)
+        assertEquals(0, outIndices[0])
+
+        // When landscape is OFF, both stars are found
+        val countOff = StarHitTester.findTopVisibleStars(
+            tapX = 200f,
+            tapY = 200f,
+            starScreenX = screenX,
+            starScreenY = screenY,
+            starInFront = inFront,
+            starMagnitudes = floatArrayOf(0f, 0f),
+            totalStars = 2,
+            maxRadiusPx = 50f,
+            outIndices = outIndices,
+            outScores = outScores,
+            starWorldX = worldX,
+            starWorldY = worldY,
+            starWorldZ = worldZ,
+            isLandscapeVisible = false,
+        )
+        assertEquals(2, countOff)
+    }
+
+    @Test
+    fun `findTopDsos and findTopPlanets filter out occluded objects`() {
+        val screenX = floatArrayOf(300f)
+        val screenY = floatArrayOf(300f)
+        val inFront = booleanArrayOf(true)
+        val radiusPx = floatArrayOf(20f)
+        val worldX = floatArrayOf(0f)
+        val worldY = floatArrayOf(1f)
+        val worldZ = floatArrayOf(-0.3f) // Below horizon
+
+        val outIndices = IntArray(1)
+        val outScores = FloatArray(1)
+
+        val dsoCount = StarHitTester.findTopDsos(
+            tapX = 300f,
+            tapY = 300f,
+            dsoScreenX = screenX,
+            dsoScreenY = screenY,
+            dsoRadiusPx = radiusPx,
+            dsoInFront = inFront,
+            dsoMagnitudes = floatArrayOf(4f),
+            totalDsos = 1,
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            dsoWorldX = worldX,
+            dsoWorldY = worldY,
+            dsoWorldZ = worldZ,
+            isLandscapeVisible = true,
+        )
+        assertEquals(0, dsoCount)
+
+        val planet = PlanetState(
+            id = "Jupiter",
+            nameEn = "Jupiter",
+            nameCs = "Jupiter",
+            raDegrees = 0.0,
+            decDegrees = 0.0,
+            magnitude = -2.0f,
+            angularDiameterDeg = 0.01f,
+            distanceFormatted = "5.2 AU",
+            illuminationFraction = 1.0f,
+            colorRgb = 0xFFFFFFFF.toInt(),
+        )
+        val planetCount = StarHitTester.findTopPlanets(
+            tapX = 300f,
+            tapY = 300f,
+            planetScreenX = screenX,
+            planetScreenY = screenY,
+            planetRadiusPx = radiusPx,
+            planetInFront = inFront,
+            totalPlanets = 1,
+            planets = listOf(planet),
+            minTouchRadiusPx = 48f,
+            outIndices = outIndices,
+            outScores = outScores,
+            planetWorldX = worldX,
+            planetWorldY = worldY,
+            planetWorldZ = worldZ,
+            isLandscapeVisible = true,
+        )
+        assertEquals(0, planetCount)
+    }
 }

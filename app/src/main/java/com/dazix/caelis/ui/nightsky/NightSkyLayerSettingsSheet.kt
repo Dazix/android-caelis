@@ -96,6 +96,7 @@ fun NightSkyLayerSettingsSheet(
     isAtmosphereVisible: Boolean,
     isMilkyWayVisible: Boolean,
     isPlanetsVisible: Boolean,
+    isDsosVisible: Boolean = true,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     isGridVisible: Boolean,
@@ -117,6 +118,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleAtmosphereVisible: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
     onTogglePlanetsVisible: () -> Unit,
+    onToggleDsosVisible: () -> Unit = {},
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
     onToggleGridVisible: () -> Unit,
@@ -177,6 +179,7 @@ fun NightSkyLayerSettingsSheet(
     }
 
     val scrollState = rememberScrollState()
+    var showDsoLegend by remember { mutableStateOf(false) }
 
     val signedAzimuth = if (alignAzimuthOffsetDeg > 180f) alignAzimuthOffsetDeg - 360f else alignAzimuthOffsetDeg
     val isAligned = kotlin.math.abs(signedAzimuth) > 0.001f || kotlin.math.abs(alignElevationOffsetDeg) > 0.001f
@@ -247,6 +250,17 @@ fun NightSkyLayerSettingsSheet(
                 iconColor = iconColor,
                 switchColors = switchColors,
                 onCheckedChange = { onTogglePlanetsVisible() },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            LayerToggleRow(
+                label = stringResource(R.string.night_sky_dsos),
+                icon = AppIcons.DeepSky,
+                isChecked = isDsosVisible,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleDsosVisible() },
+                onInfoClick = { showDsoLegend = true },
             )
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
             LayerToggleRow(
@@ -457,6 +471,14 @@ fun NightSkyLayerSettingsSheet(
 
         Spacer(modifier = Modifier.height(16.dp))
     }
+
+    if (showDsoLegend) {
+        DsoLegendDialog(
+            onDismiss = { showDsoLegend = false },
+            redVisionMode = redVisionMode,
+            nightVisionTheme = nightVisionTheme,
+        )
+    }
 }
 
 /** Container card for a logical group of layer settings. */
@@ -604,6 +626,7 @@ private fun LayerToggleRow(
     iconColor: Color,
     switchColors: androidx.compose.material3.SwitchColors,
     onCheckedChange: (Boolean) -> Unit,
+    onInfoClick: (() -> Unit)? = null,
 ) {
     ListItem(
         leadingContent = {
@@ -615,11 +638,29 @@ private fun LayerToggleRow(
             )
         },
         trailingContent = {
-            Switch(
-                checked = isChecked,
-                onCheckedChange = onCheckedChange,
-                colors = switchColors,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (onInfoClick != null) {
+                    IconButton(
+                        onClick = onInfoClick,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Info,
+                            contentDescription = stringResource(R.string.dso_legend_button),
+                            tint = iconColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                Switch(
+                    checked = isChecked,
+                    onCheckedChange = onCheckedChange,
+                    colors = switchColors,
+                )
+            }
         },
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
