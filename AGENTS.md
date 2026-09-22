@@ -22,6 +22,9 @@ without breaking it.
    `tools:ignore` to silence a warning. If a test is wrong, fix it to be *stricter* and say why.
 5. **Evidence before claims.** Do not say something passes without having run it and seen the output.
    Gradle exits 0 on skipped tests — read the result XML.
+6. **No tests during planning or documentation.** When planning (`/plan`), designing implementation
+   plans, answering questions, or creating/editing Markdown and documentation files, NEVER run unit tests,
+   instrumented tests, or build commands. Test suites belong strictly in the verification step AFTER code implementation.
 
 ## Toolchain
 
@@ -51,7 +54,9 @@ system with it. Do not "fix" the pin back to the BOM.
 
 ## The gates and scoped test suites
 
-To keep iteration fast (6-7s), unit test suites are partitioned by functional domain. **Always run only the test suite(s) relevant to the current changes during development** (pro vytváření a úpravy pouze Markdown/dokumentačních souborů není potřeba pouštět testy):
+**Never run tests during planning, research, or documentation/markdown tasks.** Tests belong exclusively to the verification phase AFTER code changes are made.
+
+To keep iteration fast (6-7s), unit test suites are partitioned by functional domain. **Always run only the test suite(s) relevant to the current changes during development:**
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):

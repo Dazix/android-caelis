@@ -389,6 +389,11 @@
     <string name="night_sky_planets_desc">Toggle solar system planets and the Moon</string>
     <string name="night_sky_layers_title">Layers &amp; Display</string>
     <string name="night_sky_layers_desc">Configure night sky AR layers and visual toggles</string>
+    <string name="night_sky_group_celestial">Celestial Objects</string>
+    <string name="night_sky_group_environment">Environment &amp; Horizon</string>
+    <string name="night_sky_group_display">Display &amp; Guides</string>
+    <string name="night_sky_group_tracking">Sensors &amp; Device</string>
+    <string name="night_sky_group_debug">Debug Options</string>
     <string name="night_sky_sensor_tracking">AR sensor tracking</string>
     <string name="night_sky_sensor_tracking_desc">Use device gyroscope and compass to look around</string>
     <string name="night_sky_sensor_mode_active">AR Sensor Mode</string>
