@@ -59,6 +59,7 @@ class FlatBuffersCatalogTest {
         val m31LocOff = fbb.createString("Galaxie v Andromedě")
         val m31ConstOff = fbb.createString("And")
         val m31NgcOff = fbb.createString("NGC 224")
+        val m31ArtOff = fbb.createString("dso_m31")
         val dsoOff = DeepSkyObject.createDeepSkyObject(
             fbb,
             31.toShort(),
@@ -71,6 +72,11 @@ class FlatBuffersCatalogTest {
             m31ConstOff,
             m31NameOff,
             m31NgcOff,
+            35.0f,
+            0.32f,
+            m31ArtOff,
+            3.2f,
+            0.0f,
         )
         val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf(dsoOff))
 
@@ -98,6 +104,11 @@ class FlatBuffersCatalogTest {
         assertEquals(41.27f, dsoObj.dec(), 0.01f)
         assertEquals(3.44f, dsoObj.mag(), 0.01f)
         assertEquals(178.0f, dsoObj.sizeArcmin(), 0.01f)
+        assertEquals(35.0f, dsoObj.positionAngleDeg(), 0.01f)
+        assertEquals(0.32f, dsoObj.axisRatio(), 0.01f)
+        assertEquals("dso_m31", dsoObj.artResourceName())
+        assertEquals(3.2f, dsoObj.artWidthDeg(), 0.01f)
+        assertEquals(0.0f, dsoObj.artRotationDeg(), 0.01f)
 
         // Verify zero-allocation reused struct access
         val starReusable = Star()
@@ -270,22 +281,46 @@ class FlatBuffersCatalogTest {
         assertEquals(41.27f, m31.dec(), 0.1f)
         assertEquals(3.44f, m31.mag(), 0.1f)
         assertTrue("M31 size should be >= 100 arcmin", m31.sizeArcmin() >= 100f)
+        assertEquals("dso_m31", m31.artResourceName())
+        assertEquals(3.2f, m31.artWidthDeg(), 0.1f)
+        assertEquals(35.0f, m31.positionAngleDeg(), 0.1f)
+        assertEquals(0.32f, m31.axisRatio(), 0.05f)
 
         val m42 = allDsos.first { it.messierId() == 42.toShort() }
         assertEquals("Great Orion Nebula", m42.englishName())
         assertEquals(DsoType.NEBULA, m42.type())
+        assertEquals("dso_m42", m42.artResourceName())
+        assertEquals(1.2f, m42.artWidthDeg(), 0.1f)
 
         val m45 = allDsos.first { it.messierId() == 45.toShort() }
         assertEquals("Pleiades / Seven Sisters", m45.englishName())
         assertEquals(DsoType.OPEN_CLUSTER, m45.type())
+        assertEquals("dso_m45", m45.artResourceName())
+        assertEquals(2.0f, m45.artWidthDeg(), 0.1f)
 
         val m13 = allDsos.first { it.messierId() == 13.toShort() }
         assertEquals(DsoType.GLOBULAR_CLUSTER, m13.type())
+        assertEquals("dso_m13", m13.artResourceName())
+        assertEquals(0.45f, m13.artWidthDeg(), 0.05f)
+
+        val m27 = allDsos.first { it.messierId() == 27.toShort() }
+        assertEquals(DsoType.PLANETARY_NEBULA, m27.type())
+        assertEquals("dso_m27", m27.artResourceName())
+
+        val m51 = allDsos.first { it.messierId() == 51.toShort() }
+        assertEquals(DsoType.GALAXY, m51.type())
+        assertEquals("dso_m51", m51.artResourceName())
 
         val m57 = allDsos.first { it.messierId() == 57.toShort() }
         assertEquals(DsoType.PLANETARY_NEBULA, m57.type())
+        assertEquals("dso_m57", m57.artResourceName())
+
+        val m8 = allDsos.first { it.messierId() == 8.toShort() }
+        assertEquals(DsoType.NEBULA, m8.type())
+        assertEquals("dso_m8", m8.artResourceName())
 
         val m1 = allDsos.first { it.messierId() == 1.toShort() }
         assertEquals(DsoType.NEBULA, m1.type())
+        assertTrue("Standard DSO without texture should have null or empty artResourceName", m1.artResourceName().isNullOrEmpty())
     }
 }

@@ -52,6 +52,11 @@ table DeepSkyObject {
   constellation_id: string;  // IAU 3-letter code (e.g., "And")
   english_name: string;      // e.g., "Andromeda Galaxy"
   ngc_id: string;            // e.g., "NGC 224"
+  position_angle_deg: float; // Major axis rotation in degrees [0.0, 180.0)
+  axis_ratio: float;         // Minor/Major axis ratio b/a (0.1 .. 1.0)
+  art_resource_name: string; // e.g., "dso_m31" (optional texture)
+  art_width_deg: float;      // Real angular width on celestial sphere (degrees)
+  art_rotation_deg: float;   // Local rotation offset in degrees
 }
 
 table NightSkyCatalog {

@@ -159,6 +159,10 @@ class NightSkyRenderer {
     val dsoRadiusPx = FloatArray(MAX_DSOS)
     val dsoInFront = BooleanArray(MAX_DSOS)
     val dsoMagnitudes = FloatArray(MAX_DSOS)
+    val dsoPolySrc = FloatArray(8)
+    val dsoPolyDst = FloatArray(8)
+    val dsoCornerProjected = FloatArray(12)
+    val dsoMatrix = Matrix()
 
     var selectedDsoIndex: Int = -1
 
@@ -682,7 +686,8 @@ class NightSkyRenderer {
         return (Math.toDegrees(angleRad.toDouble()).toFloat() + 90f) % 360f
     }
 
-    fun getOrLoadArtwork(context: Context, resourceName: String): Bitmap? {
+    fun getOrLoadArtwork(context: Context?, resourceName: String): Bitmap? {
+        if (context == null) return null
         var bitmap = artworkCache.get(resourceName)
         if (bitmap == null) {
             val resId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
@@ -2241,53 +2246,133 @@ class NightSkyRenderer {
                 val mNum = reusableDso.messierId()
                 val messierId = "M$mNum"
 
-                // Draw type-specific glyph
-                when (dsoType) {
-                    DsoType.GALAXY -> {
-                        // Tilted ellipse (major:minor = 2:1)
-                        nativeCanvas.save()
-                        nativeCanvas.translate(pX, pY)
-                        nativeCanvas.rotate(-35f)
-                        dsoRectF.set(-renderedRadiusPx, -renderedRadiusPx * 0.5f, renderedRadiusPx, renderedRadiusPx * 0.5f)
-                        nativeCanvas.drawOval(dsoRectF, dsoHaloPaint)
-                        nativeCanvas.drawOval(dsoRectF, dsoPaint)
-                        nativeCanvas.drawCircle(0f, 0f, 1.8f * density, dsoCorePaint)
-                        nativeCanvas.restore()
+                // Check for photorealistic artwork texture (Hybrid Rendering)
+                val artRes = reusableDso.artResourceName()
+                var drewTexture = false
+                if (!artRes.isNullOrEmpty()) {
+                    val bitmap = getOrLoadArtwork(context, artRes)
+                    if (bitmap != null) {
+                        val artWidthDeg = reusableDso.artWidthDeg()
+                        val wDeg = if (artWidthDeg > 0f) artWidthDeg.toDouble() else (sizeArcmin.toDouble() / 60.0).coerceAtLeast(0.1)
+                        val bw = bitmap.width.toFloat()
+                        val bh = bitmap.height.toFloat()
+                        val aspect = bh / bw
+                        val halfWDeg = wDeg * 0.5
+                        val halfHDeg = halfWDeg * aspect
+
+                        val posAngleDeg = reusableDso.positionAngleDeg().toDouble() + reusableDso.artRotationDeg().toDouble()
+                        val phiRad = Math.toRadians(posAngleDeg)
+                        val cosP = kotlin.math.cos(phiRad)
+                        val sinP = kotlin.math.sin(phiRad)
+
+                        val dsoRa = reusableDso.ra().toDouble()
+                        val dsoDec = reusableDso.dec().toDouble()
+                        val decRad = Math.toRadians(dsoDec)
+                        val cosDec = kotlin.math.cos(decRad).coerceAtLeast(0.01)
+
+                        var allInFront = true
+                        for (i in 0 until 4) {
+                            val u = when (i) {
+                                0, 3 -> -halfWDeg
+                                else -> halfWDeg
+                            }
+                            val v = when (i) {
+                                0, 1 -> halfHDeg
+                                else -> -halfHDeg
+                            }
+                            val uRot = u * cosP - v * sinP
+                            val vRot = u * sinP + v * cosP
+                            val cRa = dsoRa - (uRot / cosDec)
+                            val cDec = (dsoDec + vRot).coerceIn(-90.0, 90.0)
+
+                            EquatorialCoordinates.computeWorldVector(cRa, cDec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+                            val inFront = projectWorldToScreen(
+                                tempWorldVec[0], tempWorldVec[1], tempWorldVec[2],
+                                matrix, displayRotation, halfW, halfH, focalLengthPixels,
+                                dsoCornerProjected, i * 3
+                            )
+                            if (!inFront) {
+                                allInFront = false
+                            }
+                        }
+
+                        val z0 = dsoCornerProjected[2]
+                        val z1 = dsoCornerProjected[5]
+                        val z2 = dsoCornerProjected[8]
+                        val z3 = dsoCornerProjected[11]
+
+                        if (allInFront && z0 > 0.001f && z1 > 0.001f && z2 > 0.001f && z3 > 0.001f) {
+                            dsoPolySrc[0] = 0f; dsoPolySrc[1] = 0f
+                            dsoPolySrc[2] = bw; dsoPolySrc[3] = 0f
+                            dsoPolySrc[4] = bw; dsoPolySrc[5] = bh
+                            dsoPolySrc[6] = 0f; dsoPolySrc[7] = bh
+
+                            dsoPolyDst[0] = dsoCornerProjected[0]
+                            dsoPolyDst[1] = dsoCornerProjected[1]
+                            dsoPolyDst[2] = dsoCornerProjected[3]
+                            dsoPolyDst[3] = dsoCornerProjected[4]
+                            dsoPolyDst[4] = dsoCornerProjected[6]
+                            dsoPolyDst[5] = dsoCornerProjected[7]
+                            dsoPolyDst[6] = dsoCornerProjected[9]
+                            dsoPolyDst[7] = dsoCornerProjected[10]
+
+                            dsoMatrix.reset()
+                            dsoMatrix.setPolyToPoly(dsoPolySrc, 0, dsoPolyDst, 0, 4)
+
+                            artPaint.alpha = 230
+                            nativeCanvas.drawBitmap(bitmap, dsoMatrix, artPaint)
+                            drewTexture = true
+                        }
                     }
-                    DsoType.GLOBULAR_CLUSTER -> {
-                        // Circle with inscribed crosshair
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
-                        nativeCanvas.drawLine(pX - renderedRadiusPx, pY, pX + renderedRadiusPx, pY, dsoPaint)
-                        nativeCanvas.drawLine(pX, pY - renderedRadiusPx, pX, pY + renderedRadiusPx, dsoPaint)
-                        nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
-                    }
-                    DsoType.OPEN_CLUSTER -> {
-                        // Dashed circle with center core
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoDashedPaint)
-                        nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
-                    }
-                    DsoType.NEBULA -> {
-                        // Rounded square bounding frame
-                        val r = renderedRadiusPx * 0.85f
-                        dsoRectF.set(pX - r, pY - r, pX + r, pY + r)
-                        nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoHaloPaint)
-                        nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoPaint)
-                        nativeCanvas.drawCircle(pX, pY, 1.5f * density, dsoCorePaint)
-                    }
-                    DsoType.PLANETARY_NEBULA -> {
-                        // Circle with 4 outward tick marks
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
-                        val tick = 4f * density
-                        nativeCanvas.drawLine(pX - renderedRadiusPx - tick, pY, pX - renderedRadiusPx, pY, dsoPaint)
-                        nativeCanvas.drawLine(pX + renderedRadiusPx, pY, pX + renderedRadiusPx + tick, pY, dsoPaint)
-                        nativeCanvas.drawLine(pX, pY - renderedRadiusPx - tick, pX, pY - renderedRadiusPx, dsoPaint)
-                        nativeCanvas.drawLine(pX, pY + renderedRadiusPx, pX, pY + renderedRadiusPx + tick, dsoPaint)
-                    }
-                    else -> {
-                        nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                }
+
+                // If no texture was drawn, draw the type-specific vector glyph
+                if (!drewTexture) {
+                    val dsoType = reusableDso.type()
+                    when (dsoType) {
+                        DsoType.GALAXY -> {
+                            val posAngle = reusableDso.positionAngleDeg()
+                            val axisRatio = reusableDso.axisRatio().coerceIn(0.15f, 1.0f)
+                            nativeCanvas.save()
+                            nativeCanvas.translate(pX, pY)
+                            nativeCanvas.rotate(posAngle)
+                            dsoRectF.set(-renderedRadiusPx, -renderedRadiusPx * axisRatio, renderedRadiusPx, renderedRadiusPx * axisRatio)
+                            nativeCanvas.drawOval(dsoRectF, dsoHaloPaint)
+                            nativeCanvas.drawOval(dsoRectF, dsoPaint)
+                            nativeCanvas.drawCircle(0f, 0f, 1.8f * density, dsoCorePaint)
+                            nativeCanvas.restore()
+                        }
+                        DsoType.GLOBULAR_CLUSTER -> {
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                            nativeCanvas.drawLine(pX - renderedRadiusPx, pY, pX + renderedRadiusPx, pY, dsoPaint)
+                            nativeCanvas.drawLine(pX, pY - renderedRadiusPx, pX, pY + renderedRadiusPx, dsoPaint)
+                            nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                        }
+                        DsoType.OPEN_CLUSTER -> {
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoDashedPaint)
+                            nativeCanvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                        }
+                        DsoType.NEBULA -> {
+                            val r = renderedRadiusPx * 0.85f
+                            dsoRectF.set(pX - r, pY - r, pX + r, pY + r)
+                            nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoHaloPaint)
+                            nativeCanvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoPaint)
+                            nativeCanvas.drawCircle(pX, pY, 1.5f * density, dsoCorePaint)
+                        }
+                        DsoType.PLANETARY_NEBULA -> {
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoHaloPaint)
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                            val tick = 4f * density
+                            nativeCanvas.drawLine(pX - renderedRadiusPx - tick, pY, pX - renderedRadiusPx, pY, dsoPaint)
+                            nativeCanvas.drawLine(pX + renderedRadiusPx, pY, pX + renderedRadiusPx + tick, pY, dsoPaint)
+                            nativeCanvas.drawLine(pX, pY - renderedRadiusPx - tick, pX, pY - renderedRadiusPx, dsoPaint)
+                            nativeCanvas.drawLine(pX, pY + renderedRadiusPx, pX, pY + renderedRadiusPx + tick, dsoPaint)
+                        }
+                        else -> {
+                            nativeCanvas.drawCircle(pX, pY, renderedRadiusPx, dsoPaint)
+                        }
                     }
                 }
 

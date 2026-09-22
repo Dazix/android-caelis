@@ -94,17 +94,20 @@ enum DsoType : ubyte {
 
 table DeepSkyObject {
     messier_id: short;           // Číslo v Messierově katalogu (1..110)
-    dso_type: DsoType;           // Typ tělesa
     ra: float;                   // Rektascenze v stupních J2000.0 [0.0, 360.0)
     dec: float;                  // Deklinace v stupních J2000.0 [-90.0, +90.0]
-    magnitude: float;            // Vizuální magnituda (např. 3.44 pro M31)
-    radius_arcmin: float;        // Úhlový poloměr v úhlových minutách
+    mag: float;                  // Vizuální magnituda (např. 3.44 pro M31)
+    size_arcmin: float;          // Úhlový poloměr v úhlových minutách
+    type: DsoType;               // Typ tělesa
+    localized_name: string;      // Např. "Galaxie v Andromedě"
+    constellation_id: string;    // Zkratka souhvězdí (např. "And")
+    english_name: string;        // Např. "Andromeda Galaxy"
+    ngc_id: string;              // Např. "NGC 224"
     position_angle_deg: float;   // Poziční úhel hlavní poloosy [0.0, 180.0)
     axis_ratio: float;           // Poměr vedlejší ku hlavní poloose b/a (0.1 .. 1.0)
-    english_name: string;        // Např. "Andromeda Galaxy"
-    localized_name: string;      // Např. "Galaxie v Andromedě"
-    ngc_id: string;              // Např. "NGC 224"
-    constellation_id: string;    // Zkratka souhvězdí (např. "And")
+    art_resource_name: string;   // Název textury pro prominentní DSO (např. "dso_m31")
+    art_width_deg: float;        // Skutečná úhlová šířka textury na nebeské sféře
+    art_rotation_deg: float;     // Lokální korekce rotace textury
 }
 
 table NightSkyCatalog {
@@ -168,12 +171,24 @@ V třídě [`NightSkyRenderer`](file:///home/dazix/projects/caelis-mobile-app/ap
 - `dsoInFront`: `BooleanArray(110)`
 - `dsoMagnitudes`: `FloatArray(110)`
 
-### Výpočet úhlového poloměru a měřítka při zoomu
-Úhlový poloměr v obloukových minutách ($\theta_{\text{arcmin}}$) se promítá do pixelové velikosti na displeji:
+### Hybridní rendering (Fotorealistické textury vs. Vektorové glyfy)
 
-$$\theta_{\text{deg}} = \text{clamp}\left(\frac{\theta_{\text{arcmin}}}{60.0},\, 0.05^\circ,\, 5.0^\circ\right)$$
+Pro zajištění maximální vizuální kvality a věrnosti používá Caelis **hybridní vykreslovací strategii**:
+1. **Prominentní objekty (M31, M42, M45, M13, M27, M51, M57, M8):** Vykreslují se pomocí fotorealistických WebP textur s alfa kanálem (`dso_m31.webp`, `dso_m42.webp` atd.) ukotvených přímo k nebeské sféře.
+2. **Standardní objekty:** Vykreslují se pomocí minimalistických vektorových glyfů podle astronomického typu `DsoType`.
 
-$$R_{\text{px}} = \text{clamp}\left(f_{\text{pixels}} \cdot \tan\left(\theta_{\text{deg}} \cdot \frac{\pi}{180}\right) \cdot \text{zoomFactor},\, 8.0 \cdot \text{density},\, 250.0 \cdot \text{density}\right)$$
+#### 3D Poly-to-Poly Homografie bez paralaktického driftu
+Aby nedocházelo k deformacím či "plavání" textury při okraji zorného pole (parallax drift způsobený jednoduchým 2D `postScale`), je textura mapována v plném 3D prostoru:
+1. Ze středu $(\text{RA}_0, \text{Dec}_0)$, úhlové šířky $\theta_w = \text{artWidthDeg}$, poměru stran bitmapy $h/w$ a pozičního úhlu $\phi = \text{positionAngleDeg} + \text{artRotationDeg}$ se na lokální tečné rovině vypočtou 4 nebeské rohy:
+   - $\text{TL}: (-w/2, +h/2)$, $\text{TR}: (+w/2, +h/2)$, $\text{BR}: (+w/2, -h/2)$, $\text{BL}: (-w/2, -h/2)$.
+2. Po rotaci o úhel $\phi$ se rohy převedou do rovníkových souřadnic $(\text{RA}_k, \text{Dec}_k)$ a následně do světových vektorů ENU.
+3. Všechny 4 rohy projdou transformací $R^T$ a perspektivní projekcí do souřadnic displeje $(x_k, y_k)$.
+4. Pokud leží všechny 4 rohy před rovinou kamery ($z_s > 0.001$), matice `dsoMatrix` se nastaví přes:
+   $$\text{dsoMatrix.setPolyToPoly}(\text{dsoPolySrc}, 0, \text{dsoPolyDst}, 0, 4)$$
+   a bitmapa je vykreslena voláním `Canvas.drawBitmap(bitmap, dsoMatrix, artPaint)`.
+5. V režimech nočního vidění (Red/Amber/Green) se na `artPaint` aplikuje `PorterDuffColorFilter(ActiveColor, PorterDuff.Mode.MULTIPLY)`, který texturu okamžitě převede do monochromatického režimu bez oslnění očí.
+
+---
 
 ### Matematika a geometrie jednotlivých glyfů
 

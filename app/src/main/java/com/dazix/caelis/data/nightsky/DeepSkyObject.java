@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * FlatBuffers table storing astronomical data for Messier Deep Sky Objects (DSOs).
+ * FlatBuffers table storing astronomical data and hybrid texture metadata for Messier Deep Sky Objects (DSOs).
  */
 @SuppressWarnings("unused")
 public final class DeepSkyObject extends Table {
@@ -35,6 +35,13 @@ public final class DeepSkyObject extends Table {
     public String ngcId() { int o = __offset(22); return o != 0 ? __string(o + bb_pos) : null; }
     public ByteBuffer ngcIdAsByteBuffer() { return __vector_as_bytebuffer(22, 1); }
     public ByteBuffer ngcIdInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 22, 1); }
+    public float positionAngleDeg() { int o = __offset(24); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
+    public float axisRatio() { int o = __offset(26); return o != 0 ? bb.getFloat(o + bb_pos) : 1.0f; }
+    public String artResourceName() { int o = __offset(28); return o != 0 ? __string(o + bb_pos) : null; }
+    public ByteBuffer artResourceNameAsByteBuffer() { return __vector_as_bytebuffer(28, 1); }
+    public ByteBuffer artResourceNameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 28, 1); }
+    public float artWidthDeg() { int o = __offset(30); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
+    public float artRotationDeg() { int o = __offset(32); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
 
     public static int createDeepSkyObject(FlatBufferBuilder builder,
         short messierId,
@@ -46,8 +53,18 @@ public final class DeepSkyObject extends Table {
         int localizedNameOffset,
         int constellationIdOffset,
         int englishNameOffset,
-        int ngcIdOffset) {
-        builder.startTable(10);
+        int ngcIdOffset,
+        float positionAngleDeg,
+        float axisRatio,
+        int artResourceNameOffset,
+        float artWidthDeg,
+        float artRotationDeg) {
+        builder.startTable(15);
+        DeepSkyObject.addArtRotationDeg(builder, artRotationDeg);
+        DeepSkyObject.addArtWidthDeg(builder, artWidthDeg);
+        DeepSkyObject.addArtResourceName(builder, artResourceNameOffset);
+        DeepSkyObject.addAxisRatio(builder, axisRatio);
+        DeepSkyObject.addPositionAngleDeg(builder, positionAngleDeg);
         DeepSkyObject.addNgcId(builder, ngcIdOffset);
         DeepSkyObject.addEnglishName(builder, englishNameOffset);
         DeepSkyObject.addConstellationId(builder, constellationIdOffset);
@@ -61,7 +78,7 @@ public final class DeepSkyObject extends Table {
         return DeepSkyObject.endDeepSkyObject(builder);
     }
 
-    public static void startDeepSkyObject(FlatBufferBuilder builder) { builder.startTable(10); }
+    public static void startDeepSkyObject(FlatBufferBuilder builder) { builder.startTable(15); }
     public static void addMessierId(FlatBufferBuilder builder, short messierId) { builder.addShort(0, messierId, 0); }
     public static void addRa(FlatBufferBuilder builder, float ra) { builder.addFloat(1, ra, 0.0f); }
     public static void addDec(FlatBufferBuilder builder, float dec) { builder.addFloat(2, dec, 0.0f); }
@@ -72,6 +89,11 @@ public final class DeepSkyObject extends Table {
     public static void addConstellationId(FlatBufferBuilder builder, int constellationIdOffset) { builder.addOffset(7, constellationIdOffset, 0); }
     public static void addEnglishName(FlatBufferBuilder builder, int englishNameOffset) { builder.addOffset(8, englishNameOffset, 0); }
     public static void addNgcId(FlatBufferBuilder builder, int ngcIdOffset) { builder.addOffset(9, ngcIdOffset, 0); }
+    public static void addPositionAngleDeg(FlatBufferBuilder builder, float positionAngleDeg) { builder.addFloat(10, positionAngleDeg, 0.0f); }
+    public static void addAxisRatio(FlatBufferBuilder builder, float axisRatio) { builder.addFloat(11, axisRatio, 1.0f); }
+    public static void addArtResourceName(FlatBufferBuilder builder, int artResourceNameOffset) { builder.addOffset(12, artResourceNameOffset, 0); }
+    public static void addArtWidthDeg(FlatBufferBuilder builder, float artWidthDeg) { builder.addFloat(13, artWidthDeg, 0.0f); }
+    public static void addArtRotationDeg(FlatBufferBuilder builder, float artRotationDeg) { builder.addFloat(14, artRotationDeg, 0.0f); }
     public static int endDeepSkyObject(FlatBufferBuilder builder) {
         int o = builder.endTable();
         return o;
