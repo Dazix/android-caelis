@@ -52,12 +52,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.dazix.caelis.domain.nightsky.TimeState
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
+import java.time.ZoneId
 
 data class NightSkyArUiState(
+    val timeState: TimeState = TimeState(),
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
     val keepScreenOn: Boolean = false,
@@ -129,6 +133,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     val isSearchActive = MutableStateFlow(false)
+
+    private val _timeState = MutableStateFlow(TimeState())
+    val timeState: StateFlow<TimeState> = _timeState.asStateFlow()
 
     val selectedStarIndex = MutableStateFlow(-1)
     val selectedConstellationIndex = MutableStateFlow(-1)
@@ -512,6 +519,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             horizonState,
             debugPreferences,
             multipleHitsTargetState,
+            _timeState,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -561,8 +569,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val horizState = args[41] as com.dazix.caelis.data.horizon.HorizonState
         val debugPrefs = args[42] as com.dazix.caelis.data.DebugPreferences
         val multipleHits = args[43] as NightSkyRenderer.HitTarget.MultipleHits?
+        val tState = args[44] as TimeState
 
         NightSkyArUiState(
+            timeState = tState,
             location = loc,
             hasGpsFix = gps,
             keepScreenOn = keepOn,
@@ -656,7 +666,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             locationProvider.location.collect { loc ->
                 orientationTracker.updateLocation(loc)
-                isNightState.value = SolarPositionCalculator.isNight(Instant.now(), loc)
+                val activeTime = _timeState.value.activeInstant()
+                isNightState.value = SolarPositionCalculator.isNight(activeTime, loc)
                 if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
                     updateManualOrientation()
                 }
@@ -690,32 +701,85 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         // Sidereal time, planetary ephemeris & day/night ticker updating every second
         viewModelScope.launch {
             while (isActive) {
-                val loc = locationProvider.location.value
-                val now = Instant.now()
-                val lstDeg = SiderealTime.computeLstDegrees(now, loc.longitude)
-                val lstHours = lstDeg / 15.0
-                lstDegreesState.value = lstDeg
-                lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
-                isNightState.value = SolarPositionCalculator.isNight(now, loc)
-                currentTimeState.value = LocalTime.now()
+                if (!_timeState.value.isVirtual) {
+                    val loc = locationProvider.location.value
+                    val now = Instant.now()
+                    val lstDeg = SiderealTime.computeLstDegrees(now, loc.longitude)
+                    val lstHours = lstDeg / 15.0
+                    lstDegreesState.value = lstDeg
+                    lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
+                    isNightState.value = SolarPositionCalculator.isNight(now, loc)
+                    currentTimeState.value = LocalTime.now()
 
-                // Recalculate dynamic planetary positions
-                val updatedPlanets = PlanetaryEphemerisCalculator.computeAll(now)
-                planetStates.value = updatedPlanets
+                    // Recalculate dynamic planetary positions
+                    val updatedPlanets = PlanetaryEphemerisCalculator.computeAll(now)
+                    planetStates.value = updatedPlanets
 
-                val currentPlanetId = selectedPlanetId.value
-                if (currentPlanetId != null) {
-                    val currentPlanet = updatedPlanets.firstOrNull { it.id.equals(currentPlanetId, ignoreCase = true) }
-                    if (currentPlanet != null) {
-                        selectedBodyState.value = createPlanetDetails(currentPlanet)
+                    val currentPlanetId = selectedPlanetId.value
+                    if (currentPlanetId != null) {
+                        val currentPlanet = updatedPlanets.firstOrNull { it.id.equals(currentPlanetId, ignoreCase = true) }
+                        if (currentPlanet != null) {
+                            selectedBodyState.value = createPlanetDetails(currentPlanet)
+                        }
                     }
-                }
 
-                if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
-                    updateManualOrientation()
+                    if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
+                        updateManualOrientation()
+                    }
                 }
                 delay(1000L)
             }
+        }
+    }
+
+    /**
+     * Activates virtual time and immediately recalculates all astronomical models.
+     */
+    fun setVirtualTime(instant: Instant) {
+        _timeState.value = TimeState(isVirtual = true, virtualTime = instant)
+        recomputeAstronomicalState(instant)
+    }
+
+    /**
+     * Resets back to live device clock.
+     */
+    fun resetToLiveTime() {
+        _timeState.value = TimeState(isVirtual = false, virtualTime = null)
+        recomputeAstronomicalState(Instant.now())
+    }
+
+    /**
+     * Increments or decrements active virtual time by [duration].
+     */
+    fun stepVirtualTime(duration: Duration) {
+        val base = _timeState.value.virtualTime ?: Instant.now()
+        val target = base.plus(duration)
+        setVirtualTime(target)
+    }
+
+    private fun recomputeAstronomicalState(instant: Instant) {
+        val loc = locationProvider.location.value
+        val lstDeg = SiderealTime.computeLstDegrees(instant, loc.longitude)
+        val lstHours = lstDeg / 15.0
+        lstDegreesState.value = lstDeg
+        lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
+        isNightState.value = SolarPositionCalculator.isNight(instant, loc)
+        currentTimeState.value = instant.atZone(ZoneId.systemDefault()).toLocalTime()
+
+        // Recalculate dynamic planetary positions
+        val updatedPlanets = PlanetaryEphemerisCalculator.computeAll(instant)
+        planetStates.value = updatedPlanets
+
+        val currentPlanetId = selectedPlanetId.value
+        if (currentPlanetId != null) {
+            val currentPlanet = updatedPlanets.firstOrNull { it.id.equals(currentPlanetId, ignoreCase = true) }
+            if (currentPlanet != null) {
+                selectedBodyState.value = createPlanetDetails(currentPlanet)
+            }
+        }
+
+        if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
+            updateManualOrientation()
         }
     }
 

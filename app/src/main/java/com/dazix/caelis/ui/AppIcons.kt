@@ -81,6 +81,17 @@ object AppIcons {
         }
     }
 
+    /** Three vertical dots: overflow / options menu. */
+    val MoreVert: ImageVector by lazy {
+        icon("MoreVert") {
+            fillPath {
+                circle(centerX = 12f, centerY = 5.2f, radius = 2f)
+                circle(centerX = 12f, centerY = 12f, radius = 2f)
+                circle(centerX = 12f, centerY = 18.8f, radius = 2f)
+            }
+        }
+    }
+
     /** A shield: everything the system has to allow before the app can tap. */
     val Permissions: ImageVector by lazy {
         icon("Permissions") {
@@ -405,6 +416,18 @@ object AppIcons {
                 lineTo(20.8f, 9.6f)
                 moveTo(7.8f, 2.4f); lineTo(7.8f, 5.6f)
                 moveTo(16.2f, 2.4f); lineTo(16.2f, 5.6f)
+            }
+        }
+    }
+
+    /** Schedule: clock / time selector icon. */
+    val Schedule: ImageVector by lazy {
+        icon("Schedule") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 8.8f)
+                moveTo(12f, 7.2f)
+                lineTo(12f, 12f)
+                lineTo(15.5f, 14f)
             }
         }
     }

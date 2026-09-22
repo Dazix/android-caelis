@@ -1518,7 +1518,7 @@ internal fun SunArTopBar(
             modifier = Modifier.size(38.dp)
         ) {
             Icon(
-                imageVector = AppIcons.Advanced,
+                imageVector = AppIcons.MoreVert,
                 contentDescription = stringResource(R.string.sun_ar_title),
                 tint = accentColor,
             )

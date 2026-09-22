@@ -535,6 +535,7 @@ fun NightSkyArScreen(
                     isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
                     zoomRatio = uiState.zoomRatio,
                     isCalibrated = uiState.isCalibrated,
+                    isVirtualTime = uiState.timeState.isVirtual,
                     horizonState = uiState.horizonState,
                     redVisionMode = uiState.redVisionMode,
                     onBack = onBack,
@@ -564,6 +565,7 @@ fun NightSkyArScreen(
                 NightSkyBottomHud(
                     lstFormatted = uiState.lstFormatted,
                     visibleStarCount = uiState.visibleStarCount,
+                    timeState = uiState.timeState,
                     redVisionMode = uiState.redVisionMode,
                     nightVisionTheme = uiState.nightVisionState.theme,
                     modifier = Modifier.align(Alignment.Center),
@@ -684,6 +686,10 @@ fun NightSkyArScreen(
                 enableNightSkyCalibration = uiState.debugPreferences.enableNightSkyCalibration,
                 enableNightSkyFocusRegion = uiState.debugPreferences.enableNightSkyFocusRegion,
                 isDebugOptionsEnabled = uiState.isDebugOptionsEnabled,
+                timeState = uiState.timeState,
+                onSetVirtualTime = viewModel::setVirtualTime,
+                onStepVirtualTime = viewModel::stepVirtualTime,
+                onResetToLive = viewModel::resetToLiveTime,
                 onToggleLandscapeVisible = viewModel::toggleLandscapeVisible,
                 onToggleRealHorizon = viewModel::toggleRealHorizonInNightSky,
                 onToggleAtmosphereVisible = viewModel::toggleAtmosphereVisible,
@@ -965,6 +971,7 @@ internal fun NightSkyTopBar(
     onResetZoom: () -> Unit,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
+    isVirtualTime: Boolean = false,
     horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
@@ -1125,15 +1132,29 @@ internal fun NightSkyTopBar(
                 )
             }
 
-            IconButton(
-                onClick = onOpenLayers,
-                modifier = Modifier.size(38.dp),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Layers,
-                    contentDescription = stringResource(R.string.night_sky_layers_title),
-                    tint = if (redVisionMode) palette.primary else Color.White,
-                )
+            Box {
+                IconButton(
+                    onClick = onOpenLayers,
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Icon(
+                        imageVector = AppIcons.MoreVert,
+                        contentDescription = stringResource(R.string.night_sky_layers_title),
+                        tint = if (redVisionMode) palette.primary else Color.White,
+                    )
+                }
+                if (isVirtualTime) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 6.dp, end = 6.dp)
+                            .size(7.dp)
+                            .background(
+                                if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                                CircleShape,
+                            )
+                    )
+                }
             }
         }
     }
@@ -1143,6 +1164,7 @@ internal fun NightSkyTopBar(
 internal fun NightSkyBottomHud(
     lstFormatted: String,
     visibleStarCount: Int,
+    timeState: com.dazix.caelis.domain.nightsky.TimeState = com.dazix.caelis.domain.nightsky.TimeState(),
     redVisionMode: Boolean,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
@@ -1197,6 +1219,29 @@ internal fun NightSkyBottomHud(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                 )
+            }
+
+            // Virtual Time Readout tag (only displayed when virtual time is active)
+            if (timeState.isVirtual && timeState.virtualTime != null) {
+                val zdt = remember(timeState.virtualTime) {
+                    timeState.virtualTime.atZone(java.time.ZoneId.systemDefault())
+                }
+                val timeStr = remember(zdt) {
+                    String.format(java.util.Locale.US, "%02d:%02d", zdt.hour, zdt.minute)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "🕒 ",
+                        fontSize = 10.sp,
+                    )
+                    Text(
+                        text = timeStr,
+                        color = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
         }
     }
