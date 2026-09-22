@@ -247,5 +247,81 @@ class CelestialMatrixCalculatorTest {
             assertEquals("Target Elevation at Az $az, El $el", el, computedEl, 0.01)
         }
     }
+
+    @Test
+    fun `computeCelestialToDeviceMatrix is strictly orthonormal and correctly transforms celestial coordinates`() {
+        val mat9 = FloatArray(9)
+        CelestialMatrixCalculator.computeCelestialToDeviceMatrix(
+            sensorMatrix16 = identity16,
+            lstDegrees = 0.0,
+            latitudeDegrees = 45.0,
+            outMatrix9 = mat9,
+        )
+
+        // Column 0
+        val c0x = mat9[0]; val c0y = mat9[3]; val c0z = mat9[6]
+        // Column 1
+        val c1x = mat9[1]; val c1y = mat9[4]; val c1z = mat9[7]
+        // Column 2
+        val c2x = mat9[2]; val c2y = mat9[5]; val c2z = mat9[8]
+
+        val mag0 = sqrt(c0x * c0x + c0y * c0y + c0z * c0z)
+        val mag1 = sqrt(c1x * c1x + c1y * c1y + c1z * c1z)
+        val mag2 = sqrt(c2x * c2x + c2y * c2y + c2z * c2z)
+
+        assertEquals("Col 0 magnitude", 1.0f, mag0, 0.001f)
+        assertEquals("Col 1 magnitude", 1.0f, mag1, 0.001f)
+        assertEquals("Col 2 magnitude", 1.0f, mag2, 0.001f)
+
+        // North Celestial Pole in J2000 [0, 1, 0]
+        // V_dev = M_cel2dev * [0, 1, 0] = [mat9[1], mat9[4], mat9[7]]
+        val devX = mat9[1]
+        val devY = mat9[4]
+        val devZ = mat9[7]
+
+        // In ENU, at Lat 45 deg, LST 0: North Celestial Pole is due North (Y=cos(45)), Up (Z=sin(45))
+        // With identity sensor matrix (V_dev = V_enu), devX = 0, devY = cos(45°), devZ = sin(45°)
+        assertEquals(0.0f, devX, 0.001f)
+        assertEquals(kotlin.math.cos(Math.toRadians(45.0)).toFloat(), devY, 0.001f)
+        assertEquals(kotlin.math.sin(Math.toRadians(45.0)).toFloat(), devZ, 0.001f)
+    }
+
+    @Test
+    fun `stationary manual matrix with advancing LST produces smooth monotonic sidereal drift without oscillation`() {
+        val manualMatrix = FloatArray(16)
+        // Camera looking South (Az 180°), Elevation 30°
+        CelestialMatrixCalculator.computeManualRotationMatrix(azDeg = 180.0, elDeg = 30.0, outMatrix16 = manualMatrix)
+
+        val matFrame0 = FloatArray(9)
+        val matFrame1 = FloatArray(9)
+        val matFrame2 = FloatArray(9)
+
+        val t0Ms = 1774304609000L
+        val t1Ms = t0Ms + 16L
+        val t2Ms = t0Ms + 32L
+        val lon = 14.4378
+        val lat = 50.0
+
+        val lst0 = SiderealTime.calculateLST(SiderealTime.toJulianDate(t0Ms), lon)
+        val lst1 = SiderealTime.calculateLST(SiderealTime.toJulianDate(t1Ms), lon)
+        val lst2 = SiderealTime.calculateLST(SiderealTime.toJulianDate(t2Ms), lon)
+
+        CelestialMatrixCalculator.computeCelestialToDeviceMatrix(manualMatrix, lst0, lat, matFrame0)
+        CelestialMatrixCalculator.computeCelestialToDeviceMatrix(manualMatrix, lst1, lat, matFrame1)
+        CelestialMatrixCalculator.computeCelestialToDeviceMatrix(manualMatrix, lst2, lat, matFrame2)
+
+        // Star at J2000 [1, 0, 0] (RA 0, Dec 0)
+        val devX0 = matFrame0[0]
+        val devX1 = matFrame1[0]
+        val devX2 = matFrame2[0]
+
+        val diff01 = devX1 - devX0
+        val diff12 = devX2 - devX1
+
+        // Delta must be non-zero and maintain exact same direction/sign across frames (monotonic, no oscillation)
+        assertTrue("Star position must drift across frames", abs(diff01) > 0.0f)
+        assertTrue("Direction must be monotonic (same sign)", diff01 * diff12 > 0.0f)
+        assertEquals("Drift rate must be strictly continuous and uniform", diff01, diff12, 1e-6f)
+    }
 }
 

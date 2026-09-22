@@ -113,6 +113,32 @@ class NightSkyRenderer {
     private var cachedLatitudeDegrees: Double = Double.NaN
     private var cachedStarCount: Int = 0
 
+    // Static Cartesian Celestial coordinates in J2000.0 (V_cel = [cos(Dec)*cos(RA), cos(Dec)*sin(RA), sin(Dec)])
+    // Eliminates all vector re-calculation on LST time shifts and provides continuous 60/120 FPS rotation.
+    val starCelX = FloatArray(MAX_STARS)
+    val starCelY = FloatArray(MAX_STARS)
+    val starCelZ = FloatArray(MAX_STARS)
+    val starCelComputed = BooleanArray(MAX_STARS)
+    @Volatile
+    var isStarCelCacheReady = false
+        private set
+
+    val dsoCelX = FloatArray(MAX_DSOS)
+    val dsoCelY = FloatArray(MAX_DSOS)
+    val dsoCelZ = FloatArray(MAX_DSOS)
+
+    val meteorCelX = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorCelY = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorCelZ = FloatArray(MAX_METEOR_SHOWERS)
+
+    private val maxConstellations = 256
+    val constellationCentroidCelX = FloatArray(maxConstellations)
+    val constellationCentroidCelY = FloatArray(maxConstellations)
+    val constellationCentroidCelZ = FloatArray(maxConstellations)
+
+    // Pre-allocated 3x3 matrix mapping Celestial J2000.0 directly into Device coordinates
+    private val cel2devMatrix = FloatArray(9)
+
     // Cached screen projection coordinates for constellation line resolution
     private val starScreenX = FloatArray(MAX_STARS)
     private val starScreenY = FloatArray(MAX_STARS)
@@ -121,7 +147,6 @@ class NightSkyRenderer {
     // Fast O(1) zero-allocation lookup table to force render constituent stars of visible constellations
     val forceRenderStar = BooleanArray(MAX_STARS)
 
-    private val maxConstellations = 256
     val constellationProgress = FloatArray(maxConstellations) { 0f }
     val constellationCentroidScreenX = FloatArray(maxConstellations)
     val constellationCentroidScreenY = FloatArray(maxConstellations)
@@ -1540,6 +1565,69 @@ class NightSkyRenderer {
     }
 
     /**
+     * Ensures static J2000.0 Cartesian unit vectors are precomputed for all stars, DSOs,
+     * meteor showers, and constellations. Computed once per catalog load.
+     */
+    fun ensureStaticCelestialVectors(catalog: NightSkyCatalog) {
+        if (isStarCelCacheReady) return
+        val bb = catalog.byteBuffer
+        val starsVectorOffset = catalog.starsVectorOffset()
+        val totalStars = minOf(catalog.starsLength(), MAX_STARS)
+        val deg2rad = Math.PI / 180.0
+
+        for (i in 0 until totalStars) {
+            val offset = starsVectorOffset + i * 12
+            val raRad = bb.getFloat(offset).toDouble() * deg2rad
+            val decRad = bb.getFloat(offset + 4).toDouble() * deg2rad
+
+            val cosDec = kotlin.math.cos(decRad)
+            val sinDec = kotlin.math.sin(decRad)
+            val cosRa = kotlin.math.cos(raRad)
+            val sinRa = kotlin.math.sin(raRad)
+
+            starCelX[i] = (cosDec * cosRa).toFloat()
+            starCelY[i] = sinDec.toFloat()
+            starCelZ[i] = (cosDec * sinRa).toFloat()
+            starCelComputed[i] = true
+        }
+
+        val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+        for (d in 0 until dsoCount) {
+            catalog.dsos(reusableDso, d)
+            val raRad = reusableDso.ra().toDouble() * deg2rad
+            val decRad = reusableDso.dec().toDouble() * deg2rad
+            val cosDec = kotlin.math.cos(decRad)
+            dsoCelX[d] = (cosDec * kotlin.math.cos(raRad)).toFloat()
+            dsoCelY[d] = kotlin.math.sin(decRad).toFloat()
+            dsoCelZ[d] = (cosDec * kotlin.math.sin(raRad)).toFloat()
+        }
+
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
+        for (m in 0 until meteorCount) {
+            catalog.meteorShowers(reusableMeteor, m)
+            val raRad = reusableMeteor.ra().toDouble() * deg2rad
+            val decRad = reusableMeteor.dec().toDouble() * deg2rad
+            val cosDec = kotlin.math.cos(decRad)
+            meteorCelX[m] = (cosDec * kotlin.math.cos(raRad)).toFloat()
+            meteorCelY[m] = kotlin.math.sin(decRad).toFloat()
+            meteorCelZ[m] = (cosDec * kotlin.math.sin(raRad)).toFloat()
+        }
+
+        val constCount = minOf(catalog.constellationsLength(), maxConstellations)
+        for (c in 0 until constCount) {
+            catalog.constellations(reusableConstellation, c)
+            val cRaRad = reusableConstellation.centroidRa().toDouble() * deg2rad
+            val cDecRad = reusableConstellation.centroidDec().toDouble() * deg2rad
+            val cosDec = kotlin.math.cos(cDecRad)
+            constellationCentroidCelX[c] = (cosDec * kotlin.math.cos(cRaRad)).toFloat()
+            constellationCentroidCelY[c] = kotlin.math.sin(cDecRad).toFloat()
+            constellationCentroidCelZ[c] = (cosDec * kotlin.math.sin(cRaRad)).toFloat()
+        }
+
+        isStarCelCacheReady = true
+    }
+
+    /**
      * Tier 1: High Priority (Naked Eye Stars: mag <= 6.0f).
      * Computes vectors for the ~5,000 visible stars immediately in < 1ms, unlocking the renderer.
      */
@@ -1549,6 +1637,7 @@ class NightSkyRenderer {
         latitudeDegrees: Double,
         totalStars: Int,
     ) {
+        ensureStaticCelestialVectors(catalog)
         val bb = catalog.byteBuffer
         val starsVectorOffset = catalog.starsVectorOffset()
 
@@ -1646,6 +1735,19 @@ class NightSkyRenderer {
     }
 
     /**
+     * Updates world unit vectors for stars and celestial bodies from Equatorial coordinates.
+     * Enforces strict 64-bit Double precision for [lstDegrees].
+     */
+    fun updateEquatorialToEnuVectors(
+        catalog: NightSkyCatalog,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        totalStars: Int = minOf(catalog.starsLength(), MAX_STARS),
+    ) {
+        updateStarWorldVectors(catalog, lstDegrees, latitudeDegrees, totalStars)
+    }
+
+    /**
      * Projects and renders visible stars and constellation lines in batch using FlatBuffers memory mapping.
      * Dual-pass optical rendering: Pass 1 renders soft optical halos, Pass 2 renders pinpoint cores.
      * Zero heap allocations per frame.
@@ -1691,13 +1793,26 @@ class NightSkyRenderer {
         val bb = catalog.byteBuffer
         val starsVectorOffset = catalog.starsVectorOffset()
 
-        // Progressive Tier 1 vector update if LST or latitude shifted significantly (< 1ms execution)
-        if (totalStars != cachedStarCount ||
-            kotlin.math.abs(lstDegrees - cachedLstDegrees) > 0.01 ||
-            kotlin.math.abs(latitudeDegrees - cachedLatitudeDegrees) > 0.001
-        ) {
-            updateStarWorldVectorsTier1(catalog, lstDegrees, latitudeDegrees, totalStars)
-        }
+        // Precompute static celestial J2000.0 vectors once
+        ensureStaticCelestialVectors(catalog)
+
+        // Compute 3x3 Celestial -> Device transformation matrix for this exact frame's LST (Zero allocations)
+        CelestialMatrixCalculator.computeCelestialToDeviceMatrix(
+            sensorMatrix16 = matrix,
+            lstDegrees = lstDegrees,
+            latitudeDegrees = latitudeDegrees,
+            outMatrix9 = cel2devMatrix,
+        )
+
+        val m00 = cel2devMatrix[0]
+        val m01 = cel2devMatrix[1]
+        val m02 = cel2devMatrix[2]
+        val m10 = cel2devMatrix[3]
+        val m11 = cel2devMatrix[4]
+        val m12 = cel2devMatrix[5]
+        val m20 = cel2devMatrix[6]
+        val m21 = cel2devMatrix[7]
+        val m22 = cel2devMatrix[8]
 
         // Reset bucket visible counts
         for (b in 0 until numBuckets) {
@@ -1706,10 +1821,10 @@ class NightSkyRenderer {
 
         val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
 
-        // 1. Camera optical axis in world ENU: v_cam = [-R[2], -R[6], -R[10]]
-        val camFwdX = -matrix[2]
-        val camFwdY = -matrix[6]
-        val camFwdZ = -matrix[10]
+        // 1. Camera optical forward axis in Celestial J2000 space (maps device [0, 0, -1] into celestial)
+        val camFwdCelX = -m20
+        val camFwdCelY = -m21
+        val camFwdCelZ = -m22
 
         // 2. Compute Frustum Dot Threshold
         val dotThreshold = StarFrustumCulling.computeFrustumDotThreshold(fovHorizontalDegrees, w, h)
@@ -1733,21 +1848,13 @@ class NightSkyRenderer {
         val focusRadiusOutSq = focusRadiusOut * focusRadiusOut
 
         for (c in 0 until constCount) {
-            catalog.constellations(reusableConstellation, c)
-            val cRa = reusableConstellation.centroidRa().toDouble()
-            val cDec = reusableConstellation.centroidDec().toDouble()
+            val cvx = constellationCentroidCelX[c]
+            val cvy = constellationCentroidCelY[c]
+            val cvz = constellationCentroidCelZ[c]
 
-            EquatorialCoordinates.computeWorldVector(cRa, cDec, lstDegrees, latitudeDegrees, tempCentroidWorldVec, 0)
-            val cvx = tempCentroidWorldVec[0]
-            val cvy = tempCentroidWorldVec[1]
-            val cvz = tempCentroidWorldVec[2]
-            constellationCentroidWorldX[c] = cvx
-            constellationCentroidWorldY[c] = cvy
-            constellationCentroidWorldZ[c] = cvz
-
-            val cxDev = matrix[0] * cvx + matrix[4] * cvy + matrix[8] * cvz
-            val cyDev = matrix[1] * cvx + matrix[5] * cvy + matrix[9] * cvz
-            val czDev = matrix[2] * cvx + matrix[6] * cvy + matrix[10] * cvz
+            val cxDev = m00 * cvx + m01 * cvy + m02 * cvz
+            val cyDev = m10 * cvx + m11 * cvy + m12 * cvz
+            val czDev = m20 * cvx + m21 * cvy + m22 * cvz
 
             val cxs: Float
             val cys: Float
@@ -1838,38 +1945,22 @@ class NightSkyRenderer {
                 continue
             }
 
-            // Guard: Ensure vector is computed before projecting to prevent [0,0,0] artifacts
-            if (!starVectorComputed[i]) {
-                if (isForced) {
-                    val ra = bb.getFloat(offset).toDouble()
-                    val dec = bb.getFloat(offset + 4).toDouble()
-                    EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
-                    starWorldX[i] = tempWorldVec[0]
-                    starWorldY[i] = tempWorldVec[1]
-                    starWorldZ[i] = tempWorldVec[2]
-                    starVectorComputed[i] = true
-                } else {
-                    starInFront[i] = false
-                    continue
-                }
-            }
-
-            // 1. Read precomputed World ENU coordinates (Zero Trigonometry)
-            val vx = starWorldX[i]
-            val vy = starWorldY[i]
-            val vz = starWorldZ[i]
+            // 1. Read precomputed static Cartesian Celestial coordinates (J2000.0)
+            val vx = starCelX[i]
+            val vy = starCelY[i]
+            val vz = starCelZ[i]
 
             // 2. Early Vector Dot-Product Frustum Culling (Rejects ~85% of out-of-view stars before matrix math)
-            val inFrustum = StarFrustumCulling.isStarInFrustum(camFwdX, camFwdY, camFwdZ, vx, vy, vz, dotThreshold)
+            val inFrustum = StarFrustumCulling.isStarInFrustum(camFwdCelX, camFwdCelY, camFwdCelZ, vx, vy, vz, dotThreshold)
             if (!inFrustum && !isForced) {
                 starInFront[i] = false
                 continue
             }
 
-            // 3. Simple Matrix Multiplication: Transform World -> Device coordinates (V_dev = R^T * V_world)
-            val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
-            val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
-            val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+            // 3. Simple Matrix Multiplication: Transform Celestial -> Device coordinates (V_dev = M_cel2dev * V_cel)
+            val xDev = m00 * vx + m01 * vy + m02 * vz
+            val yDev = m10 * vx + m11 * vy + m12 * vz
+            val zDev = m20 * vx + m21 * vy + m22 * vz
 
             // 4. Map physical device axes to camera screen coordinate system
             val xs: Float
@@ -1907,7 +1998,12 @@ class NightSkyRenderer {
             // 6. Physical Atmospheric Star Extinction (dim stars near horizon 0° <= h < 15°)
             var effectiveMag = rawMag
             if (isAtmosphereVisible) {
-                val starElevationDeg = (Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0f, 1.0f).toDouble()))).toFloat()
+                val vzEnu = if (matrix.size >= 16) {
+                    matrix[8] * xDev + matrix[9] * yDev + matrix[10] * zDev
+                } else if (matrix.size >= 9) {
+                    matrix[6] * xDev + matrix[7] * yDev + matrix[8] * zDev
+                } else 0f
+                val starElevationDeg = (Math.toDegrees(kotlin.math.asin(vzEnu.coerceIn(-1.0f, 1.0f).toDouble()))).toFloat()
                 if (starElevationDeg in 0.0f..StarOptics.EXTINCTION_ANGLE_DEG) {
                     effectiveMag = StarOptics.computeAirmassExtinction(rawMag, starElevationDeg)
                     if (effectiveMag > faintestVisibleMag && !isForced) {
@@ -2347,14 +2443,14 @@ class NightSkyRenderer {
                     continue
                 }
                 catalog.dsos(reusableDso, d)
-                val vx = dsoWorldX[d]
-                val vy = dsoWorldY[d]
-                val vz = dsoWorldZ[d]
+                val vx = dsoCelX[d]
+                val vy = dsoCelY[d]
+                val vz = dsoCelZ[d]
 
-                // Transform World -> Device coordinates: V_dev = R^T * V_world
-                val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
-                val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
-                val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+                // Transform Celestial -> Device coordinates: V_dev = M_cel2dev * V_cel
+                val xDev = m00 * vx + m01 * vy + m02 * vz
+                val yDev = m10 * vx + m11 * vy + m12 * vz
+                val zDev = m20 * vx + m21 * vy + m22 * vz
 
                 val xs: Float
                 val ys: Float
@@ -2550,14 +2646,14 @@ class NightSkyRenderer {
                     continue
                 }
                 catalog.meteorShowers(reusableMeteor, m)
-                val vx = meteorWorldX[m]
-                val vy = meteorWorldY[m]
-                val vz = meteorWorldZ[m]
+                val vx = meteorCelX[m]
+                val vy = meteorCelY[m]
+                val vz = meteorCelZ[m]
 
-                // Transform World -> Device coordinates: V_dev = R^T * V_world
-                val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
-                val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
-                val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+                // Transform Celestial -> Device coordinates: V_dev = M_cel2dev * V_cel
+                val xDev = m00 * vx + m01 * vy + m02 * vz
+                val yDev = m10 * vx + m11 * vy + m12 * vz
+                val zDev = m20 * vx + m21 * vy + m22 * vz
 
                 val xs: Float
                 val ys: Float

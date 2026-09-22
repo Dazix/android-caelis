@@ -116,7 +116,9 @@ import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.NightVisionState
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
+import com.dazix.caelis.domain.nightsky.SiderealTime
 import com.dazix.caelis.domain.nightsky.StarCatalog
+import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.ImmersiveModeEffect
@@ -472,6 +474,8 @@ fun NightSkyArScreen(
                     catalog = catalog,
                     lstDegrees = uiState.lstDegrees,
                     latitudeDegrees = uiState.location.latitude,
+                    timeState = uiState.timeState,
+                    longitudeDegrees = uiState.location.longitude,
                     nightVisionState = uiState.nightVisionState,
                     isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                     isMilkyWayVisible = uiState.isMilkyWayVisible,
@@ -824,6 +828,8 @@ internal fun NightSkyOverlayCanvas(
     catalog: com.dazix.caelis.data.nightsky.NightSkyCatalog?,
     lstDegrees: Double,
     latitudeDegrees: Double,
+    timeState: TimeState = TimeState(),
+    longitudeDegrees: Double = 0.0,
     nightVisionState: NightVisionState,
     isSkyBackgroundOpaque: Boolean,
     isMilkyWayVisible: Boolean,
@@ -929,6 +935,15 @@ internal fun NightSkyOverlayCanvas(
         @Suppress("UNUSED_VARIABLE")
         val currentTimeNanos = frameTicker
 
+        // 1. Frame-Tied Time: calculate exact microsecond/millisecond LST for this exact frame tick (Zero allocations, Double precision)
+        val currentTimestampMs = if (timeState.isVirtual && timeState.virtualTime != null) {
+            timeState.virtualTime.toEpochMilli()
+        } else {
+            System.currentTimeMillis()
+        }
+        val currentJd = SiderealTime.toJulianDate(currentTimestampMs)
+        val frameLstDegrees = SiderealTime.calculateLST(currentJd, longitudeDegrees)
+
         val hasMatrix = onGetRenderMatrix(renderMatrix)
         val matrix = if (hasMatrix) renderMatrix else (orientation?.rotationMatrix ?: return@Canvas)
 
@@ -948,7 +963,7 @@ internal fun NightSkyOverlayCanvas(
         renderer.drawSkyBackground(
             drawScope = this,
             matrix = matrix,
-            lstDegrees = lstDegrees,
+            lstDegrees = frameLstDegrees,
             latitudeDegrees = latitudeDegrees,
             displayRotation = displayRotation,
             fovHorizontalDegrees = fovHorizontalDegrees,
@@ -965,7 +980,7 @@ internal fun NightSkyOverlayCanvas(
         val visibleCount = renderer.drawNightSky(
             drawScope = this,
             catalog = catalog,
-            lstDegrees = lstDegrees,
+            lstDegrees = frameLstDegrees,
             latitudeDegrees = latitudeDegrees,
             matrix = matrix,
             displayRotation = displayRotation,
@@ -1023,7 +1038,7 @@ internal fun NightSkyOverlayCanvas(
             drawScope = this,
             selectedBody = selectedBody,
             matrix = matrix,
-            lstDegrees = lstDegrees,
+            lstDegrees = frameLstDegrees,
             latitudeDegrees = latitudeDegrees,
             displayRotation = displayRotation,
             fovHorizontalDegrees = fovHorizontalDegrees,

@@ -27,6 +27,9 @@ without breaking it.
    instrumented tests, or build commands. Test suites belong strictly in the verification step AFTER code implementation.
 7. **Commit only on explicit user request.** Never run git commit proactively or automatically. Commits
    must be performed strictly when explicitly requested by the user.
+8. **Every commit must include Co-authored-by for the active agent.** When creating a commit upon
+   explicit user request, always include the trailer `Co-authored-by: <AgentName> <agent-email>` (e.g.
+   `Co-authored-by: Antigravity <antigravity@google.com>`) at the end of the commit message body.
 
 ## Toolchain
 

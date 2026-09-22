@@ -15,17 +15,47 @@ object SiderealTime {
     private const val MS_PER_DAY = 86400000.0
 
     /**
-     * Converts a Unix [Instant] to Julian Date (JD).
+     * Converts a Unix epoch timestamp in milliseconds to Julian Date (JD).
+     * Enforces strict 64-bit Double precision to prevent Float32 absorption.
      */
-    fun toJulianDate(instant: Instant): Double {
-        return UNIX_EPOCH_JD + (instant.toEpochMilli().toDouble() / MS_PER_DAY)
+    fun toJulianDate(timestampMs: Long): Double {
+        return UNIX_EPOCH_JD + (timestampMs.toDouble() / MS_PER_DAY)
     }
 
     /**
-     * Computes Greenwich Mean Sidereal Time (GMST) in degrees [0.0, 360.0) for a given UTC [instant].
+     * Converts a Unix [Instant] to Julian Date (JD).
      */
-    fun computeGmstDegrees(instant: Instant): Double {
-        val jd = toJulianDate(instant)
+    fun toJulianDate(instant: Instant): Double {
+        return toJulianDate(instant.toEpochMilli())
+    }
+
+    /**
+     * Calculates Local Sidereal Time (LST) in degrees [0.0, 360.0) with strict 64-bit Double precision.
+     *
+     * @param jd Julian Date (Double).
+     * @param longitude Observer longitude in degrees (East positive, West negative).
+     */
+    fun calculateLST(jd: Double, longitude: Double): Double {
+        val d = jd - J2000_EPOCH_JD
+        val t = d / 36525.0
+        val gmst0 = 280.46061837 + 360.98564736629 * d +
+                0.000387933 * (t * t) - (t * t * t) / 38710000.0
+        var lst = (gmst0 + longitude) % 360.0
+        if (lst < 0.0) lst += 360.0
+        return lst
+    }
+
+    /**
+     * Calculates Local Sidereal Time (LST) in degrees [0.0, 360.0) for a Unix timestamp in milliseconds.
+     */
+    fun calculateLST(timestampMs: Long, longitude: Double): Double {
+        return calculateLST(toJulianDate(timestampMs), longitude)
+    }
+
+    /**
+     * Computes Greenwich Mean Sidereal Time (GMST) in degrees [0.0, 360.0) for a given Julian Date [jd].
+     */
+    fun computeGmstDegrees(jd: Double): Double {
         val d = jd - J2000_EPOCH_JD
         val t = d / 36525.0
 
@@ -39,23 +69,55 @@ object SiderealTime {
     }
 
     /**
+     * Computes Greenwich Mean Sidereal Time (GMST) in degrees [0.0, 360.0) for a given Unix epoch timestamp [epochMilli].
+     */
+    fun computeGmstDegrees(epochMilli: Long): Double {
+        return computeGmstDegrees(toJulianDate(epochMilli))
+    }
+
+    /**
+     * Computes Greenwich Mean Sidereal Time (GMST) in degrees [0.0, 360.0) for a given UTC [instant].
+     */
+    fun computeGmstDegrees(instant: Instant): Double {
+        return computeGmstDegrees(instant.toEpochMilli())
+    }
+
+    /**
+     * Computes Local Sidereal Time (LST) in degrees [0.0, 360.0) for a given Julian Date [jd]
+     * and observer [longitudeDegrees] (East positive, West negative).
+     */
+    fun computeLstDegrees(jd: Double, longitudeDegrees: Double): Double {
+        return calculateLST(jd, longitudeDegrees)
+    }
+
+    /**
+     * Computes Local Sidereal Time (LST) in degrees [0.0, 360.0) for a given Unix epoch timestamp [epochMilli]
+     * and observer [longitudeDegrees] (East positive, West negative).
+     */
+    fun computeLstDegrees(epochMilli: Long, longitudeDegrees: Double): Double {
+        return calculateLST(toJulianDate(epochMilli), longitudeDegrees)
+    }
+
+    /**
      * Computes Local Sidereal Time (LST) in degrees [0.0, 360.0) for a given UTC [instant]
      * and observer [longitudeDegrees] (East positive, West negative).
      */
     fun computeLstDegrees(instant: Instant, longitudeDegrees: Double): Double {
-        val gmst = computeGmstDegrees(instant)
-        var lst = (gmst + longitudeDegrees) % 360.0
-        if (lst < 0.0) {
-            lst += 360.0
-        }
-        return lst
+        return computeLstDegrees(instant.toEpochMilli(), longitudeDegrees)
+    }
+
+    /**
+     * Computes Local Sidereal Time (LST) in hours [0.0, 24.0) for a given Unix epoch timestamp [epochMilli].
+     */
+    fun computeLstHours(epochMilli: Long, longitudeDegrees: Double): Double {
+        return computeLstDegrees(epochMilli, longitudeDegrees) / 15.0
     }
 
     /**
      * Computes Local Sidereal Time (LST) in hours [0.0, 24.0).
      */
     fun computeLstHours(instant: Instant, longitudeDegrees: Double): Double {
-        return computeLstDegrees(instant, longitudeDegrees) / 15.0
+        return computeLstDegrees(instant.toEpochMilli(), longitudeDegrees) / 15.0
     }
 
     /**

@@ -77,4 +77,57 @@ class SiderealTimeTest {
         val formatted3 = SiderealTime.formatLstHours(23.999)
         assertEquals("23h 59m 56s", formatted3)
     }
+
+    @Test
+    fun `verifies primitive epochMilli and jd overloads match Instant results`() {
+        val instant = Instant.parse("2026-08-18T20:00:00Z")
+        val epochMilli = instant.toEpochMilli()
+        val lonPrague = 14.4378
+
+        val jdFromInstant = SiderealTime.toJulianDate(instant)
+        val jdFromMilli = SiderealTime.toJulianDate(epochMilli)
+        assertEquals(jdFromInstant, jdFromMilli, 1e-9)
+
+        val gmstFromInstant = SiderealTime.computeGmstDegrees(instant)
+        val gmstFromMilli = SiderealTime.computeGmstDegrees(epochMilli)
+        val gmstFromJd = SiderealTime.computeGmstDegrees(jdFromMilli)
+        assertEquals(gmstFromInstant, gmstFromMilli, 1e-9)
+        assertEquals(gmstFromInstant, gmstFromJd, 1e-9)
+
+        val lstFromInstant = SiderealTime.computeLstDegrees(instant, lonPrague)
+        val lstFromMilli = SiderealTime.computeLstDegrees(epochMilli, lonPrague)
+        val lstFromJd = SiderealTime.computeLstDegrees(jdFromMilli, lonPrague)
+        assertEquals(lstFromInstant, lstFromMilli, 1e-9)
+        assertEquals(lstFromInstant, lstFromJd, 1e-9)
+
+        val lstHoursFromInstant = SiderealTime.computeLstHours(instant, lonPrague)
+        val lstHoursFromMilli = SiderealTime.computeLstHours(epochMilli, lonPrague)
+        assertEquals(lstHoursFromInstant, lstHoursFromMilli, 1e-9)
+
+        val lstFromCalc = SiderealTime.calculateLST(jdFromMilli, lonPrague)
+        assertEquals(lstFromInstant, lstFromCalc, 1e-9)
+    }
+
+    @Test
+    fun `verifies 64-bit double precision avoids 16ms float32 absorption`() {
+        val t0Ms = 1774304609000L // arbitrary timestamp in 2026 (~2.46 million JD)
+        val t1Ms = t0Ms + 16L // +16ms (one 60 FPS frame)
+        val lon = 14.4378
+
+        val jd0 = SiderealTime.toJulianDate(t0Ms)
+        val jd1 = SiderealTime.toJulianDate(t1Ms)
+
+        // 16ms in Julian Days is ~1.85185e-7
+        val jdDiff = jd1 - jd0
+        assertTrue("JD delta must not be swallowed", jdDiff > 0.0)
+        assertEquals(16.0 / 86400000.0, jdDiff, 1e-9)
+
+        val lst0 = SiderealTime.calculateLST(jd0, lon)
+        val lst1 = SiderealTime.calculateLST(jd1, lon)
+
+        val lstDiff = lst1 - lst0
+        assertTrue("LST must advance between consecutive 60 FPS frames", lstDiff > 0.0)
+        // Earth rotates ~360.9856 deg in 86400s -> in 16ms: 16 * 360.9856 / 86400000 ~= 6.6849e-5 deg
+        assertEquals(6.6849e-5, lstDiff, 1e-6)
+    }
 }

@@ -164,6 +164,98 @@ object CelestialMatrixCalculator {
     }
 
     /**
+     * Computes the 3x3 row-major matrix mapping Equatorial Cartesian coordinates (J2000.0)
+     * directly into Device coordinates:
+     * V_dev = M_cel2dev * V_cel = (M_enu2cel * R_sensor)^T * V_cel
+     *
+     * @param sensorMatrix16 4x4 or 3x3 sensor rotation matrix (from OrientationTracker).
+     * @param lstDegrees Local Sidereal Time in degrees [0.0, 360.0).
+     * @param latitudeDegrees Observer latitude in degrees [-90.0, +90.0].
+     * @param outMatrix9 Pre-allocated FloatArray(9) to store the 3x3 row-major matrix.
+     */
+    fun computeCelestialToDeviceMatrix(
+        sensorMatrix16: FloatArray,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        outMatrix9: FloatArray,
+    ) {
+        val lstRad = lstDegrees * DEG_TO_RAD
+        val latRad = latitudeDegrees * DEG_TO_RAD
+
+        val sinLst = sin(lstRad).toFloat()
+        val cosLst = cos(lstRad).toFloat()
+        val sinLat = sin(latRad).toFloat()
+        val cosLat = cos(latRad).toFloat()
+
+        // M_enu2cel (3x3) row-major:
+        val a00 = -sinLst
+        val a01 = -sinLat * cosLst
+        val a02 = cosLat * cosLst
+
+        val a10 = 0.0f
+        val a11 = cosLat
+        val a12 = sinLat
+
+        val a20 = cosLst
+        val a21 = -sinLat * sinLst
+        val a22 = cosLat * sinLst
+
+        // Extract R_sensor (3x3) from 4x4 or 3x3 sensor matrix:
+        val b00: Float
+        val b01: Float
+        val b02: Float
+        val b10: Float
+        val b11: Float
+        val b12: Float
+        val b20: Float
+        val b21: Float
+        val b22: Float
+
+        if (sensorMatrix16.size >= 16) {
+            b00 = sensorMatrix16[0]; b01 = sensorMatrix16[1]; b02 = sensorMatrix16[2]
+            b10 = sensorMatrix16[4]; b11 = sensorMatrix16[5]; b12 = sensorMatrix16[6]
+            b20 = sensorMatrix16[8]; b21 = sensorMatrix16[9]; b22 = sensorMatrix16[10]
+        } else if (sensorMatrix16.size >= 9) {
+            b00 = sensorMatrix16[0]; b01 = sensorMatrix16[1]; b02 = sensorMatrix16[2]
+            b10 = sensorMatrix16[3]; b11 = sensorMatrix16[4]; b12 = sensorMatrix16[5]
+            b20 = sensorMatrix16[6]; b21 = sensorMatrix16[7]; b22 = sensorMatrix16[8]
+        } else {
+            b00 = 1f; b01 = 0f; b02 = 0f
+            b10 = 0f; b11 = 1f; b12 = 0f
+            b20 = 0f; b21 = 0f; b22 = 1f
+        }
+
+        // AB = M_enu2cel * R_sensor (3x3 row-major)
+        val ab00 = a00 * b00 + a01 * b10 + a02 * b20
+        val ab01 = a00 * b01 + a01 * b11 + a02 * b21
+        val ab02 = a00 * b02 + a01 * b12 + a02 * b22
+
+        val ab10 = a10 * b00 + a11 * b10 + a12 * b20
+        val ab11 = a10 * b01 + a11 * b11 + a12 * b21
+        val ab12 = a10 * b02 + a11 * b12 + a12 * b22
+
+        val ab20 = a20 * b00 + a21 * b10 + a22 * b20
+        val ab21 = a20 * b01 + a21 * b11 + a22 * b21
+        val ab22 = a20 * b02 + a21 * b12 + a22 * b22
+
+        // M_cel2dev = AB^T (3x3 row-major)
+        // Row 0 of AB^T: [ab00, ab10, ab20]
+        // Row 1 of AB^T: [ab01, ab11, ab21]
+        // Row 2 of AB^T: [ab02, ab12, ab22]
+        outMatrix9[0] = ab00
+        outMatrix9[1] = ab10
+        outMatrix9[2] = ab20
+
+        outMatrix9[3] = ab01
+        outMatrix9[4] = ab11
+        outMatrix9[5] = ab21
+
+        outMatrix9[6] = ab02
+        outMatrix9[7] = ab12
+        outMatrix9[8] = ab22
+    }
+
+    /**
      * Computes the 3x3 column-major view matrix for the Earth-fixed AGSL Atmosphere shader.
      *
      * Constructs the transformation:

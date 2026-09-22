@@ -157,11 +157,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     @Volatile
-    var manualPanRa: Float = 0f
+    var manualPanAzimuth: Float = 0f
         private set
 
     @Volatile
-    var manualPanDec: Float = 0f
+    var manualPanElevation: Float = 0f
         private set
 
     private val manualMatrixBuffer = FloatArray(16).apply {
@@ -816,20 +816,27 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
-            updateManualOrientation()
-        }
+    }
+
+    private fun captureLiveOrientationIntoManual() {
+        val liveMatrix = orientationTracker.getLiveMatrix()
+        // Camera optical forward axis in ENU: V = [-R[2], -R[6], -R[10]]^T
+        val vx = -liveMatrix[2].toDouble()
+        val vy = -liveMatrix[6].toDouble()
+        val vz = -liveMatrix[10].toDouble()
+        var az = Math.toDegrees(kotlin.math.atan2(vx, vy))
+        if (az < 0.0) az += 360.0
+        val el = Math.toDegrees(kotlin.math.asin(vz.coerceIn(-1.0, 1.0)))
+        manualPanAzimuth = az.toFloat()
+        manualPanElevation = el.toFloat()
+        updateManualOrientation()
     }
 
     private fun updateManualOrientation() {
-        val ra = manualPanRa.toDouble()
-        val dec = manualPanDec.toDouble()
-        val lst = lstDegreesState.value
-        val lat = locationProvider.location.value.latitude
+        val az = manualPanAzimuth.toDouble()
+        val el = manualPanElevation.toDouble()
 
-        val (az, el) = EquatorialCoordinates.equatorialToHorizontal(ra, dec, lst, lat)
         CelestialMatrixCalculator.computeManualRotationMatrix(az, el, manualMatrixBuffer)
-
         System.arraycopy(manualMatrixBuffer, 0, publishedManualMatrix, 0, 16)
 
         manualOrientationState.value = DeviceOrientation(
@@ -1164,40 +1171,46 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         routeCameraToCoordinates(ra, dec, displayRotation)
     }
 
+    private fun currentLstDegrees(): Double {
+        val currentMs = if (_timeState.value.isVirtual && _timeState.value.virtualTime != null) {
+            _timeState.value.virtualTime!!.toEpochMilli()
+        } else {
+            System.currentTimeMillis()
+        }
+        return SiderealTime.computeLstDegrees(currentMs, locationProvider.location.value.longitude)
+    }
+
     /**
      * Smoothly rotates/animates the camera to [raDegrees] and [decDegrees]
      * using State Injection via absolute equatorial coordinates and S-curve interpolation.
      */
     fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double, displayRotation: Int = Surface.ROTATION_0) {
-        val lst = lstDegreesState.value
+        val lst = currentLstDegrees()
         val lat = locationProvider.location.value.latitude
+        val (targetAz, targetEl) = EquatorialCoordinates.equatorialToHorizontal(raDegrees, decDegrees, lst, lat)
 
-        // 1. If currently tracking live sensor, capture current pointing direction and pause sensor tracking
-        val currentRa: Double
-        val currentDec: Double
+        val currentAz: Double
+        val currentEl: Double
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
-            val liveMatrix = orientationTracker.getLiveMatrix()
-            val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            currentRa = liveRa
-            currentDec = liveDec
-            manualPanRa = currentRa.toFloat()
-            manualPanDec = currentDec.toFloat()
+            captureLiveOrientationIntoManual()
             orientationTracker.isSensorTrackingPaused.value = true
+            currentAz = manualPanAzimuth.toDouble()
+            currentEl = manualPanElevation.toDouble()
         } else {
-            currentRa = manualPanRa.toDouble()
-            currentDec = manualPanDec.toDouble()
+            currentAz = manualPanAzimuth.toDouble()
+            currentEl = manualPanElevation.toDouble()
         }
 
         // 2. Launch smooth spherical S-curve animation
-        animateCameraToCoordinates(currentRa, currentDec, raDegrees, decDegrees)
+        animateCameraToCoordinates(currentAz, currentEl, targetAz, targetEl)
     }
 
-    private fun animateCameraToCoordinates(startRa: Double, startDec: Double, endRa: Double, endDec: Double) {
+    private fun animateCameraToCoordinates(startAz: Double, startEl: Double, endAz: Double, endEl: Double) {
         routingAnimationJob?.cancel()
         routingAnimationJob = viewModelScope.launch {
-            // Find shortest path modulo 360 across the meridian
-            val raDiff = CelestialSearchIndex.getShortestAngularDistance(startRa.toFloat(), endRa.toFloat()).toDouble()
-            val finalRa = startRa + raDiff
+            // Find shortest path modulo 360 across the 0/360 boundary
+            val azDiff = CelestialSearchIndex.getShortestAngularDistance(startAz.toFloat(), endAz.toFloat()).toDouble()
+            val finalAz = startAz + azDiff
 
             val durationMs = 800L
             val startTime = System.currentTimeMillis()
@@ -1209,12 +1222,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 // FastOutSlowIn S-curve for smooth acceleration/deceleration: 3t^2 - 2t^3
                 val t = (fraction * fraction * (3f - 2f * fraction)).toDouble()
 
-                val interpolatedRa = (startRa + (finalRa - startRa) * t) % 360.0
-                val normalizedRa = if (interpolatedRa < 0.0) interpolatedRa + 360.0 else interpolatedRa
-                val interpolatedDec = (startDec + (endDec - startDec) * t).coerceIn(-89.9, 89.9)
+                val interpolatedAz = (startAz + (finalAz - startAz) * t) % 360.0
+                val normalizedAz = if (interpolatedAz < 0.0) interpolatedAz + 360.0 else interpolatedAz
+                val interpolatedEl = (startEl + (endEl - startEl) * t).coerceIn(-89.9, 89.9)
 
-                manualPanRa = normalizedRa.toFloat()
-                manualPanDec = interpolatedDec.toFloat()
+                manualPanAzimuth = normalizedAz.toFloat()
+                manualPanElevation = interpolatedEl.toFloat()
                 updateManualOrientation()
 
                 if (fraction >= 1f) break
@@ -1316,34 +1329,21 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         routingAnimationJob = null
 
         val factor = fovDeg / viewWidth.coerceAtLeast(1f)
-        val lst = lstDegreesState.value
-        val lat = locationProvider.location.value.latitude
 
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
             // State Injection on first touch drag: freeze live sensor orientation into manual pan state
-            val liveMatrix = orientationTracker.getLiveMatrix()
-            val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa = liveRa.toFloat()
-            manualPanDec = liveDec.toFloat()
+            captureLiveOrientationIntoManual()
             orientationTracker.isSensorTrackingPaused.value = true
         }
 
         val deltaAzDeg = deltaX * factor
         val deltaElDeg = deltaY * factor
 
-        val (currentAz, currentEl) = EquatorialCoordinates.equatorialToHorizontal(
-            manualPanRa.toDouble(),
-            manualPanDec.toDouble(),
-            lst,
-            lat,
-        )
+        val newAz = (manualPanAzimuth.toDouble() - deltaAzDeg + 360.0) % 360.0
+        val newEl = (manualPanElevation.toDouble() + deltaElDeg).coerceIn(-89.9, 89.9)
 
-        val newAz = (currentAz - deltaAzDeg + 360.0) % 360.0
-        val newEl = (currentEl + deltaElDeg).coerceIn(-89.9, 89.9)
-
-        val (newRa, newDec) = EquatorialCoordinates.horizontalToEquatorial(newAz, newEl, lst, lat)
-        manualPanRa = newRa.toFloat()
-        manualPanDec = newDec.toFloat()
+        manualPanAzimuth = newAz.toFloat()
+        manualPanElevation = newEl.toFloat()
 
         // In-place matrix update for zero-recomposition hardware vsync render loop
         CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
@@ -1353,30 +1353,16 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         routingAnimationJob?.cancel()
         routingAnimationJob = null
 
-        val lst = lstDegreesState.value
-        val lat = locationProvider.location.value.latitude
-
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
-            val liveMatrix = orientationTracker.getLiveMatrix()
-            val (liveRa, liveDec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa = liveRa.toFloat()
-            manualPanDec = liveDec.toFloat()
+            captureLiveOrientationIntoManual()
             orientationTracker.isSensorTrackingPaused.value = true
         }
 
-        val (currentAz, currentEl) = EquatorialCoordinates.equatorialToHorizontal(
-            manualPanRa.toDouble(),
-            manualPanDec.toDouble(),
-            lst,
-            lat,
-        )
+        val newAz = (manualPanAzimuth.toDouble() + deltaAzimuthDeg + 360.0) % 360.0
+        val newEl = (manualPanElevation.toDouble() + deltaElevationDeg).coerceIn(-89.9, 89.9)
 
-        val newAz = (currentAz + deltaAzimuthDeg + 360.0) % 360.0
-        val newEl = (currentEl + deltaElevationDeg).coerceIn(-89.9, 89.9)
-
-        val (newRa, newDec) = EquatorialCoordinates.horizontalToEquatorial(newAz, newEl, lst, lat)
-        manualPanRa = newRa.toFloat()
-        manualPanDec = newDec.toFloat()
+        manualPanAzimuth = newAz.toFloat()
+        manualPanElevation = newEl.toFloat()
 
         // In-place matrix update for zero-recomposition hardware vsync render loop
         CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
@@ -1442,13 +1428,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         routingAnimationJob = null
         if (!enabled && isSensorTrackingEnabled.value) {
             // Switching from Sensor -> Manual: capture current pointing direction as manual starting point
-            val lst = lstDegreesState.value
-            val lat = locationProvider.location.value.latitude
-            val liveMatrix = orientationTracker.getLiveMatrix()
-            val (ra, dec) = EquatorialCoordinates.getCurrentCameraRaDec(liveMatrix, lst, lat)
-            manualPanRa = ra.toFloat()
-            manualPanDec = dec.toFloat()
-            updateManualOrientation()
+            captureLiveOrientationIntoManual()
             viewModelScope.launch(Dispatchers.Default) {
                 orientationTracker.stop()
             }
