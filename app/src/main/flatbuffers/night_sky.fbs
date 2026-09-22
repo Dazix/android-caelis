@@ -59,6 +59,17 @@ table DeepSkyObject {
   art_rotation_deg: float;   // Local rotation offset in degrees
 }
 
+table MeteorShower {
+  id: short;                 // Internal ID
+  localized_name: string;    // e.g., "Perseids" / "Perseidy"
+  ra: float;                 // J2000.0 Right Ascension (degrees)
+  dec: float;                // J2000.0 Declination (degrees)
+  zhr: short;                // Zenithal Hourly Rate (peak activity)
+  peak_month: byte;          // 1-12
+  peak_day: byte;            // 1-31
+  constellation_id: string;  // IAU 3-letter code, e.g., "Per"
+}
+
 table NightSkyCatalog {
   // Fast loop data: Tightly packed contiguous memory block
   stars: [Star];
@@ -67,6 +78,8 @@ table NightSkyCatalog {
   metadata: [StarMetadata];
   constellations: [Constellation];
   dsos: [DeepSkyObject];
+  meteor_showers: [MeteorShower];
 }
 
 root_type NightSkyCatalog;
+

@@ -269,24 +269,41 @@ fun CelestialDetailSheetContent(
                     }
                 }
 
-                // Row 2: Centroid Coordinates
-                if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
-                    val raFormatted = formatRa(selectedBody.raDegrees)
-                    val decFormatted = formatDec(selectedBody.decDegrees)
-
+                // Row 2: Property3 (if present) & Coordinates
+                if (selectedBody.property3 != null || (selectedBody.raDegrees != null && selectedBody.decDegrees != null)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        CelestialDataField(
-                            label = stringResource(R.string.celestial_coordinates),
-                            value = "$raFormatted  ·  $decFormatted",
-                            labelColor = labelColor,
-                            valueColor = accentColor,
-                            isMonospace = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
+                        if (selectedBody.property3 != null) {
+                            CelestialDataField(
+                                label = selectedBody.property3.first,
+                                value = selectedBody.property3.second,
+                                labelColor = labelColor,
+                                valueColor = valueColor,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        if (selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
+                            val raFormatted = formatRa(selectedBody.raDegrees)
+                            val decFormatted = formatDec(selectedBody.decDegrees)
+
+                            CelestialDataField(
+                                label = stringResource(R.string.celestial_coordinates),
+                                value = "$raFormatted  ·  $decFormatted",
+                                labelColor = labelColor,
+                                valueColor = accentColor,
+                                isMonospace = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else if (selectedBody.property3 != null) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+
+                        if (selectedBody.property3 == null && selectedBody.raDegrees != null && selectedBody.decDegrees != null) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }

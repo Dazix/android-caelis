@@ -80,8 +80,24 @@ class FlatBuffersCatalogTest {
         )
         val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf(dsoOff))
 
-        // 5. Root NightSkyCatalog
-        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec)
+        // 5. MeteorShowers
+        val perNameOff = fbb.createString("Perseids")
+        val perConstOff = fbb.createString("Per")
+        val meteorOff = com.dazix.caelis.data.nightsky.MeteorShower.createMeteorShower(
+            fbb,
+            1.toShort(),
+            perNameOff,
+            46.2f,
+            57.6f,
+            100.toShort(),
+            8.toByte(),
+            12.toByte(),
+            perConstOff,
+        )
+        val meteorsVec = NightSkyCatalog.createMeteorShowersVector(fbb, intArrayOf(meteorOff))
+
+        // 6. Root NightSkyCatalog
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec, meteorsVec)
         NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
 
         val bb = fbb.dataBuffer()
@@ -91,6 +107,19 @@ class FlatBuffersCatalogTest {
         assertEquals(1, catalog.metadataLength())
         assertEquals(2, catalog.constellationsLength())
         assertEquals(1, catalog.dsosLength())
+        assertEquals(1, catalog.meteorShowersLength())
+
+        // Verify Meteor Shower
+        val meteorObj = catalog.meteorShowers(0)
+        assertNotNull(meteorObj)
+        assertEquals(1.toShort(), meteorObj.id())
+        assertEquals("Perseids", meteorObj.localizedName())
+        assertEquals(46.2f, meteorObj.ra(), 0.01f)
+        assertEquals(57.6f, meteorObj.dec(), 0.01f)
+        assertEquals(8.toByte(), meteorObj.peakMonth())
+        assertEquals(12.toByte(), meteorObj.peakDay())
+        assertEquals(100.toShort(), meteorObj.zhr())
+        assertEquals("Per", meteorObj.constellationId())
 
         // Verify DSO
         val dsoObj = catalog.dsos(0)
@@ -322,5 +351,25 @@ class FlatBuffersCatalogTest {
         val m1 = allDsos.first { it.messierId() == 1.toShort() }
         assertEquals(DsoType.NEBULA, m1.type())
         assertTrue("Standard DSO without texture should have null or empty artResourceName", m1.artResourceName().isNullOrEmpty())
+
+        // Check Meteor Showers (28 prominent annual showers)
+        assertEquals("Must have exactly 28 meteor showers", 28, catalog.meteorShowersLength())
+
+        val allMeteors = (0 until catalog.meteorShowersLength()).map { catalog.meteorShowers(it) }
+        val perseids = allMeteors.first { it.localizedName() == "Perseidy" }
+        assertEquals("Per", perseids.constellationId())
+        assertEquals(8.toByte(), perseids.peakMonth())
+        assertEquals(12.toByte(), perseids.peakDay())
+        assertEquals(100.toShort(), perseids.zhr())
+        assertEquals(46.2f, perseids.ra(), 0.1f)
+        assertEquals(57.8f, perseids.dec(), 0.1f)
+
+        val geminids = allMeteors.first { it.localizedName() == "Geminidy" }
+        assertEquals("Gem", geminids.constellationId())
+        assertEquals(12.toByte(), geminids.peakMonth())
+        assertEquals(14.toByte(), geminids.peakDay())
+        assertEquals(150.toShort(), geminids.zhr())
+        assertEquals(112.5f, geminids.ra(), 0.1f)
+        assertEquals(32.5f, geminids.dec(), 0.1f)
     }
 }

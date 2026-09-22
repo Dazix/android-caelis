@@ -249,4 +249,35 @@ class CelestialSearchIndexTest {
         val orionNebulaMatches = CelestialSearchIndex.filter(searchIndex, "Orion Nebula")
         assertTrue("Must find M42 by Orion Nebula", orionNebulaMatches.any { it.type == CelestialType.DSO && it.searchableText.contains("m42") })
     }
+
+    @Test
+    fun `buildSearchIndex correctly indexes 28 meteor showers with bilingual matching`() {
+        val binFile = File("src/main/res/raw/catalog.bin")
+        val targetFile = if (binFile.exists()) binFile else File("app/src/main/res/raw/catalog.bin")
+        assertTrue("catalog.bin must exist on disk", targetFile.exists())
+
+        val catalog = FileInputStream(targetFile).use { stream ->
+            NightSkyCatalogLoader.loadFromStream(stream)
+        }
+
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog)
+        val meteorItems = searchIndex.filter { it.type == CelestialType.METEOR_SHOWER }
+        assertEquals("Must have 28 indexed Meteor Showers", 28, meteorItems.size)
+
+        // 1. Search by Czech name "Perseidy"
+        val perseidsMatches = CelestialSearchIndex.filter(searchIndex, "perseidy")
+        assertTrue("Must find Perseids by Czech name", perseidsMatches.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName.contains("Perseid") })
+
+        // 2. Search by English name "Perseids"
+        val perseidsEnMatches = CelestialSearchIndex.filter(searchIndex, "perseids")
+        assertTrue("Must find Perseids by English name", perseidsEnMatches.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName.contains("Perseid") })
+
+        // 3. Search "Geminidy"
+        val geminidsMatches = CelestialSearchIndex.filter(searchIndex, "geminidy")
+        assertTrue("Must find Geminids by Czech name", geminidsMatches.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName.contains("Geminid") })
+
+        // 4. Search "Quadrantidy" (English variant matches Kvadrantidy)
+        val quadrantidsMatches = CelestialSearchIndex.filter(searchIndex, "quadrantid")
+        assertTrue("Must find Quadrantids", quadrantidsMatches.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName.contains("Kvadrantid") })
+    }
 }

@@ -7,11 +7,14 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.dazix.caelis.data.nightsky.Constellation
+import com.dazix.caelis.data.nightsky.DeepSkyObject
+import com.dazix.caelis.data.nightsky.DsoType
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.data.nightsky.StarMetadata
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.NightSkyCatalogLoader
+import com.dazix.caelis.domain.nightsky.PlanetState
 import com.google.flatbuffers.FlatBufferBuilder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,6 +53,16 @@ class NightSkyRendererZeroAllocTest {
         assertNotNull(renderer.asterismHighlightLabelPaint)
         assertNotNull(renderer.reticlePaint)
         assertNotNull(renderer.reticleTextPaint)
+        assertNotNull(renderer.radiantPath)
+        assertNotNull(renderer.radiantPaint)
+        assertNotNull(renderer.radiantLabelPaint)
+        assertNotNull(renderer.radiantHighlightLabelPaint)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorWorldX.size)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorWorldY.size)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorWorldZ.size)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorScreenX.size)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorScreenY.size)
+        assertEquals(NightSkyRenderer.MAX_METEOR_SHOWERS, renderer.meteorInFront.size)
         assertNotNull(renderer.skyDomeRenderer)
         assertNotNull(renderer.artworkCache)
         assertNotNull(renderer.artMatrix)
@@ -1860,4 +1873,340 @@ class NightSkyRendererZeroAllocTest {
         assertTrue(names.contains("Alcyone"))
         assertTrue(names.contains("Maia"))
     }
+
+    @Test
+    fun `verifies selective rendering of DSO when showDsos is false`() {
+        val fbb = FlatBufferBuilder(1024)
+        val dso1Loc = fbb.createString("M1")
+        val dso1Const = fbb.createString("Tau")
+        val dso1Name = fbb.createString("Crab Nebula")
+        val dso1Ngc = fbb.createString("NGC 1952")
+        val dso1Art = fbb.createString("")
+        val dso1Off = DeepSkyObject.createDeepSkyObject(
+            fbb, 1.toShort(), 0.0f, 90.0f, 8.4f, 6.0f, DsoType.NEBULA,
+            dso1Loc, dso1Const, dso1Name, dso1Ngc, 0f, 0f, dso1Art, 0f, 0f
+        )
+
+        val dso2Loc = fbb.createString("M31")
+        val dso2Const = fbb.createString("And")
+        val dso2Name = fbb.createString("Andromeda Galaxy")
+        val dso2Ngc = fbb.createString("NGC 224")
+        val dso2Art = fbb.createString("")
+        val dso2Off = DeepSkyObject.createDeepSkyObject(
+            fbb, 31.toShort(), 0.0f, 90.0f, 3.4f, 178.0f, DsoType.GALAXY,
+            dso2Loc, dso2Const, dso2Name, dso2Ngc, 35f, 0.32f, dso2Art, 0f, 0f
+        )
+
+        val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf(dso1Off, dso2Off))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 1.0f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        val drawScope = CanvasDrawScope()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(android.graphics.Canvas())
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // 1. When showDsos is false and nothing selected -> no DSOs rendered in front
+        renderer.selectedDsoIndex = -1
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showDsos = false,
+            )
+        }
+        assertFalse("DSO 0 must not be rendered when showDsos is false and unselected", renderer.dsoInFront[0])
+        assertFalse("DSO 1 must not be rendered when showDsos is false and unselected", renderer.dsoInFront[1])
+
+        // 2. When showDsos is false and DSO 1 (M31) is selected -> only DSO 1 is rendered
+        renderer.selectedDsoIndex = 1
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showDsos = false,
+            )
+        }
+        assertFalse("DSO 0 must remain hidden", renderer.dsoInFront[0])
+        assertTrue("Selected DSO 1 must be rendered even when showDsos is false", renderer.dsoInFront[1])
+    }
+
+    @Test
+    fun `verifies selective rendering of planet when showPlanets is false`() {
+        val fbb = FlatBufferBuilder(1024)
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf())
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 1.0f)
+        val starsVec = fbb.endVector()
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val mars = PlanetState(
+            id = "Mars",
+            nameEn = "Mars",
+            nameCs = "Mars",
+            raDegrees = 0.0,
+            decDegrees = 90.0,
+            magnitude = 0.0f,
+            angularDiameterDeg = 0.01f,
+            distanceFormatted = "1.5 AU",
+            illuminationFraction = 1.0f,
+            colorRgb = 0xFFFF0000.toInt(),
+            isMoon = false,
+        )
+        val jupiter = PlanetState(
+            id = "Jupiter",
+            nameEn = "Jupiter",
+            nameCs = "Jupiter",
+            raDegrees = 0.0,
+            decDegrees = 90.0,
+            magnitude = -2.0f,
+            angularDiameterDeg = 0.01f,
+            distanceFormatted = "5.2 AU",
+            illuminationFraction = 1.0f,
+            colorRgb = 0xFFFFA500.toInt(),
+            isMoon = false,
+        )
+        val planets = listOf(mars, jupiter)
+
+        val renderer = NightSkyRenderer()
+        val drawScope = CanvasDrawScope()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(android.graphics.Canvas())
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // 1. When showPlanets is false and no planet selected -> no planets in front
+        renderer.selectedPlanetId = null
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showPlanets = false,
+                planets = planets,
+            )
+        }
+        assertFalse("Mars must not be rendered when showPlanets is false and unselected", renderer.planetInFront[0])
+        assertFalse("Jupiter must not be rendered when showPlanets is false and unselected", renderer.planetInFront[1])
+
+        // 2. When showPlanets is false and Mars is selected -> only Mars is rendered
+        renderer.selectedPlanetId = "Mars"
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showPlanets = false,
+                planets = planets,
+            )
+        }
+        assertTrue("Selected Mars must be rendered even when showPlanets is false", renderer.planetInFront[0])
+        assertFalse("Jupiter must remain hidden", renderer.planetInFront[1])
+    }
+
+    @Test
+    fun `verifies selective rendering of constellation when showConstellations is false`() {
+        val fbb = FlatBufferBuilder(1024)
+        val name1 = fbb.createString("Orion")
+        val loc1 = fbb.createString("Orion")
+        val lines1 = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
+        val c1Off = Constellation.createConstellation(fbb, name1, 0.0f, 90.0f, lines1, loc1, 0, 0, false, 0, 0, 0)
+
+        val name2 = fbb.createString("Ursa Major")
+        val loc2 = fbb.createString("Velká medvědice")
+        val lines2 = Constellation.createLinesVector(fbb, intArrayOf(2, 3))
+        val c2Off = Constellation.createConstellation(fbb, name2, 0.0f, 90.0f, lines2, loc2, 0, 0, false, 0, 0, 0)
+
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(c1Off, c2Off))
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 4)
+        Star.createStar(fbb, 0.0f, 90.0f, 10.0f) // Star 0 (Orion)
+        Star.createStar(fbb, 0.0f, 90.0f, 10.0f) // Star 1 (Orion)
+        Star.createStar(fbb, 0.0f, 90.0f, 10.0f) // Star 2 (Ursa Major)
+        Star.createStar(fbb, 0.0f, 90.0f, 10.0f) // Star 3 (Ursa Major)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        val drawScope = CanvasDrawScope()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(android.graphics.Canvas())
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // 1. When showConstellations is false and nothing selected -> no stars forced
+        renderer.selectedConstellationIndex = -1
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showConstellations = false,
+            )
+        }
+        assertFalse(renderer.forceRenderStar[0])
+        assertFalse(renderer.forceRenderStar[1])
+        assertFalse(renderer.forceRenderStar[2])
+        assertFalse(renderer.forceRenderStar[3])
+
+        // 2. When showConstellations is false and Orion (index 0) is selected -> only stars 0 and 1 are forced
+        renderer.selectedConstellationIndex = 0
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showConstellations = false,
+            )
+        }
+        assertTrue("Star 0 of selected constellation must be force-rendered", renderer.forceRenderStar[0])
+        assertTrue("Star 1 of selected constellation must be force-rendered", renderer.forceRenderStar[1])
+        assertFalse("Star 2 of unselected constellation must NOT be force-rendered", renderer.forceRenderStar[2])
+        assertFalse("Star 3 of unselected constellation must NOT be force-rendered", renderer.forceRenderStar[3])
+    }
+
+    @Test
+    fun `verifies meteor shower radiants projection, hit testing and theme application`() {
+        val fbb = FlatBufferBuilder(1024)
+        val nameOff = fbb.createString("Perseids")
+        val constOff = fbb.createString("Per")
+        val meteorOff = com.dazix.caelis.data.nightsky.MeteorShower.createMeteorShower(
+            fbb,
+            1.toShort(),
+            nameOff,
+            0.0f,
+            90.0f, // North celestial pole
+            100.toShort(),
+            8.toByte(),
+            12.toByte(),
+            constOff,
+        )
+        val meteorsVec = NightSkyCatalog.createMeteorShowersVector(fbb, intArrayOf(meteorOff))
+        val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf())
+        val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+        val dsosVec = NightSkyCatalog.createDsosVector(fbb, intArrayOf())
+
+        NightSkyCatalog.startStarsVector(fbb, 1)
+        Star.createStar(fbb, 0.0f, 90.0f, 2.0f)
+        val starsVec = fbb.endVector()
+
+        val rootOff = NightSkyCatalog.createNightSkyCatalog(fbb, starsVec, metaVec, constsVec, dsosVec, meteorsVec)
+        NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, rootOff)
+        val catalog = NightSkyCatalogLoader.loadFromByteBuffer(fbb.dataBuffer())
+
+        val renderer = NightSkyRenderer()
+        val drawScope = CanvasDrawScope()
+        val composeCanvas = androidx.compose.ui.graphics.Canvas(android.graphics.Canvas())
+        val northMatrix = floatArrayOf(
+            1f, 0f, 0f, 0f,
+            0f, 0f, -1f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+
+        // Draw with meteor showers visible
+        drawScope.draw(Density(2.5f), LayoutDirection.Ltr, composeCanvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
+            renderer.drawNightSky(
+                drawScope = this,
+                catalog = catalog,
+                lstDegrees = 0.0,
+                latitudeDegrees = 0.0,
+                matrix = northMatrix,
+                displayRotation = android.view.Surface.ROTATION_0,
+                fovHorizontalDegrees = 60.0f,
+                w = 1080f,
+                h = 2400f,
+                showMeteorShowers = true,
+            )
+        }
+
+        assertTrue("Meteor radiant 0 should be projected in front", renderer.meteorInFront[0])
+        val screenX = renderer.meteorScreenX[0]
+        val screenY = renderer.meteorScreenY[0]
+
+        // Test hit-testing on radiant
+        val hit = renderer.findHitAt(
+            tapX = screenX,
+            tapY = screenY,
+            maxStarRadiusPx = 48f,
+            density = 2.5f,
+            catalog = catalog,
+        )
+        assertTrue("Hit on radiant should return MeteorRadiantHit or MultipleHits containing it",
+            hit is NightSkyRenderer.HitTarget.MeteorRadiantHit ||
+            (hit is NightSkyRenderer.HitTarget.MultipleHits && hit.candidates.any { it is NightSkyRenderer.CelestialCandidate.MeteorShower })
+        )
+
+        // Test theme application across all modes
+        renderer.applyTheme(com.dazix.caelis.domain.nightsky.NightVisionState(isActive = true, theme = com.dazix.caelis.domain.nightsky.NightVisionTheme.RED))
+        renderer.applyTheme(com.dazix.caelis.domain.nightsky.NightVisionState(isActive = true, theme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER))
+        renderer.applyTheme(com.dazix.caelis.domain.nightsky.NightVisionState(isActive = true, theme = com.dazix.caelis.domain.nightsky.NightVisionTheme.GREEN))
+        renderer.applyTheme(com.dazix.caelis.domain.nightsky.NightVisionState(isActive = false))
+    }
 }
+

@@ -97,6 +97,7 @@ fun NightSkyLayerSettingsSheet(
     isMilkyWayVisible: Boolean,
     isPlanetsVisible: Boolean,
     isDsosVisible: Boolean = true,
+    isMeteorShowersVisible: Boolean = false,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
     isGridVisible: Boolean,
@@ -119,6 +120,7 @@ fun NightSkyLayerSettingsSheet(
     onToggleMilkyWayVisible: () -> Unit,
     onTogglePlanetsVisible: () -> Unit,
     onToggleDsosVisible: () -> Unit = {},
+    onToggleMeteorShowersVisible: () -> Unit = {},
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
     onToggleGridVisible: () -> Unit,
@@ -261,6 +263,16 @@ fun NightSkyLayerSettingsSheet(
                 switchColors = switchColors,
                 onCheckedChange = { onToggleDsosVisible() },
                 onInfoClick = { showDsoLegend = true },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            LayerToggleRow(
+                label = stringResource(R.string.night_sky_meteor_showers),
+                icon = AppIcons.MeteorShower,
+                isChecked = isMeteorShowersVisible,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleMeteorShowersVisible() },
             )
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
             LayerToggleRow(

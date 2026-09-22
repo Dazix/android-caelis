@@ -282,6 +282,7 @@ private fun CelestialSearchResultRow(
         CelestialType.ASTERISM -> AppIcons.AutoAwesome
         CelestialType.PLANET -> AppIcons.Planet
         CelestialType.DSO -> AppIcons.DeepSky
+        CelestialType.METEOR_SHOWER -> AppIcons.MeteorShower
     }
 
     val typeLabel = when (item.type) {
@@ -290,6 +291,7 @@ private fun CelestialSearchResultRow(
         CelestialType.ASTERISM -> stringResource(R.string.celestial_asterism_subtitle)
         CelestialType.PLANET -> stringResource(R.string.celestial_planet_subtitle)
         CelestialType.DSO -> stringResource(R.string.dso_type_generic)
+        CelestialType.METEOR_SHOWER -> stringResource(R.string.celestial_meteor_shower_subtitle)
     }
 
     ListItem(

@@ -973,4 +973,54 @@ class StarHitTesterTest {
         )
         assertEquals(0, planetCount)
     }
+
+    @Test
+    fun `findTopMeteorRadiants hits visible radiant and filters occluded ones`() {
+        val screenX = floatArrayOf(200f, 400f)
+        val screenY = floatArrayOf(200f, 400f)
+        val inFront = booleanArrayOf(true, true)
+        val worldX = floatArrayOf(0f, 0f)
+        val worldY = floatArrayOf(1f, 1f)
+        val worldZ = floatArrayOf(0.5f, -0.3f) // 0 is above horizon, 1 is below horizon
+
+        val outIndices = IntArray(2)
+        val outScores = FloatArray(2)
+
+        // Hit radiant 0 above horizon
+        val countAbove = StarHitTester.findTopMeteorRadiants(
+            tapX = 205f,
+            tapY = 205f,
+            meteorScreenX = screenX,
+            meteorScreenY = screenY,
+            meteorInFront = inFront,
+            totalMeteors = 2,
+            minTouchRadiusPx = 50f,
+            outIndices = outIndices,
+            outScores = outScores,
+            meteorWorldX = worldX,
+            meteorWorldY = worldY,
+            meteorWorldZ = worldZ,
+            isLandscapeVisible = true,
+        )
+        assertEquals(1, countAbove)
+        assertEquals(0, outIndices[0])
+
+        // Tap radiant 1 below horizon with landscape visible -> occluded
+        val countBelow = StarHitTester.findTopMeteorRadiants(
+            tapX = 405f,
+            tapY = 405f,
+            meteorScreenX = screenX,
+            meteorScreenY = screenY,
+            meteorInFront = inFront,
+            totalMeteors = 2,
+            minTouchRadiusPx = 50f,
+            outIndices = outIndices,
+            outScores = outScores,
+            meteorWorldX = worldX,
+            meteorWorldY = worldY,
+            meteorWorldZ = worldZ,
+            isLandscapeVisible = true,
+        )
+        assertEquals(0, countBelow)
+    }
 }

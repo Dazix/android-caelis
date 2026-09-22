@@ -181,14 +181,46 @@ def serialize_dsos(builder, dsos_data):
         builder.PrependUOffsetTRelative(d_off)
     return builder.EndVector()
 
-def pack_catalog(stars_data, star_names, constellations_data, dsos_data, output_path):
+def serialize_meteor_showers(builder, meteor_showers_data):
     """
-    Serializes star list, metadata, constellations (including asterisms), and DSOs using FlatBuffers.
+    meteor_showers_data: list of tuples:
+    (id, localized_name, ra, dec, zhr, peak_month, peak_day, constellation_id)
+    """
+    offsets = []
+    for item in meteor_showers_data:
+        m_id, loc_name, ra, dec, zhr, peak_m, peak_d, con_id = item
+        loc_off = builder.CreateString(loc_name) if loc_name else 0
+        con_off = builder.CreateString(con_id) if con_id else 0
+
+        # Start MeteorShower table (8 fields)
+        builder.StartObject(8)
+        builder.PrependInt16Slot(0, int(m_id), 0)
+        if loc_off:
+            builder.PrependUOffsetTRelativeSlot(1, loc_off, 0)
+        builder.PrependFloat32Slot(2, float(ra), 0.0)
+        builder.PrependFloat32Slot(3, float(dec), 0.0)
+        builder.PrependInt16Slot(4, int(zhr), 0)
+        builder.PrependByteSlot(5, int(peak_m), 0)
+        builder.PrependByteSlot(6, int(peak_d), 0)
+        if con_off:
+            builder.PrependUOffsetTRelativeSlot(7, con_off, 0)
+        off = builder.EndObject()
+        offsets.append(off)
+
+    builder.StartVector(4, len(offsets), 4)
+    for off in reversed(offsets):
+        builder.PrependUOffsetTRelative(off)
+    return builder.EndVector()
+
+def pack_catalog(stars_data, star_names, constellations_data, dsos_data, meteor_showers_data, output_path):
+    """
+    Serializes star list, metadata, constellations (including asterisms), DSOs, and Meteor Showers using FlatBuffers.
     
     stars_data: list of (ra_deg, dec_deg, mag)
     star_names: list of (star_index, name_str, body_type, constel, dist_ly)
     constellations_data: list of (name, c_ra, c_dec, lines, loc_name, bright, fam, is_ast, art_res, art_corner_ra, art_corner_dec)
     dsos_data: list of (messier_id, ra, dec, mag, size_arcmin, dso_type, czech_name, english_name, ngc_id, con_abbr)
+    meteor_showers_data: list of (id, localized_name, ra, dec, zhr, peak_month, peak_day, constellation_id)
     """
     builder = flatbuffers.Builder(1024 * 1024)
 
@@ -286,12 +318,16 @@ def pack_catalog(stars_data, star_names, constellations_data, dsos_data, output_
     # 4. Serialize DSOs Vector
     dsos_vec = serialize_dsos(builder, dsos_data)
 
-    # 5. Serialize Root NightSkyCatalog Table (4 fields)
-    builder.StartObject(4)
+    # 5. Serialize Meteor Showers Vector
+    meteor_showers_vec = serialize_meteor_showers(builder, meteor_showers_data)
+
+    # 6. Serialize Root NightSkyCatalog Table (5 fields)
+    builder.StartObject(5)
     builder.PrependUOffsetTRelativeSlot(0, stars_vec, 0)
     builder.PrependUOffsetTRelativeSlot(1, metadata_vec, 0)
     builder.PrependUOffsetTRelativeSlot(2, constellations_vec, 0)
     builder.PrependUOffsetTRelativeSlot(3, dsos_vec, 0)
+    builder.PrependUOffsetTRelativeSlot(4, meteor_showers_vec, 0)
     root_catalog = builder.EndObject()
 
     builder.Finish(root_catalog)
@@ -1132,16 +1168,49 @@ MESSIER_OBJECTS = [
     (110, 10.092, 41.685, 8.1, 21.9, 0, "Satelitní galaxie M110", "Edward Young Star", "NGC 205", "And", 170.0, 0.55, "", 0.0, 0.0),
 ]
 
+METEOR_SHOWERS = [
+    (1, "Kvadrantidy", 230.1, 49.5, 120, 1, 4, "Boo"),
+    (2, "Lyridy", 271.4, 34.3, 18, 4, 22, "Lyr"),
+    (3, "Eta Akvaridy", 338.0, -1.0, 50, 5, 6, "Aqr"),
+    (4, "Jižní Delta Akvaridy", 339.8, -16.4, 25, 7, 30, "Aqr"),
+    (5, "Alfa Kaprikornidy", 307.0, -10.2, 5, 7, 30, "Cap"),
+    (6, "Perseidy", 46.2, 57.8, 100, 8, 12, "Per"),
+    (7, "Aurigidy", 91.0, 39.0, 6, 9, 1, "Aur"),
+    (8, "Zářijové Epsilon Perseidy", 48.0, 40.0, 5, 9, 9, "Per"),
+    (9, "Drakonidy", 262.5, 54.0, 10, 10, 8, "Dra"),
+    (10, "Orionidy", 94.5, 15.8, 20, 10, 21, "Ori"),
+    (11, "Jižní Tauridy", 50.0, 14.0, 5, 11, 5, "Tau"),
+    (12, "Severní Tauridy", 58.5, 22.0, 5, 11, 12, "Tau"),
+    (13, "Leonidy", 152.0, 21.6, 15, 11, 17, "Leo"),
+    (14, "Geminidy", 112.5, 32.5, 150, 12, 14, "Gem"),
+    (15, "Ursidy", 217.5, 76.0, 10, 12, 22, "UMi"),
+    (16, "Puppidy-Velidy", 123.0, -45.0, 10, 12, 7, "Pup"),
+    (17, "Kentauridy", 211.0, -59.0, 6, 2, 8, "Cen"),
+    (18, "Gama Normidy", 239.0, -50.0, 6, 3, 14, "Nor"),
+    (19, "Pí Puppidy", 110.0, -45.0, 10, 4, 23, "Pup"),
+    (20, "Kamelopardalidy", 124.0, 79.0, 5, 5, 24, "Cam"),
+    (21, "Denní Arietidy", 44.0, 24.0, 30, 6, 7, "Ari"),
+    (22, "Červnové Bootidy", 224.0, 48.0, 5, 6, 27, "Boo"),
+    (23, "Piscis Austrinidy", 341.0, -30.0, 5, 7, 28, "PsA"),
+    (24, "Kappa Cygnidy", 286.0, 59.0, 3, 8, 17, "Cyg"),
+    (25, "Andromedidy", 26.0, 37.0, 5, 11, 27, "And"),
+    (26, "Fénixidy", 18.0, -42.0, 5, 12, 2, "Phe"),
+    (27, "Monocerotidy", 100.0, 8.0, 3, 12, 9, "Mon"),
+    (28, "Sigma Hydridy", 127.0, 2.0, 3, 12, 12, "Hya"),
+]
+
 def main():
     stars_data, star_metadata, constellations_data = build_astronomical_catalog()
     dsos_data = MESSIER_OBJECTS
+    meteor_showers_data = METEOR_SHOWERS
     
     print("=== Step 6: Packaging into FlatBuffers binary ===")
-    pack_catalog(stars_data, star_metadata, constellations_data, dsos_data, OUTPUT_RAW_BIN)
-    pack_catalog(stars_data, star_metadata, constellations_data, dsos_data, OUTPUT_PIPELINE_BIN)
+    pack_catalog(stars_data, star_metadata, constellations_data, dsos_data, meteor_showers_data, OUTPUT_RAW_BIN)
+    pack_catalog(stars_data, star_metadata, constellations_data, dsos_data, meteor_showers_data, OUTPUT_PIPELINE_BIN)
     print("Catalog generation completed successfully!")
 
 if __name__ == "__main__":
     main()
+
 
 

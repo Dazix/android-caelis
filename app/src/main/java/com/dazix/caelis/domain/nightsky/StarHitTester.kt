@@ -655,6 +655,85 @@ object StarHitTester {
     }
 
     /**
+     * Collects top candidate visible Meteor Shower Radiants intersecting the tap area sorted by score.
+     * Zero heap allocations.
+     */
+    fun findTopMeteorRadiants(
+        tapX: Float,
+        tapY: Float,
+        meteorScreenX: FloatArray,
+        meteorScreenY: FloatArray,
+        meteorInFront: BooleanArray,
+        totalMeteors: Int,
+        minTouchRadiusPx: Float,
+        outIndices: IntArray,
+        outScores: FloatArray,
+        maxCandidates: Int = minOf(outIndices.size, outScores.size),
+        meteorWorldX: FloatArray? = null,
+        meteorWorldY: FloatArray? = null,
+        meteorWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
+    ): Int {
+        if (totalMeteors <= 0 || minTouchRadiusPx <= 0.0f || maxCandidates <= 0) return 0
+
+        val limit = minOf(
+            totalMeteors,
+            meteorScreenX.size,
+            meteorScreenY.size,
+            meteorInFront.size,
+        )
+        var candidateCount = 0
+
+        val checkOcclusion = (isLandscapeVisible || (useRealHorizon && horizonProfile != null && horizonProfile.isUsable)) &&
+            meteorWorldX != null && meteorWorldY != null && meteorWorldZ != null
+
+        val hitRadius = maxOf(minTouchRadiusPx, 48f)
+        val hitRadiusSq = hitRadius * hitRadius
+
+        for (i in 0 until limit) {
+            if (!meteorInFront[i]) continue
+
+            if (checkOcclusion && isOccludedByLandscape(
+                    meteorWorldX[i],
+                    meteorWorldY[i],
+                    meteorWorldZ[i],
+                    isLandscapeVisible,
+                    useRealHorizon,
+                    horizonProfile,
+                    alignAzimuthOffsetDeg,
+                    alignElevationOffsetDeg,
+                )
+            ) {
+                continue
+            }
+
+            val px = meteorScreenX[i]
+            val py = meteorScreenY[i]
+            val dx = tapX - px
+            val dy = tapY - py
+            val distanceSq = dx * dx + dy * dy
+
+            if (distanceSq <= hitRadiusSq) {
+                val score = computeHitScore(distanceSq, 2.0f)
+                candidateCount = insertCandidate(
+                    candidateIndex = i,
+                    score = score,
+                    outIndices = outIndices,
+                    outScores = outScores,
+                    currentCount = candidateCount,
+                    maxCapacity = maxCandidates,
+                )
+            }
+        }
+
+        return candidateCount
+    }
+
+    /**
      * Collects all candidate Planets and Moon intersecting the tap area sorted by score.
      * Zero heap allocations.
      */

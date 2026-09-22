@@ -36,12 +36,18 @@ public final class NightSkyCatalog extends Table {
     public DeepSkyObject dsos(DeepSkyObject obj, int j) { int o = __offset(10); return o != 0 ? obj.__assign(__indirect(__vector(o) + j * 4), bb) : null; }
     public int dsosLength() { int o = __offset(10); return o != 0 ? __vector_len(o) : 0; }
 
+    public MeteorShower meteorShowers(int j) { return meteorShowers(new MeteorShower(), j); }
+    public MeteorShower meteorShowers(MeteorShower obj, int j) { int o = __offset(12); return o != 0 ? obj.__assign(__indirect(__vector(o) + j * 4), bb) : null; }
+    public int meteorShowersLength() { int o = __offset(12); return o != 0 ? __vector_len(o) : 0; }
+
     public static int createNightSkyCatalog(FlatBufferBuilder builder,
         int starsOffset,
         int metadataOffset,
         int constellationsOffset,
-        int dsosOffset) {
-        builder.startTable(4);
+        int dsosOffset,
+        int meteorShowersOffset) {
+        builder.startTable(5);
+        NightSkyCatalog.addMeteorShowers(builder, meteorShowersOffset);
         NightSkyCatalog.addDsos(builder, dsosOffset);
         NightSkyCatalog.addConstellations(builder, constellationsOffset);
         NightSkyCatalog.addMetadata(builder, metadataOffset);
@@ -52,11 +58,19 @@ public final class NightSkyCatalog extends Table {
     public static int createNightSkyCatalog(FlatBufferBuilder builder,
         int starsOffset,
         int metadataOffset,
-        int constellationsOffset) {
-        return createNightSkyCatalog(builder, starsOffset, metadataOffset, constellationsOffset, 0);
+        int constellationsOffset,
+        int dsosOffset) {
+        return createNightSkyCatalog(builder, starsOffset, metadataOffset, constellationsOffset, dsosOffset, 0);
     }
 
-    public static void startNightSkyCatalog(FlatBufferBuilder builder) { builder.startTable(4); }
+    public static int createNightSkyCatalog(FlatBufferBuilder builder,
+        int starsOffset,
+        int metadataOffset,
+        int constellationsOffset) {
+        return createNightSkyCatalog(builder, starsOffset, metadataOffset, constellationsOffset, 0, 0);
+    }
+
+    public static void startNightSkyCatalog(FlatBufferBuilder builder) { builder.startTable(5); }
     public static void addStars(FlatBufferBuilder builder, int starsOffset) { builder.addOffset(0, starsOffset, 0); }
     public static void startStarsVector(FlatBufferBuilder builder, int numElems) { builder.startVector(12, numElems, 4); }
     public static void addMetadata(FlatBufferBuilder builder, int metadataOffset) { builder.addOffset(1, metadataOffset, 0); }
@@ -68,6 +82,9 @@ public final class NightSkyCatalog extends Table {
     public static void addDsos(FlatBufferBuilder builder, int dsosOffset) { builder.addOffset(3, dsosOffset, 0); }
     public static int createDsosVector(FlatBufferBuilder builder, int[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addOffset(data[i]); return builder.endVector(); }
     public static void startDsosVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
+    public static void addMeteorShowers(FlatBufferBuilder builder, int meteorShowersOffset) { builder.addOffset(4, meteorShowersOffset, 0); }
+    public static int createMeteorShowersVector(FlatBufferBuilder builder, int[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addOffset(data[i]); return builder.endVector(); }
+    public static void startMeteorShowersVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
     public static int endNightSkyCatalog(FlatBufferBuilder builder) {
         int o = builder.endTable();
         return o;

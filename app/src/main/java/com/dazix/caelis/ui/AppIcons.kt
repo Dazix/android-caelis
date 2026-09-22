@@ -559,6 +559,26 @@ object AppIcons {
         }
     }
 
+    /** MeteorShower: shooting star / meteor shower radiant glyph. */
+    val MeteorShower: ImageVector by lazy {
+        icon("MeteorShower") {
+            strokePath {
+                circle(centerX = 12f, centerY = 12f, radius = 3.5f)
+                moveTo(16f, 8f)
+                lineTo(21f, 3f)
+                moveTo(8f, 16f)
+                lineTo(3f, 21f)
+                moveTo(8f, 8f)
+                lineTo(3f, 3f)
+                moveTo(16f, 16f)
+                lineTo(21f, 21f)
+            }
+            fillPath {
+                circle(centerX = 12f, centerY = 12f, radius = 1.8f)
+            }
+        }
+    }
+
     /** History: clock circle with clock hands. */
     val History: ImageVector by lazy {
         icon("History") {

@@ -17,6 +17,7 @@ data class CelestialBodyDetails(
     val subtitle: String,
     val property1: Pair<String, String>? = null,
     val property2: Pair<String, String>? = null,
+    val property3: Pair<String, String>? = null,
     val magnitude: Float? = null,
     val raDegrees: Double? = null,
     val decDegrees: Double? = null,

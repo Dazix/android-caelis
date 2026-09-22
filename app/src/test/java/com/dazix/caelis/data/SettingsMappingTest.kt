@@ -549,6 +549,18 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `night sky meteor showers visible defaults to false and survives round trip`() {
+        assertEquals(false, SettingsMapping.readNightSkyMeteorShowersVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyMeteorShowersVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyMeteorShowersVisible(prefs))
+
+        SettingsMapping.writeNightSkyMeteorShowersVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyMeteorShowersVisible(prefs))
+    }
+
+    @Test
     fun `sun ar elevation offset defaults to zero and survives round trip`() {
         assertEquals(0.0f, SettingsMapping.readSunArElevationOffset(emptyPreferences()))
 

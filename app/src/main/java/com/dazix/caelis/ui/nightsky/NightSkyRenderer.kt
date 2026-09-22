@@ -27,6 +27,7 @@ import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.DsoType
+import com.dazix.caelis.data.nightsky.MeteorShower
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.data.nightsky.StarMetadata
@@ -197,6 +198,49 @@ class NightSkyRenderer {
         setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
     }
 
+    // Pre-allocated buffers for Meteor Shower Radiants
+    val meteorWorldX = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorWorldY = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorWorldZ = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorScreenX = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorScreenY = FloatArray(MAX_METEOR_SHOWERS)
+    val meteorInFront = BooleanArray(MAX_METEOR_SHOWERS)
+
+    var selectedMeteorIndex: Int = -1
+
+    private val reusableMeteor = MeteorShower()
+    private val topMeteorIndices = IntArray(5)
+    private val topMeteorScores = FloatArray(5)
+
+    // Pre-allocate the vector glyph path (a radiant starburst)
+    val radiantPath = Path().apply {
+        // Center dot
+        addCircle(0f, 0f, 4f, Path.Direction.CW)
+        // Diverging lines simulating meteors flying outward
+        moveTo(8f, 8f); lineTo(24f, 24f)
+        moveTo(-8f, 8f); lineTo(-24f, 24f)
+        moveTo(8f, -8f); lineTo(24f, -24f)
+        moveTo(-8f, -8f); lineTo(-24f, -24f)
+    }
+    val radiantPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        color = 0xFF00E676.toInt() // Default: Green/Cyan for visibility
+    }
+    val radiantLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 24f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        color = 0xFF00E676.toInt()
+    }
+    val radiantHighlightLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        color = AndroidColor.rgb(255, 215, 64)
+        setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
+    }
+
     companion object {
         /** Fill below the real skyline. Near-black, never pure black — see [drawLandscape]. */
         private const val TERRAIN_FILL_R = 0.024f
@@ -205,6 +249,7 @@ class NightSkyRenderer {
 
         const val MAX_STARS = 100_000
         const val MAX_DSOS = 128
+        const val MAX_METEOR_SHOWERS = 32
 
         data class IndicatorTransform(
             val arrowX: Float,
@@ -801,6 +846,15 @@ class NightSkyRenderer {
             planetLabelPaint.color = primaryInt
             planetHighlightLabelPaint.color = primaryInt
 
+            radiantPaint.color = primaryInt
+            radiantPaint.colorFilter = when (theme) {
+                com.dazix.caelis.domain.nightsky.NightVisionTheme.RED -> redVisionFilter
+                com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER -> amberVisionFilter
+                com.dazix.caelis.domain.nightsky.NightVisionTheme.GREEN -> greenVisionFilter
+            }
+            radiantLabelPaint.color = primaryInt
+            radiantHighlightLabelPaint.color = primaryInt
+
             debugFocusCirclePaint.color = AndroidColor.argb(190, pr, pg, pb)
             debugFocusFillPaint.color = AndroidColor.argb(25, pr, pg, pb)
             debugFocusLabelPaint.color = AndroidColor.argb(230, pr, pg, pb)
@@ -812,6 +866,11 @@ class NightSkyRenderer {
             planetGlowPaint.colorFilter = null
             planetLabelPaint.color = AndroidColor.WHITE
             planetHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
+
+            radiantPaint.color = 0xFF00E676.toInt()
+            radiantPaint.colorFilter = null
+            radiantLabelPaint.color = 0xFF00E676.toInt()
+            radiantHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
 
             constellationPaint.color = AndroidColor.argb(170, 77, 208, 225)
             constellationHaloPaint.color = AndroidColor.argb(45, 128, 222, 234)
@@ -881,6 +940,10 @@ class NightSkyRenderer {
 
         planetLabelPaint.textSize = 13f * densityScale
         planetHighlightLabelPaint.textSize = 15f * densityScale
+
+        radiantPaint.strokeWidth = 2.0f * densityScale
+        radiantLabelPaint.textSize = 12f * densityScale
+        radiantHighlightLabelPaint.textSize = 14f * densityScale
 
         asterismPaint.strokeWidth = 1.15f * densityScale * lineArtScale
         asterismHaloPaint.strokeWidth = 4.2f * densityScale * lineArtScale
@@ -1159,6 +1222,16 @@ class NightSkyRenderer {
             override val target: HitTarget get() = HitTarget.DsoHit(dsoIndex)
         }
 
+        data class MeteorShower(
+            val showerIndex: Int,
+            override val name: String,
+            override val score: Float,
+            override val magnitude: Float = 0f,
+            override val subtitle: String? = null,
+        ) : CelestialCandidate {
+            override val target: HitTarget get() = HitTarget.MeteorRadiantHit(showerIndex)
+        }
+
         data class Constellation(
             val constellationIndex: Int,
             override val name: String,
@@ -1174,6 +1247,7 @@ class NightSkyRenderer {
         data class ConstellationHit(val index: Int) : HitTarget
         data class StarHit(val index: Int) : HitTarget
         data class DsoHit(val index: Int) : HitTarget
+        data class MeteorRadiantHit(val index: Int) : HitTarget
         data class PlanetHit(val planetId: String) : HitTarget
         data class MultipleHits(
             val tapX: Float,
@@ -1309,7 +1383,47 @@ class NightSkyRenderer {
             }
         }
 
-        // 3. Candidate Stars
+        // 3. Candidate Meteor Showers
+        if (catalog != null) {
+            val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
+            val meteorTopCount = StarHitTester.findTopMeteorRadiants(
+                tapX = tapX,
+                tapY = tapY,
+                meteorScreenX = meteorScreenX,
+                meteorScreenY = meteorScreenY,
+                meteorInFront = meteorInFront,
+                totalMeteors = meteorCount,
+                minTouchRadiusPx = maxStarRadiusPx * 1.5f,
+                outIndices = topMeteorIndices,
+                outScores = topMeteorScores,
+                maxCandidates = 5,
+                meteorWorldX = meteorWorldX,
+                meteorWorldY = meteorWorldY,
+                meteorWorldZ = meteorWorldZ,
+                isLandscapeVisible = isLandscapeVisible,
+                useRealHorizon = useRealHorizon,
+                horizonProfile = activeProfile,
+                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
+                alignElevationOffsetDeg = alignElevationOffsetDeg,
+            )
+            for (i in 0 until meteorTopCount) {
+                val mIdx = topMeteorIndices[i]
+                catalog.meteorShowers(reusableMeteor, mIdx)
+                val mName = reusableMeteor.localizedName() ?: "Meteor Shower"
+                val zhr = reusableMeteor.zhr()
+                val sub = "Peak: ${reusableMeteor.peakMonth()}/${reusableMeteor.peakDay()} • ZHR: $zhr"
+                bodyCandidates.add(
+                    CelestialCandidate.MeteorShower(
+                        showerIndex = mIdx,
+                        name = mName,
+                        score = topMeteorScores[i],
+                        subtitle = sub,
+                    )
+                )
+            }
+        }
+
+        // 4. Candidate Stars
         if (catalog != null) {
             val starCount = StarHitTester.findTopStarsFromCatalog(
                 tapX = tapX,
@@ -1469,6 +1583,18 @@ class NightSkyRenderer {
             dsoMagnitudes[d] = reusableDso.mag()
         }
 
+        // Precompute world vectors for Meteor Shower Radiants
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
+        for (m in 0 until meteorCount) {
+            catalog.meteorShowers(reusableMeteor, m)
+            val ra = reusableMeteor.ra().toDouble()
+            val dec = reusableMeteor.dec().toDouble()
+            EquatorialCoordinates.computeWorldVector(ra, dec, lstDegrees, latitudeDegrees, tempWorldVec, 0)
+            meteorWorldX[m] = tempWorldVec[0]
+            meteorWorldY[m] = tempWorldVec[1]
+            meteorWorldZ[m] = tempWorldVec[2]
+        }
+
         cachedLstDegrees = lstDegrees
         cachedLatitudeDegrees = latitudeDegrees
         cachedStarCount = totalStars
@@ -1541,6 +1667,7 @@ class NightSkyRenderer {
         showConstellationArt: Boolean = true,
         showPlanets: Boolean = true,
         showDsos: Boolean = true,
+        showMeteorShowers: Boolean = true,
         isAtmosphereVisible: Boolean = true,
         context: Context? = null,
         debugOffsetX: Float = 0f,
@@ -1678,10 +1805,12 @@ class NightSkyRenderer {
 
         // 5. Fast Dynamic Override Table: force render stars of visible constellations
         forceRenderStar.fill(false)
-        if (showConstellations) {
+        if (showConstellations || selectedConstellationIndex in 0 until constCount) {
             for (c in 0 until constCount) {
+                val isSelected = (c == selectedConstellationIndex)
+                if (!showConstellations && !isSelected) continue
                 val progress = constellationProgress[c]
-                if (progress > 0.001f || c == selectedConstellationIndex) {
+                if (progress > 0.001f || isSelected) {
                     catalog.constellations(reusableConstellation, c)
                     val linesLen = reusableConstellation.linesLength()
                     for (j in 0 until linesLen) {
@@ -1801,12 +1930,17 @@ class NightSkyRenderer {
 
         // 6b. Batch Render Artistic Constellation Overlays (Behind constellation lines and stars)
         val minDisplayThreshold = maxOf(0.001f, debugFocusDisplayThreshold)
-        if (showConstellations && showConstellationArt && context != null) {
+        val hasSelectedConstellation = selectedConstellationIndex in 0 until constCount
+        if (((showConstellations && showConstellationArt) || hasSelectedConstellation) && context != null) {
             for (c in 0 until constCount) {
-                if (!constellationCentroidInFront[c]) continue
+                val isSelected = (c == selectedConstellationIndex)
+                if ((!showConstellations || !showConstellationArt) && !isSelected) continue
+                if (!constellationCentroidInFront[c] && !isSelected) continue
                 val p = constellationProgress[c]
-                if (p <= minDisplayThreshold) continue
-                val effectiveP = if (debugFocusDisplayThreshold > 0f) {
+                if (p <= minDisplayThreshold && !isSelected) continue
+                val effectiveP = if (isSelected) {
+                    1.0f
+                } else if (debugFocusDisplayThreshold > 0f) {
                     ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
                 } else {
                     p
@@ -1882,17 +2016,20 @@ class NightSkyRenderer {
         }
 
         // 7. Batch Render Context-Aware Constellations ("Meet-in-the-Middle" & Single Line at 100%)
-        if (showConstellations) {
+        if (showConstellations || hasSelectedConstellation) {
             val density = drawScope.density
             val gapPx = 7f * density
             val artLineBoost = if (showConstellationArt) 1.25f else 1.0f
 
             for (c in 0 until constCount) {
                 val isSelected = (c == selectedConstellationIndex)
+                if (!showConstellations && !isSelected) continue
                 if (!constellationCentroidInFront[c] && !isSelected) continue
                 val p = constellationProgress[c]
-                if (p <= minDisplayThreshold) continue
-                val effectiveP = if (debugFocusDisplayThreshold > 0f) {
+                if (p <= minDisplayThreshold && !isSelected) continue
+                val effectiveP = if (isSelected) {
+                    1.0f
+                } else if (debugFocusDisplayThreshold > 0f) {
                     ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
                 } else {
                     p
@@ -1980,7 +2117,7 @@ class NightSkyRenderer {
 
                 // Render Animated Constellation Name Label with vertical slide (Skip asterisms)
                 val labelMinThreshold = maxOf(0.05f, debugFocusDisplayThreshold)
-                if (!isAsterism && constellationCentroidInFront[c] && p > labelMinThreshold) {
+                if (!isAsterism && constellationCentroidInFront[c] && (p > labelMinThreshold || isSelected)) {
                     val cx = constellationCentroidScreenX[c]
                     val cy = constellationCentroidScreenY[c]
                     val textY = cy - (40f * (1f - effectiveP))
@@ -2003,11 +2140,19 @@ class NightSkyRenderer {
 
         // 7b. Dynamic Solar System Planetary Rendering (Dual-State: Point Light <-> High-Res Texture)
         activePlanetsCount = 0
-        if (showPlanets && planets.isNotEmpty()) {
+        val totalPlanets = minOf(planets.size, maxPlanets)
+        val selectedPlanet = selectedPlanetId
+        val hasSelectedPlanet = selectedPlanet != null && planets.any { it.id.equals(selectedPlanet, ignoreCase = true) }
+        if ((showPlanets || hasSelectedPlanet) && planets.isNotEmpty()) {
             val density = drawScope.density
 
-            for (pIdx in 0 until minOf(planets.size, maxPlanets)) {
+            for (pIdx in 0 until totalPlanets) {
                 val planet = planets[pIdx]
+                val isSelected = selectedPlanet != null && planet.id.equals(selectedPlanet, ignoreCase = true)
+                if (!showPlanets && !isSelected) {
+                    planetInFront[pIdx] = false
+                    continue
+                }
                 val ra = planet.raDegrees
                 val dec = planet.decDegrees
 
@@ -2189,12 +2334,18 @@ class NightSkyRenderer {
         }
 
         // 7c. Deep Sky Objects (Messier Catalog: Galaxies, Clusters, Nebulae)
-        if (showDsos) {
-            val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+        val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
+        val hasSelectedDso = selectedDsoIndex in 0 until dsoCount
+        if (showDsos || hasSelectedDso) {
             val density = drawScope.density
             val opticScale = StarOptics.computeOpticScale(zoomFactor)
 
             for (d in 0 until dsoCount) {
+                val isSelected = (d == selectedDsoIndex)
+                if (!showDsos && !isSelected) {
+                    dsoInFront[d] = false
+                    continue
+                }
                 catalog.dsos(reusableDso, d)
                 val vx = dsoWorldX[d]
                 val vy = dsoWorldY[d]
@@ -2241,7 +2392,6 @@ class NightSkyRenderer {
                 val renderedRadiusPx = physicalRadiusPx.coerceIn(8f * density * opticScale, 70f * density * opticScale)
                 dsoRadiusPx[d] = renderedRadiusPx
 
-                val isSelected = (d == selectedDsoIndex)
                 val dsoType = reusableDso.type()
                 val mNum = reusableDso.messierId()
                 val messierId = "M$mNum"
@@ -2387,6 +2537,75 @@ class NightSkyRenderer {
             }
         }
 
+        // 7d. Meteor Shower Radiants
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
+        val hasSelectedMeteor = selectedMeteorIndex in 0 until meteorCount
+        if (showMeteorShowers || hasSelectedMeteor) {
+            val density = drawScope.density
+
+            for (m in 0 until meteorCount) {
+                val isSelected = (m == selectedMeteorIndex)
+                if (!showMeteorShowers && !isSelected) {
+                    meteorInFront[m] = false
+                    continue
+                }
+                catalog.meteorShowers(reusableMeteor, m)
+                val vx = meteorWorldX[m]
+                val vy = meteorWorldY[m]
+                val vz = meteorWorldZ[m]
+
+                // Transform World -> Device coordinates: V_dev = R^T * V_world
+                val xDev = matrix[0] * vx + matrix[4] * vy + matrix[8] * vz
+                val yDev = matrix[1] * vx + matrix[5] * vy + matrix[9] * vz
+                val zDev = matrix[2] * vx + matrix[6] * vy + matrix[10] * vz
+
+                val xs: Float
+                val ys: Float
+                when (displayRotation) {
+                    Surface.ROTATION_0 -> { xs = xDev; ys = yDev }
+                    Surface.ROTATION_90 -> { xs = yDev; ys = -xDev }
+                    Surface.ROTATION_180 -> { xs = -xDev; ys = -yDev }
+                    Surface.ROTATION_270 -> { xs = -yDev; ys = xDev }
+                    else -> { xs = xDev; ys = yDev }
+                }
+                val zs = -zDev
+
+                if (zs <= 0.001f) {
+                    meteorInFront[m] = false
+                    continue
+                }
+
+                val pX = halfW + focalLengthPixels * (xs / zs)
+                val pY = halfH - focalLengthPixels * (ys / zs)
+
+                meteorScreenX[m] = pX
+                meteorScreenY[m] = pY
+                meteorInFront[m] = true
+
+                // Viewport culling
+                val marginMeteor = 80.0f
+                if (pX !in -marginMeteor..(w + marginMeteor) || pY !in -marginMeteor..(h + marginMeteor)) {
+                    continue
+                }
+
+                // Render radiant vector glyph
+                nativeCanvas.save()
+                nativeCanvas.translate(pX, pY)
+                nativeCanvas.drawPath(radiantPath, radiantPaint)
+                nativeCanvas.restore()
+
+                // Render radiant label
+                val mName = reusableMeteor.localizedName() ?: ""
+                val labelPaint = if (isSelected) radiantHighlightLabelPaint else radiantLabelPaint
+                val labelY = pY + (32f * density)
+                nativeCanvas.drawText(mName, pX, labelY, labelPaint)
+            }
+        } else {
+            for (m in 0 until MAX_METEOR_SHOWERS) {
+                meteorInFront[m] = false
+            }
+        }
+
         // 8. Hybrid Optical Star Rendering:
         // Pass 1: Continuous Radial Gradient Sprite Glow for Bright Stars (Buckets 0, 1, 2: mag < 3.0)
         val sprite = starSpriteBitmap
@@ -2513,8 +2732,8 @@ class NightSkyRenderer {
             return
         }
 
-        // Only draw broken crosshair if a Star, Planet, or DSO is selected (not a Constellation)
-        if (selectedStarIndex >= 0 || selectedPlanetId != null || selectedDsoIndex >= 0) {
+        // Only draw broken crosshair if a Star, Planet, DSO, or Meteor Shower is selected (not a Constellation)
+        if (selectedStarIndex >= 0 || selectedPlanetId != null || selectedDsoIndex >= 0 || selectedMeteorIndex >= 0) {
             // Scaled to 75% of original radii (r1: 13dp -> 9.75dp, r2: 24dp -> 18dp):
             val r1 = 9.75f * density
             val r2 = 18.0f * density

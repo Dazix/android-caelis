@@ -452,6 +452,12 @@
     <string name="dso_type_diffuse_nebula">Diffuse nebula</string>
     <string name="dso_type_planetary_nebula">Planetary nebula</string>
     <string name="dso_type_supernova_remnant">Supernova remnant</string>
+    <string name="night_sky_meteor_showers">Meteor Showers</string>
+    <string name="night_sky_meteor_showers_desc">Show/hide meteor shower radiants</string>
+    <string name="celestial_meteor_shower_subtitle">Meteor Shower Radiant</string>
+    <string name="celestial_peak">Peak</string>
+    <string name="celestial_zhr">ZHR (Rate)</string>
+    <string name="celestial_zhr_format">%1$d meteors/hr</string>
     <string name="dso_legend_title">Deep sky objects legend</string>
     <string name="dso_legend_button">Symbol legend</string>
     <string name="dso_legend_galaxy_title">Galaxies</string>

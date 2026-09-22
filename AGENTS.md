@@ -25,6 +25,8 @@ without breaking it.
 6. **No tests during planning or documentation.** When planning (`/plan`), designing implementation
    plans, answering questions, or creating/editing Markdown and documentation files, NEVER run unit tests,
    instrumented tests, or build commands. Test suites belong strictly in the verification step AFTER code implementation.
+7. **Commit only on explicit user request.** Never run git commit proactively or automatically. Commits
+   must be performed strictly when explicitly requested by the user.
 
 ## Toolchain
 

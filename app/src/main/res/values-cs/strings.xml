@@ -458,6 +458,12 @@
     <string name="dso_type_diffuse_nebula">Difúzní mlhovina</string>
     <string name="dso_type_planetary_nebula">Planetární mlhovina</string>
     <string name="dso_type_supernova_remnant">Pozůstatek po supernově</string>
+    <string name="night_sky_meteor_showers">Meteorické roje</string>
+    <string name="night_sky_meteor_showers_desc">Zobrazit/skrýt radianty meteorických rojů</string>
+    <string name="celestial_meteor_shower_subtitle">Radiant meteorického roje</string>
+    <string name="celestial_peak">Maximum</string>
+    <string name="celestial_zhr">ZHR (Frekvence)</string>
+    <string name="celestial_zhr_format">%1$d meteorů/hod</string>
     <string name="dso_legend_title">Legenda symbolů hlubokého vesmíru</string>
     <string name="dso_legend_button">Legenda symbolů</string>
     <string name="dso_legend_galaxy_title">Galaxie</string>

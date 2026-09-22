@@ -99,6 +99,7 @@ class SettingsStore(context: Context) {
 
     val nightSkyPlanetsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyPlanetsVisible(it) }
     val nightSkyDsosVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyDsosVisible(it) }
+    val nightSkyMeteorShowersVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyMeteorShowersVisible(it) }
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
@@ -255,6 +256,10 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyDsosVisible(it, enabled) }
     }
 
+    suspend fun saveNightSkyMeteorShowersVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyMeteorShowersVisible(it, enabled) }
+    }
+
     suspend fun saveNightSkyConstellationsVisible(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkyConstellationsVisible(it, enabled) }
     }
@@ -377,6 +382,7 @@ internal object SettingsMapping {
     private val NIGHT_SKY_GRID_VISIBLE = booleanPreferencesKey("night_sky_grid_visible")
     private val NIGHT_SKY_PLANETS_VISIBLE = booleanPreferencesKey("night_sky_planets_visible")
     private val NIGHT_SKY_DSOS_VISIBLE = booleanPreferencesKey("night_sky_dsos_visible")
+    private val NIGHT_SKY_METEOR_SHOWERS_VISIBLE = booleanPreferencesKey("night_sky_meteor_showers_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
     private val NIGHT_SKY_SENSOR_TRACKING = booleanPreferencesKey("night_sky_sensor_tracking")
@@ -745,6 +751,13 @@ internal object SettingsMapping {
 
     fun writeNightSkyDsosVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_DSOS_VISIBLE] = enabled
+    }
+
+    fun readNightSkyMeteorShowersVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_METEOR_SHOWERS_VISIBLE] ?: false
+
+    fun writeNightSkyMeteorShowersVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_METEOR_SHOWERS_VISIBLE] = enabled
     }
 
     fun readNightSkyConstellationsVisible(prefs: Preferences): Boolean =
