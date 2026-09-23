@@ -164,7 +164,11 @@ fun ScreenScaffold(
                 scrollBehavior = scrollBehavior,
             )
         },
-        bottomBar = { navigation?.invoke() },
+        bottomBar = {
+            if (onBack == null) {
+                navigation?.invoke()
+            }
+        },
     ) { insets ->
         Box(
             modifier = Modifier

@@ -89,7 +89,7 @@ fun AppNavigationShell(
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val rail = wantsNavigationRail(maxWidth)
-        val bar: (@Composable () -> Unit)? = if (enabled && !rail) {
+        val bar: (@Composable () -> Unit)? = if (!rail) {
             remember(current, onNavigate) {
                 @Composable {
                     ShortNavigationBar {

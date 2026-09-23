@@ -155,7 +155,7 @@ fun NightSkyArScreen(
     var showDsoLegendInAr by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
-    val renderer = remember { NightSkyRenderer() }
+    val renderer = viewModel.renderer
     val maxTouchRadiusPx = with(density) { uiState.debugPreferences.starTapRadiusDp.dp.toPx() }
 
     // Track the active selection identity to prevent partialExpand loops on periodic data updates
@@ -369,7 +369,6 @@ fun NightSkyArScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(bgColor)
                 .pointerInput(Unit) {
                     detectArSkyGestures(
                         onTap = { offset ->
@@ -521,7 +520,6 @@ fun NightSkyArScreen(
                     debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
                     debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
                     showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
-                    onVisibleStarsUpdated = viewModel::updateVisibleStarCount,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -875,7 +873,6 @@ internal fun NightSkyOverlayCanvas(
     debugFocusRadiusMultiplier: Float = 0.48f,
     debugFocusDisplayThreshold: Float = 0.0f,
     showTapRadiusIndicator: Boolean = false,
-    onVisibleStarsUpdated: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -892,19 +889,31 @@ internal fun NightSkyOverlayCanvas(
         stringResource(R.string.sun_ar_cardinal_nw),
     )
 
-    val milkyWayBitmap = remember(context) {
-        try {
-            BitmapFactory.decodeResource(context.resources, R.drawable.milky_way_starless)
-        } catch (_: Exception) {
-            null
+    val milkyWayBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, context) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                    inScaled = false
+                }
+                BitmapFactory.decodeResource(context.resources, R.drawable.milky_way_starless, options)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
-    val landscapeBitmap = remember(context) {
-        try {
-            BitmapFactory.decodeResource(context.resources, R.drawable.landscape_photorealistic)
-        } catch (_: Exception) {
-            null
+    val landscapeBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, context) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                    inScaled = false
+                }
+                BitmapFactory.decodeResource(context.resources, R.drawable.landscape_photorealistic, options)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -929,11 +938,12 @@ internal fun NightSkyOverlayCanvas(
         renderer.setHorizonProfile(horizonProfile)
     }
 
-    // Lazy background population of remaining ~78,000 telescopic stars (Tier 2) on Dispatchers.Default
-    LaunchedEffect(catalog, lstDegrees, latitudeDegrees) {
+    // Lazy background population of remaining ~78,000 telescopic stars (Tier 2) and static J2000 vectors on Dispatchers.Default
+    LaunchedEffect(catalog, latitudeDegrees) {
         if (catalog != null) {
             val totalStars = minOf(catalog.starsLength(), NightSkyRenderer.MAX_STARS)
             withContext(Dispatchers.Default) {
+                renderer.ensureStaticCelestialVectors(catalog)
                 renderer.updateStarWorldVectorsTier2(catalog, lstDegrees, latitudeDegrees, totalStars) {
                     !isActive
                 }
@@ -1076,8 +1086,6 @@ internal fun NightSkyOverlayCanvas(
                 isNightVision = nightVisionState.isActive,
             )
         }
-
-        onVisibleStarsUpdated(visibleCount)
     }
 }
 

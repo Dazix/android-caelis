@@ -1,7 +1,6 @@
 package com.dazix.caelis.domain.nightsky
 
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -17,13 +16,7 @@ object NightSkyCatalogLoader {
      * and wraps it with [NightSkyCatalog] root table in O(1) time.
      */
     fun loadFromStream(stream: InputStream): NightSkyCatalog {
-        val buffer = ByteArrayOutputStream()
-        val data = ByteArray(16384)
-        var nRead: Int
-        while (stream.read(data, 0, data.size).also { nRead = it } != -1) {
-            buffer.write(data, 0, nRead)
-        }
-        val bytes = buffer.toByteArray()
+        val bytes = stream.readBytes()
         val byteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         return NightSkyCatalog.getRootAsNightSkyCatalog(byteBuffer)
     }

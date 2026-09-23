@@ -9,6 +9,7 @@ import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.FrameGrabber
 import com.dazix.caelis.ar.OrientationTracker
+import com.dazix.caelis.ar.SkyDomeRenderer
 import com.dazix.caelis.ar.SkylineAligner
 import com.dazix.caelis.ar.SolarLocationProvider
 import com.dazix.caelis.data.HorizonSettings
@@ -148,6 +149,8 @@ data class SunArUiState(
 
 @OptIn(FlowPreview::class)
 class SunArViewModel(application: Application) : AndroidViewModel(application) {
+
+    val renderer = SkyDomeRenderer()
 
     private val settingsStore = SettingsStore(application)
     private val orientationTracker = OrientationTracker(application)

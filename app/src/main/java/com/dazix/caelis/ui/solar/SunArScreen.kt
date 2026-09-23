@@ -330,6 +330,7 @@ fun SunArScreen(
                 modifier = Modifier.fillMaxSize(),
                 horizonProfile = uiState.horizonProfile.takeIf { uiState.horizonSettings.enabled },
                 shadeOccludedTrajectory = uiState.horizonSettings.shadeOccludedTrajectory,
+                renderer = viewModel.renderer,
             )
         } else {
             // Camera Permission Needed Surface
@@ -510,6 +511,7 @@ internal fun SkyDomeOverlayCanvas(
     modifier: Modifier = Modifier,
     horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
     shadeOccludedTrajectory: Boolean = true,
+    renderer: SkyDomeRenderer = remember { SkyDomeRenderer() },
 ) {
     val zenithLabel = stringResource(R.string.sun_ar_zenith)
     val nadirLabel = stringResource(R.string.sun_ar_nadir)
@@ -524,7 +526,6 @@ internal fun SkyDomeOverlayCanvas(
         stringResource(R.string.sun_ar_cardinal_nw),
     )
 
-    val renderer = remember { SkyDomeRenderer() }
     renderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(redVisionMode = false)
 

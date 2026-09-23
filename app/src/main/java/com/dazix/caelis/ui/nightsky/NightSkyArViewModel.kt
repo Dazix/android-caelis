@@ -128,6 +128,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val settingsStore = SettingsStore(application)
     private val orientationTracker = OrientationTracker(application)
     private val locationProvider = SolarLocationProvider(application)
+    val renderer = NightSkyRenderer()
 
     private val catalogState = MutableStateFlow<NightSkyCatalog?>(null)
     val catalog: StateFlow<NightSkyCatalog?> = catalogState.asStateFlow()
@@ -680,21 +681,29 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
     init {
-        // Load FlatBuffers Star Catalog binary asynchronously from res/raw/catalog.bin
+        // Load FlatBuffers Star Catalog binary asynchronously from res/raw/catalog.bin,
+        // precompute J2000 celestial vectors, and build search index on background thread (Dispatchers.Default).
         viewModelScope.launch {
-            val cat = withContext(Dispatchers.IO) {
-                try {
-                    application.resources.openRawResource(R.raw.catalog).use { stream ->
-                        NightSkyCatalogLoader.loadFromStream(stream)
+            val (cat, index) = withContext(Dispatchers.Default) {
+                val catalog = withContext(Dispatchers.IO) {
+                    try {
+                        application.resources.openRawResource(R.raw.catalog).use { stream ->
+                            NightSkyCatalogLoader.loadFromStream(stream)
+                        }
+                    } catch (_: Exception) {
+                        null
                     }
-                } catch (_: Exception) {
-                    null
                 }
+                val builtIndex = if (catalog != null) {
+                    renderer.ensureStaticCelestialVectors(catalog)
+                    CelestialSearchIndex.buildSearchIndex(catalog, planetStates.value)
+                } else {
+                    emptyList()
+                }
+                Pair(catalog, builtIndex)
             }
+            searchIndex = index
             catalogState.value = cat
-            if (cat != null) {
-                searchIndex = CelestialSearchIndex.buildSearchIndex(cat, planetStates.value)
-            }
         }
 
         // Search autocomplete query debounce collector
@@ -803,6 +812,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                     if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
                         updateManualOrientation()
                     }
+                    visibleStarCountState.value = renderer.lastVisibleStarCount
                 }
                 delay(1000L)
             }

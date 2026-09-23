@@ -109,6 +109,8 @@ class NightSkyRenderer {
     @Volatile
     var isStarCacheReady = false
         private set
+    @Volatile
+    var lastVisibleStarCount: Int = 0
     private var cachedLstDegrees: Double = Double.NaN
     private var cachedLatitudeDegrees: Double = Double.NaN
     private var cachedStarCount: Int = 0
@@ -504,7 +506,8 @@ class NightSkyRenderer {
     private val tempReticleVec = FloatArray(3)
 
     // Pre-allocated artwork transformation matrix, paints, filters, and projection buffers
-    val artworkCache = LruCache<String, Bitmap>(16)
+    val artworkCache = LruCache<String, Bitmap>(64)
+    private val resIdCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
     val artMatrix = Matrix()
     val artPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         isFilterBitmap = true
@@ -760,9 +763,14 @@ class NightSkyRenderer {
         if (context == null) return null
         var bitmap = artworkCache.get(resourceName)
         if (bitmap == null) {
-            val resId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
+            val resId = resIdCache.computeIfAbsent(resourceName) { name ->
+                context.resources.getIdentifier(name, "drawable", context.packageName)
+            }
             if (resId != 0) {
-                val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                val options = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inScaled = false
+                }
                 bitmap = BitmapFactory.decodeResource(context.resources, resId, options)
                 if (bitmap != null) {
                     artworkCache.put(resourceName, bitmap)
@@ -1591,33 +1599,36 @@ class NightSkyRenderer {
             starCelComputed[i] = true
         }
 
+        val localDso = DeepSkyObject()
         val dsoCount = minOf(catalog.dsosLength(), MAX_DSOS)
         for (d in 0 until dsoCount) {
-            catalog.dsos(reusableDso, d)
-            val raRad = reusableDso.ra().toDouble() * deg2rad
-            val decRad = reusableDso.dec().toDouble() * deg2rad
+            catalog.dsos(localDso, d)
+            val raRad = localDso.ra().toDouble() * deg2rad
+            val decRad = localDso.dec().toDouble() * deg2rad
             val cosDec = kotlin.math.cos(decRad)
             dsoCelX[d] = (cosDec * kotlin.math.cos(raRad)).toFloat()
             dsoCelY[d] = kotlin.math.sin(decRad).toFloat()
             dsoCelZ[d] = (cosDec * kotlin.math.sin(raRad)).toFloat()
         }
 
+        val localMeteor = MeteorShower()
         val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
         for (m in 0 until meteorCount) {
-            catalog.meteorShowers(reusableMeteor, m)
-            val raRad = reusableMeteor.ra().toDouble() * deg2rad
-            val decRad = reusableMeteor.dec().toDouble() * deg2rad
+            catalog.meteorShowers(localMeteor, m)
+            val raRad = localMeteor.ra().toDouble() * deg2rad
+            val decRad = localMeteor.dec().toDouble() * deg2rad
             val cosDec = kotlin.math.cos(decRad)
             meteorCelX[m] = (cosDec * kotlin.math.cos(raRad)).toFloat()
             meteorCelY[m] = kotlin.math.sin(decRad).toFloat()
             meteorCelZ[m] = (cosDec * kotlin.math.sin(raRad)).toFloat()
         }
 
+        val localConst = Constellation()
         val constCount = minOf(catalog.constellationsLength(), maxConstellations)
         for (c in 0 until constCount) {
-            catalog.constellations(reusableConstellation, c)
-            val cRaRad = reusableConstellation.centroidRa().toDouble() * deg2rad
-            val cDecRad = reusableConstellation.centroidDec().toDouble() * deg2rad
+            catalog.constellations(localConst, c)
+            val cRaRad = localConst.centroidRa().toDouble() * deg2rad
+            val cDecRad = localConst.centroidDec().toDouble() * deg2rad
             val cosDec = kotlin.math.cos(cDecRad)
             constellationCentroidCelX[c] = (cosDec * kotlin.math.cos(cRaRad)).toFloat()
             constellationCentroidCelY[c] = kotlin.math.sin(cDecRad).toFloat()
@@ -2758,6 +2769,7 @@ class NightSkyRenderer {
             }
         }
 
+        lastVisibleStarCount = totalVisibleStars
         return totalVisibleStars
     }
 
