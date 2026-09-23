@@ -93,10 +93,20 @@ Augmented reality planetarium for night sky framing, astrophotography alignment,
 - **88 IAU Constellations & Asterisms**: Stick-figure line asterisms, meet-in-the-middle animations, focus region
   spatial hysteresis ($0.45 W / 0.55 W$) to eliminate hand jitter, and perspective artwork illustration overlays
   mapped via 4-corner homography (`Matrix.setPolyToPoly`).
+- **Messier DSO Catalog & Hybrid Rendering**: 110 Deep Sky Objects (galaxies, nebulae, open/globular clusters) with
+  dual-state hybrid rendering: 4-corner homography WebP photographic textures (`Matrix.setPolyToPoly`) in deep zoom and
+  vector glyphs in wide view, symbol legend sheet, and landscape occlusion filtering.
+- **Meteor Shower Radiants**: Major annual meteor showers (Perseids, Geminids, Quadrantids, etc.) with radiant positions,
+  velocity vectors, ZHR (Zenithal Hourly Rate), peak date formatting, and active shower highlighting.
 - **Dynamic Planetary Ephemeris**: Real-time Keplerian orbital elements (Simon/Standish & Meeus lunar theory) for
   all 8 planets and the Moon with dual-state rendering (soft optical point light with `RadialGradient` vs photorealistic
   3D textures with deep zoom).
-- **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (Czech / Latin / IAU names) and
+- **Virtual Clock & Time Travel**: Continuous time scrubber ($\pm 12\,\text{h}$ range), custom Date and Time pickers for
+  future/past celestial simulation, Live vs. Paused modes, and zero layout shift during time scrubbing.
+- **Celestial Visibility Schedule & Local Date Override**: Precise daily Rise, Transit/Culmination, and Set times
+  computed against the physical terrain (`HorizonProfile`) with bisection search. Features an isolated local date override
+  (stepper and date picker) in the object detail sheet that updates visibility without altering global AR time.
+- **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (Czech / Latin / IAU names / Messier) and
   search history. Features animated camera routing in AR mode (freeze-frame accelerate-decelerate re-calibration) and
   interactive manual virtual planetarium pan mode (FastOutSlowIn S-curve).
 - **Adaptive Celestial Hit-Testing & Disambiguation**: Weighted brightness and proximity scoring (`StarHitTester`),
@@ -107,8 +117,8 @@ Augmented reality planetarium for night sky framing, astrophotography alignment,
   hiding system bars with transient swipe reveal.
 - **Procedural GPU AGSL Shaders & Planetarium Mode**: Procedural volumetric Milky Way galaxy shader, Rayleigh/Mie atmospheric
   scattering, horizon landscape silhouette (real 1440x1 terrain strip), and Planetarium mode with automatic Milky Way state memorization and restoration.
-- **Layer Controls & Detail Sheets**: Layer toggles (stars, constellations, artwork, planets, grid, atmosphere), visual
-  magnitude cutoff slider, and rich celestial body bottom sheet with astronomical distance, magnitude, and rise/set times.
+- **Layer Controls & Detail Sheets**: Layer toggles logically grouped into cards (objects, constellations, environment),
+  visual magnitude cutoff slider, and rich celestial body bottom sheet with astronomical distance, magnitude, rise/transit/set schedule, and symbol legend.
 
 **Universal targeting.** The engine knows nothing about any particular camera. It needs "which package,
 which shutter matcher, which calibrated point". Camera-specific knowledge lives in data-only
@@ -253,9 +263,9 @@ camera, and the broadcast entry points that start a session from a shell.
 
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
-scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (293 tests)
+scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (295 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (232 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (100 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (129 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -271,7 +281,7 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **646 JVM tests (293 intervalometer/caelis, 232 solar & horizon, 100 night sky, plus docs/UI), 31 instrumented
+what a dead accessibility service produces. Current baseline: **677 JVM tests (295 intervalometer/caelis, 232 solar & horizon, 129 night sky, plus docs/UI), 31 instrumented
 tests, no failures, no skips, lint clean.**
 
 ---
@@ -284,11 +294,11 @@ com.dazix.caelis
 │   ├── horizon/     pure Kotlin terrain horizon — .hgt decoder, ray-marched skyline with curvature & refraction
 │   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
 │   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
-│                    star optics, planetary ephemeris, constellation tables, search index)
+│                    star optics, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule, search index)
 ├── ar/              AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers, SkyDomeRenderer
 ├── data/            DataStore settings, calibrations, and the process-wide session snapshot
 │   ├── horizon/     elevation tile download (the only network code), import, mmap cache, profile codec
-│   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors
+│   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors (Star, Constellation, Dso, MeteorShower)
 ├── service/         ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
 │                    CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
 ├── overlay/         the floating panel, its placement/cloak/dim policy, and the calibration overlay
@@ -297,7 +307,7 @@ com.dazix.caelis
 ├── monitor/         battery and storage
 └── ui/              activity, Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme
     ├── solar/       Sun AR screen, ViewModel, and 60 FPS zero-allocation 3D celestial canvas renderer
-    └── nightsky/    Night Sky AR screen, ViewModel, 60 FPS batch star renderer, search bar, bottom sheets, AGSL shaders
+    └── nightsky/    Night Sky AR screen, ViewModel, 60 FPS batch star & DSO renderer, search bar, Virtual Clock, bottom sheets, AGSL shaders
 ```
 
 **The accessibility service owns the session.** Only an accessibility service may call

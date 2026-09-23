@@ -211,7 +211,7 @@ fun SettingsScreen(
         subtitle = stringResource(R.string.settings_subtitle),
         onBack = onBack,
     ) {
-        // ---- Section 1: Display / Night Vision (Zobrazení) ----
+        // ---- Section 1: Display / Night Vision ----
         SectionHeader(text = stringResource(R.string.settings_section_display))
 
         SectionCard(
@@ -414,11 +414,11 @@ fun SettingsScreen(
             }
         }
 
-        // ---- Section 4: Data Management (Správa dat) ----
+        // ---- Section 4: Data Management ----
         SectionCard(
             title = stringResource(R.string.settings_section_storage),
         ) {
-            // Row 0: Trvalá offline data (Offline Regions)
+            // Row 0: Permanent offline data (Offline Regions)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -446,7 +446,7 @@ fun SettingsScreen(
                 )
             }
 
-            // Action: Spravovat offline terén
+            // Action: Manage offline terrain
             OutlinedButton(
                 onClick = onNavigateToOfflineTerrain,
                 modifier = Modifier
@@ -464,7 +464,7 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-            // Row 1: Terénní data (Mezipaměť) - Value right-aligned on new line
+            // Row 1: Terrain Data Cache - Value right-aligned on new line
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -490,7 +490,7 @@ fun SettingsScreen(
                 )
             }
 
-            // Row 2: Vypočtené horizonty - Value right-aligned on new line
+            // Row 2: Computed Horizons - Value right-aligned on new line
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -518,7 +518,7 @@ fun SettingsScreen(
                 )
             }
 
-            // Action: Vymazat mezipaměť terénu
+            // Action: Clear terrain cache
             OutlinedButton(
                 onClick = { showClearCacheConfirmation = true },
                 enabled = storageMetrics.demCacheSizeBytes > 0,
@@ -536,7 +536,7 @@ fun SettingsScreen(
             }
         }
 
-        // ---- Section 5: Debug Options (Ladění) ----
+        // ---- Section 5: Debug Options ----
         SectionHeader(
             text = stringResource(R.string.settings_section_debug),
             modifier = Modifier.padding(top = 8.dp),

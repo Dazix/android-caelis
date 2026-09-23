@@ -65,9 +65,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (283 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (179 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer (92 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (295 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (232 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (129 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -83,7 +83,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **646 JVM tests (293 intervalometer, 232 solar & horizon, 100 night sky, plus docs/UI), 31
+`skipped`), not from the console. Current baseline: **677 JVM tests (295 intervalometer, 232 solar & horizon, 129 night sky, plus docs/UI), 31
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -101,11 +101,11 @@ a session from the shell.
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
-| `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, search index). |
+| `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
 | `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), dynamic matrix calculation (`DynamicMatrixCalculator`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the camera-geometry half of automatic horizon alignment (`SkylineAligner`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
-| `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `StarMetadata`). |
+| `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
@@ -114,7 +114,7 @@ a session from the shell.
 | `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/horizon/` | Terrain AR screen (`TerrainArScreen`), ViewModel (`HorizonViewModel`), AGSL hardware shader canvas (`HardwareTerrainShaderCanvas`), lock indicator (`HorizonLockIndicator`). |
-| `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, bottom sheets, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
+| `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
 
 `ShutterAccessibilityService` marks its UI wiring with an `==== INTEGRATION POINT ====` block: those are
 the only calls into the notification and the panel.
@@ -295,6 +295,13 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Celestial hit-testing scores both brightness and proximity.** In dense star fields, Euclidean distance
   alone selects faint background stars over prominent navigation stars. `StarHitTester` combines
   normalized distance and magnitude weights with a disambiguation popup for close candidate targets.
+- **Local date override in celestial detail sheet must not alter global AR time or trigger render loop allocations.**
+  `CelestialDetailBottomSheet` calculates visibility asynchronously for the chosen date via `CelestialVisibilityCalculator`
+  using an isolated local `Instant`, leaving `NightSkyArViewModel.timeState` and the 60 FPS render loop untouched.
+- **DSO rendering uses hybrid homography and vector glyphs.** In close zoom, WebP textures are projected via 4-corner
+  `Matrix.setPolyToPoly` homography; in wide field, vector glyphs are rendered with zero GC allocations.
+- **Virtual Clock time scrubber preserves stable layout during drag.** The timeline scrubber provides continuous
+  $\pm 12\,\text{h}$ simulation without resizing bottom bar containers or triggering recomposition jitter.
 
 ## Conventions
 
