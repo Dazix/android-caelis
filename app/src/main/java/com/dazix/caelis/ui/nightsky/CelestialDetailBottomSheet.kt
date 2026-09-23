@@ -9,20 +9,32 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -31,8 +43,15 @@ import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
+import com.dazix.caelis.domain.nightsky.CelestialVisibility
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
+import com.dazix.caelis.domain.nightsky.VisibilityState
 import com.dazix.caelis.ui.AppIcons
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 
@@ -48,6 +67,11 @@ import kotlin.math.abs
 @Composable
 fun CelestialDetailSheetContent(
     selectedBody: CelestialBodyDetails?,
+    visibilityState: VisibilityState = VisibilityState.Loading,
+    localScheduleDate: LocalDate? = null,
+    activeGlobalDate: LocalDate = LocalDate.now(),
+    onSetLocalDate: ((LocalDate?) -> Unit)? = null,
+    onStepLocalDate: ((Long) -> Unit)? = null,
     redVisionMode: Boolean,
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
@@ -307,6 +331,474 @@ fun CelestialDetailSheetContent(
                     }
                 }
             }
+
+            // Divider before Visibility section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.8.dp)
+                    .background(if (redVisionMode) palette.primary.copy(alpha = 0.25f) else Color(0xFF283248)),
+            )
+
+            // Visibility Section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val effectiveDate = localScheduleDate ?: activeGlobalDate
+                val isOverridden = localScheduleDate != null
+                val currentLocale = LocalConfiguration.current.locales[0]
+                val isCzech = currentLocale.language.equals("cs", ignoreCase = true)
+                val dateFormatted = remember(effectiveDate, isCzech) {
+                    if (isCzech) {
+                        val monthStr = when (effectiveDate.monthValue) {
+                            1 -> "led"; 2 -> "úno"; 3 -> "bře"; 4 -> "dub"
+                            5 -> "kvě"; 6 -> "čer"; 7 -> "čvc"; 8 -> "srp"
+                            9 -> "zář"; 10 -> "říj"; 11 -> "lis"; 12 -> "pro"
+                            else -> "${effectiveDate.monthValue}"
+                        }
+                        "${effectiveDate.dayOfMonth}. $monthStr ${effectiveDate.year}"
+                    } else {
+                        effectiveDate.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US))
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.celestial_visibility_title),
+                            color = labelColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                        )
+
+                        if (isOverridden && onSetLocalDate != null) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (redVisionMode) palette.primary.copy(alpha = 0.15f) else accentColor.copy(alpha = 0.15f),
+                                border = BorderStroke(
+                                    0.6.dp,
+                                    if (redVisionMode) palette.primary.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.4f),
+                                ),
+                                onClick = { onSetLocalDate(null) },
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.celestial_visibility_today),
+                                    color = accentColor,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+
+                    if (onStepLocalDate != null) {
+                        var showDatePicker by remember { mutableStateOf(false) }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            IconButton(
+                                onClick = { onStepLocalDate(-1L) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Back,
+                                    contentDescription = stringResource(R.string.celestial_visibility_prev_day),
+                                    tint = accentColor,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isOverridden) {
+                                    if (redVisionMode) palette.primary.copy(alpha = 0.15f) else accentColor.copy(alpha = 0.12f)
+                                } else Color.Transparent,
+                                border = if (isOverridden) {
+                                    BorderStroke(
+                                        0.6.dp,
+                                        if (redVisionMode) palette.primary.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.4f),
+                                    )
+                                } else null,
+                                onClick = { showDatePicker = true },
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = AppIcons.Calendar,
+                                        contentDescription = null,
+                                        tint = if (isOverridden) accentColor else labelColor,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                    Text(
+                                        text = dateFormatted,
+                                        color = if (isOverridden) accentColor else valueColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isOverridden) FontWeight.SemiBold else FontWeight.Medium,
+                                        fontFamily = FontFamily.Monospace,
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = { onStepLocalDate(1L) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Forward,
+                                    contentDescription = stringResource(R.string.celestial_visibility_next_day),
+                                    tint = accentColor,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+
+                        if (showDatePicker && onSetLocalDate != null) {
+                            val initialMillis = remember(effectiveDate) {
+                                effectiveDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+                            }
+                            val datePickerState = rememberDatePickerState(
+                                initialSelectedDateMillis = initialMillis,
+                            )
+                            val dialogColors = if (redVisionMode) {
+                                DatePickerDefaults.colors(
+                                    containerColor = Color.Black,
+                                    titleContentColor = palette.primary,
+                                    headlineContentColor = palette.primary,
+                                    weekdayContentColor = palette.secondary,
+                                    subheadContentColor = palette.primary,
+                                    yearContentColor = palette.secondary,
+                                    currentYearContentColor = palette.primary,
+                                    selectedYearContentColor = Color.Black,
+                                    selectedYearContainerColor = palette.primary,
+                                    dayContentColor = palette.primary,
+                                    disabledDayContentColor = palette.primary.copy(alpha = 0.2f),
+                                    selectedDayContentColor = Color.Black,
+                                    selectedDayContainerColor = palette.primary,
+                                    todayContentColor = palette.primary,
+                                    todayDateBorderColor = palette.primary,
+                                    dividerColor = palette.primary.copy(alpha = 0.25f),
+                                    navigationContentColor = palette.primary,
+                                )
+                            } else {
+                                DatePickerDefaults.colors(
+                                    containerColor = Color(0xFF161B26),
+                                    titleContentColor = Color.White,
+                                    headlineContentColor = Color(0xFF4DD0E1),
+                                    weekdayContentColor = Color(0xFF8C9BAE),
+                                    subheadContentColor = Color.White,
+                                    yearContentColor = Color(0xFF8C9BAE),
+                                    currentYearContentColor = Color(0xFF4DD0E1),
+                                    selectedYearContentColor = Color(0xFF0A0E14),
+                                    selectedYearContainerColor = Color(0xFF4DD0E1),
+                                    dayContentColor = Color(0xFFE2E8F0),
+                                    disabledDayContentColor = Color(0xFF4A5568),
+                                    selectedDayContentColor = Color(0xFF0A0E14),
+                                    selectedDayContainerColor = Color(0xFF4DD0E1),
+                                    todayContentColor = Color(0xFF4DD0E1),
+                                    todayDateBorderColor = Color(0xFF4DD0E1),
+                                    dividerColor = Color(0xFF283248),
+                                    navigationContentColor = Color(0xFF4DD0E1),
+                                )
+                            }
+                            DatePickerDialog(
+                                onDismissRequest = { showDatePicker = false },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            datePickerState.selectedDateMillis?.let { millis ->
+                                                val selectedDate = Instant.ofEpochMilli(millis)
+                                                    .atZone(ZoneOffset.UTC)
+                                                    .toLocalDate()
+                                                onSetLocalDate(selectedDate)
+                                            }
+                                            showDatePicker = false
+                                        }
+                                    ) {
+                                        Text(
+                                            text = stringResource(android.R.string.ok),
+                                            color = accentColor,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDatePicker = false }) {
+                                        Text(
+                                            text = stringResource(android.R.string.cancel),
+                                            color = labelColor,
+                                        )
+                                    }
+                                },
+                                colors = dialogColors,
+                            ) {
+                                DatePicker(
+                                    state = datePickerState,
+                                    colors = dialogColors,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                when (visibilityState) {
+                    is VisibilityState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = accentColor,
+                                    strokeWidth = 2.dp,
+                                )
+                                Text(
+                                    text = stringResource(R.string.celestial_visibility_loading),
+                                    color = labelColor,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                    is VisibilityState.Error -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 52.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            Text(
+                                text = "—",
+                                color = labelColor,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(vertical = 2.dp),
+                            )
+                        }
+                    }
+                    is VisibilityState.Loaded -> {
+                        when (val vis = visibilityState.visibility) {
+                            is CelestialVisibility.RisesAndSets -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    // 1. Rise
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = AppIcons.Sunrise,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.celestial_visibility_rise),
+                                                color = labelColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Normal,
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = formatTime(vis.riseInstant),
+                                            color = valueColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.Monospace,
+                                        )
+                                        if (vis.riseDelayFromAstronomical != null && vis.riseDelayFromAstronomical.toMinutes() > 0) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            ) {
+                                                Icon(
+                                                    imageVector = AppIcons.Landscape,
+                                                    contentDescription = null,
+                                                    tint = labelColor,
+                                                    modifier = Modifier.size(10.dp),
+                                                )
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.celestial_visibility_terrain_delay_format,
+                                                        vis.riseDelayFromAstronomical.toMinutes(),
+                                                    ),
+                                                    color = labelColor,
+                                                    fontSize = 10.sp,
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // 2. Culmination / Transit
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = AppIcons.Schedule,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.celestial_visibility_transit),
+                                                color = labelColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Normal,
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = formatTime(vis.transitInstant),
+                                            color = valueColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.Monospace,
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees),
+                                            color = accentColor,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Normal,
+                                        )
+                                    }
+
+                                    // 3. Set
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = AppIcons.Sunset,
+                                                contentDescription = null,
+                                                tint = accentColor,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.celestial_visibility_set),
+                                                color = labelColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Normal,
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = formatTime(vis.setInstant),
+                                            color = valueColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = FontFamily.Monospace,
+                                        )
+                                        if (vis.setDelayFromAstronomical != null && vis.setDelayFromAstronomical.toMinutes() > 0) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            ) {
+                                                Icon(
+                                                    imageVector = AppIcons.Landscape,
+                                                    contentDescription = null,
+                                                    tint = labelColor,
+                                                    modifier = Modifier.size(10.dp),
+                                                )
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.celestial_visibility_terrain_delay_format,
+                                                        vis.setDelayFromAstronomical.toMinutes(),
+                                                    ),
+                                                    color = labelColor,
+                                                    fontSize = 10.sp,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            is CelestialVisibility.AlwaysAboveHorizon -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = AppIcons.Star,
+                                            contentDescription = null,
+                                            tint = accentColor,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.celestial_visibility_circumpolar),
+                                            color = valueColor,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    Text(
+                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
+                                        color = labelColor,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                            }
+                            is CelestialVisibility.AlwaysBelowHorizon -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.celestial_visibility_never_rises),
+                                        color = labelColor,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
+                                        color = labelColor.copy(alpha = 0.8f),
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -355,4 +847,9 @@ private fun formatDec(decDegrees: Double): String {
     val m = remM.toInt()
     val s = ((remM - m) * 60.0).toInt()
     return String.format(Locale.US, "%s%02d° %02d' %02d\"", sign, d, m, s)
+}
+
+private fun formatTime(instant: Instant): String {
+    val localTime = instant.atZone(ZoneId.systemDefault()).toLocalTime()
+    return String.format(Locale.US, "%02d:%02d", localTime.hour, localTime.minute)
 }

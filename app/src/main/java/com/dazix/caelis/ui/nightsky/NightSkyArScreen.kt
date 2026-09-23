@@ -123,6 +123,7 @@ import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
+import java.time.ZoneId
 import com.dazix.caelis.ui.solar.HorizonConsentDialog
 
 import android.graphics.BitmapFactory
@@ -157,9 +158,21 @@ fun NightSkyArScreen(
     val renderer = remember { NightSkyRenderer() }
     val maxTouchRadiusPx = with(density) { uiState.debugPreferences.starTapRadiusDp.dp.toPx() }
 
+    // Track the active selection identity to prevent partialExpand loops on periodic data updates
+    val selectedBody = uiState.selectedBody
+    val selectedTargetKey = when {
+        uiState.selectedPlanetId != null -> "planet_${uiState.selectedPlanetId}"
+        uiState.selectedStarIndex != -1 -> "star_${uiState.selectedStarIndex}"
+        uiState.selectedConstellationIndex != -1 -> "const_${uiState.selectedConstellationIndex}"
+        uiState.selectedDsoIndex != -1 -> "dso_${uiState.selectedDsoIndex}"
+        uiState.selectedMeteorIndex != -1 -> "meteor_${uiState.selectedMeteorIndex}"
+        selectedBody != null -> "body_${selectedBody.name}"
+        else -> null
+    }
+
     // Synchronize ViewModel State with UI State
     LaunchedEffect(
-        uiState.selectedBody,
+        selectedTargetKey,
         uiState.selectedPlanetId,
         uiState.selectedStarIndex,
         uiState.selectedConstellationIndex,
@@ -171,8 +184,11 @@ fun NightSkyArScreen(
         renderer.selectedDsoIndex = uiState.selectedDsoIndex
         renderer.selectedMeteorIndex = uiState.selectedMeteorIndex
         renderer.selectedPlanetId = uiState.selectedPlanetId
-        if (uiState.selectedBody != null) {
-            sheetState.partialExpand()
+        if (selectedTargetKey != null) {
+            // Only partially expand if the sheet is currently hidden or switching to a new target
+            if (sheetState.targetValue == SheetValue.Hidden || sheetState.currentValue == SheetValue.Hidden) {
+                sheetState.partialExpand()
+            }
         } else {
             sheetState.hide()
         }
@@ -324,14 +340,19 @@ fun NightSkyArScreen(
         sheetContent = {
             CelestialDetailSheetContent(
                 selectedBody = uiState.selectedBody,
+                visibilityState = uiState.visibilityState,
+                localScheduleDate = uiState.localScheduleDate,
+                activeGlobalDate = uiState.timeState.activeInstant().atZone(ZoneId.systemDefault()).toLocalDate(),
+                onSetLocalDate = viewModel::setLocalScheduleDate,
+                onStepLocalDate = viewModel::stepLocalScheduleDate,
                 redVisionMode = uiState.redVisionMode,
                 onHeaderMeasured = { height ->
-                    if (height > 0 && height != headerHeightPx) {
+                    if (height > 0 && kotlin.math.abs(height - headerHeightPx) > 2) {
                         headerHeightPx = height
                     }
                 },
                 onFullHeightMeasured = { height ->
-                    if (height > 0 && height != fullHeightPx) {
+                    if (height > 0 && kotlin.math.abs(height - fullHeightPx) > 2) {
                         fullHeightPx = height
                     }
                 },

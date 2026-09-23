@@ -22,6 +22,8 @@ import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.CelestialSearchIndex
 import com.dazix.caelis.domain.nightsky.CelestialType
+import com.dazix.caelis.domain.nightsky.CelestialVisibility
+import com.dazix.caelis.domain.nightsky.CelestialVisibilityCalculator
 import com.dazix.caelis.domain.nightsky.EquatorialCoordinates
 import com.dazix.caelis.domain.nightsky.IAU_CONSTELLATION_NAMES_CS
 import com.dazix.caelis.domain.nightsky.IAU_CONSTELLATION_NAMES_EN
@@ -33,6 +35,7 @@ import com.dazix.caelis.domain.nightsky.PlanetState
 import com.dazix.caelis.domain.nightsky.PlanetaryEphemerisCalculator
 import com.dazix.caelis.domain.nightsky.SearchResultItem
 import com.dazix.caelis.domain.nightsky.SiderealTime
+import com.dazix.caelis.domain.nightsky.VisibilityState
 import com.dazix.caelis.domain.nightsky.isTimeInRange
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.solar.SolarPositionCalculator
@@ -59,11 +62,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
 data class NightSkyArUiState(
     val timeState: TimeState = TimeState(),
+    val localScheduleDate: LocalDate? = null,
     val location: GeoLocation = GeoLocation.DEFAULT,
     val hasGpsFix: Boolean = false,
     val keepScreenOn: Boolean = false,
@@ -101,6 +106,7 @@ data class NightSkyArUiState(
     val selectedMeteorIndex: Int = -1,
     val selectedPlanetId: String? = null,
     val selectedBody: CelestialBodyDetails? = null,
+    val visibilityState: VisibilityState = VisibilityState.Loading,
     val planetStates: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
     val debugArtOffsetX: Float = 0f,
     val debugArtOffsetY: Float = 0f,
@@ -496,6 +502,13 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val selectedBodyState = MutableStateFlow<CelestialBodyDetails?>(null)
     val selectedBody: StateFlow<CelestialBodyDetails?> = selectedBodyState.asStateFlow()
 
+    private var visibilityCalculationJob: Job? = null
+    private val _visibilityState = MutableStateFlow<VisibilityState>(VisibilityState.Loading)
+    val visibilityState: StateFlow<VisibilityState> = _visibilityState.asStateFlow()
+
+    private val _localScheduleDate = MutableStateFlow<LocalDate?>(null)
+    val localScheduleDate: StateFlow<LocalDate?> = _localScheduleDate.asStateFlow()
+
     private val multipleHitsTargetState = MutableStateFlow<NightSkyRenderer.HitTarget.MultipleHits?>(null)
     val multipleHitsTarget: StateFlow<NightSkyRenderer.HitTarget.MultipleHits?> = multipleHitsTargetState.asStateFlow()
 
@@ -550,6 +563,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             debugPreferences,
             multipleHitsTargetState,
             _timeState,
+            _visibilityState,
+            _localScheduleDate,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -604,9 +619,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val debugPrefs = args[46] as com.dazix.caelis.data.DebugPreferences
         val multipleHits = args[47] as NightSkyRenderer.HitTarget.MultipleHits?
         val tState = args[48] as TimeState
+        val visState = args[49] as VisibilityState
+        val localDate = args[50] as LocalDate?
 
         NightSkyArUiState(
             timeState = tState,
+            localScheduleDate = localDate,
             location = loc,
             hasGpsFix = gps,
             keepScreenOn = keepOn,
@@ -644,6 +662,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedMeteorIndex = meteorIdx,
             selectedPlanetId = planetId,
             selectedBody = selected,
+            visibilityState = visState,
             planetStates = planetsList,
             debugArtOffsetX = dbgOffsetX,
             debugArtOffsetY = dbgOffsetY,
@@ -708,6 +727,26 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 isNightState.value = SolarPositionCalculator.isNight(activeTime, loc)
                 if (!isSensorTrackingEnabled.value || isSensorTrackingPaused.value) {
                     updateManualOrientation()
+                }
+            }
+        }
+
+        // Recompute visibility on debounced location changes
+        viewModelScope.launch {
+            locationProvider.location
+                .debounce(2_000L)
+                .collect {
+                    selectedBodyState.value?.let { body ->
+                        fetchVisibilityForSelectedBody(body.raDegrees, body.decDegrees, isInitialSelection = false)
+                    }
+                }
+        }
+
+        // Recompute visibility when horizon terrain profile changes
+        viewModelScope.launch {
+            horizonProfile.collect {
+                selectedBodyState.value?.let { body ->
+                    fetchVisibilityForSelectedBody(body.raDegrees, body.decDegrees, isInitialSelection = false)
                 }
             }
         }
@@ -816,6 +855,88 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        selectedBodyState.value?.let { body ->
+            fetchVisibilityForSelectedBody(body.raDegrees, body.decDegrees, isInitialSelection = false)
+        }
+    }
+
+    private fun fetchVisibilityForSelectedBody(
+        raDegrees: Double?,
+        decDegrees: Double?,
+        isInitialSelection: Boolean = false,
+    ) {
+        visibilityCalculationJob?.cancel()
+        if (raDegrees == null || decDegrees == null) {
+            _visibilityState.value = VisibilityState.Error
+            return
+        }
+
+        if (isInitialSelection || _visibilityState.value !is VisibilityState.Loaded) {
+            _visibilityState.value = VisibilityState.Loading
+        }
+        val targetDate = _localScheduleDate.value
+        val instant = if (targetDate != null) {
+            targetDate.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+        } else {
+            _timeState.value.activeInstant()
+        }
+        val loc = locationProvider.location.value
+        val profile = if (horizonSettings.value.realHorizonInNightSky && horizonSettings.value.enabled) {
+            horizonProfile.value
+        } else null
+
+        val planetId = selectedPlanetId.value
+        visibilityCalculationJob = viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val (targetRa, targetDec) = if (planetId != null) {
+                    val dynamicPlanets = PlanetaryEphemerisCalculator.computeAll(instant)
+                    val p = dynamicPlanets.firstOrNull { it.id.equals(planetId, ignoreCase = true) }
+                    if (p != null) Pair(p.raDegrees, p.decDegrees) else Pair(raDegrees, decDegrees)
+                } else {
+                    Pair(raDegrees, decDegrees)
+                }
+
+                val vis = CelestialVisibilityCalculator.calculateVisibility(
+                    raDegrees = targetRa,
+                    decDegrees = targetDec,
+                    referenceInstant = instant,
+                    location = loc,
+                    profile = profile,
+                )
+                _visibilityState.value = VisibilityState.Loaded(vis)
+            } catch (_: Exception) {
+                if (isInitialSelection || _visibilityState.value !is VisibilityState.Loaded) {
+                    _visibilityState.value = VisibilityState.Error
+                }
+            }
+        }
+    }
+
+    /**
+     * Overrides the calendar date exclusively for the visibility schedule of the active celestial body.
+     * Pass `null` to revert back to the global application date.
+     */
+    fun setLocalScheduleDate(date: LocalDate?) {
+        _localScheduleDate.value = date
+        selectedBodyState.value?.let { body ->
+            fetchVisibilityForSelectedBody(body.raDegrees, body.decDegrees, isInitialSelection = false)
+        }
+    }
+
+    /**
+     * Steps the local schedule date forward or backward by [days].
+     */
+    fun stepLocalScheduleDate(days: Long) {
+        val activeTime = _timeState.value.activeInstant()
+        val baseDate = _localScheduleDate.value ?: activeTime.atZone(ZoneId.systemDefault()).toLocalDate()
+        setLocalScheduleDate(baseDate.plusDays(days))
+    }
+
+    /**
+     * Resets the local schedule date override, returning to global application time.
+     */
+    fun resetLocalScheduleDate() {
+        setLocalScheduleDate(null)
     }
 
     private fun captureLiveOrientationIntoManual() {
@@ -885,6 +1006,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedDsoIndex.value = -1
         selectedMeteorIndex.value = -1
         selectedPlanetId.value = null
+        _localScheduleDate.value = null
 
         val star = Star()
         cat.stars(star, starIndex)
@@ -931,6 +1053,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             raDegrees = star.ra().toDouble(),
             decDegrees = star.dec().toDouble(),
         )
+        fetchVisibilityForSelectedBody(star.ra().toDouble(), star.dec().toDouble(), isInitialSelection = true)
     }
 
     /**
@@ -951,6 +1074,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedDsoIndex.value = -1
         selectedMeteorIndex.value = -1
         selectedPlanetId.value = null
+        _localScheduleDate.value = null
 
         val reusableConst = com.dazix.caelis.data.nightsky.Constellation()
         cat.constellations(reusableConst, constellationIndex)
@@ -972,15 +1096,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             Pair(app.getString(R.string.celestial_family), family)
         }
 
+        val ra = reusableConst.centroidRa().toDouble()
+        val dec = reusableConst.centroidDec().toDouble()
+
         selectedBodyState.value = CelestialBodyDetails(
             name = name,
             subtitle = subtitle,
             property1 = prop1,
             property2 = prop2,
             magnitude = null,
-            raDegrees = reusableConst.centroidRa().toDouble(),
-            decDegrees = reusableConst.centroidDec().toDouble(),
+            raDegrees = ra,
+            decDegrees = dec,
         )
+        fetchVisibilityForSelectedBody(ra, dec, isInitialSelection = true)
     }
 
     /**
@@ -1001,6 +1129,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedConstellationIndex.value = -1
         selectedMeteorIndex.value = -1
         selectedPlanetId.value = null
+        _localScheduleDate.value = null
 
         val reusableDso = com.dazix.caelis.data.nightsky.DeepSkyObject()
         cat.dsos(reusableDso, dsoIndex)
@@ -1036,15 +1165,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val prop1: Pair<String, String>? = if (ngc != null) Pair(app.getString(R.string.celestial_catalog_id), ngc) else null
         val prop2: Pair<String, String>? = Pair(app.getString(R.string.celestial_angular_size), sizeFormatted)
 
+        val dsoRa = reusableDso.ra().toDouble()
+        val dsoDec = reusableDso.dec().toDouble()
+
         selectedBodyState.value = CelestialBodyDetails(
             name = name,
             subtitle = dsoTypeStr,
             property1 = prop1,
             property2 = prop2,
             magnitude = reusableDso.mag(),
-            raDegrees = reusableDso.ra().toDouble(),
-            decDegrees = reusableDso.dec().toDouble(),
+            raDegrees = dsoRa,
+            decDegrees = dsoDec,
         )
+        fetchVisibilityForSelectedBody(dsoRa, dsoDec, isInitialSelection = true)
     }
 
     /**
@@ -1065,6 +1198,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedConstellationIndex.value = -1
         selectedDsoIndex.value = -1
         selectedPlanetId.value = null
+        _localScheduleDate.value = null
 
         val reusableMeteor = com.dazix.caelis.data.nightsky.MeteorShower()
         cat.meteorShowers(reusableMeteor, meteorIndex)
@@ -1105,6 +1239,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val prop2: Pair<String, String>? = Pair(app.getString(R.string.celestial_zhr), zhrFormatted)
         val prop3: Pair<String, String>? = if (constName != null) Pair(app.getString(R.string.celestial_constellation), constName) else null
 
+        val meteorRa = reusableMeteor.ra().toDouble()
+        val meteorDec = reusableMeteor.dec().toDouble()
+
         selectedBodyState.value = CelestialBodyDetails(
             name = name,
             subtitle = subtitle,
@@ -1112,9 +1249,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             property2 = prop2,
             property3 = prop3,
             magnitude = null,
-            raDegrees = reusableMeteor.ra().toDouble(),
-            decDegrees = reusableMeteor.dec().toDouble(),
+            raDegrees = meteorRa,
+            decDegrees = meteorDec,
         )
+        fetchVisibilityForSelectedBody(meteorRa, meteorDec, isInitialSelection = true)
     }
 
     private fun resolveConstellationName(constCode: String, isCzech: Boolean): String {
@@ -1300,13 +1438,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         selectedConstellationIndex.value = -1
         selectedDsoIndex.value = -1
         selectedMeteorIndex.value = -1
+        _localScheduleDate.value = null
         selectedBodyState.value = createPlanetDetails(planet)
+        fetchVisibilityForSelectedBody(planet.raDegrees, planet.decDegrees, isInitialSelection = true)
     }
 
     /**
      * Dismisses the celestial object selection.
      */
     fun clearSelectedBody() {
+        visibilityCalculationJob?.cancel()
+        visibilityCalculationJob = null
+        _visibilityState.value = VisibilityState.Loading
+        _localScheduleDate.value = null
         dismissDisambiguation()
         selectedStarIndex.value = -1
         selectedConstellationIndex.value = -1
