@@ -362,6 +362,8 @@
     <string name="ar_align_auto_no_profile">No terrain profile yet. Switch the terrain horizon on in Settings.</string>
     <string name="ar_align_auto_no_camera">The camera is not available.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
+    <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon.</string>
+    <string name="ar_heading_locked">Heading held by gyroscope since alignment</string>
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Night Sky</string>

@@ -11,6 +11,27 @@ import kotlin.math.sqrt
 class OrientationTrackerMathTest {
 
     @Test
+    fun `the heading YawOffset extracts is the angle applyMagneticDeclination takes`() {
+        // Dual mode composes Rz(declination + psi) onto the game matrix through this function; if the
+        // two disagreed on sign, the compass correction would double instead of cancel.
+        val game = floatArrayOf(
+            0.6f, 0f, -0.8f, 0f,
+            -0.8f, 0f, -0.6f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val magnetic = FloatArray(16)
+        OrientationTracker.applyMagneticDeclination(game, 14.2f, magnetic)
+
+        val psi = com.dazix.caelis.domain.arframe.YawOffset.extractDegrees(magnetic, game)
+        assertEquals(14.2f, psi, 1e-3f)
+
+        val rebuilt = FloatArray(16)
+        OrientationTracker.applyMagneticDeclination(game, psi, rebuilt)
+        for (i in 0 until 16) assertEquals("element $i", magnetic[i], rebuilt[i], 1e-5f)
+    }
+
+    @Test
     fun `verifies magnetic declination 0 degrees preserves matrix identity`() {
         val identity = floatArrayOf(
             1f, 0f, 0f, 0f,

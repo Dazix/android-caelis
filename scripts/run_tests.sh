@@ -55,6 +55,7 @@ case "$TARGET" in
             --tests "com.dazix.caelis.domain.horizon.*" \
             --tests "com.dazix.caelis.data.horizon.*" \
             --tests "com.dazix.caelis.ar.*" \
+            --tests "com.dazix.caelis.domain.arframe.*" \
             --rerun-tasks)
         check_xml_results
         info "Sun Trajectory test suite PASSED."
@@ -65,6 +66,7 @@ case "$TARGET" in
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
             --tests "com.dazix.caelis.domain.nightsky.*" \
             --tests "com.dazix.caelis.ui.nightsky.*" \
+            --tests "com.dazix.caelis.domain.arframe.*" \
             --rerun-tasks)
         check_xml_results
         info "Night Sky test suite PASSED."

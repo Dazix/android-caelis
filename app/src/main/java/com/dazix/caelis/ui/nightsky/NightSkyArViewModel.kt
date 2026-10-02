@@ -294,6 +294,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val isSensorTrackingPaused: StateFlow<Boolean> = orientationTracker.isSensorTrackingPaused.asStateFlow()
 
+    val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
+
     val orientation: StateFlow<DeviceOrientation?> = combine(
         isSensorTrackingEnabled,
         isSensorTrackingPaused,
@@ -1522,12 +1524,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
     }
 
-    /** Nudges the standing calibration, leaving the sensors live. See [OrientationTracker.setCalibration]. */
+    /**
+     * Nudges the standing calibration, leaving the sensors live. See [OrientationTracker.setCalibration].
+     * It is an alignment, so it also locks the heading ([OrientationTracker.lockHeading]).
+     */
     fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        orientationTracker.setCalibration(
-            azimuthDeg = orientationTracker.calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
-            pitchDeg = orientationTracker.calibrationPitchOffsetDeg + deltaElevationDeg,
-        )
+        orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
         persistCalibration()
@@ -1562,7 +1564,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun resumeSensorTracking() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null
-        orientationTracker.setCalibration(0f, 0f)
+        orientationTracker.clearCalibration()
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f

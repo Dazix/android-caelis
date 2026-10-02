@@ -202,6 +202,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
+    val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
     val location: StateFlow<GeoLocation> = locationProvider.location
     val hasGpsFix: StateFlow<Boolean> = locationProvider.hasGpsFix
 
@@ -516,6 +517,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                     deltaAzimuthDeg = match.azimuthOffsetDegrees.toFloat(),
                     deltaElevationDeg = match.elevationOffsetDegrees.toFloat(),
                 )
+                // A determined fit is a measured heading even when its correction rounds to zero.
+                if (match.azimuthDetermined) orientationTracker.lockHeading()
                 autoAlignState.value = AutoAlignResult.Aligned(
                     residualDegrees = match.residualDegrees,
                     azimuthDetermined = match.azimuthDetermined,
@@ -544,7 +547,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeSensorTracking() {
-        orientationTracker.setCalibration(0f, 0f)
+        orientationTracker.clearCalibration()
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f

@@ -368,6 +368,8 @@
     <string name="ar_align_auto_no_profile">Zatím není profil terénu. Zapněte horizont terénu v Nastavení.</string>
     <string name="ar_align_auto_no_camera">Kamera není k dispozici.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
+    <string name="ar_heading_compass_unreliable">Kompas je nespolehlivý. Opište telefonem osmičku, nebo srovnejte podle horizontu.</string>
+    <string name="ar_heading_locked">Směr drží gyroskop od srovnání</string>
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Noční obloha</string>

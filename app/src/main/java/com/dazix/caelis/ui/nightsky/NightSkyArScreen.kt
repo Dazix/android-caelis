@@ -627,6 +627,14 @@ fun NightSkyArScreen(
                         .align(Alignment.TopCenter)
                         .padding(top = 36.dp, start = 12.dp, end = 12.dp),
                 )
+                val headingState by viewModel.headingState.collectAsStateWithLifecycle()
+                com.dazix.caelis.ui.HeadingStatusChip(
+                    state = headingState,
+                    nightVisionColor = if (uiState.redVisionMode) activePalette.primary else null,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 100.dp, start = 24.dp, end = 24.dp),
+                )
             }
 
             // Bottom Controls Layer: Absolute Centered HUD + Decoupled Contextual Reset View

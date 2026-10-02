@@ -364,6 +364,13 @@ fun SunArScreen(
                 .align(Alignment.TopCenter)
                 .padding(top = 36.dp, start = 12.dp, end = 12.dp),
         )
+        val headingState by viewModel.headingState.collectAsStateWithLifecycle()
+        com.dazix.caelis.ui.HeadingStatusChip(
+            state = headingState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 100.dp, start = 24.dp, end = 24.dp),
+        )
 
         // Diagnostic HUD for terrain horizon metrics (Auto-Range & DEM tiles)
         if (uiState.debugPreferences.showTerrainMetrics) {

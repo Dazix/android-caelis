@@ -182,6 +182,18 @@ Each of these was found by review or on the device and is now covered by a test.
   `setCalibration`, which folds into the live matrix on every sensor sample and leaves tracking
   alone; restoring it through `setPanOffsets` opened the AR screen with the overlay frozen for
   anyone who had ever calibrated, which made the stored value worse than useless.
+- **After an alignment the heading is gyro-held, not compass-held.** `OrientationTracker` still draws
+  `TYPE_ROTATION_VECTOR` and also listens to `TYPE_GAME_ROTATION_VECTOR`; ψ between the two
+  (`YawOffset`, same-timestamp pairs only) carries every compass excursion. An azimuth alignment
+  (drag, nudge, determined auto-align) locks ψ for the session (`HeadingLock`) and from then on the
+  correction cancels later changes of ψ; a restored calibration does not lock, and a reset or a new
+  session unlocks it. Indoors the compass needed +14° by a window and −7° on the roof, and the
+  rotation vector alone pulled an aligned overlay off again as soon as the phone turned towards
+  different steel. Do not draw the game vector itself: on a Pixel 7 Pro it visibly trailed a tilt.
+- **Sensor matrices are row-major.** `SensorManager` writes them row-major; convert a slerped
+  quaternion with `QuaternionSlerp.quaternionToRowMajorMatrix`, never the column-major
+  `quaternionToRotationMatrix`. Mixing the two transposed the auto-align's synchronized matrix and
+  put the first heading of the gyro-held tracker ~90° out.
 - **Dropping a pan is not forgetting the calibration.** `resumeSensorTracking` and `startSensors`
   clear `pan*` and keep `calibration*`; only an explicit reset clears both.
 - **Zero allocations on the AR render loop.** `SkyDomeRenderer` uses pre-allocated flat FloatArrays

@@ -68,7 +68,24 @@ object QuaternionSlerp {
     }
 
     /**
+     * Converts a unit quaternion [q] (x, y, z, w) into a 4x4 **row-major** rotation matrix, the layout
+     * `SensorManager.getRotationMatrixFromVector` writes and every sensor matrix in this app uses.
+     *
+     * The column-major [quaternionToRotationMatrix] is its transpose. Feeding that one to code that
+     * reads sensor matrices row-major once inverted the camera rotation: the synchronized matrix of
+     * the automatic alignment, and the heading between the two rotation vectors, which came out
+     * tens of degrees off and changed as the phone turned.
+     */
+    fun quaternionToRowMajorMatrix(q: FloatArray, outMatrix16: FloatArray) {
+        quaternionToRotationMatrix(q, outMatrix16)
+        var t = outMatrix16[1]; outMatrix16[1] = outMatrix16[4]; outMatrix16[4] = t
+        t = outMatrix16[2]; outMatrix16[2] = outMatrix16[8]; outMatrix16[8] = t
+        t = outMatrix16[6]; outMatrix16[6] = outMatrix16[9]; outMatrix16[9] = t
+    }
+
+    /**
      * Converts a unit quaternion [q] (x, y, z, w) into a 4x4 column-major rotation matrix in [outMatrix16].
+     * Sensor matrices are row-major: use [quaternionToRowMajorMatrix] for those.
      */
     fun quaternionToRotationMatrix(q: FloatArray, outMatrix16: FloatArray) {
         val x = q[0]

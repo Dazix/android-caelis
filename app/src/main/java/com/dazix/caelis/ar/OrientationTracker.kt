@@ -7,6 +7,9 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.Surface
+import com.dazix.caelis.domain.arframe.HeadingLock
+import com.dazix.caelis.domain.arframe.HeadingState
+import com.dazix.caelis.domain.arframe.YawOffset
 import com.dazix.caelis.domain.solar.GeoLocation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,6 +66,42 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private val rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
         ?: sensorManager?.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
         ?: sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+    private val gameSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+
+    /**
+     * Also listen to the game rotation vector, so that an alignment can stop the compass moving the
+     * heading ([headingLock]).
+     *
+     * The rotation vector alone keeps pulling the heading towards the magnetometer, and near rebar
+     * or a window frame the field is bent differently in every direction: aligned by hand, a look
+     * left and right came back off. The rotation vector is still what is drawn: drawing the game
+     * vector instead made the overlay visibly trail a tilt up or down on a Pixel 7 Pro. Without
+     * both sensors this is the old single-sensor path.
+     */
+    private val dualMode = gameSensor != null && rotationSensor != null &&
+        rotationSensor.type != Sensor.TYPE_GAME_ROTATION_VECTOR
+
+    private val headingLock = HeadingLock()
+
+    /** [HeadingLock.correctionDegrees], folded into the world-Z term next to the declination. */
+    @Volatile
+    private var headingOffsetDeg = 0f
+    private var compassAccuracy = SensorManager.SENSOR_STATUS_ACCURACY_HIGH
+    private val compassMatrix = FloatArray(16)
+    private val gameMatrix = FloatArray(16)
+    private val latestGameQuat = FloatArray(4)
+    private var latestGameTimestampNs = 0L
+    private var hasGameSample = false
+    private val latestCompassQuat = FloatArray(4)
+    private var latestCompassTimestampNs = 0L
+    private var hasCompassSample = false
+    private var lastPairedTimestampNs = Long.MIN_VALUE
+    private val sampleQuat = FloatArray(4)
+
+    private val headingStateFlow = MutableStateFlow(HeadingState.OK)
+
+    /** What the heading rests on: the compass (and how good it says it is) or the user's alignment. */
+    val headingState: StateFlow<HeadingState> = headingStateFlow.asStateFlow()
 
     private val smoothedQuat = FloatArray(4).apply { this[3] = 1f }
     private val rawMatrix = FloatArray(16).apply {
@@ -166,11 +205,11 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         }
 
         QuaternionSlerp.slerp(syncQ1, syncQ2, u, syncQInterp)
-        QuaternionSlerp.quaternionToRotationMatrix(syncQInterp, syncRawMatrix)
+        QuaternionSlerp.quaternionToRowMajorMatrix(syncQInterp, syncRawMatrix)
 
         applyCalibration(
             sensorMatrix = syncRawMatrix,
-            declinationDeg = magneticDeclinationDeg,
+            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -232,7 +271,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // the next sensor sample, and while tracking is paused there will not be one.
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg,
+            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -253,6 +292,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      * anything back and turning around still works.
      */
     fun nudgeCalibrationBy(deltaAzimuthDeg: Float, deltaPitchDeg: Float) {
+        // Only an azimuth correction measures the heading. A pitch-only nudge (the up/down
+        // buttons, an auto-align on terrain too flat for the compass) says nothing about north.
+        if (deltaAzimuthDeg != 0f) lockHeading()
         setCalibration(
             azimuthDeg = calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
             pitchDeg = calibrationPitchOffsetDeg + deltaPitchDeg,
@@ -271,7 +313,27 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         panAzimuthOffsetDeg = 0f
         panPitchOffsetDeg = 0f
         isSensorTrackingPaused.value = false
+        if (azimuth != calibrationAzimuthOffsetDeg) lockHeading()
         setCalibration(azimuth, pitch)
+    }
+
+    /**
+     * The user has just aligned the overlay with something real: from now on the gyro holds the
+     * heading and the compass is no longer consulted, until [clearCalibration] or a new session.
+     * A restored calibration ([setCalibration]) does not come through here — it was measured
+     * somewhere else.
+     */
+    fun lockHeading() {
+        if (!dualMode) return
+        headingLock.lock()
+        publishHeadingState()
+    }
+
+    /** Explicit reset: no calibration, and back to the compass for the heading. */
+    fun clearCalibration() {
+        headingLock.reset()
+        publishHeadingState()
+        setCalibration(0f, 0f)
     }
 
     fun setPanOffsets(azimuthDeg: Float, pitchDeg: Float) {
@@ -295,7 +357,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // dropping a pan is "stop dragging", not "forget where north is".
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg,
+            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -365,6 +427,16 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     fun start() {
         if (isListening || sensorManager == null || rotationSensor == null) return
         isFirstSample = true
+        // A new session: the game vector's north restarts and the user has not aligned anything yet.
+        headingLock.reset()
+        headingOffsetDeg = 0f
+        hasGameSample = false
+        hasCompassSample = false
+        lastPairedTimestampNs = Long.MIN_VALUE
+        publishHeadingState()
+        if (dualMode) {
+            sensorManager.registerListener(this, gameSensor, SensorManager.SENSOR_DELAY_GAME)
+        }
         sensorManager.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME)
         isListening = true
     }
@@ -378,18 +450,28 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event == null || event.values.isEmpty()) return
-
-        val qx = event.values[0]
-        val qy = event.values[1]
-        val qz = event.values[2]
-        val qw = if (event.values.size >= 4) {
-            event.values[3]
-        } else {
-            val s = 1.0f - (qx * qx + qy * qy + qz * qz)
-            if (s > 0f) sqrt(s) else 0f
+        if (dualMode && event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
+            readQuaternion(event.values, latestGameQuat)
+            latestGameTimestampNs = event.timestamp
+            hasGameSample = true
+            updateHeading()
+            return
         }
 
+        readQuaternion(event.values, sampleQuat)
+        val qx = sampleQuat[0]
+        val qy = sampleQuat[1]
+        val qz = sampleQuat[2]
+        val qw = sampleQuat[3]
+
         ringBuffer.push(event.timestamp, qx, qy, qz, qw)
+        if (dualMode) {
+            System.arraycopy(sampleQuat, 0, latestCompassQuat, 0, 4)
+            latestCompassTimestampNs = event.timestamp
+            hasCompassSample = true
+            compassAccuracy = event.accuracy
+            updateHeading()
+        }
 
         if (isFirstSample) {
             smoothedQuat[0] = qx
@@ -433,7 +515,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // of the world frame, so they compose into the single offset applyCalibration already takes.
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg,
+            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -445,6 +527,44 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             System.arraycopy(liveTrueMatrix, 0, frozenMatrix, 0, 16)
             System.arraycopy(liveTrueMatrix, 0, adjustedMatrix, 0, 16)
             publishOrientation(accuracy = event.accuracy)
+        }
+    }
+
+    /**
+     * ψ between the rotation vector and the game vector, and from it the correction a lock applies.
+     *
+     * Only a pair taken at the same instant is used: on the Pixel both streams carry identical
+     * timestamps but arrive in either order, and pairing a sample with the other stream's previous
+     * one would turn the phone's own motion during those 17 ms into a heading error. So this runs
+     * from both handlers and acts once, when the second half of a pair arrives.
+     */
+    private fun updateHeading() {
+        if (hasGameSample && hasCompassSample &&
+            latestCompassTimestampNs != lastPairedTimestampNs &&
+            kotlin.math.abs(latestCompassTimestampNs - latestGameTimestampNs) <= MAX_GAME_SKEW_NS
+        ) {
+            lastPairedTimestampNs = latestCompassTimestampNs
+            SensorManager.getRotationMatrixFromVector(compassMatrix, latestCompassQuat)
+            SensorManager.getRotationMatrixFromVector(gameMatrix, latestGameQuat)
+            headingLock.addCompass(YawOffset.extractDegrees(compassMatrix, gameMatrix))
+            headingOffsetDeg = headingLock.correctionDegrees()
+        }
+        publishHeadingState()
+    }
+
+    private fun publishHeadingState() {
+        headingStateFlow.value = headingLock.state(compassAccuracy)
+    }
+
+    private fun readQuaternion(values: FloatArray, out: FloatArray) {
+        out[0] = values[0]
+        out[1] = values[1]
+        out[2] = values[2]
+        out[3] = if (values.size >= 4) {
+            values[3]
+        } else {
+            val s = 1.0f - (out[0] * out[0] + out[1] * out[1] + out[2] * out[2])
+            if (s > 0f) sqrt(s) else 0f
         }
     }
 
@@ -473,6 +593,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     companion object {
         const val MAX_GESTURE_PITCH = 85f
+
+        /** How far apart a rotation vector and a game vector sample may be to count as one instant. */
+        private const val MAX_GAME_SKEW_NS = 2_000_000L
 
         /**
          * How far the standing calibration may tilt the world frame.
@@ -621,6 +744,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        if (dualMode) {
+            // The game vector has no magnetometer; only the compass stream's accuracy means anything.
+            if (sensor?.type == Sensor.TYPE_GAME_ROTATION_VECTOR) return
+            compassAccuracy = accuracy
+            publishHeadingState()
+        }
         val current = stateFlow.value
         if (current != null) {
             stateFlow.value = current.copy(accuracy = accuracy)

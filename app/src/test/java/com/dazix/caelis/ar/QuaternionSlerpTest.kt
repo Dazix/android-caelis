@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 class QuaternionSlerpTest {
 
@@ -106,5 +107,40 @@ class QuaternionSlerpTest {
         assertEquals(0f, matrix[8], 1e-4f)
         assertEquals(0f, matrix[9], 1e-4f)
         assertEquals(1f, matrix[10], 1e-4f)
+    }
+
+    @Test
+    fun `quaternionToRowMajorMatrix matches the SensorManager layout`() {
+        // SensorManager.getRotationMatrixFromVector for 90 deg about Z writes, row-major:
+        // [ 0 -1  0 ]
+        // [ 1  0  0 ]
+        // [ 0  0  1 ]
+        // so a device X axis maps to world Y. The column-major variant is the transpose and would
+        // map it to -Y: the camera rotation inverted.
+        val q90Z = floatArrayOf(0f, 0f, sin(Math.toRadians(45.0)).toFloat(), cos(Math.toRadians(45.0)).toFloat())
+        val matrix = FloatArray(16)
+
+        QuaternionSlerp.quaternionToRowMajorMatrix(q90Z, matrix)
+
+        val expected = floatArrayOf(
+            0f, -1f, 0f, 0f,
+            1f, 0f, 0f, 0f,
+            0f, 0f, 1f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        for (i in 0 until 16) assertEquals("Index $i mismatch", expected[i], matrix[i], 1e-4f)
+    }
+
+    @Test
+    fun `quaternionToRowMajorMatrix is the transpose of the column-major matrix for a general rotation`() {
+        val n = sqrt(0.1f * 0.1f + 0.7f * 0.7f + 0.3f * 0.3f + 0.6f * 0.6f)
+        val q = floatArrayOf(0.1f / n, 0.7f / n, 0.3f / n, 0.6f / n)
+        val col = FloatArray(16)
+        val row = FloatArray(16)
+        QuaternionSlerp.quaternionToRotationMatrix(q, col)
+        QuaternionSlerp.quaternionToRowMajorMatrix(q, row)
+        for (i in 0 until 4) for (j in 0 until 4) {
+            assertEquals("($i,$j)", col[j * 4 + i], row[i * 4 + j], 1e-6f)
+        }
     }
 }
