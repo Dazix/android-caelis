@@ -1,6 +1,7 @@
 # Build output
 /build
 /app/build
+/buildSrc/build
 .gradle
 .kotlin
 *.apk

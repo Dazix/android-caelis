@@ -1,0 +1,126 @@
+// Lines with a width in pixels: constellation figures, the alt-az grid, sun/moon arcs, DSO glyphs.
+//
+// Filament's LINES primitive is one pixel wide, so every segment is a quad of four vertices that
+// all know both endpoints; the vertex shader projects both, clips the segment against the near
+// plane (a line from a star behind you to one in front must not flip across the screen) and pushes
+// the vertex sideways by half the width in screen space.
+//
+// Per-vertex data (see LineBatch):
+//   position = this endpoint (model space)           custom0 = (other endpoint xyz, side +-1)
+//   custom1  = (t: 0 at A / 1 at B, widthPx, gapPx, dashPx)
+//   color    = straight RGBA, already themed for night vision on the CPU
+//   custom2.x = progress of the owning constellation (1 = whole line, full alpha), a small
+//               dynamic buffer; it scales both the drawn length and the alpha, as on the Canvas
+//
+// The fragment works in screen pixels along the segment, which is what the Canvas renderer did:
+// a gap of gapPx is left at each star, a partial progress p draws p/2 of the trimmed segment from
+// each end so the halves meet in the middle, and dashPx > 0 dashes the line. Screen-linear
+// interpolation is recovered from the perspective-correct one by carrying (v * w, w).
+material {
+    name : Line,
+    shadingModel : unlit,
+    blending : transparent,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    requires : [ color, custom0, custom1, custom2 ],
+    variables : [ lineAlong, lineAcross, lineProgress ]
+}
+
+vertex {
+    // In the device domain Filament ignores material.worldPosition: the output is
+    // clipSpaceTransform * getPosition(). So the computed clip position is delivered as a
+    // translation that carries the attribute position onto it. Depth: Filament then converts z
+    // from GL to its own convention (z * -0.5 + 0.5, without w), so z = 1 - w lands at 0.5 * w,
+    // always inside the clip range (nothing here tests depth).
+    void placeAt(inout MaterialVertexInputs material, float4 clip) {
+        clip.z = 1.0 - clip.w;
+        mat4 t = mat4(1.0);
+        t[3] = clip - float4(getPosition().xyz, 0.0);
+        material.clipSpaceTransform = t;
+    }
+
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 other = getCustom0();
+        float4 info = getCustom1();
+        float t = info.x;
+        float side = other.w;
+
+        mat4 clipFromModel = getClipFromWorldMatrix() * getWorldFromModelMatrix();
+        float4 cThis = clipFromModel * float4(getPosition().xyz, 1.0);
+        float4 cOther = clipFromModel * float4(other.xyz, 1.0);
+
+        const float eps = 1e-3;
+        bool thisClipped = cThis.w < eps;
+        bool otherClipped = cOther.w < eps;
+        if (thisClipped && otherClipped) {
+            placeAt(material, float4(0.0, 0.0, 0.0, 1.0));
+            material.lineAlong = float4(0.0);
+            material.lineAcross = float4(0.0, 0.0, 0.0, 1.0);
+            material.lineProgress = float4(0.0);
+            return;
+        }
+        if (thisClipped) cThis = mix(cThis, cOther, (eps - cThis.w) / (cOther.w - cThis.w));
+        if (otherClipped) cOther = mix(cOther, cThis, (eps - cOther.w) / (cThis.w - cOther.w));
+
+        float2 halfRes = 0.5 * getResolution().xy;
+        float2 sThis = cThis.xy / cThis.w * halfRes;
+        float2 sOther = cOther.xy / cOther.w * halfRes;
+        // Orient everything from end A to end B, whichever end this vertex is.
+        float2 sA = t < 0.5 ? sThis : sOther;
+        float2 sB = t < 0.5 ? sOther : sThis;
+        float2 d = sB - sA;
+        float len = length(d);
+        float2 dir = len > 1e-4 ? d / len : float2(1.0, 0.0);
+        float2 n = float2(-dir.y, dir.x);
+
+        float halfWidth = 0.5 * info.y;
+        float extent = halfWidth + 1.0; // one pixel of antialiasing margin
+        float2 offsetPx = n * side * extent;
+        placeAt(material, cThis + float4(offsetPx / halfRes * cThis.w, 0.0, 0.0));
+
+        // A clipped end is off screen: no gap to leave there.
+        bool aClipped = t < 0.5 ? thisClipped : otherClipped;
+        bool bClipped = t < 0.5 ? otherClipped : thisClipped;
+        float gapA = aClipped ? 0.0 : info.z;
+        float gapB = bClipped ? 0.0 : info.z;
+        float along = t < 0.5 ? 0.0 : len;
+        float w = cThis.w;
+        material.lineAlong = float4(along, len, gapA, gapB) * w;
+        material.lineAcross = float4(side * extent * w, halfWidth * w, info.w * w, w);
+        material.lineProgress = float4(getCustom2().x, 0.0, 0.0, 0.0);
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float w = variable_lineAcross.w;
+        float4 along = variable_lineAlong / w;
+        float3 across = variable_lineAcross.xyz / w;
+        float s = along.x;
+        float len = along.y;
+        float gapA = along.z;
+        float gapB = along.w;
+        float p = variable_lineProgress.x;
+
+        // A segment too short to leave both gaps is not drawn at all (Canvas: length > 2.1 * gap).
+        bool visible = s >= gapA && s <= len - gapB && len > 1.05 * (gapA + gapB);
+        if (visible && p < 0.99) {
+            float trimmed = max(len - gapA - gapB, 0.0);
+            float halfLen = 0.5 * p * trimmed;
+            visible = (s - gapA) <= halfLen || (len - gapB - s) <= halfLen;
+        }
+        float dash = across.z;
+        if (visible && dash > 0.0) {
+            visible = mod(s, 2.0 * dash) <= dash;
+        }
+        float coverage = visible ? clamp(across.y - abs(across.x) + 0.5, 0.0, 1.0) : 0.0;
+
+        // The Canvas renderer faded a constellation in as it grew: alpha = base * progress.
+        float4 c = getColor();
+        float a = c.a * coverage * p;
+        material.baseColor = float4(c.rgb * a, a);
+    }
+}

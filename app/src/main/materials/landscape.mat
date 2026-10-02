@@ -1,0 +1,53 @@
+// The stylised ground panorama (grass and tree line), Earth-fixed, ray-cast per pixel.
+//
+// Port of the AGSL LandscapeShader's panorama branch. The real-horizon branch is not here: the
+// terrain skyline is geometry now (terrain.mat + HorizonMeshBuilder), so the strip texture and its
+// packed-elevation decode — and the half-turn bug that lived in its texture coordinate — are gone.
+//
+// The half-turn `+ 0.5` in texU is the *panorama's* convention: that asset has north in the centre
+// column. Alignment offsets are added to the ray, exactly as in StarHitTester.isOccludedByLandscape.
+// It is drawn after the stars (render priority), so its opaque pixels hide them.
+material {
+    name : Landscape,
+    shadingModel : unlit,
+    blending : transparent,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    flipUV : false,
+    parameters : [
+        { type : sampler2d, name : panorama, precision : medium },
+        { type : float, name : azimuthOffset },
+        { type : float, name : elevationOffset }
+    ],
+    variables : [ eyeDirection ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float3 p = getPosition().xyz;
+        float3 view = mulMat4x4Float3(getViewFromClipMatrix(), p).xyz;
+        material.eyeDirection.xyz = mulMat3x3Float3(getWorldFromViewMatrix(), view).xyz;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float3 worldDir = normalize(variable_eyeDirection.xyz);
+        // Offsets are in radians, like the AGSL uniforms they replace.
+        float theta = atan(worldDir.x, worldDir.y) + materialParams.azimuthOffset;
+        float phi = asin(clamp(worldDir.z, -1.0, 1.0)) + materialParams.elevationOffset;
+        float texU = theta / 6.283185307179586 + 0.5;
+        float texV = 0.5 - phi / 3.141592653589793;
+        float4 color = texture(materialParams_panorama, float2(texU, texV));
+
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5 && color.a > 0.0) {
+            float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
+            color = float4(luminance * 0.15 * nv.rgb, color.a);
+        }
+        material.baseColor = color;
+    }
+}

@@ -1,0 +1,51 @@
+// The real terrain skyline: the HorizonMeshBuilder ring, filled solid below the ridge line.
+//
+// Each vertex carries (azimuthDeg, elevationDeg, u, v) in custom0; the direction is computed here
+// with the alignment offsets, the same function as HorizonMeshBuilder.directionOf (keep the two in
+// step — HorizonMeshBuilderTest pins the CPU side against StarHitTester's occlusion rule). Sample 0
+// is north by construction; there is no texture coordinate to get half a turn wrong.
+//
+// The camera is always at the world origin, so a direction times a radius is a world position.
+material {
+    name : Terrain,
+    shadingModel : unlit,
+    blending : transparent,
+    vertexDomain : world,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    doubleSided : true,
+    requires : [ custom0 ],
+    parameters : [
+        { type : float, name : azimuthOffset },
+        { type : float, name : elevationOffset },
+        { type : float4, name : terrainColor }
+    ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 c = getCustom0();
+        float az = radians(c.x - materialParams.azimuthOffset);
+        // The nadir stays the nadir whatever the offset; only the skyline moves.
+        float elDeg = c.y <= -90.0 ? -90.0 : c.y - materialParams.elevationOffset;
+        float el = radians(clamp(elDeg, -90.0, 90.0));
+        float3 dir = float3(sin(az) * cos(el), cos(az) * cos(el), sin(el));
+        material.worldPosition.xyz = dir * 50.0;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        // terrainColor is straight RGBA; transparent blending wants premultiplied.
+        float4 c = materialParams.terrainColor;
+        float4 color = float4(c.rgb * c.a, c.a);
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5 && color.a > 0.0) {
+            float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
+            color = float4(luminance * 0.15 * nv.rgb, color.a);
+        }
+        material.baseColor = color;
+    }
+}

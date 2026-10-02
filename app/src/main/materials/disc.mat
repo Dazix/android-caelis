@@ -1,0 +1,52 @@
+// Screen-sized discs at a sky position: planet cores and magnitude halos, sun and moon markers,
+// DSO and meteor-radiant dots.
+//
+// Ports the Canvas drawCircle + unit RadialGradient pair: profile 0 is a solid antialiased disc,
+// profile 1 is the two-stop radial gradient (colour at the centre -> transparent at the rim) that
+// createUnitGlowShader built. Radii are pixels computed on the CPU (they depend on magnitude,
+// density and optic scale); colour is straight RGBA already themed for night vision.
+//
+// Per-vertex: position = centre (model space), custom0 = (cornerX, cornerY, radiusPx, profile).
+material {
+    name : Disc,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    doubleSided : true,
+    requires : [ color, custom0 ],
+    variables : [ discUv ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 c = getCustom0();
+        float3 wp = material.worldPosition.xyz;
+        float4 viewPos = mulMat4x4Float3(getViewFromWorldMatrix(), wp);
+        float dist = -viewPos.z;
+        // Behind the camera: collapse, never mirror onto the screen.
+        float radiusPx = dist > 1e-4 ? c.z + 1.0 : 0.0;
+        float worldPerPx = 2.0 * max(dist, 1e-4) / (getClipFromViewMatrix()[1][1] * getResolution().y);
+        float3 right = getWorldFromViewMatrix()[0].xyz;
+        float3 up = getWorldFromViewMatrix()[1].xyz;
+        material.worldPosition.xyz = wp + (right * c.x + up * c.y) * radiusPx * worldPerPx;
+        // xy corner, z radius in px (without the AA margin), w profile.
+        material.discUv = float4(c.xy * (c.z + 1.0), c.z, c.w);
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float4 uv = variable_discUv;
+        float r = length(uv.xy);
+        float radius = max(uv.z, 1e-3);
+        float shape = uv.w < 0.5
+            ? clamp(radius - r + 0.5, 0.0, 1.0)
+            : clamp(1.0 - r / radius, 0.0, 1.0);
+        float4 c = getColor();
+        float a = c.a * shape;
+        material.baseColor = float4(c.rgb * a, a);
+    }
+}

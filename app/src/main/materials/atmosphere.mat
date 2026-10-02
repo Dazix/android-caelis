@@ -1,0 +1,47 @@
+// Atmospheric horizon glow in the Earth-fixed ENU frame, ray-cast per pixel.
+//
+// Port of the AGSL AtmosphereShader, same constants: glow up to 15 deg (sin 0.258), cubic falloff,
+// deep twilight blue (0.1, 0.25, 0.45) fading to transparent, nothing below the horizon. Skia
+// shader output is premultiplied, so is this: colour and alpha are both scaled by the factor.
+// Night vision mutes it to 15 % in colour and alpha so it does not drown the stars.
+material {
+    name : Atmosphere,
+    shadingModel : unlit,
+    blending : transparent,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    variables : [ eyeDirection ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float3 p = getPosition().xyz;
+        float3 view = mulMat4x4Float3(getViewFromClipMatrix(), p).xyz;
+        material.eyeDirection.xyz = mulMat3x3Float3(getWorldFromViewMatrix(), view).xyz;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float3 worldDir = normalize(variable_eyeDirection.xyz);
+        float sinElevation = worldDir.z;
+        if (sinElevation < 0.0) {
+            material.baseColor = float4(0.0);
+            return;
+        }
+        float maxElevationSin = 0.258;
+        float factor = clamp(1.0 - sinElevation / maxElevationSin, 0.0, 1.0);
+        factor = pow(factor, 3.0);
+        float4 color = mix(float4(0.0), float4(0.1, 0.25, 0.45, 1.0), factor);
+
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5) {
+            float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
+            color = float4(luminance * 0.15 * nv.rgb, color.a * 0.15);
+        }
+        material.baseColor = color;
+    }
+}

@@ -77,6 +77,25 @@ android {
     }
 }
 
+// Filament materials: app/src/main/materials/*.mat -> generated assets/*.filamat, compiled by the
+// matc of exactly the Filament version the app links against (see CompileFilamentMaterialsTask).
+val compileFilamentMaterials = tasks.register<CompileFilamentMaterialsTask>("compileFilamentMaterials") {
+    filamentVersion.set(libs.versions.filament)
+    checksumFile.set(rootProject.layout.projectDirectory.file("gradle/filament-tools.sha256"))
+    materialSources.from(layout.projectDirectory.dir("src/main/materials").asFileTree.matching { include("*.mat") })
+    backends.set("opengl")
+    toolsCacheDir.set(File(gradle.gradleUserHomeDir, "caches/caelis-filament-tools"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            compileFilamentMaterials,
+            CompileFilamentMaterialsTask::outputDir,
+        )
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -94,6 +113,9 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.flatbuffers.java)
+    implementation(libs.filament.android)
+    // Consent-gated at runtime (ArCoreSessionController); `optional` in the manifest.
+    implementation(libs.arcore)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

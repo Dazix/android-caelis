@@ -1,0 +1,27 @@
+// The ARCore camera image behind the sky in ARCore mode (in sensor mode the CameraX PreviewView
+// sits under a translucent Filament surface instead, and this material is not used).
+//
+// A full-screen triangle; its UVs are rewritten by ArCoreBackground whenever ARCore reports a
+// display geometry change (Frame.transformCoordinates2d), because the camera texture is in sensor
+// orientation and aspect, not the screen's. The external OES texture is ARCore's own.
+material {
+    name : CameraBackground,
+    shadingModel : unlit,
+    blending : opaque,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    flipUV : false,
+    requires : [ uv0 ],
+    parameters : [
+        { type : samplerExternal, name : cameraFeed, precision : medium }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = float4(texture(materialParams_cameraFeed, getUV0()).rgb, 1.0);
+    }
+}

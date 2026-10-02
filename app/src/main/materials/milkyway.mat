@@ -1,0 +1,52 @@
+// The Milky Way: an equirectangular panorama in celestial (J2000) coordinates, ray-cast per pixel.
+//
+// Port of the AGSL MilkyWayShader: one full-screen triangle (vertexDomain device), each fragment's
+// world (ENU) ray rotated into the celestial frame and looked up by (RA, Dec). No sphere mesh, so
+// no seam and no polygon clipping at the poles.
+//
+// The sample is treated as premultiplied (Bitmaps are, and Skia's shader.eval() was), so the night
+// vision luminance matches the Canvas version bit for bit: luminance * 0.3 * tint, alpha kept.
+material {
+    name : MilkyWay,
+    shadingModel : unlit,
+    blending : transparent,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    flipUV : false,
+    parameters : [
+        { type : sampler2d, name : milkyWay, precision : medium },
+        { type : mat3, name : enuToCelestial }
+    ],
+    variables : [ eyeDirection ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float3 p = getPosition().xyz;
+        float3 view = mulMat4x4Float3(getViewFromClipMatrix(), p).xyz;
+        material.eyeDirection.xyz = mulMat3x3Float3(getWorldFromViewMatrix(), view).xyz;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float3 worldDir = normalize(variable_eyeDirection.xyz);
+        float3 cel = materialParams.enuToCelestial * worldDir;
+
+        float theta = atan(cel.z, cel.x);
+        float phi = asin(clamp(cel.y, -1.0, 1.0));
+        float texU = theta / 6.283185307179586 + 0.5;
+        float texV = 0.5 - phi / 3.141592653589793;
+        float4 color = texture(materialParams_milkyWay, float2(texU, texV));
+
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5) {
+            float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
+            color = float4(luminance * 0.3 * nv.rgb, color.a);
+        }
+        material.baseColor = color;
+    }
+}
