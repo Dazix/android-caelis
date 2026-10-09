@@ -20,10 +20,12 @@ import android.util.LruCache
 import android.view.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import com.dazix.caelis.ar.SkyDomeRenderer
 import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.DsoType
@@ -3003,5 +3005,449 @@ class NightSkyRenderer {
         // Radius Label
         val label = "SEARCH RADIUS: ${tapIndicatorRadiusDp} dp (${radius.toInt()} px)"
         nativeCanvas.drawText(label, x, y - radius - 12f, debugTapLabelPaint)
+    }
+
+    // ==== GPU sky: the screen-space half ====================================================
+    //
+    // With the Filament scene drawing stars, figures, art, planets and the ground, what is left
+    // for the Canvas is what the GPU has no good primitive for: text, the DSO and meteor vector
+    // glyphs, and the grid's markers. Every position comes from the scene's own [SkyProjector] and
+    // celestial matrix, i.e. from the pose the GPU frame was just drawn with.
+
+    private val overlayProjected = FloatArray(3)
+    private val overlayEnu = FloatArray(3)
+    private var dsoLabels: Array<String> = emptyArray()
+    private var meteorLabels: Array<String> = emptyArray()
+    private var overlayCatalog: NightSkyCatalog? = null
+    private val altitudeLabels = skyDomeRenderer.altitudeLevels.map { "${if (it > 0) "+" else ""}${it.toInt()}°" }.toTypedArray()
+
+    /** Strings read once per catalogue instead of once per frame. */
+    private fun ensureOverlayLabels(catalog: NightSkyCatalog) {
+        if (overlayCatalog === catalog) return
+        overlayCatalog = catalog
+        dsoLabels = Array(minOf(catalog.dsosLength(), MAX_DSOS)) {
+            catalog.dsos(reusableDso, it)
+            "M${reusableDso.messierId()}"
+        }
+        meteorLabels = Array(minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)) {
+            catalog.meteorShowers(reusableMeteor, it)
+            reusableMeteor.localizedName() ?: ""
+        }
+    }
+
+    /** Ground occlusion of the overlay, the same test the tap hit test uses. */
+    private fun isBelowGround(frame: com.dazix.caelis.ar.scene.NightSkyFrame, x: Float, y: Float, z: Float): Boolean =
+        StarHitTester.isOccludedByLandscape(
+            x, y, z,
+            // A wanted terrain skyline without its profile yet is drawn as a flat ring: ground below 0°.
+            isLandscapeVisible = frame.showLandscape || frame.useRealHorizon,
+            useRealHorizon = frame.useRealHorizon,
+            horizonProfile = currentHorizonProfile,
+            alignAzimuthOffsetDeg = frame.alignAzimuthOffsetDeg,
+            alignElevationOffsetDeg = frame.alignElevationOffsetDeg,
+        )
+
+    /**
+     * Draws everything of the night sky that is text or screen-space vector art, on top of the GPU
+     * frame [scene] just rendered from [frame].
+     *
+     * The Canvas renderer drew constellation names, DSO glyphs and radiants before the landscape,
+     * which then covered whatever was below ground; here they are on top of the GPU, so each one is
+     * skipped when its direction is occluded instead.
+     */
+    fun drawGpuOverlay(
+        drawScope: DrawScope,
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        catalog: NightSkyCatalog,
+        displayRotation: Int,
+        showConstellations: Boolean,
+        showMeteorShowers: Boolean,
+        lstDegrees: Double,
+        latitudeDegrees: Double,
+        selectedBody: CelestialBodyDetails?,
+        isDebugFocusRegionVisible: Boolean,
+        debugFocusRadiusMultiplier: Float,
+        debugFocusDisplayThreshold: Float,
+        showTapRadiusIndicator: Boolean,
+    ) {
+        ensureOverlayLabels(catalog)
+        val canvas = drawScope.drawContext.canvas.nativeCanvas
+        val density = drawScope.density
+        val w = drawScope.size.width
+        val h = drawScope.size.height
+        val projector = scene.projector
+        val c2e = scene.celestialToEnu
+        val focus = scene.focus
+        val margin = 40f
+
+        // Constellation names, sliding up as the figure grows (asterisms carry no name).
+        val constCount = scene.constellationCount
+        for (c in 0 until constCount) {
+            val isSelected = c == frame.selectedConstellation
+            if (!showConstellations && !isSelected) continue
+            if (!focus.centroidInFront[c]) continue
+            val p = focus.progress[c]
+            if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) continue
+            catalog.constellations(reusableConstellation, c)
+            if (reusableConstellation.isAsterism()) continue
+            SkyFrameMath.transformDirection(c2e, constellationCentroidCelX[c], constellationCentroidCelY[c], constellationCentroidCelZ[c], overlayEnu)
+            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
+            val effectiveP = when {
+                isSelected -> 1f
+                debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
+                else -> p
+            }
+            val cx = focus.centroidScreenX[c]
+            val textY = focus.centroidScreenY[c] - (40f * (1f - effectiveP))
+            if (cx !in -margin..(w + margin) || textY !in -margin..(h + margin)) continue
+            val label = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: continue
+            val paint = if (isSelected) constellationHighlightLabelPaint else constellationLabelPaint
+            paint.alpha = ((if (isSelected) 255f else 200f) * effectiveP).toInt().coerceIn(0, 255)
+            canvas.drawText(label, cx, textY, paint)
+        }
+
+        // Deep-sky glyphs (only where no photograph is on screen) and Messier numbers.
+        val opticScale = StarOptics.computeOpticScale(frame.zoomRatio)
+        val focal = projector.focalLengthPixels
+        for (d in 0 until minOf(scene.dsoCount, dsoLabels.size)) {
+            val isSelected = d == frame.selectedDso
+            if (!frame.showDsos && !isSelected) continue
+            if (!projector.projectCelestial(c2e, scene.dsoCel[d * 3], scene.dsoCel[d * 3 + 1], scene.dsoCel[d * 3 + 2], overlayProjected)) continue
+            val pX = overlayProjected[0]
+            val pY = overlayProjected[1]
+            if (pX !in -100f..(w + 100f) || pY !in -100f..(h + 100f)) continue
+            SkyFrameMath.transformDirection(c2e, scene.dsoCel[d * 3], scene.dsoCel[d * 3 + 1], scene.dsoCel[d * 3 + 2], overlayEnu)
+            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
+            catalog.dsos(reusableDso, d)
+            val radius = dsoRenderedRadiusPx(reusableDso.sizeArcmin(), focal, density, opticScale)
+            if (!scene.dsoArtShown[d]) drawDsoGlyph(canvas, reusableDso, pX, pY, radius, density)
+            canvas.drawText(dsoLabels[d], pX, pY + radius + 14f * density, if (isSelected) dsoHighlightLabelPaint else dsoLabelPaint)
+        }
+
+        // Meteor shower radiants.
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS, meteorLabels.size)
+        if (meteorCount > 0) ensureStaticCelestialVectors(catalog)
+        for (m in 0 until meteorCount) {
+            val isSelected = m == selectedMeteorIndex
+            if (!showMeteorShowers && !isSelected) continue
+            if (!projector.projectCelestial(c2e, meteorCelX[m], meteorCelY[m], meteorCelZ[m], overlayProjected)) continue
+            val pX = overlayProjected[0]
+            val pY = overlayProjected[1]
+            if (pX !in -80f..(w + 80f) || pY !in -80f..(h + 80f)) continue
+            SkyFrameMath.transformDirection(c2e, meteorCelX[m], meteorCelY[m], meteorCelZ[m], overlayEnu)
+            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
+            canvas.save()
+            canvas.translate(pX, pY)
+            canvas.drawPath(radiantPath, radiantPaint)
+            canvas.restore()
+            canvas.drawText(meteorLabels[m], pX, pY + 32f * density, if (isSelected) radiantHighlightLabelPaint else radiantLabelPaint)
+        }
+
+        if (frame.showGrid) drawGridMarkers(canvas, projector, w, h, frame.nightVisionActive)
+
+        if (isDebugFocusRegionVisible) {
+            val halfW = w * 0.5f
+            val halfH = h * 0.5f
+            val radiusIn = w * (debugFocusRadiusMultiplier * (45f / 48f))
+            val radiusOut = w * (debugFocusRadiusMultiplier * (55f / 48f))
+            canvas.drawCircle(halfW, halfH, radiusOut, debugFocusFillPaint)
+            canvas.drawCircle(halfW, halfH, radiusIn, debugFocusCirclePaint)
+            canvas.drawCircle(halfW, halfH, radiusOut, debugFocusCirclePaint)
+            for (c in 0 until constCount) {
+                if (!focus.centroidInFront[c]) continue
+                val x = focus.centroidScreenX[c]
+                val y = focus.centroidScreenY[c]
+                if (x < -margin || x > w + margin || y < -margin || y > h + margin) continue
+                debugCentroidPaint.color = if (focus.focused[c]) debugCentroidInFocusColor else debugCentroidOutOfFocusColor
+                canvas.drawCircle(x, y, 6f, debugCentroidPaint)
+            }
+        }
+
+        drawSelectionReticle(
+            drawScope = drawScope,
+            selectedBody = selectedBody,
+            matrix = frame.deviceToEnu,
+            lstDegrees = lstDegrees,
+            latitudeDegrees = latitudeDegrees,
+            displayRotation = displayRotation,
+            fovHorizontalDegrees = frame.fovHorizontalDegrees,
+            w = w,
+            h = h,
+            density = density,
+        )
+        if (showTapRadiusIndicator) {
+            drawTapRadiusIndicator(drawScope, frame.nightVisionTheme, frame.nightVisionActive)
+        }
+    }
+
+    /** The Canvas DSO size: the object's angular size at this focal length, within 8..70 dp. */
+    private fun dsoRenderedRadiusPx(sizeArcmin: Float, focal: Float, density: Float, opticScale: Float): Float {
+        val baseSizeRad = if (sizeArcmin > 0f) Math.toRadians(sizeArcmin / 60.0).toFloat() else 0.004f
+        return (focal * tan(baseSizeRad * 0.5f)).coerceIn(8f * density * opticScale, 70f * density * opticScale)
+    }
+
+    private fun drawDsoGlyph(canvas: android.graphics.Canvas, dso: DeepSkyObject, pX: Float, pY: Float, radius: Float, density: Float) {
+        when (dso.type()) {
+            DsoType.GALAXY -> {
+                val axisRatio = dso.axisRatio().coerceIn(0.15f, 1.0f)
+                canvas.save()
+                canvas.translate(pX, pY)
+                canvas.rotate(dso.positionAngleDeg())
+                dsoRectF.set(-radius, -radius * axisRatio, radius, radius * axisRatio)
+                canvas.drawOval(dsoRectF, dsoHaloPaint)
+                canvas.drawOval(dsoRectF, dsoPaint)
+                canvas.drawCircle(0f, 0f, 1.8f * density, dsoCorePaint)
+                canvas.restore()
+            }
+            DsoType.GLOBULAR_CLUSTER -> {
+                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
+                canvas.drawCircle(pX, pY, radius, dsoPaint)
+                canvas.drawLine(pX - radius, pY, pX + radius, pY, dsoPaint)
+                canvas.drawLine(pX, pY - radius, pX, pY + radius, dsoPaint)
+                canvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+            }
+            DsoType.OPEN_CLUSTER -> {
+                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
+                canvas.drawCircle(pX, pY, radius, dsoDashedPaint)
+                canvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+            }
+            DsoType.NEBULA -> {
+                val r = radius * 0.85f
+                dsoRectF.set(pX - r, pY - r, pX + r, pY + r)
+                canvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoHaloPaint)
+                canvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoPaint)
+                canvas.drawCircle(pX, pY, 1.5f * density, dsoCorePaint)
+            }
+            DsoType.PLANETARY_NEBULA -> {
+                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
+                canvas.drawCircle(pX, pY, radius, dsoPaint)
+                val tick = 4f * density
+                canvas.drawLine(pX - radius - tick, pY, pX - radius, pY, dsoPaint)
+                canvas.drawLine(pX + radius, pY, pX + radius + tick, pY, dsoPaint)
+                canvas.drawLine(pX, pY - radius - tick, pX, pY - radius, dsoPaint)
+                canvas.drawLine(pX, pY + radius, pX, pY + radius + tick, dsoPaint)
+            }
+            else -> canvas.drawCircle(pX, pY, radius, dsoPaint)
+        }
+    }
+
+    /**
+     * The grid's markers and labels: the GPU draws the lattice itself (`AltAzGridBuilder`), and
+     * these are the text and dots `SkyDomeRenderer.drawSkyDomeGrid` put on top of it, at the same
+     * offsets and in the same paints.
+     */
+    private fun drawGridMarkers(
+        canvas: android.graphics.Canvas,
+        projector: com.dazix.caelis.domain.arframe.SkyProjector,
+        w: Float,
+        h: Float,
+        nightVision: Boolean,
+    ) {
+        val dome = skyDomeRenderer
+        val palette = dome.activePalette
+        val horizonArgb = (if (nightVision) palette.secondary else com.dazix.caelis.ar.NormalHorizon).toArgb()
+        val minorArgb = (if (nightVision) palette.grid else com.dazix.caelis.ar.NormalGrid).toArgb()
+        for ((li, elevation) in dome.altitudeLevels.withIndex()) {
+            for (az in dome.labelAzimuths) {
+                if (!projectAltAz(projector, az, elevation)) continue
+                val px = overlayProjected[0]
+                val py = overlayProjected[1]
+                if (px in 20f..(w - 20f) && py in 40f..(h - 40f)) canvas.drawText(altitudeLabels[li], px, py - 4f, dome.gridTextPaint)
+            }
+        }
+        gridMarkerPaint.style = Paint.Style.FILL
+        gridMarkerPaint.color = horizonArgb
+        for (i in dome.cardinalAzimuths.indices) {
+            if (!projectAltAz(projector, dome.cardinalAzimuths[i], 0.0)) continue
+            val px = overlayProjected[0]
+            val py = overlayProjected[1]
+            if (px !in -50f..(w + 50f) || py !in -50f..(h + 50f)) continue
+            canvas.drawCircle(px, py, 3.5f, gridMarkerPaint)
+            canvas.drawText(dome.cardinalLabels[i], px, py - 10f, dome.horizonTextPaint)
+        }
+        if (projectAltAz(projector, 0.0, 90.0)) {
+            val zx = overlayProjected[0]
+            val zy = overlayProjected[1]
+            if (zx in -50f..(w + 50f) && zy in -50f..(h + 50f)) {
+                drawCrossMarker(canvas, zx, zy, 12f, 6f, 1.5f, 1.4f, horizonArgb)
+                canvas.drawText(dome.zenithLabel, zx, zy - 15f, dome.horizonTextPaint)
+            }
+        }
+        if (projectAltAz(projector, 0.0, -90.0)) {
+            val nx = overlayProjected[0]
+            val ny = overlayProjected[1]
+            if (nx in -50f..(w + 50f) && ny in -50f..(h + 50f)) {
+                drawCrossMarker(canvas, nx, ny, 10f, 5f, 1.2f, 1.0f, minorArgb)
+                canvas.drawText(dome.nadirLabel, nx, ny - 13f, dome.gridTextPaint)
+            }
+        }
+    }
+
+    private val gridMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private fun drawCrossMarker(
+        canvas: android.graphics.Canvas, x: Float, y: Float,
+        arm: Float, ring: Float, armWidth: Float, ringWidth: Float, argb: Int,
+    ) {
+        gridMarkerPaint.color = argb
+        gridMarkerPaint.style = Paint.Style.STROKE
+        gridMarkerPaint.strokeWidth = armWidth
+        canvas.drawLine(x - arm, y, x + arm, y, gridMarkerPaint)
+        canvas.drawLine(x, y - arm, x, y + arm, gridMarkerPaint)
+        gridMarkerPaint.strokeWidth = ringWidth
+        canvas.drawCircle(x, y, ring, gridMarkerPaint)
+    }
+
+    private fun projectAltAz(projector: com.dazix.caelis.domain.arframe.SkyProjector, azimuthDeg: Double, elevationDeg: Double): Boolean {
+        com.dazix.caelis.domain.arframe.AltAzGridBuilder.direction(azimuthDeg, elevationDeg, overlayEnu)
+        return projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)
+    }
+
+    /**
+     * The HUD's visible-star count for the GPU path: stars within the telescope limit (or forced
+     * by a figure or the selection) whose position is on screen. Writes [lastVisibleStarCount].
+     */
+    fun countVisibleStars(
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        catalog: NightSkyCatalog,
+    ) {
+        ensureStaticCelestialVectors(catalog)
+        val projector = scene.projector
+        val c2e = scene.celestialToEnu
+        val limit = StarOptics.computeFaintestVisibleMagnitude(frame.zoomRatio)
+        val w = projector.viewportWidth
+        val h = projector.viewportHeight
+        val bb = catalog.byteBuffer
+        val base = catalog.starsVectorOffset()
+        var count = 0
+        for (i in 0 until minOf(scene.stars.starCount, MAX_STARS)) {
+            if (bb.getFloat(base + i * 12 + 8) > limit && !scene.stars.isForced(i)) continue
+            if (!projector.projectCelestial(c2e, starCelX[i], starCelY[i], starCelZ[i], overlayProjected)) continue
+            if (overlayProjected[0] in 0f..w && overlayProjected[1] in 0f..h) count++
+        }
+        lastVisibleStarCount = count
+    }
+
+    /**
+     * Fills the hit-test arrays [findHitAt] reads from the GPU scene's last frame. Called on a tap,
+     * not per frame: the Canvas renderer kept them as a side effect of drawing every star, which the
+     * GPU path no longer does on the CPU.
+     *
+     * World vectors are rotated with this frame's sidereal time. The Canvas path wrote star world
+     * vectors once at load time (so the ground-occlusion test drifted with the sky over an evening)
+     * and never wrote the DSO, meteor and centroid ones at all, which left their occlusion test
+     * working on zeros.
+     */
+    fun prepareHitTest(
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        catalog: NightSkyCatalog,
+        showConstellations: Boolean,
+        showMeteorShowers: Boolean,
+        density: Float,
+    ) {
+        ensureStaticCelestialVectors(catalog)
+        val projector = scene.projector
+        val c2e = scene.celestialToEnu
+        val focus = scene.focus
+
+        // Which stars are drawn regardless of the telescope limit, as the scene forces them.
+        val constCount = minOf(scene.constellationCount, maxConstellations)
+        java.util.Arrays.fill(forceRenderStar, false)
+        val totalStars = minOf(catalog.starsLength(), MAX_STARS)
+        for (c in 0 until constCount) {
+            val isSelected = c == frame.selectedConstellation
+            constellationProgress[c] = focus.progress[c]
+            constellationCentroidInFront[c] = focus.centroidInFront[c]
+            constellationCentroidScreenX[c] = focus.centroidScreenX[c]
+            constellationCentroidScreenY[c] = focus.centroidScreenY[c]
+            SkyFrameMath.transformDirection(c2e, constellationCentroidCelX[c], constellationCentroidCelY[c], constellationCentroidCelZ[c], overlayEnu)
+            constellationCentroidWorldX[c] = overlayEnu[0]
+            constellationCentroidWorldY[c] = overlayEnu[1]
+            constellationCentroidWorldZ[c] = overlayEnu[2]
+            if (!showConstellations && !isSelected) continue
+            if (focus.progress[c] > 0.001f || isSelected) {
+                catalog.constellations(reusableConstellation, c)
+                for (j in 0 until reusableConstellation.linesLength()) {
+                    val s = reusableConstellation.lines(j)
+                    if (s in 0 until totalStars) forceRenderStar[s] = true
+                }
+            }
+        }
+
+        val limit = StarOptics.computeFaintestVisibleMagnitude(frame.zoomRatio)
+        val bb = catalog.byteBuffer
+        val base = catalog.starsVectorOffset()
+        for (i in 0 until totalStars) {
+            val forced = forceRenderStar[i] || i == frame.selectedStar
+            if (bb.getFloat(base + i * 12 + 8) > limit && !forced) {
+                starInFront[i] = false
+                continue
+            }
+            SkyFrameMath.transformDirection(c2e, starCelX[i], starCelY[i], starCelZ[i], overlayEnu)
+            starWorldX[i] = overlayEnu[0]
+            starWorldY[i] = overlayEnu[1]
+            starWorldZ[i] = overlayEnu[2]
+            starInFront[i] = projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)
+            starScreenX[i] = overlayProjected[0]
+            starScreenY[i] = overlayProjected[1]
+        }
+
+        val opticScale = StarOptics.computeOpticScale(frame.zoomRatio)
+        val focal = projector.focalLengthPixels
+        val dsoCount = minOf(scene.dsoCount, MAX_DSOS)
+        for (d in 0 until dsoCount) {
+            if (!frame.showDsos && d != frame.selectedDso) {
+                dsoInFront[d] = false
+                continue
+            }
+            catalog.dsos(reusableDso, d)
+            SkyFrameMath.transformDirection(c2e, scene.dsoCel[d * 3], scene.dsoCel[d * 3 + 1], scene.dsoCel[d * 3 + 2], overlayEnu)
+            dsoWorldX[d] = overlayEnu[0]
+            dsoWorldY[d] = overlayEnu[1]
+            dsoWorldZ[d] = overlayEnu[2]
+            dsoMagnitudes[d] = reusableDso.mag()
+            dsoInFront[d] = projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)
+            dsoScreenX[d] = overlayProjected[0]
+            dsoScreenY[d] = overlayProjected[1]
+            dsoRadiusPx[d] = dsoRenderedRadiusPx(reusableDso.sizeArcmin(), focal, density, opticScale)
+        }
+
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)
+        for (m in 0 until meteorCount) {
+            if (!showMeteorShowers && m != selectedMeteorIndex) {
+                meteorInFront[m] = false
+                continue
+            }
+            SkyFrameMath.transformDirection(c2e, meteorCelX[m], meteorCelY[m], meteorCelZ[m], overlayEnu)
+            meteorWorldX[m] = overlayEnu[0]
+            meteorWorldY[m] = overlayEnu[1]
+            meteorWorldZ[m] = overlayEnu[2]
+            meteorInFront[m] = projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)
+            meteorScreenX[m] = overlayProjected[0]
+            meteorScreenY[m] = overlayProjected[1]
+        }
+
+        val planetCount = minOf(scene.planetCount, maxPlanets)
+        for (p in 0 until maxPlanets) planetInFront[p] = false
+        activePlanetsCount = 0
+        for (p in 0 until planetCount) {
+            val planet = frame.planets.getOrNull(p) ?: continue
+            val isSelected = frame.selectedPlanetId != null && planet.id.equals(frame.selectedPlanetId, ignoreCase = true)
+            if (!frame.showPlanets && !isSelected) continue
+            SkyFrameMath.transformDirection(c2e, scene.planetCel[p * 3], scene.planetCel[p * 3 + 1], scene.planetCel[p * 3 + 2], overlayEnu)
+            planetWorldX[p] = overlayEnu[0]
+            planetWorldY[p] = overlayEnu[1]
+            planetWorldZ[p] = overlayEnu[2]
+            if (!projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)) continue
+            planetScreenX[p] = overlayProjected[0]
+            planetScreenY[p] = overlayProjected[1]
+            planetRadiusPx[p] = scene.planetAppearance[p].hitRadiusPx
+            planetInFront[p] = true
+            planetIds[p] = planet.id
+            activePlanetsCount++
+        }
     }
 }

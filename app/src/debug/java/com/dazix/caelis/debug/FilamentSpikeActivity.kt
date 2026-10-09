@@ -21,6 +21,7 @@ import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.scene.NightSkyFrame
 import com.dazix.caelis.ar.scene.NightSkyScene
 import com.dazix.caelis.ar.scene.SkySurface
+import com.dazix.caelis.ar.scene.StarGeometry
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.NightSkyCatalogLoader
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
@@ -96,7 +97,7 @@ class FilamentSpikeActivity : ComponentActivity() {
         val setupStart = SystemClock.elapsedRealtimeNanos()
         val catalog = resources.openRawResource(R.raw.catalog).use(NightSkyCatalogLoader::loadFromStream)
         surface = SkySurface(this, skyView)
-        scene = NightSkyScene(this, surface, catalog)
+        scene = NightSkyScene(this, surface, catalog, StarGeometry(catalog))
         decode(R.drawable.milky_way_starless)?.let(scene::setMilkyWayBitmap)
         decode(R.drawable.landscape_photorealistic)?.let(scene::setLandscapeBitmap)
         Log.i(

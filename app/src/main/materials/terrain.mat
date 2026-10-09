@@ -1,6 +1,7 @@
 // The real terrain skyline: the HorizonMeshBuilder ring, filled solid below the ridge line.
 //
-// Each vertex carries (azimuthDeg, elevationDeg, u, v) in custom0; the direction is computed here
+// Each vertex carries (azimuthDeg, elevationDeg, u, v) in custom0 and the elevation it is morphing
+// from in custom1.x (HorizonMorph: flat until the profile lands); the direction is computed here
 // with the alignment offsets, the same function as HorizonMeshBuilder.directionOf (keep the two in
 // step — HorizonMeshBuilderTest pins the CPU side against StarHitTester's occlusion rule). Sample 0
 // is north by construction; there is no texture coordinate to get half a turn wrong.
@@ -15,10 +16,11 @@ material {
     depthCulling : false,
     culling : none,
     doubleSided : true,
-    requires : [ custom0 ],
+    requires : [ custom0, custom1 ],
     parameters : [
         { type : float, name : azimuthOffset },
         { type : float, name : elevationOffset },
+        { type : float, name : morph },
         { type : float4, name : terrainColor }
     ]
 }
@@ -28,7 +30,9 @@ vertex {
         float4 c = getCustom0();
         float az = radians(c.x - materialParams.azimuthOffset);
         // The nadir stays the nadir whatever the offset; only the skyline moves.
-        float elDeg = c.y <= -90.0 ? -90.0 : c.y - materialParams.elevationOffset;
+        // custom1.x is the elevation the ridge is rising from (flat 0, or the previous profile).
+        float ridge = mix(getCustom1().x, c.y, materialParams.morph);
+        float elDeg = c.y <= -90.0 ? -90.0 : ridge - materialParams.elevationOffset;
         float el = radians(clamp(elDeg, -90.0, 90.0));
         float3 dir = float3(sin(az) * cos(el), cos(az) * cos(el), sin(el));
         material.worldPosition.xyz = dir * 50.0;

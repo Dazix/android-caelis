@@ -20,6 +20,7 @@ import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
+import com.dazix.caelis.domain.nightsky.RealHorizonPolicy
 import com.dazix.caelis.domain.nightsky.CelestialSearchIndex
 import com.dazix.caelis.domain.nightsky.CelestialType
 import com.dazix.caelis.domain.nightsky.CelestialVisibility
@@ -360,9 +361,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
     val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
 
-    /** Replace the stylised tree line with the terrain around you — only once a profile exists. */
-    val useRealHorizon: StateFlow<Boolean> = combine(horizonSettings, horizonProfile) { cfg, profile ->
-        cfg.enabled && cfg.realHorizonInNightSky && profile != null
+    /**
+     * Replace the stylised tree line with the terrain around you: flat until the profile arrives,
+     * stylised again only if it is not coming ([RealHorizonPolicy]).
+     */
+    val useRealHorizon: StateFlow<Boolean> = combine(horizonSettings, horizonProfile, horizonState) { cfg, profile, state ->
+        RealHorizonPolicy.isWanted(
+            featureEnabled = cfg.enabled,
+            realHorizonInNightSky = cfg.realHorizonInNightSky,
+            hasProfile = profile != null,
+            profileUnavailable = state is HorizonState.Failed || state is HorizonState.NeedsTiles,
+        )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
@@ -773,11 +782,21 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         // Keep a terrain profile for wherever the observer is, on the same terms as the Sun AR
         // screen: debounced, rounded to about 110 m, and a no-op when the layer is switched off.
+        // The first usable fix goes through at once: debouncing it only delayed the stored profile,
+        // and the repository already ignores repeats of the same rounded position.
         viewModelScope.launch {
+            var firstFixSeen = false
             combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
                 Triple(loc, hasFix, cfg)
             }
-                .debounce(1_000L)
+                .debounce { (_, hasFix, _) ->
+                    if (!firstFixSeen && hasFix) {
+                        firstFixSeen = true
+                        0L
+                    } else {
+                        1_000L
+                    }
+                }
                 .collect { (loc, hasFix, cfg) ->
                     if (hasFix && cfg.realHorizonInNightSky) {
                         horizonRepository.ensureProfile(loc, cfg)

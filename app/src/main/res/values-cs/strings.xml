@@ -544,6 +544,8 @@
     <string name="settings_debug_group_terrain">Terénní horizont</string>
     <string name="settings_debug_night_sky_calibration">Ladění zarovnání ilustrací</string>
     <string name="settings_debug_night_sky_calibration_desc">Povolí ovládací prvky ladění zarovnání souhvězdí v noční obloze</string>
+    <string name="settings_debug_legacy_canvas_sky">Starý Canvas renderer oblohy</string>
+    <string name="settings_debug_legacy_canvas_sky_desc">Vykreslí noční oblohu původním CPU rendererem místo GPU scény</string>
     <string name="settings_debug_night_sky_focus_region">Oblast aktivace souhvězdí</string>
     <string name="settings_debug_night_sky_focus_region_desc">Zobrazí aktivní oblast zaměření a práh zobrazení souhvězdí v noční obloze</string>
     <string name="settings_debug_terrain_metrics">Metriky terénního horizontu</string>

@@ -15,6 +15,11 @@ data class DebugPreferences(
     val starTapRadiusDp: Int = DEFAULT_STAR_TAP_RADIUS_DP,
     /** Visualize celestial hit-test radius circle upon tapping in Night Sky AR. */
     val showTapRadiusIndicator: Boolean = false,
+    /**
+     * Draw Night Sky with the old Canvas renderer instead of the Filament scene. A fallback while
+     * the GPU path is being verified on devices; removed together with the Canvas code.
+     */
+    val useLegacyCanvasSky: Boolean = false,
 ) {
     /** True if any debug or diagnostic feature is currently turned on. */
     val anyEnabled: Boolean
@@ -22,6 +27,7 @@ data class DebugPreferences(
             enableNightSkyFocusRegion ||
             showTerrainMetrics ||
             showTapRadiusIndicator ||
+            useLegacyCanvasSky ||
             starTapRadiusDp != DEFAULT_STAR_TAP_RADIUS_DP
 
     companion object {

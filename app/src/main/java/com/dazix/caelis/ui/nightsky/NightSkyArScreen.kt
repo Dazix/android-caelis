@@ -329,6 +329,11 @@ fun NightSkyArScreen(
     val currentHorizonProfile by rememberUpdatedState(horizonProfile)
     val currentAlignAzimuthOffset by rememberUpdatedState(alignAzimuthOffset)
     val currentAlignElevationOffset by rememberUpdatedState(alignElevationOffset)
+    val gpuSky = remember { NightSkyGpuHandle() }
+    val useGpuSky = !uiState.debugPreferences.useLegacyCanvasSky
+    val currentUseGpuSky by rememberUpdatedState(useGpuSky)
+    val currentConstellationsVisible by rememberUpdatedState(uiState.isConstellationsVisible)
+    val currentMeteorShowersVisible by rememberUpdatedState(uiState.isMeteorShowersVisible)
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
@@ -380,6 +385,20 @@ fun NightSkyArScreen(
                                     radiusDp = currentDebugPreferences.starTapRadiusDp,
                                 )
                             }
+                            // The GPU path keeps no per-frame screen positions on the CPU; project
+                            // the last drawn frame now, so the hit test sees what is on screen.
+                            val gpuScene = gpuSky.scene
+                            val tapCatalog = currentCatalog
+                            if (currentUseGpuSky && gpuScene != null && tapCatalog != null) {
+                                renderer.prepareHitTest(
+                                    scene = gpuScene,
+                                    frame = gpuSky.frame,
+                                    catalog = tapCatalog,
+                                    showConstellations = currentConstellationsVisible,
+                                    showMeteorShowers = currentMeteorShowersVisible,
+                                    density = currentDensity,
+                                )
+                            }
                             val hitTarget = renderer.findHitAt(
                                 tapX = offset.x,
                                 tapY = offset.y,
@@ -387,7 +406,8 @@ fun NightSkyArScreen(
                                 density = currentDensity,
                                 catalog = currentCatalog,
                                 planets = currentPlanets,
-                                isLandscapeVisible = currentLandscapeVisible,
+                                // A wanted skyline still waiting for its profile is a flat ring: ground below 0°.
+                                isLandscapeVisible = currentLandscapeVisible || currentUseRealHorizon,
                                 useRealHorizon = currentUseRealHorizon,
                                 horizonProfile = currentHorizonProfile,
                                 alignAzimuthOffsetDeg = currentAlignAzimuthOffset,
@@ -483,45 +503,82 @@ fun NightSkyArScreen(
                     onCameraBound = viewModel::attachCamera,
                 )
 
-                // 3D Night Sky AR Overlay Canvas with AGSL Milky Way, Atmosphere, Landscape, and Opaque Sky Dome layers
-                NightSkyOverlayCanvas(
-                    renderer = renderer,
-                    orientation = orientation,
-                    onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
-                    displayRotation = displayRotation,
-                    fovHorizontalDegrees = uiState.cameraFovHorizontal,
-                    zoomRatio = uiState.zoomRatio,
-                    catalog = catalog,
-                    lstDegrees = uiState.lstDegrees,
-                    latitudeDegrees = uiState.location.latitude,
-                    timeState = uiState.timeState,
-                    longitudeDegrees = uiState.location.longitude,
-                    nightVisionState = uiState.nightVisionState,
-                    isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                    isMilkyWayVisible = uiState.isMilkyWayVisible,
-                    isAtmosphereVisible = uiState.isAtmosphereVisible,
-                    isLandscapeVisible = uiState.isLandscapeVisible,
-                    isGridVisible = uiState.isGridVisible,
-                    horizonProfile = horizonProfile,
-                    useRealHorizon = useRealHorizon,
-                    isPlanetsVisible = uiState.isPlanetsVisible,
-                    isDsosVisible = uiState.isDsosVisible,
-                    isMeteorShowersVisible = uiState.isMeteorShowersVisible,
-                    isConstellationsVisible = uiState.isConstellationsVisible,
-                    isConstellationArtVisible = uiState.isConstellationArtVisible,
-                    selectedBody = uiState.selectedBody,
-                    selectedPlanetId = uiState.selectedPlanetId,
-                    planets = uiState.planetStates,
-                    debugArtOffsetX = uiState.debugArtOffsetX,
-                    debugArtOffsetY = uiState.debugArtOffsetY,
-                    debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
-                    debugArtRotationOffset = uiState.debugArtRotationOffset,
-                    isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
-                    debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
-                    debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
-                    showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                if (useGpuSky) {
+                    NightSkyGpuSky(
+                        handle = gpuSky,
+                        renderer = renderer,
+                        orientation = orientation,
+                        onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
+                        displayRotation = displayRotation,
+                        fovHorizontalDegrees = uiState.cameraFovHorizontal,
+                        zoomRatio = uiState.zoomRatio,
+                        catalog = catalog,
+                        latitudeDegrees = uiState.location.latitude,
+                        timeState = uiState.timeState,
+                        longitudeDegrees = uiState.location.longitude,
+                        nightVisionState = uiState.nightVisionState,
+                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                        isMilkyWayVisible = uiState.isMilkyWayVisible,
+                        isAtmosphereVisible = uiState.isAtmosphereVisible,
+                        isLandscapeVisible = uiState.isLandscapeVisible,
+                        isGridVisible = uiState.isGridVisible,
+                        horizonProfile = horizonProfile,
+                        useRealHorizon = useRealHorizon,
+                        isPlanetsVisible = uiState.isPlanetsVisible,
+                        isDsosVisible = uiState.isDsosVisible,
+                        isMeteorShowersVisible = uiState.isMeteorShowersVisible,
+                        isConstellationsVisible = uiState.isConstellationsVisible,
+                        isConstellationArtVisible = uiState.isConstellationArtVisible,
+                        selectedBody = uiState.selectedBody,
+                        selectedPlanetId = uiState.selectedPlanetId,
+                        planets = uiState.planetStates,
+                        isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
+                        debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                        debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
+                        showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    // Fallback while the GPU sky is verified on devices (debug setting); goes with the Canvas code.
+                    NightSkyOverlayCanvas(
+                        renderer = renderer,
+                        orientation = orientation,
+                        onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
+                        displayRotation = displayRotation,
+                        fovHorizontalDegrees = uiState.cameraFovHorizontal,
+                        zoomRatio = uiState.zoomRatio,
+                        catalog = catalog,
+                        lstDegrees = uiState.lstDegrees,
+                        latitudeDegrees = uiState.location.latitude,
+                        timeState = uiState.timeState,
+                        longitudeDegrees = uiState.location.longitude,
+                        nightVisionState = uiState.nightVisionState,
+                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                        isMilkyWayVisible = uiState.isMilkyWayVisible,
+                        isAtmosphereVisible = uiState.isAtmosphereVisible,
+                        isLandscapeVisible = uiState.isLandscapeVisible,
+                        isGridVisible = uiState.isGridVisible,
+                        horizonProfile = horizonProfile,
+                        useRealHorizon = useRealHorizon,
+                        isPlanetsVisible = uiState.isPlanetsVisible,
+                        isDsosVisible = uiState.isDsosVisible,
+                        isMeteorShowersVisible = uiState.isMeteorShowersVisible,
+                        isConstellationsVisible = uiState.isConstellationsVisible,
+                        isConstellationArtVisible = uiState.isConstellationArtVisible,
+                        selectedBody = uiState.selectedBody,
+                        selectedPlanetId = uiState.selectedPlanetId,
+                        planets = uiState.planetStates,
+                        debugArtOffsetX = uiState.debugArtOffsetX,
+                        debugArtOffsetY = uiState.debugArtOffsetY,
+                        debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
+                        debugArtRotationOffset = uiState.debugArtRotationOffset,
+                        isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
+                        debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                        debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
+                        showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             } else {
                 // Camera Permission Request Surface
                 NightSkyPermissionPrompt(

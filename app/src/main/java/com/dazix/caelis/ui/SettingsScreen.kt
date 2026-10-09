@@ -644,6 +644,12 @@ fun SettingsScreen(
                         checked = debugPreferences.enableNightSkyFocusRegion,
                         onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(enableNightSkyFocusRegion = it)) },
                     )
+                    SwitchRow(
+                        title = stringResource(R.string.settings_debug_legacy_canvas_sky),
+                        description = stringResource(R.string.settings_debug_legacy_canvas_sky_desc),
+                        checked = debugPreferences.useLegacyCanvasSky,
+                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(useLegacyCanvasSky = it)) },
+                    )
 
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),

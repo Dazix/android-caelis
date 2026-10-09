@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceView
+import android.view.TextureView
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.google.android.filament.Camera
 import com.google.android.filament.Engine
@@ -20,16 +21,30 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * One Filament engine, scene and camera drawing into a [SurfaceView], with its own vsync loop.
+ * One Filament engine, scene and camera drawing into a [SurfaceView] or a [TextureView], with its
+ * own vsync loop.
  *
- * The surface is translucent and sits as a media overlay: above the CameraX preview's own
- * SurfaceView, below the window, so the Compose HUD still draws on top of the sky. Post-processing
+ * The output is translucent. A SurfaceView sits as a media overlay: above the CameraX preview's own
+ * SurfaceView, below the window, so the Compose HUD still draws on top of the sky. A TextureView is
+ * part of the window itself, which is what a screen with a Compose overlay pinned to the sky needs:
+ * SurfaceFlinger presents a SurfaceView's buffers independently of the window's, and on a Pixel 7 Pro
+ * labels drawn in the window visibly slid against the stars during a pan; a TextureView is latched
+ * by the window's own frame, so both halves reach the screen together. Post-processing
  * is off on purpose — tone mapping would shift every unlit colour away from the palette the Canvas
  * renderer used, and night vision depends on those colours being exact.
  *
  * Everything here runs on the main thread, which is where Choreographer delivers frames.
+ *
+ * With [ownFrameLoop] false nothing is scheduled here and the owner calls [renderFrame] itself.
+ * Night Sky does that from Compose's frame clock, so the GPU frame and the Compose label overlay
+ * are drawn from the same pose in the same vsync; with two independent loops the labels could
+ * trail the stars by a frame during a fast pan.
  */
-class SkySurface(private val context: Context, surfaceView: SurfaceView) {
+class SkySurface(
+    private val context: Context,
+    target: android.view.View,
+    private val ownFrameLoop: Boolean = true,
+) {
 
     val engine: Engine = Engine.create()
     val scene: Scene = engine.createScene()
@@ -56,12 +71,13 @@ class SkySurface(private val context: Context, surfaceView: SurfaceView) {
             if (destroyed) return
             Choreographer.getInstance().postFrameCallback(this)
             onFrame?.invoke(frameTimeNanos)
-            val chain = swapChain ?: return
-            if (uiHelper.isReadyToRender && renderer.beginFrame(chain, frameTimeNanos)) {
-                renderer.render(view)
-                renderer.endFrame()
-            }
+            renderFrame(frameTimeNanos)
         }
+    }
+
+    private val clearOptions = Renderer.ClearOptions().apply {
+        clear = true
+        clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
     }
 
     init {
@@ -69,10 +85,7 @@ class SkySurface(private val context: Context, surfaceView: SurfaceView) {
         view.camera = camera
         view.blendMode = View.BlendMode.TRANSLUCENT
         view.isPostProcessingEnabled = false
-        renderer.clearOptions = Renderer.ClearOptions().apply {
-            clear = true
-            clearColor = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
-        }
+        renderer.clearOptions = clearOptions
         setNightVision(active = false, colors = NightVisionColors.NONE)
 
         uiHelper.isOpaque = false
@@ -99,8 +112,34 @@ class SkySurface(private val context: Context, surfaceView: SurfaceView) {
                 applyProjection()
             }
         }
-        uiHelper.attachTo(surfaceView)
-        Choreographer.getInstance().postFrameCallback(frameCallback)
+        when (target) {
+            is TextureView -> uiHelper.attachTo(target)
+            is SurfaceView -> uiHelper.attachTo(target)
+            else -> throw IllegalArgumentException("SkySurface draws into a SurfaceView or a TextureView")
+        }
+        if (ownFrameLoop) Choreographer.getInstance().postFrameCallback(frameCallback)
+    }
+
+    /** Renders one frame with whatever transforms and uniforms are set now. Main thread only. */
+    fun renderFrame(frameTimeNanos: Long) {
+        if (destroyed) return
+        val chain = swapChain ?: return
+        if (uiHelper.isReadyToRender && renderer.beginFrame(chain, frameTimeNanos)) {
+            renderer.render(view)
+            renderer.endFrame()
+        }
+    }
+
+    /**
+     * What the frame is cleared to: transparent over the camera, or the planetarium's opaque sky.
+     * Values are written to the swap chain as they are (post-processing is off), so an sRGB colour
+     * comes out as that colour.
+     */
+    fun setClearColor(r: Float, g: Float, b: Float, a: Float) {
+        val c = clearOptions.clearColor
+        if (c[0] == r.toDouble() && c[1] == g.toDouble() && c[2] == b.toDouble() && c[3] == a.toDouble()) return
+        c[0] = r.toDouble(); c[1] = g.toDouble(); c[2] = b.toDouble(); c[3] = a.toDouble()
+        renderer.clearOptions = clearOptions
     }
 
     /** Horizontal FOV of the screen, as every AR screen already computes it. */
@@ -148,7 +187,7 @@ class SkySurface(private val context: Context, surfaceView: SurfaceView) {
     fun destroy() {
         if (destroyed) return
         destroyed = true
-        Choreographer.getInstance().removeFrameCallback(frameCallback)
+        if (ownFrameLoop) Choreographer.getInstance().removeFrameCallback(frameCallback)
         uiHelper.detach()
         swapChain?.let { engine.destroySwapChain(it) }
         swapChain = null

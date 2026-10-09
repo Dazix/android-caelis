@@ -43,22 +43,29 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
                 LocationManager.NETWORK_PROVIDER,
                 LocationManager.PASSIVE_PROVIDER,
             )
-            val best = providers.mapNotNull { p ->
+            val known = providers.mapNotNull { p ->
                 runCatching { lm.getLastKnownLocation(p) }.getOrNull()
-            }.maxByOrNull { it.time }
+            }
+            // A qualifying fix wins over a newer coarse one: picking only the newest let a network
+            // location from a moment later hide a usable satellite or fused fix, and everything gated
+            // on a fix (the terrain horizon) then waited for a live one.
+            val fix = known.filter(::qualifiesAsFix).maxByOrNull { it.time }
+            val best = fix ?: known.maxByOrNull { it.time }
 
             if (best != null) {
                 locationState.value = GeoLocation(best.latitude, best.longitude, best.altitude)
-                val isFresh = (System.currentTimeMillis() - best.time) < FRESH_FIX_MAX_AGE_MS
-                val isAccurate = best.hasAccuracy() && best.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
-                val isSatelliteOrFused = best.provider == LocationManager.GPS_PROVIDER || best.provider == LocationManager.FUSED_PROVIDER
-                hasGpsFixState.value = isFresh && isAccurate && isSatelliteOrFused
-            } else {
-                hasGpsFixState.value = false
             }
+            hasGpsFixState.value = fix != null
         } catch (_: SecurityException) {
             // Permission revoked concurrently
         }
+    }
+
+    private fun qualifiesAsFix(loc: Location): Boolean {
+        val isFresh = (System.currentTimeMillis() - loc.time) < FRESH_FIX_MAX_AGE_MS
+        val isAccurate = loc.hasAccuracy() && loc.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
+        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == LocationManager.FUSED_PROVIDER
+        return isFresh && isAccurate && isSatelliteOrFused
     }
 
     fun startUpdates() {

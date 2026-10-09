@@ -1,6 +1,7 @@
 package com.dazix.caelis.ar.scene
 
 import com.dazix.caelis.domain.arframe.HorizonMeshBuilder
+import com.dazix.caelis.domain.arframe.HorizonMorph
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.google.android.filament.Box
 import com.google.android.filament.EntityManager
@@ -27,6 +28,13 @@ class TerrainRing(
     private val indexBuffer: IndexBuffer
     private val vertices = FloatArray(HorizonMeshBuilder.VERTEX_COUNT * HorizonMeshBuilder.FLOATS_PER_VERTEX)
     private val upload = DoubleBuffer(HorizonMeshBuilder.VERTEX_COUNT * STRIDE)
+
+    // Per-vertex elevation the ridge is morphing from and to; see HorizonMorph.
+    private val fromElevation = FloatArray(HorizonMeshBuilder.VERTEX_COUNT)
+    private val toElevation = FloatArray(HorizonMeshBuilder.VERTEX_COUNT)
+    private val morph = HorizonMorph()
+    private var framesShown = 0
+
     // Declared before init: setColor runs from it.
     private val color = FloatArray(4)
     private var profileStamp = Long.MIN_VALUE
@@ -41,6 +49,7 @@ class TerrainRing(
             // POSITION is required by Filament; terrain.mat computes the real position from custom0.
             .attribute(VertexBuffer.VertexAttribute.POSITION, 0, VertexBuffer.AttributeType.FLOAT3, 0, STRIDE)
             .attribute(VertexBuffer.VertexAttribute.CUSTOM0, 0, VertexBuffer.AttributeType.FLOAT4, 12, STRIDE)
+            .attribute(VertexBuffer.VertexAttribute.CUSTOM1, 0, VertexBuffer.AttributeType.FLOAT, 28, STRIDE)
             .build(engine)
 
         val idx = IntArray(HorizonMeshBuilder.INDEX_COUNT)
@@ -67,18 +76,30 @@ class TerrainRing(
             .build(engine, entity)
         setOffsets(0f, 0f)
         setColor(0.024f, 0.031f, 0.043f, 1f)
+        materialInstance.setParameter("morph", morph.eased)
     }
 
     val hasUsableProfile: Boolean get() = hasProfile
 
-    /** Null or unusable -> never drawn; the stylised landscape layer covers that case, not a flat ring. */
+    /**
+     * Null or unusable draws a flat ring at 0° — the placeholder while a profile is on its way; the
+     * owner shows the stylised landscape instead once none is coming. A new shape rises out of
+     * whatever is on screen, unless nothing has been drawn yet, in which case it simply appears.
+     */
     fun setProfile(profile: HorizonProfile?) {
         val usable = profile != null && profile.isUsable
-        if (usable && hasProfile && profile!!.generatedAtEpochMillis == profileStamp) return
+        val stamp = if (usable) profile!!.generatedAtEpochMillis else Long.MIN_VALUE
+        if (usable == hasProfile && stamp == profileStamp) return
         hasProfile = usable
-        profileStamp = if (usable) profile!!.generatedAtEpochMillis else Long.MIN_VALUE
-        if (usable) uploadMesh(profile)
+        profileStamp = stamp
+        uploadMesh(if (usable) profile else null)
         applyVisibility()
+    }
+
+    /** Advances the rise of the ridge by one frame. Call from the frame loop. */
+    fun advance(dtSeconds: Float) {
+        if (isShown()) framesShown++
+        if (morph.advance(dtSeconds)) materialInstance.setParameter("morph", morph.eased)
     }
 
     fun setVisible(visible: Boolean) {
@@ -87,8 +108,10 @@ class TerrainRing(
         applyVisibility()
     }
 
+    private fun isShown() = surface.scene.hasEntity(entity)
+
     private fun applyVisibility() {
-        val show = requestedVisible && hasProfile
+        val show = requestedVisible
         val scene = surface.scene
         if (show && !scene.hasEntity(entity)) scene.addEntity(entity)
         if (!show && scene.hasEntity(entity)) scene.removeEntity(entity)
@@ -121,18 +144,29 @@ class TerrainRing(
 
     private fun uploadMesh(profile: HorizonProfile?) {
         HorizonMeshBuilder.buildVertices(profile, vertices)
-        val buffer = upload.next()
         val f = HorizonMeshBuilder.FLOATS_PER_VERTEX
+        // Start from what is on screen now; before anything was drawn there is nothing to morph from.
+        val animate = framesShown > 0
+        for (v in 0 until HorizonMeshBuilder.VERTEX_COUNT) {
+            val target = vertices[v * f + 1]
+            fromElevation[v] = if (animate) morph.blend(fromElevation[v], toElevation[v]) else target
+            toElevation[v] = target
+        }
+        if (animate) morph.restart() else morph.finish()
+        materialInstance.setParameter("morph", morph.eased)
+
+        val buffer = upload.next()
         for (v in 0 until HorizonMeshBuilder.VERTEX_COUNT) {
             buffer.putFloat(0f).putFloat(0f).putFloat(0f)
             buffer.putFloat(vertices[v * f]).putFloat(vertices[v * f + 1])
             buffer.putFloat(vertices[v * f + 2]).putFloat(vertices[v * f + 3])
+            buffer.putFloat(fromElevation[v])
         }
         buffer.flip()
         vertexBuffer.setBufferAt(surface.engine, 0, buffer)
     }
 
     private companion object {
-        const val STRIDE = 28
+        const val STRIDE = 32
     }
 }

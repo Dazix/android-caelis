@@ -537,6 +537,8 @@
     <string name="settings_debug_group_terrain">Terrain Horizon</string>
     <string name="settings_debug_night_sky_calibration">Artwork alignment debug</string>
     <string name="settings_debug_night_sky_calibration_desc">Enable constellation illustration alignment debug controls in Night Sky AR</string>
+    <string name="settings_debug_legacy_canvas_sky">Legacy Canvas sky</string>
+    <string name="settings_debug_legacy_canvas_sky_desc">Draw Night Sky AR with the old CPU renderer instead of the GPU scene</string>
     <string name="settings_debug_night_sky_focus_region">Constellation focus area</string>
     <string name="settings_debug_night_sky_focus_region_desc">Highlight active constellation focus area and threshold in Night Sky AR</string>
     <string name="settings_debug_terrain_metrics">Terrain horizon metrics</string>

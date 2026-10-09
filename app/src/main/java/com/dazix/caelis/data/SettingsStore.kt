@@ -397,6 +397,7 @@ internal object SettingsMapping {
     private val DEBUG_SHOW_TERRAIN_METRICS = booleanPreferencesKey("debug_show_terrain_metrics")
     private val DEBUG_STAR_TAP_RADIUS = intPreferencesKey("debug_star_tap_radius")
     private val DEBUG_SHOW_TAP_RADIUS_INDICATOR = booleanPreferencesKey("debug_show_tap_radius_indicator")
+    private val DEBUG_LEGACY_CANVAS_SKY = booleanPreferencesKey("debug_legacy_canvas_sky")
 
     private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
@@ -843,6 +844,7 @@ internal object SettingsMapping {
             showTerrainMetrics = prefs[DEBUG_SHOW_TERRAIN_METRICS] ?: false,
             starTapRadiusDp = prefs[DEBUG_STAR_TAP_RADIUS] ?: DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP,
             showTapRadiusIndicator = prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] ?: false,
+            useLegacyCanvasSky = prefs[DEBUG_LEGACY_CANVAS_SKY] ?: false,
         )
     }
 
@@ -852,6 +854,7 @@ internal object SettingsMapping {
         prefs[DEBUG_SHOW_TERRAIN_METRICS] = preferences.showTerrainMetrics
         prefs[DEBUG_STAR_TAP_RADIUS] = preferences.starTapRadiusDp
         prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] = preferences.showTapRadiusIndicator
+        prefs[DEBUG_LEGACY_CANVAS_SKY] = preferences.useLegacyCanvasSky
     }
 
     fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(

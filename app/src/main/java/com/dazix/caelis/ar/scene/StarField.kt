@@ -1,6 +1,5 @@
 package com.dazix.caelis.ar.scene
 
-import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.google.android.filament.Box
 import com.google.android.filament.EntityManager
 import com.google.android.filament.IndexBuffer
@@ -10,8 +9,6 @@ import com.google.android.filament.RenderableManager
 import com.google.android.filament.VertexBuffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * The whole star catalogue as one renderable of camera-facing quads (see `star.mat`).
@@ -22,10 +19,10 @@ import kotlin.math.sin
  * constellation bypass the telescope limit), held in its own small buffer and uploaded only when
  * the set changes.
  */
-class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, material: Material) {
+class StarField(private val surface: SkySurface, geometry: StarGeometry, material: Material) {
 
     val entity: Int = EntityManager.get().create()
-    val starCount: Int = catalog.starsLength().coerceAtMost(MAX_STARS)
+    val starCount: Int = geometry.starCount
     val materialInstance: MaterialInstance = material.createInstance()
 
     private val vertexCount = starCount * 4
@@ -36,37 +33,17 @@ class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, mater
     // the one just handed over must not be written again until the next change.
     private val forcedBuffers = arrayOf(newBuffer(vertexCount * 4), newBuffer(vertexCount * 4))
     private val forced = BooleanArray(starCount)
+
+    // The vertex stream mirrored on the heap and copied into the upload buffer in one bulk put.
+    // Writing it byte by byte (1.6 MB as 400k separate puts into a direct buffer) took 25-30 ms
+    // on a Pixel 7 Pro, every time a constellation faded in or out during a pan.
+    private val forcedBytes = ByteArray(vertexCount * 4)
+    private val forcedList = IntArray(starCount)
+    private var forcedListSize = 0
     private var forcedFront = 0
     private var forcedDirty = false
 
     init {
-        val geometry = newBuffer(vertexCount * STRIDE)
-        val bb = catalog.byteBuffer
-        val base = catalog.starsVectorOffset()
-        for (i in 0 until starCount) {
-            val offset = base + i * 12
-            val ra = Math.toRadians(bb.getFloat(offset).toDouble())
-            val dec = Math.toRadians(bb.getFloat(offset + 4).toDouble())
-            val magnitude = bb.getFloat(offset + 8)
-            val x = (cos(dec) * cos(ra)).toFloat() * SkySurface.SKY_RADIUS
-            val y = sin(dec).toFloat() * SkySurface.SKY_RADIUS
-            val z = (cos(dec) * sin(ra)).toFloat() * SkySurface.SKY_RADIUS
-            for (corner in 0 until 4) {
-                geometry.putFloat(x).putFloat(y).putFloat(z)
-                geometry.putFloat(CORNER_X[corner]).putFloat(CORNER_Y[corner])
-                geometry.putFloat(magnitude).putFloat(0f)
-            }
-        }
-        geometry.flip()
-
-        val indices = newBuffer(starCount * 6 * 4)
-        for (i in 0 until starCount) {
-            val v = i * 4
-            indices.putInt(v).putInt(v + 1).putInt(v + 2)
-            indices.putInt(v).putInt(v + 2).putInt(v + 3)
-        }
-        indices.flip()
-
         val engine = surface.engine
         vertexBuffer = VertexBuffer.Builder()
             .vertexCount(vertexCount)
@@ -76,14 +53,14 @@ class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, mater
             .attribute(VertexBuffer.VertexAttribute.CUSTOM1, 1, VertexBuffer.AttributeType.UBYTE4, 0, 4)
             .normalized(VertexBuffer.VertexAttribute.CUSTOM1)
             .build(engine)
-        vertexBuffer.setBufferAt(engine, 0, geometry)
+        vertexBuffer.setBufferAt(engine, 0, geometry.vertices)
         uploadForced()
 
         indexBuffer = IndexBuffer.Builder()
             .indexCount(starCount * 6)
             .bufferType(IndexBuffer.Builder.IndexType.UINT)
             .build(engine)
-        indexBuffer.setBuffer(engine, indices)
+        indexBuffer.setBuffer(engine, geometry.indices)
 
         val r = SkySurface.SKY_RADIUS * 1.1f
         RenderableManager.Builder(1)
@@ -100,19 +77,30 @@ class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, mater
         surface.scene.addEntity(entity)
     }
 
-    fun setForced(starIndex: Int, value: Boolean) {
-        if (starIndex !in 0 until starCount || forced[starIndex] == value) return
-        forced[starIndex] = value
+    /** Adds a star to the forced set; [clearForced] empties the whole set. */
+    fun force(starIndex: Int) {
+        if (starIndex !in 0 until starCount || forced[starIndex]) return
+        forced[starIndex] = true
+        forcedList[forcedListSize++] = starIndex
+        writeFlag(starIndex, -1)
         forcedDirty = true
     }
 
+    fun isForced(starIndex: Int): Boolean = starIndex in 0 until starCount && forced[starIndex]
+
     fun clearForced() {
-        for (i in 0 until starCount) {
-            if (forced[i]) {
-                forced[i] = false
-                forcedDirty = true
-            }
+        for (k in 0 until forcedListSize) {
+            val i = forcedList[k]
+            forced[i] = false
+            writeFlag(i, 0)
+            forcedDirty = true
         }
+        forcedListSize = 0
+    }
+
+    private fun writeFlag(starIndex: Int, value: Byte) {
+        val base = starIndex * 16
+        for (corner in 0 until 4) forcedBytes[base + corner * 4] = value
     }
 
     /** Uploads the forced flags if they changed since the last frame. Call from the frame loop. */
@@ -124,10 +112,7 @@ class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, mater
         forcedFront = 1 - forcedFront
         val buffer = forcedBuffers[forcedFront]
         buffer.clear()
-        for (i in 0 until starCount) {
-            val b: Byte = if (forced[i]) -1 else 0
-            for (corner in 0 until 4) buffer.put(b).put(0).put(0).put(0)
-        }
+        buffer.put(forcedBytes)
         buffer.flip()
         vertexBuffer.setBufferAt(surface.engine, 1, buffer)
         forcedDirty = false
@@ -149,10 +134,7 @@ class StarField(private val surface: SkySurface, catalog: NightSkyCatalog, mater
     }
 
     companion object {
-        const val MAX_STARS = 100_000
-        private const val STRIDE = 28
-        private val CORNER_X = floatArrayOf(-1f, 1f, 1f, -1f)
-        private val CORNER_Y = floatArrayOf(-1f, -1f, 1f, 1f)
+        private const val STRIDE = StarGeometry.STRIDE
 
         private fun newBuffer(bytes: Int): ByteBuffer =
             ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
