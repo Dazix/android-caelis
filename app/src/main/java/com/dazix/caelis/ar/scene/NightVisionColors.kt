@@ -1,6 +1,5 @@
 package com.dazix.caelis.ar.scene
 
-import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 
 /**

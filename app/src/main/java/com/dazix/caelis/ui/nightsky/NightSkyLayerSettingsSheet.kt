@@ -67,7 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.ui.AppIcons
@@ -702,7 +702,7 @@ private fun TimeTravelSectionContent(
     onStepVirtualTime: (Duration) -> Unit,
     onResetToLive: () -> Unit,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
 ) {
     val activeInstant = timeState.activeInstant()
     val zone = remember { ZoneId.systemDefault() }
@@ -969,7 +969,7 @@ private fun DateTimeChip(
 private fun NightSkyDatePickerDialog(
     initialDate: LocalDate,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1042,7 +1042,7 @@ private fun NightSkyDatePickerDialog(
 private fun NightSkyTimePickerDialog(
     initialTime: LocalTime,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
     onTimeSelected: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {

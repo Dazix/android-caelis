@@ -36,7 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialType
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.SearchResultItem

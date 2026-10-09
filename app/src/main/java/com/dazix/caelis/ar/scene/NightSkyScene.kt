@@ -6,9 +6,6 @@ import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
 import android.util.LruCache
-import com.dazix.caelis.ar.NormalGrid
-import com.dazix.caelis.ar.NormalHorizon
-import com.dazix.caelis.ar.paletteForTheme
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
@@ -309,23 +306,7 @@ class NightSkyScene(
         buildConstellationLines(frame)
     }
 
-    private fun buildGrid(theme: NightVisionTheme, nightVision: Boolean) {
-        val palette = paletteForTheme(theme)
-        val horizon = if (nightVision) palette.secondary else NormalHorizon
-        val major = if (nightVision) palette.secondary.copy(alpha = 0.6f) else NormalHorizon.copy(alpha = 0.55f)
-        val minor = if (nightVision) palette.grid else NormalGrid
-        grid.begin()
-        AltAzGridBuilder.build { ax, ay, az, bx, by, bz, w, role ->
-            val c = when (role) {
-                AltAzGridBuilder.Role.HORIZON -> horizon
-                AltAzGridBuilder.Role.MAJOR -> major
-                AltAzGridBuilder.Role.MINOR -> minor
-            }
-            val r = SkySurface.SKY_RADIUS
-            grid.addSegment(ax * r, ay * r, az * r, bx * r, by * r, bz * r, w, c.red, c.green, c.blue, c.alpha)
-        }
-        grid.end()
-    }
+    private fun buildGrid(theme: NightVisionTheme, nightVision: Boolean) = grid.fillAltAzGrid(nightVision, theme)
 
     /**
      * Constellation figures, in the celestial frame. Colours and widths are the Canvas paints':

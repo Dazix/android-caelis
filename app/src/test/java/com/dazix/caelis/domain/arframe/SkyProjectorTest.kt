@@ -162,4 +162,58 @@ class SkyProjectorTest {
         p.projectEnu(enuStar[0], enuStar[1], enuStar[2], b)
         for (i in 0 until 3) assertEquals(b[i], a[i], 1e-3f)
     }
+
+    @Test
+    fun `alt-az projection is the projection of the same ENU direction`() {
+        val p = projector(uprightNorth, 90, width = h, height = w)
+        val a = FloatArray(3)
+        val b = FloatArray(3)
+        for (az in doubleArrayOf(0.0, 17.0, 95.0, 200.0, 341.0)) for (el in doubleArrayOf(-40.0, 0.0, 12.5, 70.0)) {
+            val d = enu(az, el)
+            assertEquals(p.projectEnu(d[0], d[1], d[2], b), p.projectAltAz(az, el, a))
+            for (i in 0 until 3) assertEquals(b[i], a[i], 1e-3f)
+        }
+    }
+
+    @Test
+    fun `screen bearing points the way to turn`() {
+        val p = projector(uprightNorth, 0)
+        val out = FloatArray(2)
+        fun bearing(az: Double, el: Double) = enu(az, el).let { p.screenBearing(it[0], it[1], it[2], out) }
+
+        bearing(90.0, 0.0)
+        assertEquals(1f, out[0], 1e-4f)
+        assertEquals(0f, out[1], 1e-4f)
+
+        bearing(0.0, 60.0)
+        assertEquals(0f, out[0], 1e-4f)
+        assertEquals(-1f, out[1], 1e-4f)
+
+        // Behind and to the right stays right: it is not mirrored like a projected point.
+        bearing(150.0, 0.0)
+        assertTrue(out[0] > 0.99f)
+
+        // Dead behind has no side; the pointer goes down rather than nowhere.
+        bearing(180.0, 0.0)
+        assertEquals(0f, out[0], 1e-4f)
+        assertEquals(1f, out[1], 1e-4f)
+    }
+
+    @Test
+    fun `screen bearing follows the display rotation`() {
+        // In landscape the bearing to a far target must agree with where a near one in the same
+        // direction lands, i.e. it turns with the display exactly as the projection does.
+        val p = projector(uprightNorth, 90, width = h, height = w)
+        val out = FloatArray(2)
+        val east = enu(90.0, 0.0)
+        p.screenBearing(east[0], east[1], east[2], out)
+        val projected = FloatArray(3)
+        val near = enu(10.0, 0.0)
+        p.projectEnu(near[0], near[1], near[2], projected)
+        val dx = projected[0] - h / 2
+        val dy = projected[1] - w / 2
+        val len = kotlin.math.sqrt(dx * dx + dy * dy)
+        assertEquals(dx / len, out[0], 1e-3f)
+        assertEquals(dy / len, out[1], 1e-3f)
+    }
 }

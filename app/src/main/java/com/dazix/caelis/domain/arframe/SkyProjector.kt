@@ -1,5 +1,8 @@
 package com.dazix.caelis.domain.arframe
 
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 
@@ -58,6 +61,38 @@ class SkyProjector {
         out[offset + 1] = viewportHeight * 0.5f - sign * focalLengthPixels * (vy / safe)
         out[offset + 2] = depth
         return inFront
+    }
+
+    /** [projectEnu] for an azimuth (clockwise from north) and elevation, both in degrees. */
+    fun projectAltAz(azimuthDeg: Double, elevationDeg: Double, out: FloatArray, offset: Int = 0): Boolean {
+        val az = Math.toRadians(azimuthDeg)
+        val el = Math.toRadians(elevationDeg)
+        val cosEl = cos(el)
+        return projectEnu((sin(az) * cosEl).toFloat(), (cos(az) * cosEl).toFloat(), sin(el).toFloat(), out, offset)
+    }
+
+    /**
+     * Which way an ENU direction lies from the screen centre, for an off-screen pointer: writes the
+     * unit screen vector `(dx, dy)` (Y down) into [out2]. Unlike [projectEnu] nothing is mirrored —
+     * a target behind the camera keeps the side it is on, and one dead behind points down, so the
+     * arrow says "turn this way" rather than "it is opposite this point".
+     */
+    fun screenBearing(x: Float, y: Float, z: Float, out2: FloatArray) {
+        val m = cameraModel
+        var dx = m[0] * x + m[1] * y + m[2] * z
+        var dy = -(m[4] * x + m[5] * y + m[6] * z)
+        val behind = m[8] * x + m[9] * y + m[10] * z > 0f
+        if (behind && abs(dx) < 0.001f && abs(dy) < 0.001f) dy = 1f
+        val len = sqrt(dx * dx + dy * dy)
+        if (len > 0.001f) {
+            dx /= len
+            dy /= len
+        } else {
+            dx = 0f
+            dy = -1f
+        }
+        out2[0] = dx
+        out2[1] = dy
     }
 
     /** Celestial direction through a column-major celestial -> ENU matrix, then [projectEnu]. */

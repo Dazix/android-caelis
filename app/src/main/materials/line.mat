@@ -11,6 +11,7 @@
 //   color    = straight RGBA, already themed for night vision on the CPU
 //   custom2.x = progress of the owning constellation (1 = whole line, full alpha), a small
 //               dynamic buffer; it scales both the drawn length and the alpha, as on the Canvas
+//   custom3  = (point beyond this end of a polyline, 1) for a mitred joint, or (0, 0, 0, 0)
 //
 // The fragment works in screen pixels along the segment, which is what the Canvas renderer did:
 // a gap of gapPx is left at each star, a partial progress p draws p/2 of the trimmed segment from
@@ -24,7 +25,7 @@ material {
     depthWrite : false,
     depthCulling : false,
     culling : none,
-    requires : [ color, custom0, custom1, custom2 ],
+    requires : [ color, custom0, custom1, custom2, custom3 ],
     variables : [ lineAlong, lineAcross, lineProgress ]
 }
 
@@ -77,7 +78,31 @@ vertex {
 
         float halfWidth = 0.5 * info.y;
         float extent = halfWidth + 1.0; // one pixel of antialiasing margin
-        float2 offsetPx = n * side * extent;
+        // Polyline joints (custom3 = the neighbouring point beyond this end, w = 1 if there is
+        // one): push the edge along the bisector of this segment's and the neighbour's normals,
+        // lengthened to keep the line's width, so the two segments meet edge to edge with no
+        // wedge outside the bend and no doubled alpha inside it. Very sharp turns are capped.
+        float2 offsetDir = n;
+        float miter = 1.0;
+        float4 join = getCustom3();
+        if (join.w > 0.5 && !thisClipped) {
+            float4 cJoin = clipFromModel * float4(join.xyz, 1.0);
+            if (cJoin.w >= eps) {
+                float2 sJoin = cJoin.xy / cJoin.w * halfRes;
+                // Travel direction through this end: P -> A at end A, B -> N at end B.
+                float2 dJoin = t < 0.5 ? sThis - sJoin : sJoin - sThis;
+                float lJoin = length(dJoin);
+                if (lJoin > 1e-4) {
+                    float2 m = n + float2(-dJoin.y, dJoin.x) / lJoin;
+                    float lm = length(m);
+                    if (lm > 1e-3) {
+                        offsetDir = m / lm;
+                        miter = 1.0 / max(dot(offsetDir, n), 0.25);
+                    }
+                }
+            }
+        }
+        float2 offsetPx = offsetDir * side * extent * miter;
         placeAt(material, cThis + float4(offsetPx / halfRes * cThis.w, 0.0, 0.0));
 
         // A clipped end is off screen: no gap to leave there.

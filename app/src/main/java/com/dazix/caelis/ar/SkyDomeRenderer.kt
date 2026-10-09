@@ -2,102 +2,26 @@ package com.dazix.caelis.ar
 
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
-import android.graphics.RectF
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.dazix.caelis.domain.horizon.HorizonProfile
-
-// Normal Color Palette
-val NormalGoldSolar = Color(0xFFFFB300)
-val NormalSunrise = Color(0xFFFF7043)
-val NormalSunset = Color(0xFFE64A19)
-val NormalHorizon = Color(0xDD4DD0E1)
-val NormalGrid = Color(0x664DD0E1)
-val NormalNightArc = Color(0x44FFB300)
-
-/**
- * The real terrain skyline. Deliberately a different hue from [NormalHorizon]: the two lines are
- * drawn together and the whole point is telling the mathematical horizon apart from the ground.
- */
-val NormalTerrain = Color(0xFF8BC34A)
-
-/** Casing drawn under the silhouette so it stays readable against a bright sky or a pale field. */
-val SilhouetteCasing = Color(0x99000000)
-
-// Red Vision (Astrophotography Night Mode) Palette
-val RedPrimary = Color(0xFFFF1744)
-val RedSecondary = Color(0xFFD32F2F)
-val RedGrid = Color(0x33FF1744)
-val RedNightArc = Color(0x33FF1744)
-
-data class NightVisionPalette(
-    val primary: Color,
-    val secondary: Color,
-    val grid: Color,
-    val nightArc: Color,
-    val shaderTintR: Float,
-    val shaderTintG: Float,
-    val shaderTintB: Float,
-)
-
-val RedNightVisionPalette = NightVisionPalette(
-    primary = Color(0xFFFF1744),
-    secondary = Color(0xFFD32F2F),
-    grid = Color(0x33FF1744),
-    nightArc = Color(0x33FF1744),
-    shaderTintR = 1.0f,
-    shaderTintG = 0.0f,
-    shaderTintB = 0.0f,
-)
-
-val AmberNightVisionPalette = NightVisionPalette(
-    primary = Color(0xFFFFB300),
-    secondary = Color(0xFFFF8F00),
-    grid = Color(0x33FFB300),
-    nightArc = Color(0x33FFB300),
-    shaderTintR = 1.0f,
-    shaderTintG = 0.7f,
-    shaderTintB = 0.0f,
-)
-
-val GreenNightVisionPalette = NightVisionPalette(
-    primary = Color(0xFF00E676),
-    secondary = Color(0xFF00C853),
-    grid = Color(0x3300E676),
-    nightArc = Color(0x3300E676),
-    shaderTintR = 0.0f,
-    shaderTintG = 1.0f,
-    shaderTintB = 0.0f,
-)
-
-fun paletteForTheme(theme: com.dazix.caelis.domain.nightsky.NightVisionTheme): NightVisionPalette = when (theme) {
-    com.dazix.caelis.domain.nightsky.NightVisionTheme.RED -> RedNightVisionPalette
-    com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER -> AmberNightVisionPalette
-    com.dazix.caelis.domain.nightsky.NightVisionTheme.GREEN -> GreenNightVisionPalette
-}
+import com.dazix.caelis.ar.scene.AmberNightVisionPalette
+import com.dazix.caelis.ar.scene.NightVisionPalette
+import com.dazix.caelis.ar.scene.NormalGrid
+import com.dazix.caelis.ar.scene.NormalHorizon
+import com.dazix.caelis.ar.scene.paletteForTheme
 
 /**
  * High-performance zero-allocation renderer for the 3D Sky Dome coordinate frame,
  * horizon ring, altitude parallels, azimuth meridians, and cardinal points.
+ *
+ * Only the legacy Canvas night sky (the debug toggle) still draws with this; both AR screens draw
+ * the grid on the GPU (`AltAzGridBuilder`) and its labels through `SkyGridMarkers`.
  */
 class SkyDomeRenderer {
-    val tempRect = RectF()
     val tempPoint = FloatArray(3)
-    val pathBuffer = FloatArray(1440 * 3)
     val horizonBuffer = FloatArray(180 * 3)
-
-    /**
-     * The real terrain skyline, one slot per [com.dazix.caelis.domain.horizon.HorizonProfile] sample.
-     * Pre-allocated like every other buffer here: this one is walked in full on every frame.
-     */
-    val silhouetteBuffer = FloatArray(HorizonProfile.SAMPLE_COUNT * 3)
     val altitudeGridBuffer = FloatArray(72 * 3)
     val meridianBuffer = FloatArray(36 * 3)
 
@@ -134,55 +58,6 @@ class SkyDomeRenderer {
         isAntiAlias = true
         textSize = 9.0f
     }
-
-    val bubbleTextPaint = Paint().apply {
-        isFakeBoldText = true
-        textAlign = Paint.Align.CENTER
-        isAntiAlias = true
-    }
-
-    val bubbleBgPaint = Paint().apply {
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-
-    val bubbleBorderPaint = Paint().apply {
-        style = Paint.Style.STROKE
-        isAntiAlias = true
-    }
-
-    val markerTextPaint = Paint().apply {
-        isFakeBoldText = true
-        textAlign = Paint.Align.CENTER
-        isAntiAlias = true
-    }
-
-    val markerBgPaint = Paint().apply {
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-
-    val markerBorderPaint = Paint().apply {
-        style = Paint.Style.STROKE
-        isAntiAlias = true
-    }
-
-    val pointerTextPaint = Paint().apply {
-        isFakeBoldText = true
-        textAlign = Paint.Align.CENTER
-        isAntiAlias = true
-    }
-
-    val pointerBgPaint = Paint().apply {
-        style = Paint.Style.FILL
-        isAntiAlias = true
-    }
-
-    val pointerBorderPaint = Paint().apply {
-        style = Paint.Style.STROKE
-        isAntiAlias = true
-    }
-
     var activePalette: NightVisionPalette = AmberNightVisionPalette
         private set
 
@@ -204,31 +79,11 @@ class SkyDomeRenderer {
             val sg = (p.secondary.green * 255).toInt()
             val sb = (p.secondary.blue * 255).toInt()
 
-            val primaryInt = AndroidColor.rgb(pr, pg, pb)
-
             horizonTextPaint.color = AndroidColor.argb(143, pr, pg, pb)
             gridTextPaint.color = AndroidColor.argb(143, sr, sg, sb)
-            bubbleTextPaint.color = primaryInt
-            bubbleBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            bubbleBorderPaint.color = primaryInt
-            markerTextPaint.color = primaryInt
-            markerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            markerBorderPaint.color = primaryInt
-            pointerTextPaint.color = primaryInt
-            pointerBgPaint.color = AndroidColor.argb(240, 0, 0, 0)
-            pointerBorderPaint.color = primaryInt
         } else {
             horizonTextPaint.color = AndroidColor.argb(143, 255, 255, 255)
             gridTextPaint.color = AndroidColor.argb(143, 77, 208, 225)
-            bubbleTextPaint.color = AndroidColor.WHITE
-            bubbleBgPaint.color = AndroidColor.argb(220, 20, 20, 20)
-            bubbleBorderPaint.color = AndroidColor.argb(255, 255, 179, 0)
-            markerTextPaint.color = AndroidColor.WHITE
-            markerBgPaint.color = AndroidColor.argb(230, 20, 20, 20)
-            markerBorderPaint.color = AndroidColor.argb(255, 255, 179, 0)
-            pointerTextPaint.color = AndroidColor.argb(255, 255, 179, 0)
-            pointerBgPaint.color = AndroidColor.argb(220, 20, 20, 20)
-            pointerBorderPaint.color = AndroidColor.argb(255, 255, 179, 0)
         }
     }
 
@@ -506,91 +361,5 @@ class SkyDomeRenderer {
                 gridTextPaint,
             )
         }
-    }
-
-    /**
-     * Draws the real terrain skyline as a closed polyline, in exactly the way the mathematical
-     * horizon circle above is drawn — batch-project every vertex into a pre-allocated buffer, then
-     * walk the buffer emitting segments.
-     *
-     * The two lines are meant to be seen together: the thin circle is 0° elevation, the thick line
-     * is where the ground actually is, and the gap between them is the part of a sunset that happens
-     * behind a hill.
-     *
-     * Segments are dropped when either end is behind the camera, and when both ends are outside the
-     * viewport. The second test matters here and not for the 180-vertex circle: this polyline has
-     * 1440 vertices and most of them are behind the observer or far off screen on any given frame.
-     */
-    fun drawHorizonSilhouette(
-        drawScope: DrawScope,
-        profile: HorizonProfile,
-        matrix: FloatArray,
-        displayRotation: Int,
-        fovH: Float,
-        redVisionMode: Boolean,
-        w: Float,
-        h: Float,
-        theme: com.dazix.caelis.domain.nightsky.NightVisionTheme = com.dazix.caelis.domain.nightsky.NightVisionTheme.AMBER,
-    ) {
-        val palette = paletteForTheme(theme)
-        val lineColor = if (redVisionMode) palette.primary else NormalTerrain
-        val samples = HorizonProfile.SAMPLE_COUNT
-
-        for (i in 0 until samples) {
-            CameraProjection.projectFast(
-                azimuthDegrees = HorizonProfile.azimuthForIndex(i),
-                elevationDegrees = profile.elevationsDegrees[i].toDouble(),
-                rotationMatrix = matrix,
-                viewportWidth = w,
-                viewportHeight = h,
-                displayRotation = displayRotation,
-                fovHorizontalDegrees = fovH,
-                outBuffer = silhouetteBuffer,
-                offset = i * 3,
-            )
-        }
-
-        val margin = SILHOUETTE_CULL_MARGIN
-        for (i in 0 until samples) {
-            val off1 = i * 3
-            val off2 = ((i + 1) % samples) * 3
-
-            if (silhouetteBuffer[off1 + 2] <= 0.001f || silhouetteBuffer[off2 + 2] <= 0.001f) continue
-
-            val x1 = silhouetteBuffer[off1]
-            val y1 = silhouetteBuffer[off1 + 1]
-            val x2 = silhouetteBuffer[off2]
-            val y2 = silhouetteBuffer[off2 + 1]
-
-            if (x1 < -margin && x2 < -margin) continue
-            if (x1 > w + margin && x2 > w + margin) continue
-            if (y1 < -margin && y2 < -margin) continue
-            if (y1 > h + margin && y2 > h + margin) continue
-
-            // Dark casing under the coloured line, as the trajectory arcs use: over a bright sky or a
-            // pale field a single thin stroke disappears exactly where it is needed most.
-            drawScope.drawLine(
-                color = SilhouetteCasing,
-                start = Offset(x1, y1),
-                end = Offset(x2, y2),
-                strokeWidth = 3.4f,
-            )
-            drawScope.drawLine(
-                color = lineColor,
-                start = Offset(x1, y1),
-                end = Offset(x2, y2),
-                strokeWidth = 2.2f,
-            )
-        }
-    }
-
-    companion object {
-        /**
-         * How far outside the viewport a segment may reach before it is dropped.
-         *
-         * Generous on purpose: a segment with both ends just off screen can still cross a corner of
-         * it, and a horizon with a notch missing reads as a bug rather than as an optimisation.
-         */
-        private const val SILHOUETTE_CULL_MARGIN = 200f
     }
 }

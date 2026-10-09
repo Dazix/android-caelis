@@ -118,7 +118,7 @@ internal fun NightSkyGpuSky(
         stringResource(R.string.sun_ar_cardinal_w),
         stringResource(R.string.sun_ar_cardinal_nw),
     )
-    renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
+    renderer.gridMarkers.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
     renderer.applyTheme(nightVisionState)
     renderer.selectedPlanetId = selectedPlanetId
 

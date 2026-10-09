@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import com.dazix.caelis.ar.SkyDomeRenderer
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
@@ -51,6 +51,8 @@ import kotlin.math.tan
 class NightSkyRenderer {
 
     val skyDomeRenderer = SkyDomeRenderer()
+    /** Labels and markers of the GPU grid; the GPU path themes and sizes these, not [skyDomeRenderer]. */
+    val gridMarkers = com.dazix.caelis.ar.scene.SkyGridMarkers()
 
     // Pre-allocated AGSL ViewMatrix uniform buffer (3x3 column-major)
     private val matrixBuffer = FloatArray(9)
@@ -829,6 +831,7 @@ class NightSkyRenderer {
         isNightVision: Boolean,
     ) {
         skyDomeRenderer.applyTheme(theme = theme, isNightVision = isNightVision)
+        gridMarkers.applyTheme(nightVision = isNightVision, theme = theme)
         setupStarPaints(theme = theme, isNightVision = isNightVision)
 
         if (isNightVision) {
@@ -991,6 +994,8 @@ class NightSkyRenderer {
 
         skyDomeRenderer.horizonTextPaint.textSize = 10.5f * densityScale
         skyDomeRenderer.gridTextPaint.textSize = 9.0f * densityScale
+        gridMarkers.horizonTextPaint.textSize = 10.5f * densityScale
+        gridMarkers.gridTextPaint.textSize = 9.0f * densityScale
 
         debugTapCirclePaint.strokeWidth = 2.2f * densityScale
         debugTapLabelPaint.textSize = 12.0f * densityScale
@@ -3019,7 +3024,6 @@ class NightSkyRenderer {
     private var dsoLabels: Array<String> = emptyArray()
     private var meteorLabels: Array<String> = emptyArray()
     private var overlayCatalog: NightSkyCatalog? = null
-    private val altitudeLabels = skyDomeRenderer.altitudeLevels.map { "${if (it > 0) "+" else ""}${it.toInt()}°" }.toTypedArray()
 
     /** Strings read once per catalogue instead of once per frame. */
     private fun ensureOverlayLabels(catalog: NightSkyCatalog) {
@@ -3144,7 +3148,7 @@ class NightSkyRenderer {
             canvas.drawText(meteorLabels[m], pX, pY + 32f * density, if (isSelected) radiantHighlightLabelPaint else radiantLabelPaint)
         }
 
-        if (frame.showGrid) drawGridMarkers(canvas, projector, w, h, frame.nightVisionActive)
+        if (frame.showGrid) gridMarkers.draw(canvas, projector, w, h)
 
         if (isDebugFocusRegionVisible) {
             val halfW = w * 0.5f
@@ -3231,79 +3235,6 @@ class NightSkyRenderer {
             else -> canvas.drawCircle(pX, pY, radius, dsoPaint)
         }
     }
-
-    /**
-     * The grid's markers and labels: the GPU draws the lattice itself (`AltAzGridBuilder`), and
-     * these are the text and dots `SkyDomeRenderer.drawSkyDomeGrid` put on top of it, at the same
-     * offsets and in the same paints.
-     */
-    private fun drawGridMarkers(
-        canvas: android.graphics.Canvas,
-        projector: com.dazix.caelis.domain.arframe.SkyProjector,
-        w: Float,
-        h: Float,
-        nightVision: Boolean,
-    ) {
-        val dome = skyDomeRenderer
-        val palette = dome.activePalette
-        val horizonArgb = (if (nightVision) palette.secondary else com.dazix.caelis.ar.NormalHorizon).toArgb()
-        val minorArgb = (if (nightVision) palette.grid else com.dazix.caelis.ar.NormalGrid).toArgb()
-        for ((li, elevation) in dome.altitudeLevels.withIndex()) {
-            for (az in dome.labelAzimuths) {
-                if (!projectAltAz(projector, az, elevation)) continue
-                val px = overlayProjected[0]
-                val py = overlayProjected[1]
-                if (px in 20f..(w - 20f) && py in 40f..(h - 40f)) canvas.drawText(altitudeLabels[li], px, py - 4f, dome.gridTextPaint)
-            }
-        }
-        gridMarkerPaint.style = Paint.Style.FILL
-        gridMarkerPaint.color = horizonArgb
-        for (i in dome.cardinalAzimuths.indices) {
-            if (!projectAltAz(projector, dome.cardinalAzimuths[i], 0.0)) continue
-            val px = overlayProjected[0]
-            val py = overlayProjected[1]
-            if (px !in -50f..(w + 50f) || py !in -50f..(h + 50f)) continue
-            canvas.drawCircle(px, py, 3.5f, gridMarkerPaint)
-            canvas.drawText(dome.cardinalLabels[i], px, py - 10f, dome.horizonTextPaint)
-        }
-        if (projectAltAz(projector, 0.0, 90.0)) {
-            val zx = overlayProjected[0]
-            val zy = overlayProjected[1]
-            if (zx in -50f..(w + 50f) && zy in -50f..(h + 50f)) {
-                drawCrossMarker(canvas, zx, zy, 12f, 6f, 1.5f, 1.4f, horizonArgb)
-                canvas.drawText(dome.zenithLabel, zx, zy - 15f, dome.horizonTextPaint)
-            }
-        }
-        if (projectAltAz(projector, 0.0, -90.0)) {
-            val nx = overlayProjected[0]
-            val ny = overlayProjected[1]
-            if (nx in -50f..(w + 50f) && ny in -50f..(h + 50f)) {
-                drawCrossMarker(canvas, nx, ny, 10f, 5f, 1.2f, 1.0f, minorArgb)
-                canvas.drawText(dome.nadirLabel, nx, ny - 13f, dome.gridTextPaint)
-            }
-        }
-    }
-
-    private val gridMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    private fun drawCrossMarker(
-        canvas: android.graphics.Canvas, x: Float, y: Float,
-        arm: Float, ring: Float, armWidth: Float, ringWidth: Float, argb: Int,
-    ) {
-        gridMarkerPaint.color = argb
-        gridMarkerPaint.style = Paint.Style.STROKE
-        gridMarkerPaint.strokeWidth = armWidth
-        canvas.drawLine(x - arm, y, x + arm, y, gridMarkerPaint)
-        canvas.drawLine(x, y - arm, x, y + arm, gridMarkerPaint)
-        gridMarkerPaint.strokeWidth = ringWidth
-        canvas.drawCircle(x, y, ring, gridMarkerPaint)
-    }
-
-    private fun projectAltAz(projector: com.dazix.caelis.domain.arframe.SkyProjector, azimuthDeg: Double, elevationDeg: Double): Boolean {
-        com.dazix.caelis.domain.arframe.AltAzGridBuilder.direction(azimuthDeg, elevationDeg, overlayEnu)
-        return projector.projectEnu(overlayEnu[0], overlayEnu[1], overlayEnu[2], overlayProjected)
-    }
-
     /**
      * The HUD's visible-star count for the GPU path: stars within the telescope limit (or forced
      * by a figure or the selection) whose position is on screen. Writes [lastVisibleStarCount].

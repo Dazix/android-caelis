@@ -110,9 +110,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.CameraPreview
 import com.dazix.caelis.ar.DeviceOrientation
-import com.dazix.caelis.ar.RedPrimary
-import com.dazix.caelis.ar.RedSecondary
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.RedPrimary
+import com.dazix.caelis.ar.scene.RedSecondary
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.NightVisionState
 import com.dazix.caelis.domain.nightsky.NightVisionTheme

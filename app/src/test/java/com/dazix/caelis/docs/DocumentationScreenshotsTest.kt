@@ -72,7 +72,12 @@ import com.dazix.caelis.ui.nightsky.NightSkyBottomHud
 import com.dazix.caelis.ui.nightsky.NightSkyLayerSettingsSheet
 import com.dazix.caelis.ui.nightsky.NightSkyTopBar
 import com.dazix.caelis.ui.solar.DateNavigatorBar
-import com.dazix.caelis.ui.solar.SkyDomeOverlayCanvas
+import com.dazix.caelis.ui.solar.SunArOverlay
+import com.dazix.caelis.domain.arframe.SkyFrameMath
+import com.dazix.caelis.domain.arframe.SkyProjector
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.remember
 import com.dazix.caelis.ui.solar.SunArTopBar
 import com.dazix.caelis.ui.solar.SunMoonTimesInfoCard
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -402,17 +407,29 @@ class DocumentationScreenshotsTest {
                         .fillMaxSize()
                         .background(Color(0xFF0F141C))
                 ) {
-                    // 3D Sky Dome AR Canvas with Solar & Lunar trajectories
-                    SkyDomeOverlayCanvas(
-                        orientation = sampleOrientation,
-                        displayRotation = 0,
-                        fovHorizontalDegrees = 56f,
-                        solarTrajectory = solarTrajectory,
-                        lunarTrajectory = lunarTrajectory,
-                        currentSunPos = currentSunCoordinates,
-                        currentMoonPos = currentMoonCoordinates,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    // The grid, silhouette and arcs are Filament geometry, which Robolectric cannot
+                    // render; this captures the Compose overlay drawn over them (labels, bubbles,
+                    // badges, the sun and the moon) through the projector the GPU frame would use.
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                        val heightPx = with(LocalDensity.current) { maxHeight.toPx() }
+                        val projector = remember(widthPx, heightPx) {
+                            SkyProjector().also {
+                                val model = FloatArray(16)
+                                SkyFrameMath.cameraModelMatrix(sampleOrientation.rotationMatrix, 0, model)
+                                it.update(model, widthPx, heightPx, 56f)
+                            }
+                        }
+                        SunArOverlay(
+                            projector = projector,
+                            frameTick = 0L,
+                            solarTrajectory = solarTrajectory,
+                            lunarTrajectory = lunarTrajectory,
+                            currentSunPos = currentSunCoordinates,
+                            currentMoonPos = currentMoonCoordinates,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
 
                     // Top HUD Bar
                     SunArTopBar(

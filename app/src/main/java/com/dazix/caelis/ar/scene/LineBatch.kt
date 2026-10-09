@@ -1,5 +1,7 @@
 package com.dazix.caelis.ar.scene
 
+import com.dazix.caelis.domain.arframe.AltAzGridBuilder
+import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.google.android.filament.Box
 import com.google.android.filament.EntityManager
 import com.google.android.filament.IndexBuffer
@@ -50,6 +52,7 @@ class LineBatch(
             .attribute(VertexBuffer.VertexAttribute.CUSTOM0, 0, VertexBuffer.AttributeType.FLOAT4, 12, STRIDE)
             .attribute(VertexBuffer.VertexAttribute.CUSTOM1, 0, VertexBuffer.AttributeType.FLOAT4, 28, STRIDE)
             .attribute(VertexBuffer.VertexAttribute.COLOR, 0, VertexBuffer.AttributeType.FLOAT4, 44, STRIDE)
+            .attribute(VertexBuffer.VertexAttribute.CUSTOM3, 0, VertexBuffer.AttributeType.FLOAT4, 60, STRIDE)
             .attribute(VertexBuffer.VertexAttribute.CUSTOM2, 1, VertexBuffer.AttributeType.FLOAT, 0, 4)
             .build(engine)
 
@@ -106,12 +109,44 @@ class LineBatch(
     ): Boolean {
         val buffer = checkNotNull(writing) { "addSegment outside begin/end" }
         if (segmentCount >= maxSegments) return false
-        // v0 = A left, v1 = A right, v2 = B right, v3 = B left.
-        putVertex(buffer, ax, ay, az, bx, by, bz, -1f, 0f, widthPx, gapPx, dashPx, r, g, b, a)
-        putVertex(buffer, ax, ay, az, bx, by, bz, 1f, 0f, widthPx, gapPx, dashPx, r, g, b, a)
-        putVertex(buffer, bx, by, bz, ax, ay, az, -1f, 1f, widthPx, gapPx, dashPx, r, g, b, a)
-        putVertex(buffer, bx, by, bz, ax, ay, az, 1f, 1f, widthPx, gapPx, dashPx, r, g, b, a)
+        // v0 = A left, v1 = A right, v2 = B right, v3 = B left: the quad's outline, which the
+        // indices (0,1,2)(0,2,3) need. `side` is relative to the A -> B normal at both ends, so
+        // B right is +1 like A right. With B's two sides swapped the two triangles crossed into a
+        // bow tie: a notch out of one edge of every segment and a doubled sliver on the other,
+        // which on the densely sampled sun arcs read as a saw blade.
+        putVertex(buffer, ax, ay, az, bx, by, bz, -1f, 0f, widthPx, gapPx, dashPx, r, g, b, a, 0f, 0f, 0f, 0f)
+        putVertex(buffer, ax, ay, az, bx, by, bz, 1f, 0f, widthPx, gapPx, dashPx, r, g, b, a, 0f, 0f, 0f, 0f)
+        putVertex(buffer, bx, by, bz, ax, ay, az, 1f, 1f, widthPx, gapPx, dashPx, r, g, b, a, 0f, 0f, 0f, 0f)
+        putVertex(buffer, bx, by, bz, ax, ay, az, -1f, 1f, widthPx, gapPx, dashPx, r, g, b, a, 0f, 0f, 0f, 0f)
         segmentGroup[segmentCount] = group.coerceIn(0, maxGroups - 1)
+        segmentCount++
+        return true
+    }
+
+    /**
+     * A segment A-B of a polyline, mitred onto its neighbours: P is the point before A and N the
+     * one after B ([hasPrevious] / [hasNext] false at an open end). Adjacent segments then share
+     * their edges exactly. Butt-ended segments leave a wedge on the outside of every bend and
+     * overlap on the inside, which on a densely sampled curve with a translucent casing read as a
+     * saw blade (the sun arcs, sampled every 2 minutes, on a Pixel 7 Pro).
+     */
+    fun addJoinedSegment(
+        px: Float, py: Float, pz: Float, hasPrevious: Boolean,
+        ax: Float, ay: Float, az: Float,
+        bx: Float, by: Float, bz: Float,
+        nx: Float, ny: Float, nz: Float, hasNext: Boolean,
+        widthPx: Float,
+        r: Float, g: Float, b: Float, a: Float,
+    ): Boolean {
+        val buffer = checkNotNull(writing) { "addJoinedSegment outside begin/end" }
+        if (segmentCount >= maxSegments) return false
+        val joinA = if (hasPrevious) 1f else 0f
+        val joinB = if (hasNext) 1f else 0f
+        putVertex(buffer, ax, ay, az, bx, by, bz, -1f, 0f, widthPx, 0f, 0f, r, g, b, a, px, py, pz, joinA)
+        putVertex(buffer, ax, ay, az, bx, by, bz, 1f, 0f, widthPx, 0f, 0f, r, g, b, a, px, py, pz, joinA)
+        putVertex(buffer, bx, by, bz, ax, ay, az, 1f, 1f, widthPx, 0f, 0f, r, g, b, a, nx, ny, nz, joinB)
+        putVertex(buffer, bx, by, bz, ax, ay, az, -1f, 1f, widthPx, 0f, 0f, r, g, b, a, nx, ny, nz, joinB)
+        segmentGroup[segmentCount] = 0
         segmentCount++
         return true
     }
@@ -181,14 +216,38 @@ class LineBatch(
         side: Float, t: Float,
         widthPx: Float, gapPx: Float, dashPx: Float,
         r: Float, g: Float, b: Float, a: Float,
+        jx: Float, jy: Float, jz: Float, join: Float,
     ) {
         buffer.putFloat(x).putFloat(y).putFloat(z)
         buffer.putFloat(ox).putFloat(oy).putFloat(oz).putFloat(side)
         buffer.putFloat(t).putFloat(widthPx).putFloat(gapPx).putFloat(dashPx)
         buffer.putFloat(r).putFloat(g).putFloat(b).putFloat(a)
+        buffer.putFloat(jx).putFloat(jy).putFloat(jz).putFloat(join)
     }
 
     private companion object {
-        const val STRIDE = 60
+        const val STRIDE = 76
     }
+}
+
+/**
+ * Rebuilds this batch as the ENU alt-az grid ([AltAzGridBuilder]) in the colours the Canvas grid
+ * used. Needs [AltAzGridBuilder.SEGMENT_COUNT] segments.
+ */
+fun LineBatch.fillAltAzGrid(nightVision: Boolean, theme: NightVisionTheme) {
+    val palette = paletteForTheme(theme)
+    val horizon = if (nightVision) palette.secondary else NormalHorizon
+    val major = if (nightVision) palette.secondary.copy(alpha = 0.6f) else NormalHorizon.copy(alpha = 0.55f)
+    val minor = if (nightVision) palette.grid else NormalGrid
+    val r = SkySurface.SKY_RADIUS
+    begin()
+    AltAzGridBuilder.build { ax, ay, az, bx, by, bz, w, role ->
+        val c = when (role) {
+            AltAzGridBuilder.Role.HORIZON -> horizon
+            AltAzGridBuilder.Role.MAJOR -> major
+            AltAzGridBuilder.Role.MINOR -> minor
+        }
+        addSegment(ax * r, ay * r, az * r, bx * r, by * r, bz * r, w, c.red, c.green, c.blue, c.alpha)
+    }
+    end()
 }
