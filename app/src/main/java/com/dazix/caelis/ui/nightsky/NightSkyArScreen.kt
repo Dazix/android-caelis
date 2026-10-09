@@ -240,7 +240,6 @@ fun NightSkyArScreen(
             uiState.selectedBody != null -> viewModel.clearSelectedBody()
             uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
             isLayerSheetOpen -> isLayerSheetOpen = false
-            uiState.isDebugOptionsEnabled && uiState.isDebugCalibrationVisible -> viewModel.setDebugCalibrationVisible(false)
             uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible -> viewModel.setDebugFocusRegionVisible(false)
             else -> onBack()
         }
@@ -330,8 +329,6 @@ fun NightSkyArScreen(
     val currentAlignAzimuthOffset by rememberUpdatedState(alignAzimuthOffset)
     val currentAlignElevationOffset by rememberUpdatedState(alignElevationOffset)
     val gpuSky = remember { NightSkyGpuHandle() }
-    val useGpuSky = !uiState.debugPreferences.useLegacyCanvasSky
-    val currentUseGpuSky by rememberUpdatedState(useGpuSky)
     val currentConstellationsVisible by rememberUpdatedState(uiState.isConstellationsVisible)
     val currentMeteorShowersVisible by rememberUpdatedState(uiState.isMeteorShowersVisible)
 
@@ -389,7 +386,7 @@ fun NightSkyArScreen(
                             // the last drawn frame now, so the hit test sees what is on screen.
                             val gpuScene = gpuSky.scene
                             val tapCatalog = currentCatalog
-                            if (currentUseGpuSky && gpuScene != null && tapCatalog != null) {
+                            if (gpuScene != null && tapCatalog != null) {
                                 renderer.prepareHitTest(
                                     scene = gpuScene,
                                     frame = gpuSky.frame,
@@ -503,82 +500,40 @@ fun NightSkyArScreen(
                     onCameraBound = viewModel::attachCamera,
                 )
 
-                if (useGpuSky) {
-                    NightSkyGpuSky(
-                        handle = gpuSky,
-                        renderer = renderer,
-                        orientation = orientation,
-                        onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
-                        displayRotation = displayRotation,
-                        fovHorizontalDegrees = uiState.cameraFovHorizontal,
-                        zoomRatio = uiState.zoomRatio,
-                        catalog = catalog,
-                        latitudeDegrees = uiState.location.latitude,
-                        timeState = uiState.timeState,
-                        longitudeDegrees = uiState.location.longitude,
-                        nightVisionState = uiState.nightVisionState,
-                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                        isMilkyWayVisible = uiState.isMilkyWayVisible,
-                        isAtmosphereVisible = uiState.isAtmosphereVisible,
-                        isLandscapeVisible = uiState.isLandscapeVisible,
-                        isGridVisible = uiState.isGridVisible,
-                        horizonProfile = horizonProfile,
-                        useRealHorizon = useRealHorizon,
-                        isPlanetsVisible = uiState.isPlanetsVisible,
-                        isDsosVisible = uiState.isDsosVisible,
-                        isMeteorShowersVisible = uiState.isMeteorShowersVisible,
-                        isConstellationsVisible = uiState.isConstellationsVisible,
-                        isConstellationArtVisible = uiState.isConstellationArtVisible,
-                        selectedBody = uiState.selectedBody,
-                        selectedPlanetId = uiState.selectedPlanetId,
-                        planets = uiState.planetStates,
-                        isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
-                        debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
-                        debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
-                        showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    // Fallback while the GPU sky is verified on devices (debug setting); goes with the Canvas code.
-                    NightSkyOverlayCanvas(
-                        renderer = renderer,
-                        orientation = orientation,
-                        onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
-                        displayRotation = displayRotation,
-                        fovHorizontalDegrees = uiState.cameraFovHorizontal,
-                        zoomRatio = uiState.zoomRatio,
-                        catalog = catalog,
-                        lstDegrees = uiState.lstDegrees,
-                        latitudeDegrees = uiState.location.latitude,
-                        timeState = uiState.timeState,
-                        longitudeDegrees = uiState.location.longitude,
-                        nightVisionState = uiState.nightVisionState,
-                        isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                        isMilkyWayVisible = uiState.isMilkyWayVisible,
-                        isAtmosphereVisible = uiState.isAtmosphereVisible,
-                        isLandscapeVisible = uiState.isLandscapeVisible,
-                        isGridVisible = uiState.isGridVisible,
-                        horizonProfile = horizonProfile,
-                        useRealHorizon = useRealHorizon,
-                        isPlanetsVisible = uiState.isPlanetsVisible,
-                        isDsosVisible = uiState.isDsosVisible,
-                        isMeteorShowersVisible = uiState.isMeteorShowersVisible,
-                        isConstellationsVisible = uiState.isConstellationsVisible,
-                        isConstellationArtVisible = uiState.isConstellationArtVisible,
-                        selectedBody = uiState.selectedBody,
-                        selectedPlanetId = uiState.selectedPlanetId,
-                        planets = uiState.planetStates,
-                        debugArtOffsetX = uiState.debugArtOffsetX,
-                        debugArtOffsetY = uiState.debugArtOffsetY,
-                        debugArtScaleMultiplier = uiState.debugArtScaleMultiplier,
-                        debugArtRotationOffset = uiState.debugArtRotationOffset,
-                        isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
-                        debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
-                        debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
-                        showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+                NightSkyGpuSky(
+                    handle = gpuSky,
+                    renderer = renderer,
+                    orientation = orientation,
+                    onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
+                    displayRotation = displayRotation,
+                    fovHorizontalDegrees = uiState.cameraFovHorizontal,
+                    zoomRatio = uiState.zoomRatio,
+                    catalog = catalog,
+                    latitudeDegrees = uiState.location.latitude,
+                    timeState = uiState.timeState,
+                    longitudeDegrees = uiState.location.longitude,
+                    nightVisionState = uiState.nightVisionState,
+                    isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                    isMilkyWayVisible = uiState.isMilkyWayVisible,
+                    isAtmosphereVisible = uiState.isAtmosphereVisible,
+                    isLandscapeVisible = uiState.isLandscapeVisible,
+                    isGridVisible = uiState.isGridVisible,
+                    horizonProfile = horizonProfile,
+                    useRealHorizon = useRealHorizon,
+                    isPlanetsVisible = uiState.isPlanetsVisible,
+                    isDsosVisible = uiState.isDsosVisible,
+                    isMeteorShowersVisible = uiState.isMeteorShowersVisible,
+                    isConstellationsVisible = uiState.isConstellationsVisible,
+                    isConstellationArtVisible = uiState.isConstellationArtVisible,
+                    selectedBody = uiState.selectedBody,
+                    selectedPlanetId = uiState.selectedPlanetId,
+                    planets = uiState.planetStates,
+                    isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
+                    debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                    debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
+                    showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
+                    modifier = Modifier.fillMaxSize(),
+                )
             } else {
                 // Camera Permission Request Surface
                 NightSkyPermissionPrompt(
@@ -587,31 +542,6 @@ fun NightSkyArScreen(
                     redVisionMode = uiState.redVisionMode,
                     nightVisionTheme = uiState.nightVisionState.theme,
                     modifier = Modifier.fillMaxSize(),
-                )
-            }
-
-            // In-App Calibration Debugger Overlay
-            androidx.compose.animation.AnimatedVisibility(
-                visible = (uiState.debugPreferences.enableNightSkyCalibration || uiState.isDebugOptionsEnabled) && uiState.isDebugCalibrationVisible,
-                enter = fadeIn() + slideInVertically { it / 2 },
-                exit = fadeOut() + slideOutVertically { it / 2 },
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 16.dp, top = 80.dp, bottom = 80.dp),
-            ) {
-                CalibrationDebugOverlay(
-                    offsetX = uiState.debugArtOffsetX,
-                    offsetY = uiState.debugArtOffsetY,
-                    scaleMultiplier = uiState.debugArtScaleMultiplier,
-                    rotationOffset = uiState.debugArtRotationOffset,
-                    redVisionMode = uiState.redVisionMode,
-                    onOffsetXChange = viewModel::setDebugArtOffsetX,
-                    onOffsetYChange = viewModel::setDebugArtOffsetY,
-                    onScaleMultiplierChange = viewModel::setDebugArtScaleMultiplier,
-                    onRotationOffsetChange = viewModel::setDebugArtRotationOffset,
-                    onReset = viewModel::resetDebugCalibration,
-                    onClose = { viewModel.setDebugCalibrationVisible(false) },
-                    nightVisionTheme = uiState.nightVisionState.theme,
                 )
             }
 
@@ -845,9 +775,7 @@ fun NightSkyArScreen(
                 redVisionMode = uiState.redVisionMode,
                 isSensorTrackingEnabled = uiState.isSensorTrackingEnabled,
                 isKeepScreenOn = uiState.keepScreenOn,
-                isDebugCalibrationVisible = uiState.isDebugCalibrationVisible,
                 isDebugFocusRegionVisible = uiState.isDebugFocusRegionVisible,
-                enableNightSkyCalibration = uiState.debugPreferences.enableNightSkyCalibration,
                 enableNightSkyFocusRegion = uiState.debugPreferences.enableNightSkyFocusRegion,
                 isDebugOptionsEnabled = uiState.isDebugOptionsEnabled,
                 timeState = uiState.timeState,
@@ -868,7 +796,6 @@ fun NightSkyArScreen(
                 onToggleRedVisionMode = viewModel::toggleRedVisionMode,
                 onToggleSensorTracking = viewModel::toggleSensorTracking,
                 onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
-                onToggleDebugCalibration = viewModel::toggleDebugCalibration,
                 onToggleDebugFocusRegion = viewModel::toggleDebugFocusRegion,
                 alignAzimuthOffsetDeg = alignAzimuthOffset,
                 alignElevationOffsetDeg = alignElevationOffset,
@@ -898,259 +825,6 @@ fun NightSkyArScreen(
             redVisionMode = uiState.redVisionMode,
             nightVisionTheme = uiState.nightVisionState.theme,
         )
-    }
-}
-
-@Composable
-internal fun NightSkyOverlayCanvas(
-    renderer: NightSkyRenderer,
-    orientation: DeviceOrientation?,
-    onGetRenderMatrix: (FloatArray) -> Boolean = { false },
-    displayRotation: Int,
-    fovHorizontalDegrees: Float,
-    zoomRatio: Float,
-    catalog: com.dazix.caelis.data.nightsky.NightSkyCatalog?,
-    lstDegrees: Double,
-    latitudeDegrees: Double,
-    timeState: TimeState = TimeState(),
-    longitudeDegrees: Double = 0.0,
-    nightVisionState: NightVisionState,
-    isSkyBackgroundOpaque: Boolean,
-    isMilkyWayVisible: Boolean,
-    isAtmosphereVisible: Boolean,
-    isLandscapeVisible: Boolean,
-    isGridVisible: Boolean,
-    horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
-    useRealHorizon: Boolean = false,
-    isPlanetsVisible: Boolean = true,
-    isDsosVisible: Boolean = true,
-    isMeteorShowersVisible: Boolean = false,
-    isConstellationsVisible: Boolean,
-    isConstellationArtVisible: Boolean,
-    selectedBody: CelestialBodyDetails? = null,
-    selectedPlanetId: String? = null,
-    planets: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
-    debugArtOffsetX: Float = 0f,
-    debugArtOffsetY: Float = 0f,
-    debugArtScaleMultiplier: Float = 1.0f,
-    debugArtRotationOffset: Float = 0f,
-    isDebugFocusRegionVisible: Boolean = false,
-    debugFocusRadiusMultiplier: Float = 0.48f,
-    debugFocusDisplayThreshold: Float = 0.0f,
-    showTapRadiusIndicator: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val zenithLabel = stringResource(R.string.sun_ar_zenith)
-    val nadirLabel = stringResource(R.string.sun_ar_nadir)
-    val cardinalLabels = arrayOf(
-        stringResource(R.string.sun_ar_cardinal_n),
-        stringResource(R.string.sun_ar_cardinal_ne),
-        stringResource(R.string.sun_ar_cardinal_e),
-        stringResource(R.string.sun_ar_cardinal_se),
-        stringResource(R.string.sun_ar_cardinal_s),
-        stringResource(R.string.sun_ar_cardinal_sw),
-        stringResource(R.string.sun_ar_cardinal_w),
-        stringResource(R.string.sun_ar_cardinal_nw),
-    )
-
-    val milkyWayBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, context) {
-        value = withContext(Dispatchers.IO) {
-            try {
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-                    inScaled = false
-                }
-                BitmapFactory.decodeResource(context.resources, R.drawable.milky_way_starless, options)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
-    val landscapeBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, context) {
-        value = withContext(Dispatchers.IO) {
-            try {
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
-                    inScaled = false
-                }
-                BitmapFactory.decodeResource(context.resources, R.drawable.landscape_photorealistic, options)
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-
-    val renderMatrix = remember {
-        FloatArray(16).apply {
-            this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
-        }
-    }
-
-    renderer.skyDomeRenderer.updateLabels(zenithLabel, nadirLabel, cardinalLabels)
-    renderer.applyTheme(nightVisionState)
-    renderer.selectedPlanetId = selectedPlanetId
-
-    LaunchedEffect(milkyWayBitmap, landscapeBitmap) {
-        milkyWayBitmap?.let { renderer.setMilkyWayBitmap(it) }
-        landscapeBitmap?.let { renderer.setLandscapeBitmap(it) }
-    }
-
-    // Packing the profile into its strip is a per-location cost, not a per-frame one, so it is keyed
-    // on the profile itself and never runs from inside the draw scope.
-    LaunchedEffect(horizonProfile) {
-        renderer.setHorizonProfile(horizonProfile)
-    }
-
-    // Lazy background population of remaining ~78,000 telescopic stars (Tier 2) and static J2000 vectors on Dispatchers.Default
-    LaunchedEffect(catalog, latitudeDegrees) {
-        if (catalog != null) {
-            val totalStars = minOf(catalog.starsLength(), NightSkyRenderer.MAX_STARS)
-            withContext(Dispatchers.Default) {
-                renderer.ensureStaticCelestialVectors(catalog)
-                renderer.updateStarWorldVectorsTier2(catalog, lstDegrees, latitudeDegrees, totalStars) {
-                    !isActive
-                }
-            }
-        }
-    }
-
-    // Continuous frame ticker driving hardware vsync (60/120 Hz) draw invalidations
-    // Decouples the render loop from sensor/gesture state updates
-    val frameTicker by produceState(initialValue = 0L) {
-        while (isActive) {
-            withFrameNanos { time ->
-                value = time
-            }
-        }
-    }
-
-    Canvas(modifier = modifier) {
-        // Read the ticker state first to establish a DrawScope dependency for continuous 60 FPS redraws
-        @Suppress("UNUSED_VARIABLE")
-        val currentTimeNanos = frameTicker
-
-        // 1. Frame-Tied Time: calculate exact microsecond/millisecond LST for this exact frame tick (Zero allocations, Double precision)
-        val currentTimestampMs = if (timeState.isVirtual && timeState.virtualTime != null) {
-            timeState.virtualTime.toEpochMilli()
-        } else {
-            System.currentTimeMillis()
-        }
-        val currentJd = SiderealTime.toJulianDate(currentTimestampMs)
-        val frameLstDegrees = SiderealTime.calculateLST(currentJd, longitudeDegrees)
-
-        val hasMatrix = onGetRenderMatrix(renderMatrix)
-        val matrix = if (hasMatrix) renderMatrix else (orientation?.rotationMatrix ?: return@Canvas)
-
-        val w = size.width
-        val h = size.height
-
-        // Configure optical star halo/core stroke widths scaling by screen density, zoom, and artwork layer highlight
-        renderer.updateOpticalPaints(
-            zoomFactor = zoomRatio,
-            density = density,
-            redVisionMode = nightVisionState.isActive,
-            constellationPx = 1.8.dp.toPx(),
-            boostStarAndLines = isConstellationArtVisible,
-        )
-
-        // Layer 0 & Layer 1: Opaque Sky Dome background and hardware-accelerated AGSL Milky Way & Atmosphere
-        renderer.drawSkyBackground(
-            drawScope = this,
-            matrix = matrix,
-            lstDegrees = frameLstDegrees,
-            latitudeDegrees = latitudeDegrees,
-            displayRotation = displayRotation,
-            fovHorizontalDegrees = fovHorizontalDegrees,
-            w = w,
-            h = h,
-            isSkyBackgroundOpaque = isSkyBackgroundOpaque,
-            isMilkyWayVisible = isMilkyWayVisible,
-            isAtmosphereVisible = isAtmosphereVisible,
-            isRedVision = nightVisionState.isActive,
-            theme = nightVisionState.theme,
-        )
-
-        // Layer 2: Dual-pass batch render visible stars (halo + core), constellation lines, and artwork illustrations
-        val visibleCount = renderer.drawNightSky(
-            drawScope = this,
-            catalog = catalog,
-            lstDegrees = frameLstDegrees,
-            latitudeDegrees = latitudeDegrees,
-            matrix = matrix,
-            displayRotation = displayRotation,
-            fovHorizontalDegrees = fovHorizontalDegrees,
-            w = w,
-            h = h,
-            zoomFactor = zoomRatio,
-            showConstellations = isConstellationsVisible,
-            showConstellationArt = isConstellationArtVisible,
-            showPlanets = isPlanetsVisible,
-            showDsos = isDsosVisible,
-            showMeteorShowers = isMeteorShowersVisible,
-            isAtmosphereVisible = isAtmosphereVisible,
-            context = context,
-            debugOffsetX = debugArtOffsetX,
-            debugOffsetY = debugArtOffsetY,
-            debugScaleMultiplier = debugArtScaleMultiplier,
-            debugRotationOffset = debugArtRotationOffset,
-            isDebugFocusRegionVisible = isDebugFocusRegionVisible,
-            debugFocusRadiusMultiplier = debugFocusRadiusMultiplier,
-            debugFocusDisplayThreshold = debugFocusDisplayThreshold,
-            planets = planets,
-        )
-
-        // Layer 3: Hardware-accelerated AGSL Photorealistic Landscape ground & tree line (occludes stars below horizon)
-        renderer.drawLandscape(
-            drawScope = this,
-            matrix = matrix,
-            displayRotation = displayRotation,
-            fovHorizontalDegrees = fovHorizontalDegrees,
-            w = w,
-            h = h,
-            isLandscapeVisible = isLandscapeVisible,
-            isRedVision = nightVisionState.isActive,
-            theme = nightVisionState.theme,
-            useRealHorizon = useRealHorizon,
-        )
-
-        // Layer 4: 3D Celestial Dome Coordinate Grid (Horizon, Meridians, Altitude Rings, Cardinals)
-        if (isGridVisible) {
-            renderer.skyDomeRenderer.drawSkyDomeGrid(
-                drawScope = this,
-                matrix = matrix,
-                displayRotation = displayRotation,
-                fovH = fovHorizontalDegrees,
-                redVisionMode = nightVisionState.isActive,
-                w = w,
-                h = h,
-                theme = nightVisionState.theme,
-            )
-        }
-
-        // Layer 5: 3D Celestial Selection Reticle (Broken Crosshair & Star Name Text)
-        renderer.drawSelectionReticle(
-            drawScope = this,
-            selectedBody = selectedBody,
-            matrix = matrix,
-            lstDegrees = frameLstDegrees,
-            latitudeDegrees = latitudeDegrees,
-            displayRotation = displayRotation,
-            fovHorizontalDegrees = fovHorizontalDegrees,
-            w = w,
-            h = h,
-            density = density,
-        )
-
-        // Layer 6: Debug Hit-Test Tap Radius Indicator
-        if (showTapRadiusIndicator) {
-            renderer.drawTapRadiusIndicator(
-                drawScope = this,
-                theme = nightVisionState.theme,
-                isNightVision = nightVisionState.isActive,
-            )
-        }
     }
 }
 
@@ -1505,172 +1179,6 @@ private fun NightSkyPermissionPrompt(
     }
 }
 
-
-@Composable
-private fun CalibrationDebugOverlay(
-    offsetX: Float,
-    offsetY: Float,
-    scaleMultiplier: Float,
-    rotationOffset: Float,
-    redVisionMode: Boolean,
-    onOffsetXChange: (Float) -> Unit,
-    onOffsetYChange: (Float) -> Unit,
-    onScaleMultiplierChange: (Float) -> Unit,
-    onRotationOffsetChange: (Float) -> Unit,
-    onReset: () -> Unit,
-    onClose: () -> Unit,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
-    modifier: Modifier = Modifier,
-) {
-    val palette = paletteForTheme(nightVisionTheme)
-    val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xEE121824)
-    val borderColor = if (redVisionMode) palette.primary.copy(alpha = 0.3f) else Color(0x444DD0E1)
-    val textColor = if (redVisionMode) palette.primary else Color(0xFFE2E8F0)
-    val labelColor = if (redVisionMode) palette.secondary else Color(0xFF94A3B8)
-    val sliderColors = if (redVisionMode) {
-        SliderDefaults.colors(
-            thumbColor = palette.primary,
-            activeTrackColor = palette.primary,
-            inactiveTrackColor = Color(0xFF3B0000),
-        )
-    } else {
-        SliderDefaults.colors(
-            thumbColor = Color(0xFF4DD0E1),
-            activeTrackColor = Color(0xFF00ACC1),
-            inactiveTrackColor = Color(0xFF1E293B),
-        )
-    }
-
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = containerBg,
-        border = BorderStroke(1.dp, borderColor),
-        modifier = modifier.widthIn(max = 300.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Setup,
-                        contentDescription = null,
-                        tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.night_sky_debug_calibration),
-                        color = textColor,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    IconButton(
-                        onClick = onReset,
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.ResetCalibration,
-                            contentDescription = stringResource(R.string.night_sky_debug_reset),
-                            tint = labelColor,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                    IconButton(
-                        onClick = onClose,
-                        modifier = Modifier.size(28.dp),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Clear,
-                            contentDescription = stringResource(R.string.celestial_close),
-                            tint = labelColor,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
-
-            // X Offset Slider
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.night_sky_debug_offset_x, offsetX),
-                    color = labelColor,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Slider(
-                    value = offsetX,
-                    onValueChange = onOffsetXChange,
-                    valueRange = -500f..500f,
-                    colors = sliderColors,
-                    modifier = Modifier.height(24.dp),
-                )
-            }
-
-            // Y Offset Slider
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.night_sky_debug_offset_y, offsetY),
-                    color = labelColor,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Slider(
-                    value = offsetY,
-                    onValueChange = onOffsetYChange,
-                    valueRange = -500f..500f,
-                    colors = sliderColors,
-                    modifier = Modifier.height(24.dp),
-                )
-            }
-
-            // Scale Slider
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.night_sky_debug_scale, scaleMultiplier),
-                    color = labelColor,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Slider(
-                    value = scaleMultiplier,
-                    onValueChange = onScaleMultiplierChange,
-                    valueRange = 0.5f..2.5f,
-                    colors = sliderColors,
-                    modifier = Modifier.height(24.dp),
-                )
-            }
-
-            // Rotation Slider
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(R.string.night_sky_debug_rotation, rotationOffset),
-                    color = labelColor,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Slider(
-                    value = rotationOffset,
-                    onValueChange = onRotationOffsetChange,
-                    valueRange = -90f..90f,
-                    colors = sliderColors,
-                    modifier = Modifier.height(24.dp),
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun FocusRegionDebugOverlay(

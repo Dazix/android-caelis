@@ -62,11 +62,12 @@ case "$TARGET" in
         ;;
 
     nightsky|stars)
-        info "Running Night Sky test suite (Celestial Math, FlatBuffers Catalog, Frustum Culling, Optics, Renderer Zero-Alloc)..."
+        info "Running Night Sky test suite (Celestial Math, FlatBuffers Catalog, Frustum Culling, Optics, Overlay & Hit Test, Sky Materials)..."
         (cd "$PROJECT_DIR" && JAVA_HOME="$JAVA_HOME" ./gradlew :app:testDebugUnitTest \
             --tests "com.dazix.caelis.domain.nightsky.*" \
             --tests "com.dazix.caelis.ui.nightsky.*" \
             --tests "com.dazix.caelis.domain.arframe.*" \
+            --tests "com.dazix.caelis.ar.scene.*" \
             --rerun-tasks)
         check_xml_results
         info "Night Sky test suite PASSED."

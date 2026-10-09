@@ -493,14 +493,9 @@
     <string name="dso_legend_close">Close</string>
 
     <!-- Calibration Debugger -->
-    <string name="night_sky_debug_calibration">Artwork alignment debug</string>
     <string name="night_sky_debug_focus_region">Constellation focus area</string>
     <string name="night_sky_debug_focus_radius">Focus radius: %1$.0f%%</string>
     <string name="night_sky_debug_focus_threshold">Display threshold: %1$.0f%%</string>
-    <string name="night_sky_debug_offset_x">X Offset: %1$.1f px</string>
-    <string name="night_sky_debug_offset_y">Y Offset: %1$.1f px</string>
-    <string name="night_sky_debug_scale">Scale: %1$.2fx</string>
-    <string name="night_sky_debug_rotation">Rotation: %1$.1f°</string>
     <string name="night_sky_debug_tap_radius">Tap radius: %1$d dp</string>
     <string name="night_sky_debug_show_tap_indicator">Show tap indicator</string>
     <string name="night_sky_debug_reset">Reset</string>
@@ -535,10 +530,6 @@
     <string name="settings_debug_group_touch">Touch &amp; Selection</string>
     <string name="settings_debug_group_night_sky">Night Sky AR</string>
     <string name="settings_debug_group_terrain">Terrain Horizon</string>
-    <string name="settings_debug_night_sky_calibration">Artwork alignment debug</string>
-    <string name="settings_debug_night_sky_calibration_desc">Enable constellation illustration alignment debug controls in Night Sky AR</string>
-    <string name="settings_debug_legacy_canvas_sky">Legacy Canvas sky</string>
-    <string name="settings_debug_legacy_canvas_sky_desc">Draw Night Sky AR with the old CPU renderer instead of the GPU scene</string>
     <string name="settings_debug_night_sky_focus_region">Constellation focus area</string>
     <string name="settings_debug_night_sky_focus_region_desc">Highlight active constellation focus area and threshold in Night Sky AR</string>
     <string name="settings_debug_terrain_metrics">Terrain horizon metrics</string>

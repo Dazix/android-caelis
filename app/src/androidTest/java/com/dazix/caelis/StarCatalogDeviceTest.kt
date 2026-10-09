@@ -1,16 +1,14 @@
 package com.dazix.caelis
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import androidx.compose.ui.graphics.Canvas as ComposeCanvas
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.dazix.caelis.ar.scene.NightSkyFrame
+import com.dazix.caelis.ar.scene.NightSkyScene
+import com.dazix.caelis.ar.scene.SkySurface
+import com.dazix.caelis.ar.scene.StarGeometry
 import com.dazix.caelis.domain.nightsky.NightSkyCatalogLoader
-import com.dazix.caelis.ui.nightsky.NightSkyRenderer
+import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -18,8 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * On-device instrumented test verifying FlatBuffers catalog.bin loading from Android res/raw
- * and zero-allocation canvas rendering on the real Android ART runtime.
+ * The FlatBuffers catalogue loads from res/raw on the real runtime, and the whole of it renders
+ * through the Filament night sky on the device GPU.
  */
 @RunWith(AndroidJUnit4::class)
 class StarCatalogDeviceTest {
@@ -45,58 +43,51 @@ class StarCatalogDeviceTest {
         assertTrue("Sirius visual magnitude should be negative, got ${sirius.mag()}", sirius.mag() < 0.0f)
     }
 
+    /**
+     * One frame of the full catalogue, constellations on, in red night vision: something must be
+     * drawn, and nothing drawn may be anything but red-dominant — a white star core or a cyan
+     * figure line would ruin dark adaptation, which is the whole point of the mode.
+     */
     @Test
-    fun nightSkyRendererExecutesOnDeviceCanvasWithoutException() {
-        val stream = context.resources.openRawResource(R.raw.catalog)
-        val catalog = stream.use { NightSkyCatalogLoader.loadFromStream(it) }
+    fun fullCatalogRendersOnTheGpuInRedVision() {
+        val catalog = context.resources.openRawResource(R.raw.catalog).use { NightSkyCatalogLoader.loadFromStream(it) }
+        val width = 270
+        val height = 600
+        val surface = SkySurface.offscreen(context, width, height)
+        val scene = NightSkyScene(context, surface, catalog, StarGeometry(catalog))
+        try {
+            val frame = NightSkyFrame().apply {
+                // Phone upright facing the north horizon, Prague, early evening sidereal time.
+                floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, -1f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 1f).copyInto(deviceToEnu)
+                viewportWidth = width.toFloat()
+                viewportHeight = height.toFloat()
+                fovHorizontalDegrees = 56f
+                density = 1f
+                lstDegrees = 280.0
+                latitudeDegrees = 50.0755
+                showConstellations = true
+                showLandscape = false
+                nightVisionActive = true
+                nightVisionTheme = NightVisionTheme.RED
+            }
+            scene.update(frame)
+            val pixels = surface.renderAndRead()
 
-        val renderer = NightSkyRenderer()
-        renderer.applyTheme(redVisionMode = true)
-
-        val bitmap = Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
-        val androidCanvas = Canvas(bitmap)
-        val composeCanvas = ComposeCanvas(androidCanvas)
-
-        val drawScope = CanvasDrawScope()
-        drawScope.draw(
-            density = Density(2.625f),
-            layoutDirection = LayoutDirection.Ltr,
-            canvas = composeCanvas,
-            size = androidx.compose.ui.geometry.Size(1080f, 2400f),
-        ) {
-            val northMatrix = floatArrayOf(
-                1f, 0f, 0f, 0f,
-                0f, 0f, -1f, 0f,
-                0f, 1f, 0f, 0f,
-                0f, 0f, 0f, 1f,
-            )
-
-            // Draw celestial dome grid
-            renderer.skyDomeRenderer.drawSkyDomeGrid(
-                drawScope = this,
-                matrix = northMatrix,
-                displayRotation = android.view.Surface.ROTATION_0,
-                fovH = 56.0f,
-                redVisionMode = true,
-                w = 1080f,
-                h = 2400f,
-            )
-
-            // Draw star field & constellation lines in batch
-            val starsRendered = renderer.drawNightSky(
-                drawScope = this,
-                catalog = catalog,
-                lstDegrees = 280.0,
-                latitudeDegrees = 50.0755,
-                matrix = northMatrix,
-                displayRotation = android.view.Surface.ROTATION_0,
-                fovHorizontalDegrees = 56.0f,
-                w = 1080f,
-                h = 2400f,
-                showConstellations = true,
-            )
-
-            assertTrue("Stars should be projected on screen, count was $starsRendered", starsRendered >= 0)
+            var lit = 0
+            var offColour = 0
+            for (i in pixels.indices step 4) {
+                val r = pixels[i].toInt() and 0xFF
+                val g = pixels[i + 1].toInt() and 0xFF
+                val b = pixels[i + 2].toInt() and 0xFF
+                if (r + g + b < 24) continue
+                lit++
+                if (g > r || b > r) offColour++
+            }
+            assertTrue("the full catalogue must put something on screen; $lit lit pixels", lit > 50)
+            assertEquals("red vision drew $offColour of $lit lit pixels in a non-red colour", 0, offColour)
+        } finally {
+            scene.destroy()
+            surface.destroy()
         }
     }
 }

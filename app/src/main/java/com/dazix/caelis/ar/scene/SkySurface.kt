@@ -40,11 +40,19 @@ import java.nio.ByteOrder
  * are drawn from the same pose in the same vsync; with two independent loops the labels could
  * trail the stars by a frame during a fast pan.
  */
-class SkySurface(
+class SkySurface private constructor(
     private val context: Context,
-    target: android.view.View,
-    private val ownFrameLoop: Boolean = true,
+    target: android.view.View?,
+    private val ownFrameLoop: Boolean,
+    offscreenWidth: Int,
+    offscreenHeight: Int,
 ) {
+
+    constructor(context: Context, target: android.view.View, ownFrameLoop: Boolean = true) :
+        this(context, target, ownFrameLoop, 0, 0)
+
+    /** A headless surface: no view, a fixed size, read back with [renderAndRead]. */
+    private val offscreen = target == null
 
     val engine: Engine = Engine.create()
     val scene: Scene = engine.createScene()
@@ -113,6 +121,14 @@ class SkySurface(
             }
         }
         when (target) {
+            null -> {
+                // Headless: a GPU swap chain with no window, for instrumented tests that read pixels.
+                swapChain = engine.createSwapChain(offscreenWidth, offscreenHeight, com.google.android.filament.SwapChainFlags.CONFIG_TRANSPARENT)
+                viewportWidth = offscreenWidth.coerceAtLeast(1)
+                viewportHeight = offscreenHeight.coerceAtLeast(1)
+                view.viewport = Viewport(0, 0, viewportWidth, viewportHeight)
+                applyProjection()
+            }
             is TextureView -> uiHelper.attachTo(target)
             is SurfaceView -> uiHelper.attachTo(target)
             else -> throw IllegalArgumentException("SkySurface draws into a SurfaceView or a TextureView")
@@ -124,11 +140,48 @@ class SkySurface(
     fun renderFrame(frameTimeNanos: Long) {
         if (destroyed) return
         val chain = swapChain ?: return
-        if (uiHelper.isReadyToRender && renderer.beginFrame(chain, frameTimeNanos)) {
+        if ((offscreen || uiHelper.isReadyToRender) && renderer.beginFrame(chain, frameTimeNanos)) {
             renderer.render(view)
             renderer.endFrame()
         }
     }
+
+    /**
+     * Offscreen only: renders one frame and returns its pixels as RGBA bytes, bottom row first (GL
+     * order), premultiplied. Blocks until the GPU has finished. Call from the thread that created
+     * this surface.
+     */
+    fun renderAndRead(): ByteArray {
+        check(offscreen) { "renderAndRead is for offscreen surfaces" }
+        val chain = checkNotNull(swapChain)
+        val buffer = ByteBuffer.allocateDirect(viewportWidth * viewportHeight * 4)
+        // Filament may skip a frame when the previous one is still in flight; a test frame must not be skipped.
+        var began = false
+        for (attempt in 0 until 10) {
+            if (renderer.beginFrame(chain, System.nanoTime())) {
+                began = true
+                break
+            }
+            engine.flushAndWait()
+        }
+        check(began) { "Filament refused to begin a frame" }
+        renderer.render(view)
+        renderer.readPixels(
+            0, 0, viewportWidth, viewportHeight,
+            com.google.android.filament.Texture.PixelBufferDescriptor(
+                buffer, com.google.android.filament.Texture.Format.RGBA, com.google.android.filament.Texture.Type.UBYTE,
+            ),
+        )
+        renderer.endFrame()
+        engine.flushAndWait()
+        val out = ByteArray(buffer.capacity())
+        buffer.rewind()
+        buffer.get(out)
+        return out
+    }
+
+    val width: Int get() = viewportWidth
+    val height: Int get() = viewportHeight
 
     /**
      * What the frame is cleared to: transparent over the camera, or the planetarium's opaque sky.
@@ -188,7 +241,7 @@ class SkySurface(
         if (destroyed) return
         destroyed = true
         if (ownFrameLoop) Choreographer.getInstance().removeFrameCallback(frameCallback)
-        uiHelper.detach()
+        if (!offscreen) uiHelper.detach()
         swapChain?.let { engine.destroySwapChain(it) }
         swapChain = null
         engine.destroyRenderer(renderer)
@@ -205,6 +258,10 @@ class SkySurface(
     }
 
     companion object {
+        /** A headless surface of [width] x [height] pixels, for instrumented rendering tests. */
+        fun offscreen(context: Context, width: Int, height: Int): SkySurface =
+            SkySurface(context, null, ownFrameLoop = false, offscreenWidth = width, offscreenHeight = height)
+
         /** Everything celestial sits on a sphere of this radius around the camera. */
         const val SKY_RADIUS = 100f
         private const val NEAR = 0.5

@@ -499,14 +499,9 @@
     <string name="dso_legend_close">Zavřít</string>
 
     <!-- Calibration Debugger -->
-    <string name="night_sky_debug_calibration">Ladění zarovnání ilustrací</string>
     <string name="night_sky_debug_focus_region">Oblast aktivace souhvězdí</string>
     <string name="night_sky_debug_focus_radius">Poloměr oblasti: %1$.0f %%</string>
     <string name="night_sky_debug_focus_threshold">Práh zobrazení: %1$.0f %%</string>
-    <string name="night_sky_debug_offset_x">Posun X: %1$.1f px</string>
-    <string name="night_sky_debug_offset_y">Posun Y: %1$.1f px</string>
-    <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
-    <string name="night_sky_debug_rotation">Rotace: %1$.1f°</string>
     <string name="night_sky_debug_tap_radius">Rádius dotyku: %1$d dp</string>
     <string name="night_sky_debug_show_tap_indicator">Zobrazit kroužek dotyku</string>
     <string name="night_sky_debug_reset">Obnovit</string>
@@ -542,10 +537,6 @@
     <string name="settings_debug_group_touch">Detekce dotyku a výběr</string>
     <string name="settings_debug_group_night_sky">Noční obloha AR</string>
     <string name="settings_debug_group_terrain">Terénní horizont</string>
-    <string name="settings_debug_night_sky_calibration">Ladění zarovnání ilustrací</string>
-    <string name="settings_debug_night_sky_calibration_desc">Povolí ovládací prvky ladění zarovnání souhvězdí v noční obloze</string>
-    <string name="settings_debug_legacy_canvas_sky">Starý Canvas renderer oblohy</string>
-    <string name="settings_debug_legacy_canvas_sky_desc">Vykreslí noční oblohu původním CPU rendererem místo GPU scény</string>
     <string name="settings_debug_night_sky_focus_region">Oblast aktivace souhvězdí</string>
     <string name="settings_debug_night_sky_focus_region_desc">Zobrazí aktivní oblast zaměření a práh zobrazení souhvězdí v noční obloze</string>
     <string name="settings_debug_terrain_metrics">Metriky terénního horizontu</string>

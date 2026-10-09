@@ -253,13 +253,7 @@ internal fun NightSkyGpuSky(
             val tick = frameTick
             val sc = scene ?: return@Canvas
             val cat = catalog ?: return@Canvas
-            renderer.updateOpticalPaints(
-                zoomFactor = zoomRatio,
-                density = density,
-                redVisionMode = nightVisionState.isActive,
-                constellationPx = 1.8f * density,
-                boostStarAndLines = isConstellationArtVisible,
-            )
+            renderer.updateOpticalPaints(density = density)
             renderer.drawGpuOverlay(
                 drawScope = this,
                 scene = sc,

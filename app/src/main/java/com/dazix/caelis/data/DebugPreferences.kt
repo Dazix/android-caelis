@@ -5,8 +5,6 @@ package com.dazix.caelis.data
  * All flags default to false so production behavior is unaffected unless explicitly enabled.
  */
 data class DebugPreferences(
-    /** Enable constellation illustration alignment / artwork calibration debugger in Night Sky AR. */
-    val enableNightSkyCalibration: Boolean = false,
     /** Enable constellation activation / focus region indicator in Night Sky AR. */
     val enableNightSkyFocusRegion: Boolean = false,
     /** Display real-time terrain horizon metrics (Auto-Range km and active DEM tile count) in AR views. */
@@ -15,19 +13,12 @@ data class DebugPreferences(
     val starTapRadiusDp: Int = DEFAULT_STAR_TAP_RADIUS_DP,
     /** Visualize celestial hit-test radius circle upon tapping in Night Sky AR. */
     val showTapRadiusIndicator: Boolean = false,
-    /**
-     * Draw Night Sky with the old Canvas renderer instead of the Filament scene. A fallback while
-     * the GPU path is being verified on devices; removed together with the Canvas code.
-     */
-    val useLegacyCanvasSky: Boolean = false,
 ) {
     /** True if any debug or diagnostic feature is currently turned on. */
     val anyEnabled: Boolean
-        get() = enableNightSkyCalibration ||
-            enableNightSkyFocusRegion ||
+        get() = enableNightSkyFocusRegion ||
             showTerrainMetrics ||
             showTapRadiusIndicator ||
-            useLegacyCanvasSky ||
             starTapRadiusDp != DEFAULT_STAR_TAP_RADIUS_DP
 
     companion object {

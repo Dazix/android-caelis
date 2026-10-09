@@ -109,11 +109,6 @@ data class NightSkyArUiState(
     val selectedBody: CelestialBodyDetails? = null,
     val visibilityState: VisibilityState = VisibilityState.Loading,
     val planetStates: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
-    val debugArtOffsetX: Float = 0f,
-    val debugArtOffsetY: Float = 0f,
-    val debugArtScaleMultiplier: Float = 1.0f,
-    val debugArtRotationOffset: Float = 0f,
-    val isDebugCalibrationVisible: Boolean = false,
     val isDebugFocusRegionVisible: Boolean = false,
     val debugFocusRadiusMultiplier: Float = 0.48f,
     val debugFocusDisplayThreshold: Float = 0.0f,
@@ -490,11 +485,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     // In-App Calibration Debugger StateFlows
-    val debugArtOffsetX = MutableStateFlow(0f)
-    val debugArtOffsetY = MutableStateFlow(0f)
-    val debugArtScaleMultiplier = MutableStateFlow(1.0f)
-    val debugArtRotationOffset = MutableStateFlow(0f)
-    val isDebugCalibrationVisible = MutableStateFlow(false)
     val isDebugFocusRegionVisible = MutableStateFlow(false)
     val debugFocusRadiusMultiplier = MutableStateFlow(0.48f)
     val debugFocusDisplayThreshold = MutableStateFlow(0.0f)
@@ -504,7 +494,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         com.dazix.caelis.data.DebugPreferences(),
     )
     val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugPreferences
-        .map { it.enableNightSkyCalibration || it.enableNightSkyFocusRegion }
+        .map { it.enableNightSkyFocusRegion }
         .stateIn(
             viewModelScope,
             SharingStarted.Eagerly,
@@ -560,11 +550,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedConstellationIndex,
             selectedDsoIndex,
             selectedMeteorIndex,
-            debugArtOffsetX,
-            debugArtOffsetY,
-            debugArtScaleMultiplier,
-            debugArtRotationOffset,
-            isDebugCalibrationVisible,
             isDebugFocusRegionVisible,
             debugFocusRadiusMultiplier,
             debugFocusDisplayThreshold,
@@ -615,24 +600,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val constIdx = args[31] as Int
         val dsoIdx = args[32] as Int
         val meteorIdx = args[33] as Int
-        val dbgOffsetX = args[34] as Float
-        val dbgOffsetY = args[35] as Float
-        val dbgScale = args[36] as Float
-        val dbgRot = args[37] as Float
-        val dbgVis = args[38] as Boolean
-        val dbgFocus = args[39] as Boolean
-        val dbgRadius = args[40] as Float
-        val dbgThresh = args[41] as Float
-        val dbgOptions = args[42] as Boolean
+        val dbgFocus = args[34] as Boolean
+        val dbgRadius = args[35] as Float
+        val dbgThresh = args[36] as Float
+        val dbgOptions = args[37] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val planetsList = args[43] as List<PlanetState>
-        val planetId = args[44] as String?
-        val horizState = args[45] as com.dazix.caelis.data.horizon.HorizonState
-        val debugPrefs = args[46] as com.dazix.caelis.data.DebugPreferences
-        val multipleHits = args[47] as NightSkyRenderer.HitTarget.MultipleHits?
-        val tState = args[48] as TimeState
-        val visState = args[49] as VisibilityState
-        val localDate = args[50] as LocalDate?
+        val planetsList = args[38] as List<PlanetState>
+        val planetId = args[39] as String?
+        val horizState = args[40] as com.dazix.caelis.data.horizon.HorizonState
+        val debugPrefs = args[41] as com.dazix.caelis.data.DebugPreferences
+        val multipleHits = args[42] as NightSkyRenderer.HitTarget.MultipleHits?
+        val tState = args[43] as TimeState
+        val visState = args[44] as VisibilityState
+        val localDate = args[45] as LocalDate?
 
         NightSkyArUiState(
             timeState = tState,
@@ -676,11 +656,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedBody = selected,
             visibilityState = visState,
             planetStates = planetsList,
-            debugArtOffsetX = dbgOffsetX,
-            debugArtOffsetY = dbgOffsetY,
-            debugArtScaleMultiplier = dbgScale,
-            debugArtRotationOffset = dbgRot,
-            isDebugCalibrationVisible = dbgVis,
             isDebugFocusRegionVisible = dbgFocus,
             debugFocusRadiusMultiplier = dbgRadius,
             debugFocusDisplayThreshold = dbgThresh,
@@ -1815,31 +1790,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    // In-App Calibration Debugger controls
-    fun setDebugArtOffsetX(v: Float) {
-        debugArtOffsetX.value = v
-    }
-
-    fun setDebugArtOffsetY(v: Float) {
-        debugArtOffsetY.value = v
-    }
-
-    fun setDebugArtScaleMultiplier(v: Float) {
-        debugArtScaleMultiplier.value = v
-    }
-
-    fun setDebugArtRotationOffset(v: Float) {
-        debugArtRotationOffset.value = v
-    }
-
-    fun toggleDebugCalibration() {
-        isDebugCalibrationVisible.value = !isDebugCalibrationVisible.value
-    }
-
-    fun setDebugCalibrationVisible(visible: Boolean) {
-        isDebugCalibrationVisible.value = visible
-    }
-
     fun toggleDebugFocusRegion() {
         isDebugFocusRegionVisible.value = !isDebugFocusRegionVisible.value
     }
@@ -1880,14 +1830,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         setDebugStarTapRadius(com.dazix.caelis.data.DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP)
         setShowTapRadiusIndicator(false)
     }
-
-    fun resetDebugCalibration() {
-        debugArtOffsetX.value = 0f
-        debugArtOffsetY.value = 0f
-        debugArtScaleMultiplier.value = 1.0f
-        debugArtRotationOffset.value = 0f
-    }
-
     fun startSensors() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null

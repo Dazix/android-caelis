@@ -105,9 +105,7 @@ fun NightSkyLayerSettingsSheet(
     redVisionMode: Boolean,
     isSensorTrackingEnabled: Boolean = true,
     isKeepScreenOn: Boolean = false,
-    isDebugCalibrationVisible: Boolean = false,
     isDebugFocusRegionVisible: Boolean = false,
-    enableNightSkyCalibration: Boolean = false,
     enableNightSkyFocusRegion: Boolean = false,
     isDebugOptionsEnabled: Boolean = false,
     timeState: TimeState = TimeState(),
@@ -128,7 +126,6 @@ fun NightSkyLayerSettingsSheet(
     onToggleRedVisionMode: () -> Unit,
     onToggleSensorTracking: () -> Unit = {},
     onToggleKeepScreenOn: () -> Unit = {},
-    onToggleDebugCalibration: () -> Unit = {},
     onToggleDebugFocusRegion: () -> Unit = {},
     alignAzimuthOffsetDeg: Float = 0f,
     alignElevationOffsetDeg: Float = 0f,
@@ -442,42 +439,22 @@ fun NightSkyLayerSettingsSheet(
         }
 
         // 6. Debug Options (conditional)
-        val showDebugCalib = enableNightSkyCalibration || (isDebugOptionsEnabled && !enableNightSkyFocusRegion)
-        val showDebugFocus = enableNightSkyFocusRegion || (isDebugOptionsEnabled && !enableNightSkyCalibration)
-        if (showDebugCalib || showDebugFocus) {
+        if (enableNightSkyFocusRegion || isDebugOptionsEnabled) {
             LayerGroupCard(
                 title = stringResource(R.string.night_sky_group_debug),
                 titleColor = groupTitleColor,
                 containerColor = cardContainerColor,
                 borderColor = cardBorderColor,
             ) {
-                var hasPrevious = false
-                if (showDebugCalib) {
-                    LayerToggleRow(
-                        label = stringResource(R.string.night_sky_debug_calibration),
-                        icon = AppIcons.Setup,
-                        isChecked = isDebugCalibrationVisible,
-                        headlineColor = headlineColor,
-                        iconColor = iconColor,
-                        switchColors = switchColors,
-                        onCheckedChange = { onToggleDebugCalibration() },
-                    )
-                    hasPrevious = true
-                }
-                if (showDebugFocus) {
-                    if (hasPrevious) {
-                        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                    }
-                    LayerToggleRow(
-                        label = stringResource(R.string.night_sky_debug_focus_region),
-                        icon = AppIcons.FocusArea,
-                        isChecked = isDebugFocusRegionVisible,
-                        headlineColor = headlineColor,
-                        iconColor = iconColor,
-                        switchColors = switchColors,
-                        onCheckedChange = { onToggleDebugFocusRegion() },
-                    )
-                }
+                LayerToggleRow(
+                    label = stringResource(R.string.night_sky_debug_focus_region),
+                    icon = AppIcons.FocusArea,
+                    isChecked = isDebugFocusRegionVisible,
+                    headlineColor = headlineColor,
+                    iconColor = iconColor,
+                    switchColors = switchColors,
+                    onCheckedChange = { onToggleDebugFocusRegion() },
+                )
             }
         }
 

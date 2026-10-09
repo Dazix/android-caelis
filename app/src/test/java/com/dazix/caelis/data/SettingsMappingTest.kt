@@ -759,7 +759,6 @@ class SettingsMappingTest {
     @Test
     fun `debug preferences default to all false on empty preferences`() {
         val defaults = SettingsMapping.readDebugPreferences(emptyPreferences())
-        assertFalse(defaults.enableNightSkyCalibration)
         assertFalse(defaults.enableNightSkyFocusRegion)
         assertFalse(defaults.showTerrainMetrics)
         assertFalse(defaults.showTapRadiusIndicator)
@@ -771,7 +770,6 @@ class SettingsMappingTest {
     fun `debug preferences survive round trip when true and false`() {
         val prefs = mutablePreferencesOf()
         val custom = DebugPreferences(
-            enableNightSkyCalibration = true,
             enableNightSkyFocusRegion = false,
             showTerrainMetrics = true,
             starTapRadiusDp = 64,
@@ -788,7 +786,6 @@ class SettingsMappingTest {
         SettingsMapping.writeDebugModeEnabled(prefs, true)
 
         val read = SettingsMapping.readDebugPreferences(prefs)
-        assertEquals(true, read.enableNightSkyCalibration)
         assertEquals(true, read.enableNightSkyFocusRegion)
         assertEquals(false, read.showTerrainMetrics)
         assertEquals(false, read.showTapRadiusIndicator)

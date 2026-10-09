@@ -66,8 +66,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (295 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (232 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (129 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (302 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (209 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -83,7 +83,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **677 JVM tests (295 intervalometer, 232 solar & horizon, 129 night sky, plus docs/UI), 31
+`skipped`), not from the console. Current baseline: **753 JVM tests (295 intervalometer, 302 solar & horizon, 209 night sky — the suites overlap on `domain.arframe` — plus docs/UI), 31
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -102,7 +102,8 @@ a session from the shell.
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
-| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), dynamic matrix calculation (`DynamicMatrixCalculator`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the camera-geometry half of automatic horizon alignment (`SkylineAligner`), and zero-allocation 3D celestial grid renderer (`SkyDomeRenderer`). |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`). |
+| `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the line/disc/star/textured batches, `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
@@ -113,8 +114,8 @@ a session from the shell.
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
 | `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
-| `ui/horizon/` | Terrain AR screen (`TerrainArScreen`), ViewModel (`HorizonViewModel`), AGSL hardware shader canvas (`HardwareTerrainShaderCanvas`), lock indicator (`HorizonLockIndicator`). |
-| `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), 60 FPS zero-allocation batch renderer (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override, and custom AGSL shaders (Milky Way, atmosphere, landscape). |
+| `ui/horizon/` | Offline terrain management screen (`OfflineTerrainScreen`) and the terrain metrics debug HUD (`TerrainDebugOverlay`). The standalone Terrain AR screen is gone: the terrain skyline is drawn by Sun AR and Night Sky. |
+| `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), the GPU sky composable (`NightSkyGpuSky`), the CPU overlay and tap hit test over it (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override. |
 
 `ShutterAccessibilityService` marks its UI wiring with an `==== INTEGRATION POINT ====` block: those are
 the only calls into the notification and the panel.
@@ -196,8 +197,15 @@ Each of these was found by review or on the device and is now covered by a test.
   put the first heading of the gyro-held tracker ~90° out.
 - **Dropping a pan is not forgetting the calibration.** `resumeSensorTracking` and `startSensors`
   clear `pan*` and keep `calibration*`; only an explicit reset clears both.
-- **Zero allocations on the AR render loop.** `SkyDomeRenderer` uses pre-allocated flat FloatArrays
-  and in-place `CameraProjection.projectFast` to ensure zero GC allocations per frame at 60 FPS.
+- **Zero allocations on the AR render loop.** A frame of either AR screen is matrix and uniform writes
+  plus uploads only when data changed; geometry is rebuilt on data changes (`SunArScene`,
+  `NightSkyScene`), and the Compose overlays draw through pre-allocated paints and buffers.
+- **The AR skies render into a TextureView, never a SurfaceView.** SurfaceFlinger presents a
+  SurfaceView's buffers independently of the window, and on a Pixel 7 Pro the Compose labels slid
+  visibly against the stars during a pan. A TextureView is composited in the window's own frame,
+  and one `withFrameNanos` loop renders the GPU frame and invalidates the overlay from one pose.
+- **One matrix feeds the GPU and the CPU.** Labels, bubbles, pointers and the tap hit test project
+  through the scene's `SkyProjector`, updated in the same call that sets the Filament camera.
 - **Timing is absolute.** Shot times come from `IntervalSchedule.targetElapsedFor`, never "now +
   interval". A late shot must not push the series.
 - **A tap is not a shot.** With verification armed, `shotsTaken` moves only when verification resolves
@@ -271,16 +279,17 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Terrain crossings are compared against the *apparent* elevation.** The profile already has
   refraction folded into an enlarged Earth radius ($R/(1-k)$, $k = 0.13$); comparing the geometric
   elevation would count it once on one side and not the other.
-- **The night sky profile strip is sampled NEAREST and interpolated in the shader.** Elevation is
-  packed 16-bit across R and G; hardware filtering would blend the packed bytes, and an interpolated
-  R channel across a carry boundary decodes to a wild number, not to a halfway elevation.
-- **The profile strip and the landscape panorama do not share a texture coordinate.** The strip
-  starts at north (texel 0 is azimuth 0); the panorama has north in the middle of the image, which is
-  what its `texU`'s `+ 0.5` is for. Reading the strip with `texU` drew the whole terrain horizon half
-  a turn out — a ridge due north appeared due south — and it looked entirely plausible, because a
-  horizon is a horizon whichever way you face. `NightSkyHorizonOrientationTest` renders the real
-  shader against a profile with terrain in one direction only and checks all four cardinal points, so
-  a quarter-turn is caught as well as a half-turn.
+- **The terrain horizon's orientation lives in geometry, not in a texture coordinate.** The AGSL
+  shader once read the profile strip with the panorama's `texU` (north in the middle of the image)
+  and drew the whole skyline half a turn out — a ridge due north appeared due south, and it looked
+  entirely plausible. `HorizonMeshBuilder` puts vertex i at azimuth i / 4°, so north is sample 0 by
+  construction; the panorama keeps its own `+ 0.5` in `landscape.mat`. `NightSkyHorizonOrientationTest`
+  renders the real `TerrainRing` through `terrain.mat` offscreen against a profile with terrain in
+  one direction only and checks all four cardinal points, so a quarter-turn is caught as well.
+- **Polyline quads are wound as an outline.** `LineBatch` writes A-left, A-right, B-right, B-left
+  with `side` relative to the A -> B normal at both ends; with B's sides swapped the two triangles
+  crossed into a bow tie and every densely sampled arc read as a saw blade. Curves pass their
+  neighbours (`addJoinedSegment`) so joints are mitred instead of notched.
 - **Terrain download notifications use `IMPORTANCE_DEFAULT` with muted sound and vibration.**
   Android's `IMPORTANCE_LOW` categorises notifications into the Silent section, where Android
   SystemUI suppresses the status bar icon by default. `IMPORTANCE_DEFAULT` with `setSound(null, null)`
@@ -310,8 +319,9 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Local date override in celestial detail sheet must not alter global AR time or trigger render loop allocations.**
   `CelestialDetailBottomSheet` calculates visibility asynchronously for the chosen date via `CelestialVisibilityCalculator`
   using an isolated local `Instant`, leaving `NightSkyArViewModel.timeState` and the 60 FPS render loop untouched.
-- **DSO rendering uses hybrid homography and vector glyphs.** In close zoom, WebP textures are projected via 4-corner
-  `Matrix.setPolyToPoly` homography; in wide field, vector glyphs are rendered with zero GC allocations.
+- **DSO and constellation artwork are 3D quads, glyphs are overlay.** Photographs are textured quads on
+  the sky sphere at their catalogue RA/Dec corners (perspective comes from the GPU, north from the
+  celestial frame); where no photograph is on screen the overlay draws the vector glyph instead.
 - **Virtual Clock time scrubber preserves stable layout during drag.** The timeline scrubber provides continuous
   $\pm 12\,\text{h}$ simulation without resizing bottom bar containers or triggering recomposition jitter.
 

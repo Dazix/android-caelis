@@ -657,7 +657,6 @@ class DocumentationScreenshotsTest {
                         nightVisionTheme = NightVisionTheme.AMBER,
                         isSensorTrackingEnabled = true,
                         isKeepScreenOn = true,
-                        isDebugCalibrationVisible = false,
                         isDebugFocusRegionVisible = false,
                         isDebugOptionsEnabled = false,
                         onToggleLandscapeVisible = {},
@@ -671,7 +670,6 @@ class DocumentationScreenshotsTest {
                         onToggleRedVisionMode = {},
                         onToggleSensorTracking = {},
                         onToggleKeepScreenOn = {},
-                        onToggleDebugCalibration = {},
                         onToggleDebugFocusRegion = {},
                     )
                 }

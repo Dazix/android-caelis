@@ -392,12 +392,10 @@ internal object SettingsMapping {
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
     private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
     private val DEBUG_MODE_ENABLED = booleanPreferencesKey("debug_mode_enabled")
-    private val DEBUG_NIGHT_SKY_CALIBRATION = booleanPreferencesKey("debug_night_sky_calibration")
     private val DEBUG_NIGHT_SKY_FOCUS_REGION = booleanPreferencesKey("debug_night_sky_focus_region")
     private val DEBUG_SHOW_TERRAIN_METRICS = booleanPreferencesKey("debug_show_terrain_metrics")
     private val DEBUG_STAR_TAP_RADIUS = intPreferencesKey("debug_star_tap_radius")
     private val DEBUG_SHOW_TAP_RADIUS_INDICATOR = booleanPreferencesKey("debug_show_tap_radius_indicator")
-    private val DEBUG_LEGACY_CANVAS_SKY = booleanPreferencesKey("debug_legacy_canvas_sky")
 
     private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
@@ -839,22 +837,18 @@ internal object SettingsMapping {
     fun readDebugPreferences(prefs: Preferences): DebugPreferences {
         val legacyDebug = prefs[DEBUG_MODE_ENABLED] ?: false
         return DebugPreferences(
-            enableNightSkyCalibration = prefs[DEBUG_NIGHT_SKY_CALIBRATION] ?: legacyDebug,
             enableNightSkyFocusRegion = prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] ?: legacyDebug,
             showTerrainMetrics = prefs[DEBUG_SHOW_TERRAIN_METRICS] ?: false,
             starTapRadiusDp = prefs[DEBUG_STAR_TAP_RADIUS] ?: DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP,
             showTapRadiusIndicator = prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] ?: false,
-            useLegacyCanvasSky = prefs[DEBUG_LEGACY_CANVAS_SKY] ?: false,
         )
     }
 
     fun writeDebugPreferences(prefs: MutablePreferences, preferences: DebugPreferences) {
-        prefs[DEBUG_NIGHT_SKY_CALIBRATION] = preferences.enableNightSkyCalibration
         prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] = preferences.enableNightSkyFocusRegion
         prefs[DEBUG_SHOW_TERRAIN_METRICS] = preferences.showTerrainMetrics
         prefs[DEBUG_STAR_TAP_RADIUS] = preferences.starTapRadiusDp
         prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] = preferences.showTapRadiusIndicator
-        prefs[DEBUG_LEGACY_CANVAS_SKY] = preferences.useLegacyCanvasSky
     }
 
     fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(
