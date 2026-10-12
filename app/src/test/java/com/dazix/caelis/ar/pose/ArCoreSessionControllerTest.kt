@@ -192,6 +192,103 @@ class ArCoreSessionControllerTest {
         assertEquals(ArCoreSessionController.Status.NotConsented, controller.status.value)
     }
 
+    // ---- A "yes" that went stale while it was being read ----
+
+    /**
+     * Found by a security review: a resume suspended in a consent read, while the user withdrew
+     * consent (the guard tick's revalidateConsent closes the controller), went on and created the
+     * session anyway. The read itself had answered yes, a moment too early. Each read here closes the
+     * controller "during" the read and still answers yes, which is exactly that interleaving, at
+     * every read a resume makes in turn.
+     */
+    @Test
+    fun `a close during any consent read stops resume from creating a session`() = runBlocking {
+        // How many times an undisturbed resume reads consent, so every one of them is covered.
+        var baselineReads = 0
+        val baseline = FakePlatform()
+        controller(baseline, consent = { baselineReads++; true }).resume()
+        assertEquals("the undisturbed resume must reach the constructor", 1, baseline.createCalls)
+        assertTrue("resume reads consent at entry, in the availability check and in front of the constructor", baselineReads >= 3)
+
+        for (closeAt in 1..baselineReads) {
+            ArCoreSessionController.resetCountersForTest()
+            val platform = FakePlatform()
+            var reads = 0
+            lateinit var controller: ArCoreSessionController
+            controller = controller(platform, consent = {
+                if (++reads == closeAt) controller.close()
+                true
+            })
+
+            controller.resume()
+
+            assertEquals("close at read $closeAt: no session may be constructed", 0, platform.createCalls)
+            assertEquals("close at read $closeAt", 0, ArCoreSessionController.sessionCreationAttempts)
+            assertNull("close at read $closeAt", controller.session)
+        }
+    }
+
+    @Test
+    fun `a close during the geospatial read stops resume from creating a session`() = runBlocking {
+        val platform = FakePlatform()
+        lateinit var controller: ArCoreSessionController
+        controller = controller(platform, consent = { true }, geospatial = {
+            controller.close()
+            true
+        })
+
+        controller.resume()
+
+        assertEquals(0, platform.createCalls)
+        assertNull(controller.session)
+    }
+
+    @Test
+    fun `a close during the first consent read asks Play Services nothing and publishes nothing`() = runBlocking {
+        val platform = FakePlatform()
+        lateinit var controller: ArCoreSessionController
+        controller = controller(platform, consent = {
+            controller.close()
+            true
+        })
+
+        val status = controller.checkAvailability()
+
+        assertEquals("a stale yes must not reach Play Services", 0, platform.availabilityCalls)
+        assertFalse("a stale yes must not publish Ready", status == ArCoreSessionController.Status.Ready)
+        assertFalse(controller.status.value == ArCoreSessionController.Status.Ready)
+    }
+
+    @Test
+    fun `a close during a consent re-read while availability is still checking stops the probing`() = runBlocking {
+        val platform = FakePlatform(availability = { ArCoreApk.Availability.UNKNOWN_CHECKING })
+        var reads = 0
+        lateinit var controller: ArCoreSessionController
+        controller = controller(platform, consent = {
+            if (++reads == 2) controller.close()
+            true
+        })
+
+        controller.checkAvailability()
+
+        assertEquals("no probe after the controller was closed", 1, platform.availabilityCalls)
+    }
+
+    @Test
+    fun `a close during the consent read stops an install request`() = runBlocking {
+        val platform = FakePlatform()
+        lateinit var controller: ArCoreSessionController
+        controller = controller(platform, consent = {
+            controller.close()
+            true
+        })
+
+        controller.requestInstallFromUserAction(activity())
+
+        assertEquals(0, platform.installCalls)
+        assertEquals(0, ArCoreSessionController.installRequestCount)
+    }
+
     // ---- Availability, only after consent ----
 
     @Test

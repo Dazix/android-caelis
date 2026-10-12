@@ -171,10 +171,23 @@ class NetworkIsolationTest {
         val install = body(text, "suspend fun requestInstallFromUserAction(")
         val resume = body(text, "suspend fun resume()")
         val consentCheck = "if (!consent())"
+        val snapshot = "val startedIn = generation"
+        val staleCheck = "if (generation != startedIn) return _status.value"
 
-        assertTrue("checkAvailability must check consent first", check.trimStart().startsWith(consentCheck))
-        assertTrue("requestInstall must check consent first", install.trimStart().startsWith(consentCheck))
-        assertTrue("resume must check consent first", resume.trimStart().startsWith(consentCheck))
+        // Each entry point first snapshots the generation and then reads consent, nothing else. The
+        // snapshot has to come before the read: a "yes" read just before a withdrawal closed the
+        // controller is only recognisable as stale against a generation taken before it.
+        for ((name, fn) in listOf("checkAvailability" to check, "requestInstall" to install, "resume" to resume)) {
+            val code = fn.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("//") }
+            assertEquals("$name must snapshot the generation first", snapshot, code[0])
+            assertTrue("$name must check consent straight after", code[1].startsWith(consentCheck))
+            // A consent read suspends; whatever happened meanwhile (a close, a withdrawal) wins.
+            code.forEachIndexed { i, line ->
+                if (line.startsWith(consentCheck)) {
+                    assertEquals("$name: a consent read must be followed by a generation check", staleCheck, code.getOrNull(i + 1))
+                }
+            }
+        }
 
         // The consent read has to be the last thing before the constructor: any suspension between
         // the two (an availability retry, a Geospatial read) is a window in which it may have changed.
@@ -189,6 +202,10 @@ class NetworkIsolationTest {
         assertFalse(
             "nothing may suspend between the last consent check and the constructor",
             beforeConstruction.substring(lastConsent).let { it.contains("delay(") || it.contains("checkAvailability()") },
+        )
+        assertTrue(
+            "the last consent check before the constructor must be followed by a generation check",
+            beforeConstruction.substring(lastConsent).contains(staleCheck),
         )
 
         // Each Google-facing call has exactly one call site, inside the function that checked.

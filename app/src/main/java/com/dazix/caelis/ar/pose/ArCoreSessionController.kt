@@ -120,8 +120,12 @@ class ArCoreSessionController(
      * Services - until the user has agreed.
      */
     suspend fun checkAvailability(): Status {
-        if (!consent()) return deny()
+        // The generation is taken *before* the consent read, and checked after every suspension:
+        // a "yes" read just before the user withdrew it (revalidateConsent -> close) is stale by the
+        // time it returns, and acting on it would contact Play Services for a closed controller.
         val startedIn = generation
+        if (!consent()) return deny()
+        if (generation != startedIn) return _status.value
         var availability = probe()
         var retriesLeft = availabilityRetries
         while (availability.isTransient && retriesLeft-- > 0) {
@@ -130,6 +134,7 @@ class ArCoreSessionController(
             if (generation != startedIn) return _status.value
             // The user may have withdrawn consent while the check was still running.
             if (!consent()) return deny()
+            if (generation != startedIn) return _status.value
             availability = probe()
         }
         return publish(
@@ -151,7 +156,9 @@ class ArCoreSessionController(
      * `NetworkIsolationTest` pins it to this method.
      */
     suspend fun requestInstallFromUserAction(activity: Activity): Status {
+        val startedIn = generation
         if (!consent()) return deny()
+        if (generation != startedIn) return _status.value
         installRequests.incrementAndGet()
         return try {
             when (platform.requestInstall(activity)) {
@@ -174,8 +181,13 @@ class ArCoreSessionController(
      * ARCore refusal.
      */
     suspend fun resume(): Status {
-        if (!consent()) return deny()
+        // Taken before the first read; see checkAvailability. Every suspension below is followed by
+        // a generation check, and the last one sits directly in front of the construction: a resume
+        // suspended in its final consent read while the user withdrew consent (or the screen closed
+        // the controller) used to go on and create a session nobody wanted any more.
         val startedIn = generation
+        if (!consent()) return deny()
+        if (generation != startedIn) return _status.value
 
         var live = session
         if (live == null) {
@@ -186,9 +198,11 @@ class ArCoreSessionController(
             // Read once more directly in front of the construction: this is the line that makes
             // Google Play Services run, so it gets its own answer rather than one a retry ago.
             if (!consent()) return deny()
+            if (generation != startedIn) return _status.value
             val wantsGeospatial = geospatialApiKeyAvailable && geospatialConsent()
             if (generation != startedIn) return _status.value
             if (!consent()) return deny()
+            if (generation != startedIn) return _status.value
 
             live = try {
                 sessionsCreated.incrementAndGet()

@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **921 JVM tests (309 intervalometer, 461 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
+`skipped`), not from the console. Current baseline: **926 JVM tests (309 intervalometer, 466 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
