@@ -12,6 +12,8 @@ import com.dazix.caelis.R
 import com.dazix.caelis.data.AdvancedSettings
 import com.dazix.caelis.data.SessionRepository
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.BuildConfig
+import com.dazix.caelis.data.ArCoreSettings
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.data.horizon.DemTileImporter
@@ -244,6 +246,28 @@ data class SetupUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settings = SettingsStore(application)
+
+    // ==== ARCore consent ====
+    //
+    // Only the two switches live here. Nothing in this view model starts, probes or installs
+    // ARCore: that is ar.pose.ArCoreSessionController's alone, and it re-reads these values on
+    // every use rather than trusting whatever this flow last held.
+    val arCoreSettings: StateFlow<ArCoreSettings> = settings.arCore.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ArCoreSettings(),
+    )
+
+    fun setArCoreConsent(granted: Boolean) {
+        viewModelScope.launch { settings.setArCoreConsent(granted) }
+    }
+
+    fun setGeospatialConsent(granted: Boolean) {
+        viewModelScope.launch { settings.setGeospatialConsent(granted) }
+    }
+
+    /** Whether this build can offer the Geospatial API at all: it needs a key given at build time. */
+    val geospatialAvailable: Boolean = BuildConfig.HAS_GEOSPATIAL_API_KEY
 
     // ==== Terrain horizon ====
     //

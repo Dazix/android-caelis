@@ -24,14 +24,15 @@ import java.nio.ByteOrder
  * One Filament engine, scene and camera drawing into a [SurfaceView] or a [TextureView], with its
  * own vsync loop.
  *
- * The output is translucent. A SurfaceView sits as a media overlay: above the CameraX preview's own
- * SurfaceView, below the window, so the Compose HUD still draws on top of the sky. A TextureView is
- * part of the window itself, which is what a screen with a Compose overlay pinned to the sky needs:
- * SurfaceFlinger presents a SurfaceView's buffers independently of the window's, and on a Pixel 7 Pro
- * labels drawn in the window visibly slid against the stars during a pan; a TextureView is latched
- * by the window's own frame, so both halves reach the screen together. Post-processing
- * is off on purpose — tone mapping would shift every unlit colour away from the palette the Canvas
- * renderer used, and night vision depends on those colours being exact.
+ * The output is translucent, so a frame with nothing drawn lets the window show through; the camera
+ * picture ([CameraBackground]) is drawn by this same frame and is opaque, so over it nothing does.
+ * A SurfaceView sits as a media overlay, below the window, so the Compose HUD still draws on top of
+ * the sky. A TextureView is part of the window itself, which is what a screen with a Compose overlay
+ * pinned to the sky needs: SurfaceFlinger presents a SurfaceView's buffers independently of the
+ * window's, and on a Pixel 7 Pro labels drawn in the window visibly slid against the stars during a
+ * pan; a TextureView is latched by the window's own frame, so both halves reach the screen together.
+ * Post-processing is off on purpose — tone mapping would shift every unlit colour away from the
+ * palette the Canvas renderer used, and night vision depends on those colours being exact.
  *
  * Everything here runs on the main thread, which is where Choreographer delivers frames.
  *
@@ -147,9 +148,11 @@ class SkySurface private constructor(
     }
 
     /**
-     * Offscreen only: renders one frame and returns its pixels as RGBA bytes, bottom row first (GL
-     * order), premultiplied. Blocks until the GPU has finished. Call from the thread that created
-     * this surface.
+     * Offscreen only: renders one frame and returns its pixels as RGBA bytes, premultiplied, **top
+     * row first**. Not the bottom-up order glReadPixels documents: measured on a Pixel 7 Pro by
+     * rendering the terrain ring level, where the ground (opaque) came back in the last row. A test
+     * that assumed GL order read every camera picture as upside down. Blocks until the GPU has
+     * finished. Call from the thread that created this surface.
      */
     fun renderAndRead(): ByteArray {
         check(offscreen) { "renderAndRead is for offscreen surfaces" }

@@ -30,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.pose.SkyPoseFrame
+import com.dazix.caelis.ar.pose.SkyPoseRig
+import com.dazix.caelis.ar.scene.CameraBackground
 import com.dazix.caelis.ar.scene.NightSkyFrame
 import com.dazix.caelis.ar.scene.NightSkyScene
 import com.dazix.caelis.ar.scene.SkySurface
@@ -63,18 +66,25 @@ class NightSkyGpuHandle {
  * invalidates the overlay, which draws through the scene's projector — so a label can never be a
  * frame behind its star.
  *
- * The sky renders into a translucent TextureView, not a SurfaceView. A SurfaceView's buffers are
- * presented by SurfaceFlinger on their own schedule, and with the labels in the window they slid
- * visibly against the stars during a pan on a Pixel 7 Pro; a TextureView is composited by the
- * window's own frame, the same frame the overlay is in. It sits over the CameraX SurfaceView, which
- * stays below the window.
+ * The camera picture is drawn by that same Filament frame ([CameraBackground], fed by
+ * [CameraFrameSource]), and the pose is taken at the instant of the image being drawn, so a star
+ * cannot run ahead of the photographed sky during a turn. Over the opaque planetarium sky the picture
+ * is switched off and the live pose is used.
+ *
+ * The sky renders into a TextureView, not a SurfaceView. A SurfaceView's buffers are presented by
+ * SurfaceFlinger on their own schedule, and with the labels in the window they slid visibly against
+ * the stars during a pan on a Pixel 7 Pro; a TextureView is composited by the window's own frame,
+ * the same frame the overlay is in. It is translucent only where no camera image covers it: the
+ * picture is opaque.
  */
 @Composable
 internal fun NightSkyGpuSky(
     handle: NightSkyGpuHandle,
     renderer: NightSkyRenderer,
     orientation: DeviceOrientation?,
-    onGetRenderMatrix: (FloatArray) -> Boolean,
+    onGetRenderMatrix: (timestampNs: Long, out: FloatArray) -> Boolean,
+    isLivePoseActive: () -> Boolean,
+    rig: SkyPoseRig,
     displayRotation: Int,
     fovHorizontalDegrees: Float,
     zoomRatio: Float,
@@ -159,6 +169,12 @@ internal fun NightSkyGpuSky(
             built?.destroy()
         }
     }
+    var background by remember { mutableStateOf<CameraBackground?>(null) }
+    DisposableEffect(surface) {
+        val built = surface?.let { CameraBackground(it) }
+        background = built
+        onDispose { built?.destroy() }
+    }
     LaunchedEffect(scene, milkyWayBitmap) { milkyWayBitmap?.let { scene?.setMilkyWayBitmap(it) } }
     LaunchedEffect(scene, landscapeBitmap) { landscapeBitmap?.let { scene?.setLandscapeBitmap(it) } }
     LaunchedEffect(scene, horizonProfile) {
@@ -199,6 +215,12 @@ internal fun NightSkyGpuSky(
     val currentLongitude by rememberUpdatedState(longitudeDegrees)
     val currentOrientation by rememberUpdatedState(orientation)
     val currentGetMatrix by rememberUpdatedState(onGetRenderMatrix)
+    val currentOpaque by rememberUpdatedState(isSkyBackgroundOpaque)
+    val currentRig by rememberUpdatedState(rig)
+    val currentRotation by rememberUpdatedState(displayRotation)
+    val currentZoom by rememberUpdatedState(zoomRatio)
+    val currentIsLive by rememberUpdatedState(isLivePoseActive)
+    val poseFrame = remember { SkyPoseFrame() }
     var frameTick by remember { mutableLongStateOf(0L) }
     var frameLst by remember { mutableStateOf(0.0) }
 
@@ -210,7 +232,39 @@ internal fun NightSkyGpuSky(
                 val sf = surface
                 frame.dtSeconds = if (lastFrameNanos == 0L) 0.016f else ((nanos - lastFrameNanos) / 1e9f)
                 lastFrameNanos = nanos
-                if (sc != null && sf != null && sampleMatrix(frame.deviceToEnu, currentGetMatrix, currentOrientation)) {
+                // Over the camera, the newest image goes to the GPU and the pose is the one it was
+                // taken with; over the opaque planetarium sky there is no picture to match and the
+                // live pose is the more responsive one.
+                //
+                // The rig also decides who owns the camera (CameraX or ARCore) and whose pose draws.
+                // ARCore's pose is used only while the pose is the phone's (not a manual pan) and at
+                // 1x; a pinch hands the camera back to CameraX, which is the one that can zoom.
+                val rigInstance = currentRig
+                val bg = background
+                bg?.enabled = !currentOpaque
+                rigInstance.advance(
+                    background = bg,
+                    viewportWidth = frame.viewportWidth,
+                    viewportHeight = frame.viewportHeight,
+                    displayRotation = currentRotation,
+                    zoomRatio = currentZoom,
+                    pictureEnabled = !currentOpaque,
+                    livePoseAllowed = currentIsLive(),
+                    out = poseFrame,
+                )
+                val poseReady = if (poseFrame.useRigMatrix) {
+                    poseFrame.matrix.copyInto(frame.deviceToEnu, 0, 0, 16)
+                    true
+                } else {
+                    sampleMatrix(frame.deviceToEnu, poseFrame.poseTimestampNs, currentGetMatrix, currentOrientation)
+                }
+                if (sc == null && sf != null && bg != null && rigInstance.hasPicture && !currentOpaque) {
+                    // The catalogue is still being turned into geometry. The camera used to be on
+                    // screen from the first frame (it was a separate view), so it is shown meanwhile
+                    // rather than a black screen; the sky then appears in its first frame.
+                    sf.renderFrame(nanos)
+                    revealed = true
+                } else if (sc != null && sf != null && poseReady) {
                     val ts = currentTimeState
                     val millis = if (ts.isVirtual && ts.virtualTime != null) ts.virtualTime.toEpochMilli() else System.currentTimeMillis()
                     frame.lstDegrees = SiderealTime.calculateLST(SiderealTime.toJulianDate(millis), currentLongitude)
@@ -236,6 +290,8 @@ internal fun NightSkyGpuSky(
                 handle.scene?.destroy()
                 handle.scene = null
                 scene = null
+                background?.destroy()
+                background = null
                 surface?.destroy()
                 surface = null
             },
@@ -284,10 +340,11 @@ internal fun NightSkyGpuSky(
 /** The view model's matrix when it has one (manual mode, routes), else the live sensor one. */
 private fun sampleMatrix(
     out: FloatArray,
-    getMatrix: (FloatArray) -> Boolean,
+    timestampNs: Long,
+    getMatrix: (Long, FloatArray) -> Boolean,
     orientation: DeviceOrientation?,
 ): Boolean {
-    if (getMatrix(out)) return true
+    if (getMatrix(timestampNs, out)) return true
     val m = orientation?.rotationMatrix ?: return false
     m.copyInto(out, 0, 0, minOf(16, m.size))
     return true

@@ -94,8 +94,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.CameraFovCalculator
+import com.dazix.caelis.ar.CameraFrameSource
 import com.dazix.caelis.ar.CameraPreview
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.PreviewFrameClock
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectory
@@ -106,6 +108,7 @@ import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
 import com.dazix.caelis.ui.formatOffsetDegrees
+import com.dazix.caelis.ui.rememberSkyPoseRig
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -149,6 +152,25 @@ fun SunArScreen(
     }
     var showDatePicker by remember { mutableStateOf(false) }
     var showInfoSheet by remember { mutableStateOf(false) }
+    val previewFrameClock = remember { PreviewFrameClock() }
+    // The camera picture is drawn by the sky's own Filament frame; see CameraFrameSource.
+    val cameraFrameSource = remember(previewFrameClock) { CameraFrameSource(previewFrameClock) }
+    DisposableEffect(cameraFrameSource) {
+        onDispose { cameraFrameSource.release() }
+    }
+    // Who owns the camera (CameraX, or ARCore if the user agreed) and whose pose draws the sky.
+    val poseRig = rememberSkyPoseRig(
+        sensorPose = viewModel.sensorPose,
+        cameraSource = cameraFrameSource,
+        cameraPermission = hasCameraPermission,
+        onFov = viewModel::setCameraFov,
+    )
+    val cameraXEnabled by poseRig.cameraXEnabled.collectAsStateWithLifecycle()
+    val poseIndicator by poseRig.indicator.collectAsStateWithLifecycle()
+    val arCoreConsented by poseRig.consentedFlow.collectAsStateWithLifecycle()
+    // Automatic alignment reads its frame from whichever camera is live.
+    val frameGrabber by poseRig.frameGrabber.collectAsStateWithLifecycle()
+    LaunchedEffect(frameGrabber) { viewModel.attachFrameGrabber(frameGrabber) }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -290,19 +312,27 @@ fun SunArScreen(
             }
     ) {
         if (hasCameraPermission) {
-            // Camera Live Viewport with Dynamic FOV extraction
+            // Camera stream with dynamic FOV extraction; the picture itself is drawn by SunArGpuSky below.
             CameraPreview(
                 modifier = Modifier.fillMaxSize(),
                 lifecycleOwner = lifecycleOwner,
                 isPortrait = isPortrait,
-                onFovCalculated = viewModel::setCameraFov,
+                // The rig forwards CameraX's field of view only while CameraX is the camera.
+                onFovCalculated = poseRig::onCameraXFov,
                 analyzeFrames = true,
-                onFrameGrabber = viewModel::attachFrameGrabber,
+                onFrameGrabber = poseRig::onCameraXGrabber,
+                frameClock = previewFrameClock,
+                frameSource = cameraFrameSource,
+                displayRotation = displayRotation,
+                cameraEnabled = cameraXEnabled,
+                onCameraReleased = poseRig::onCameraXReleased,
             )
 
             // Grid, terrain silhouette and day arcs on the GPU; labels, bubbles and pointers above.
             SunArGpuSky(
                 orientation = orientation,
+                onGetRenderMatrix = viewModel::getRenderMatrix,
+                rig = poseRig,
                 displayRotation = displayRotation,
                 fovHorizontalDegrees = uiState.cameraFovHorizontal,
                 solarTrajectory = uiState.trajectory,
@@ -346,12 +376,16 @@ fun SunArScreen(
                 .padding(top = 36.dp, start = 12.dp, end = 12.dp),
         )
         val headingState by viewModel.headingState.collectAsStateWithLifecycle()
-        com.dazix.caelis.ui.HeadingStatusChip(
-            state = headingState,
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 100.dp, start = 24.dp, end = 24.dp),
-        )
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            com.dazix.caelis.ui.HeadingStatusChip(state = headingState)
+            com.dazix.caelis.ui.PoseSourceChip(indicator = poseIndicator, arCoreConsented = arCoreConsented)
+        }
 
         // Diagnostic HUD for terrain horizon metrics (Auto-Range & DEM tiles)
         if (uiState.debugPreferences.showTerrainMetrics) {

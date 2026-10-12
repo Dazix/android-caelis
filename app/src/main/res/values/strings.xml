@@ -276,6 +276,23 @@
     <string name="horizon_consent_allow">Allow</string>
     <string name="horizon_consent_never">Not now</string>
 
+    <!-- ARCore (Google Play Services for AR), consent-gated -->
+    <string name="arcore_section_title">ARCore (optional)</string>
+    <string name="arcore_enabled">Use ARCore for AR tracking</string>
+    <string name="arcore_enabled_desc">Off by default. Off means the AR screens use only the phone\'s own sensors, and Google\'s AR component is never started or contacted.</string>
+    <string name="arcore_geospatial_enabled">Use Google\'s Geospatial API</string>
+    <string name="arcore_geospatial_desc">Locks the overlay to the real world through Google\'s Visual Positioning Service. Sends camera-derived data and your location to Google.</string>
+    <string name="arcore_geospatial_needs_arcore">Turn on ARCore first.</string>
+    <string name="arcore_presence_preinstalled">Google Play Services for AR comes with this phone\'s system (version %1$s). Nothing needs to be installed.</string>
+    <string name="arcore_presence_installed">Google Play Services for AR is installed (version %1$s).</string>
+    <string name="arcore_presence_missing">Google Play Services for AR is not installed on this phone, or is disabled. This app does not install it; the AR screens use the phone\'s own sensors.</string>
+    <string name="arcore_consent_title">Allow Google Play Services for AR?</string>
+    <string name="arcore_consent_body">ARCore is not part of this app. It is Google Play Services for AR, a separate component made and run by Google. This app starts it only while an AR screen is open, and only if you allow it here.\n\nWhile it runs, Google\'s component may send Google device identifiers, usage data and diagnostics. This app sends nothing itself, and cannot see or limit what Google\'s component sends. If the component is missing or this phone does not support it, the app does not install it for you and keeps using the phone\'s own sensors.\n\nWhile ARCore runs it takes over the camera, so the picture pauses briefly when it starts and when it stops. Zooming past 1x hands the camera back to the app\'s own camera, and ARCore waits until you are back at 1x.\n\nYou can switch it off again at any time in Settings.</string>
+    <string name="geospatial_consent_title">Allow the Geospatial API?</string>
+    <string name="geospatial_consent_body">The Geospatial API works out where you are by comparing what the camera sees with Google\'s imagery. For that, Google Play Services for AR sends camera-derived visual data and your location to Google\'s Visual Positioning Service, in addition to what ARCore already reports. This app cannot see or limit it.\n\nIt runs only while an AR screen is open. You can switch it off again at any time in Settings.</string>
+    <string name="arcore_consent_allow">Allow</string>
+    <string name="arcore_consent_cancel">Not now</string>
+
     <string name="horizon_status_locating">Waiting for GPS signal…</string>
     <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d…</string>
     <string name="horizon_status_computing">Computing the skyline…</string>
@@ -364,6 +381,9 @@
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
     <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon.</string>
     <string name="ar_heading_locked">Heading held by gyroscope since alignment</string>
+    <string name="ar_pose_source_sensor">Tracking: phone sensors</string>
+    <string name="ar_pose_source_arcore">Tracking: ARCore</string>
+    <string name="ar_pose_source_switching">Switching camera to ARCore</string>
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Night Sky</string>

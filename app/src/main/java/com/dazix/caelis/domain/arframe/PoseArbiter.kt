@@ -1,5 +1,7 @@
 package com.dazix.caelis.domain.arframe
 
+import kotlin.math.abs
+
 /**
  * Which tracker drives the sky this frame.
  *
@@ -8,11 +10,13 @@ package com.dazix.caelis.domain.arframe
  * - no consent -> sensor (ARCore sends telemetry to Google; see `ArCoreSessionController`);
  * - ARCore not TRACKING -> sensor (a dark sky starves VIO of features within seconds);
  * - heading not converged -> sensor (ARCore without north would draw the sky rotated);
- * - zoom above 1x -> sensor (ARCore has no zoom; the camera image and the overlay must zoom
+ * - zoom other than 1x -> sensor (ARCore has no zoom; the camera image and the overlay must zoom
  *   together or not at all, and only the CameraX path can zoom the image).
  *
  * Handing *to* ARCore waits for [enterDelayNanos] of all conditions holding, so a flickering
- * tracking state does not swap cameras back and forth; handing *back* is immediate.
+ * tracking state does not swap trackers back and forth; handing *back* is immediate. Who owns the
+ * camera is a separate decision ([CameraOwnerPolicy]): ARCore may supply the picture while the sensors
+ * still supply the pose.
  */
 class PoseArbiter(private val enterDelayNanos: Long = 500_000_000L) {
 
@@ -30,7 +34,7 @@ class PoseArbiter(private val enterDelayNanos: Long = 500_000_000L) {
         headingConverged: Boolean,
         zoomRatio: Float,
     ): Mode {
-        val eligible = consented && arCoreTracking && headingConverged && zoomRatio <= 1f + ZOOM_EPSILON
+        val eligible = consented && arCoreTracking && headingConverged && abs(zoomRatio - 1f) <= ZOOM_EPSILON
         if (!eligible) {
             eligibleSinceNs = Long.MIN_VALUE
             mode = Mode.SENSOR

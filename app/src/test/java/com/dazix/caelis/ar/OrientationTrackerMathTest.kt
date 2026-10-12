@@ -11,6 +11,29 @@ import kotlin.math.sqrt
 class OrientationTrackerMathTest {
 
     @Test
+    fun `the orientation flow is emitted at about a display frame, not at the 200 Hz sensor rate`() {
+        val periodNs = 5_000_000L
+        var last = 0L
+        var emitted = 0
+        for (i in 1..200) { // one second of samples
+            val ts = i * periodNs
+            if (OrientationTracker.publishDue(ts, last)) {
+                last = ts
+                emitted++
+            }
+        }
+        assertTrue("emitted $emitted of 200", emitted in 55..70)
+    }
+
+    @Test
+    fun `the first sample is always published and a clock that went backwards does not stall the flow`() {
+        assertTrue(OrientationTracker.publishDue(1_000_000_000L, 0L))
+        assertFalse(OrientationTracker.publishDue(1_005_000_000L, 1_000_000_000L))
+        assertTrue(OrientationTracker.publishDue(1_015_000_000L, 1_000_000_000L))
+        assertTrue("a restarted sensor clock", OrientationTracker.publishDue(10_000_000L, 1_000_000_000L))
+    }
+
+    @Test
     fun `the heading YawOffset extracts is the angle applyMagneticDeclination takes`() {
         // Dual mode composes Rz(declination + psi) onto the game matrix through this function; if the
         // two disagreed on sign, the compass correction would double instead of cancel.

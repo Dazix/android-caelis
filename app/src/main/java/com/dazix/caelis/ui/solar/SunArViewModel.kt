@@ -5,17 +5,21 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.ar.CameraFovCalculator
+import com.dazix.caelis.ar.CameraFrameGeometry
 import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.FrameGrabber
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SkylineAligner
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.ar.pose.SensorPose
+import com.dazix.caelis.ar.pose.SensorPoseSource
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.data.horizon.DemTileImporter
 import com.dazix.caelis.data.horizon.HorizonRepository
 import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.domain.arframe.LatestRequestGate
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.GeoLocation
@@ -31,6 +35,7 @@ import com.dazix.caelis.domain.solar.TerrainEvent
 import com.dazix.caelis.domain.solar.TerrainRiseSetCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -199,6 +204,12 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
+
+    /** The sensor tracker as a pose source, for the screen's pose rig ([com.dazix.caelis.ar.pose.SkyPoseRig]). */
+    val sensorPose: SensorPose = SensorPoseSource(orientationTracker)
+
+    /** The frame loop's pose, at the camera image's instant [timestampNs] (0 = live). Allocation-free. */
+    fun getRenderMatrix(timestampNs: Long, out: FloatArray) = orientationTracker.getRenderMatrix(timestampNs, out)
     val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
     val location: StateFlow<GeoLocation> = locationProvider.location
     val hasGpsFix: StateFlow<Boolean> = locationProvider.hasGpsFix
@@ -461,6 +472,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val autoAlignState = MutableStateFlow<AutoAlignResult?>(null)
+    private val autoAlignGate = LatestRequestGate()
+    private var autoAlignTimeout: Job? = null
 
     /** The outcome of the last automatic alignment, for the UI to report. Cleared when consumed. */
     val autoAlign: StateFlow<AutoAlignResult?> = autoAlignState.asStateFlow()
@@ -477,6 +490,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * made here on the residual and reported either way.
      */
     fun autoAlign(viewportWidth: Float, viewportHeight: Float, displayRotation: Int) {
+        // Whatever was still outstanding is abandoned first, also when this call is refused below:
+        // an old timer or a late frame must not speak for a request that is no longer the one shown.
+        autoAlignTimeout?.cancel()
+        autoAlignGate.invalidate()
         val grabber = frameGrabber
         val profile = horizonProfile.value
         when {
@@ -491,21 +508,56 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         autoAlignState.value = AutoAlignResult.Working
+        // A camera that was handed over (ARCore <-> CameraX) while the frame was being awaited takes
+        // the request with it; without this the screen would say "working" for ever.
+        // The timer belongs to this request alone (token) and ends with its frame: a bare "is it still
+        // Working?" check let an earlier timer fail a later request after a fraction of its window.
+        val request = autoAlignGate.begin()
+        autoAlignTimeout = viewModelScope.launch {
+            delay(AUTO_ALIGN_FRAME_TIMEOUT_MS)
+            if (autoAlignGate.finish(request)) autoAlignState.value = AutoAlignResult.NoCamera
+        }
         grabber.grabNext { frame ->
+            // The camera may call back from its own thread; the gate and the timer are main-thread state.
             viewModelScope.launch {
-                val syncMatrix = FloatArray(16)
-                orientationTracker.getSynchronizedMatrix(frame.timestampNs, syncMatrix)
-                val match = withContext(Dispatchers.Default) {
-                    SkylineAligner.align(
-                        frame = frame,
+                // A frame that arrives after the timeout, or for a request that was replaced, is not ours.
+                if (!autoAlignGate.isCurrent(request)) return@launch
+                autoAlignTimeout?.cancel()
+                val arPose = frame.pose
+                val geometry = if (arPose != null) {
+                    // ARCore frame: the Y plane, the pose the overlay was drawn with for *that* frame
+                    // (nothing to interpolate) and the field of view and image-to-screen scale as
+                    // ARCore maps this very image onto the viewport.
+                    CameraFrameGeometry(
+                        frameWidth = frame.width,
+                        frameHeight = frame.height,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        fillScale = arPose.fillScale,
+                        rotationMatrix = arPose.rotationMatrix,
+                        displayRotation = displayRotation,
+                        fovHorizontalDegrees = arPose.fovHorizontalDegrees,
+                    )
+                } else {
+                    // Sensor path: CameraX luma, and the rotation-vector pose SLERPed to that frame's
+                    // timestamp.
+                    val syncMatrix = FloatArray(16)
+                    orientationTracker.getSynchronizedMatrix(frame.timestampNs, syncMatrix)
+                    CameraFrameGeometry.fillCenter(
+                        frameWidth = frame.width,
+                        frameHeight = frame.height,
                         viewportWidth = viewportWidth,
                         viewportHeight = viewportHeight,
                         rotationMatrix = syncMatrix,
                         displayRotation = displayRotation,
                         fovHorizontalDegrees = cameraFovHorizontal.value,
-                        profile = profile,
                     )
                 }
+                val match = withContext(Dispatchers.Default) {
+                    SkylineAligner.align(frame = frame, geometry = geometry, profile = profile)
+                }
+                // The user may have asked again, or reset, while the fit ran off the main thread.
+                if (!autoAlignGate.finish(request)) return@launch
                 if (match == null) {
                     autoAlignState.value = AutoAlignResult.NoSkyline
                     return@launch
@@ -683,5 +735,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         /** Steps the alignment panel nudges by: coarse enough to see, fine enough to land on. */
         const val COARSE_NUDGE_DEGREES = 0.5f
         const val FINE_NUDGE_DEGREES = 0.1f
+
+        /** How long an automatic alignment waits for the camera to hand over its frame. */
+        const val AUTO_ALIGN_FRAME_TIMEOUT_MS = 4_000L
     }
 }

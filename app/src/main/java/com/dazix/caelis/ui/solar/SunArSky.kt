@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.pose.SkyPoseFrame
+import com.dazix.caelis.ar.pose.SkyPoseRig
+import com.dazix.caelis.ar.scene.CameraBackground
 import com.dazix.caelis.ar.scene.NormalGoldSolar
 import com.dazix.caelis.ar.scene.NormalSunrise
 import com.dazix.caelis.ar.scene.NormalSunset
@@ -60,15 +63,19 @@ private val Casing = Color(0x99000000)
  * The Sun AR sky drawn by Filament ([SunArScene]: grid, terrain silhouette, day arcs), with the
  * Compose overlay for everything that is text or screen-space UI on top.
  *
- * Both halves come from one frame loop: each vsync samples the pose once, renders the GPU frame and
- * invalidates the overlay, which projects through the scene's projector, so a time bubble cannot
- * lag its arc. The sky renders into a TextureView for the reason Night Sky does (see
- * `NightSkyGpuSky`): a SurfaceView is presented apart from the window and the overlay slid against
- * it during a pan.
+ * Both halves come from one frame loop: each vsync latches the newest camera image, samples the pose
+ * at that image's instant, renders the GPU frame and invalidates the overlay, which projects through
+ * the scene's projector, so a time bubble cannot lag its arc. The camera picture is drawn by the
+ * same Filament frame ([CameraBackground]) rather than by a `PreviewView` underneath, because only
+ * then are image and overlay certain to come from the same pose; the sky renders into a TextureView
+ * for the reason Night Sky does (see `NightSkyGpuSky`): a SurfaceView is presented apart from the
+ * window and the overlay slid against it during a pan.
  */
 @Composable
 internal fun SunArGpuSky(
     orientation: DeviceOrientation?,
+    onGetRenderMatrix: (timestampNs: Long, out: FloatArray) -> Unit,
+    rig: SkyPoseRig,
     displayRotation: Int,
     fovHorizontalDegrees: Float,
     solarTrajectory: SolarTrajectory,
@@ -98,6 +105,12 @@ internal fun SunArGpuSky(
         scene = built
         onDispose { built?.destroy() }
     }
+    var background by remember { mutableStateOf<CameraBackground?>(null) }
+    DisposableEffect(surface) {
+        val built = surface?.let { CameraBackground(it) }
+        background = built
+        onDispose { built?.destroy() }
+    }
     SideEffect {
         scene?.setProfile(horizonProfile)
         scene?.setTrajectories(
@@ -109,8 +122,12 @@ internal fun SunArGpuSky(
     }
 
     val currentOrientation by rememberUpdatedState(orientation)
+    val currentGetMatrix by rememberUpdatedState(onGetRenderMatrix)
+    val renderMatrix = remember { FloatArray(16) }
     val currentRotation by rememberUpdatedState(displayRotation)
     val currentFov by rememberUpdatedState(fovHorizontalDegrees)
+    val currentRig by rememberUpdatedState(rig)
+    val poseFrame = remember { SkyPoseFrame() }
     var frameTick by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
@@ -118,9 +135,31 @@ internal fun SunArGpuSky(
             withFrameNanos { nanos ->
                 val sc = scene
                 val sf = surface
-                val o = currentOrientation
-                if (sc != null && sf != null && o != null) {
-                    sc.update(o.rotationMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
+                if (sc != null && sf != null && currentOrientation != null) {
+                    // The newest camera image goes to the GPU first, and the pose is the one it was
+                    // taken with, not the newest sensor sample: the picture is tens of milliseconds
+                    // old, and the newest pose ran the overlay ahead of the ridge on every turn
+                    // (PoseTimestampPolicy). With no image yet the pose follows the phone live.
+                    //
+                    // The rig also decides who owns the camera (CameraX or ARCore) and whose pose
+                    // draws: ARCore's own matrix for the frame it just handed over, or the sensors'
+                    // at the image's instant. Sun AR has no zoom, so the zoom is always 1x.
+                    currentRig.advance(
+                        background = background,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        displayRotation = currentRotation,
+                        zoomRatio = 1f,
+                        pictureEnabled = true,
+                        livePoseAllowed = true,
+                        out = poseFrame,
+                    )
+                    if (poseFrame.useRigMatrix) {
+                        poseFrame.matrix.copyInto(renderMatrix, 0, 0, 16)
+                    } else {
+                        currentGetMatrix(poseFrame.poseTimestampNs, renderMatrix)
+                    }
+                    sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
                     sf.renderFrame(nanos)
                     revealed = true
                     frameTick = nanos
@@ -133,10 +172,13 @@ internal fun SunArGpuSky(
         AndroidView(
             factory = { ctx -> TextureView(ctx).also { surface = SkySurface(ctx, it, ownFrameLoop = false) } },
             onRelease = {
-                // Whichever of this and the scene's DisposableEffect runs first, the scene is
-                // released before the engine it lives in (SunArScene.destroy is idempotent).
+                // Whichever of this and the scene's DisposableEffect runs first, the scene and the
+                // camera picture are released before the engine they live in (both destroys are
+                // idempotent).
                 scene?.destroy()
                 scene = null
+                background?.destroy()
+                background = null
                 surface?.destroy()
                 surface = null
             },

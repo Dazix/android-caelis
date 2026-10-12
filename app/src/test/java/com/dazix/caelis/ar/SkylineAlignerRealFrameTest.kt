@@ -2,6 +2,9 @@ package com.dazix.caelis.ar
 
 import android.view.Surface
 import com.dazix.caelis.data.horizon.HorizonProfileCodec
+import com.dazix.caelis.domain.horizon.SkylineExtractor
+import com.dazix.caelis.domain.horizon.SkylineMatch
+import com.dazix.caelis.domain.horizon.SkylineMatcher
 import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
@@ -105,15 +108,7 @@ class SkylineAlignerRealFrameTest {
     fun `it finds the real compass error in the photograph it was diagnosed from`() {
         val frame = frameFromMeasuredRidge()
 
-        val match = SkylineAligner.align(
-            frame = frame,
-            viewportWidth = viewportWidth,
-            viewportHeight = viewportHeight,
-            rotationMatrix = rotationMatrix(believedYaw, believedPitch, believedRoll),
-            displayRotation = Surface.ROTATION_0,
-            fovHorizontalDegrees = believedFov,
-            profile = profile(),
-        )
+        val match = SkylineAligner.align(frame, believedGeometry(frame), profile())
 
         assertNotNull("a clear ridge over an overcast sky must be matched", match)
         match!!
@@ -159,17 +154,163 @@ class SkylineAlignerRealFrameTest {
             rowStride = frameWidth,
         )
 
-        val match = SkylineAligner.align(
-            frame = frame,
-            viewportWidth = viewportWidth,
-            viewportHeight = viewportHeight,
-            rotationMatrix = rotationMatrix(believedYaw, believedPitch, believedRoll),
-            displayRotation = Surface.ROTATION_0,
-            fovHorizontalDegrees = believedFov,
-            profile = profile(),
-        )
+        val match = SkylineAligner.align(frame, believedGeometry(frame), profile())
 
         assertEquals(null, match)
+    }
+
+    /** The geometry the sensor path builds: CameraX luma, FILL_CENTER, the pose the overlay was drawn with. */
+    private fun believedGeometry(frame: LumaFrame) = CameraFrameGeometry.fillCenter(
+        frameWidth = frame.width,
+        frameHeight = frame.height,
+        viewportWidth = viewportWidth,
+        viewportHeight = viewportHeight,
+        rotationMatrix = rotationMatrix(believedYaw, believedPitch, believedRoll),
+        displayRotation = Surface.ROTATION_0,
+        fovHorizontalDegrees = believedFov,
+    )
+
+    /**
+     * The alignment as it was written before it took a [CameraFrameGeometry], with the loose
+     * parameters inlined, kept here as the reference. The point of the geometry type is that a
+     * second frame source can feed the aligner; it must not change what the first one gets.
+     */
+    private fun alignWithLooseParameters(
+        frame: LumaFrame,
+        viewportWidth: Float,
+        viewportHeight: Float,
+        rotationMatrix: FloatArray,
+        displayRotation: Int,
+        fovHorizontalDegrees: Float,
+    ): SkylineMatch? {
+        val stride = SkylineAligner.COLUMN_STRIDE
+        val columns = (frame.width + stride - 1) / stride
+        val rows = IntArray(columns)
+        val sampled = SkylineExtractor.extract(
+            luma = frame.data,
+            width = frame.width,
+            height = frame.height,
+            rowStride = frame.rowStride,
+            columnStride = stride,
+            outRows = rows,
+        )
+        if (sampled <= 0) return null
+        val scale = maxOf(viewportWidth / frame.width, viewportHeight / frame.height)
+        val azimuths = DoubleArray(sampled)
+        val elevations = DoubleArray(sampled)
+        val azEl = DoubleArray(2)
+        var used = 0
+        for (i in 0 until sampled) {
+            val row = rows[i]
+            if (row == SkylineExtractor.NO_EDGE) continue
+            val screenX = (i * stride - frame.width * 0.5f) * scale + viewportWidth * 0.5f
+            val screenY = (row - frame.height * 0.5f) * scale + viewportHeight * 0.5f
+            if (screenX < 0f || screenX > viewportWidth) continue
+            if (screenY < 0f || screenY > viewportHeight) continue
+            CameraProjection.unprojectFast(
+                screenX = screenX,
+                screenY = screenY,
+                rotationMatrix = rotationMatrix,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                displayRotation = displayRotation,
+                fovHorizontalDegrees = fovHorizontalDegrees,
+                outAzEl = azEl,
+            )
+            azimuths[used] = azEl[0]
+            elevations[used] = azEl[1]
+            used++
+        }
+        return SkylineMatcher.match(azimuths, elevations, used, profile())
+    }
+
+    @Test
+    fun `a geometry built from the old loose inputs gives the identical alignment`() {
+        val frame = frameFromMeasuredRidge()
+        val matrix = rotationMatrix(believedYaw, believedPitch, believedRoll)
+
+        val before = alignWithLooseParameters(
+            frame, viewportWidth, viewportHeight, matrix, Surface.ROTATION_0, believedFov,
+        )
+        val after = SkylineAligner.align(frame, believedGeometry(frame), profile())
+
+        assertNotNull("the reference must match the real frame, or this proves nothing", before)
+        // A data class: every offset, the residual, the column count and the determined flag, exactly.
+        assertEquals(before, after)
+    }
+
+    @Test
+    fun `the fill scale is the one FILL_CENTER applies`() {
+        // Wider than the viewport's aspect: the height decides and the sides are cropped.
+        assertEquals(2f, CameraFrameGeometry.fillCenterScale(540, 1170, 1080f, 2340f), 0f)
+        assertEquals(2f, CameraFrameGeometry.fillCenterScale(1000, 1170, 1080f, 2340f), 0f)
+        // Taller than the viewport's aspect: the width decides and the top and bottom are cropped.
+        assertEquals(2f, CameraFrameGeometry.fillCenterScale(540, 600, 1080f, 1000f), 0f)
+        assertEquals(0f, CameraFrameGeometry.fillCenterScale(0, 600, 1080f, 1000f), 0f)
+    }
+
+    @Test
+    fun `an explicit fill scale is used instead of the derived one`() {
+        val frame = frameFromMeasuredRidge()
+        val derived = believedGeometry(frame)
+        val explicit = CameraFrameGeometry(
+            frameWidth = derived.frameWidth,
+            frameHeight = derived.frameHeight,
+            viewportWidth = derived.viewportWidth,
+            viewportHeight = derived.viewportHeight,
+            fillScale = derived.fillScale,
+            rotationMatrix = derived.rotationMatrix,
+            displayRotation = derived.displayRotation,
+            fovHorizontalDegrees = derived.fovHorizontalDegrees,
+        )
+        val sameScale = SkylineAligner.align(frame, explicit, profile())
+        assertEquals(SkylineAligner.align(frame, derived, profile()), sameScale)
+
+        // A source that fits its picture more loosely maps every column somewhere else, so the answer
+        // has to move; if it did not, the aligner would be ignoring the scale it was given.
+        val looser = CameraFrameGeometry(
+            frameWidth = derived.frameWidth,
+            frameHeight = derived.frameHeight,
+            viewportWidth = derived.viewportWidth,
+            viewportHeight = derived.viewportHeight,
+            fillScale = derived.fillScale * 1.1f,
+            rotationMatrix = derived.rotationMatrix,
+            displayRotation = derived.displayRotation,
+            fovHorizontalDegrees = derived.fovHorizontalDegrees,
+        )
+        val moved = SkylineAligner.align(frame, looser, profile())
+        assertTrue("a different fill scale must change the result", moved != sameScale)
+    }
+
+    @Test
+    fun `a geometry that does not describe the frame is refused`() {
+        val frame = frameFromMeasuredRidge()
+        val good = believedGeometry(frame)
+
+        fun geometry(
+            frameWidth: Int = good.frameWidth,
+            frameHeight: Int = good.frameHeight,
+            viewportWidth: Float = good.viewportWidth,
+            fovHorizontalDegrees: Float = good.fovHorizontalDegrees,
+            fillScale: Float = good.fillScale,
+        ) = CameraFrameGeometry(
+            frameWidth = frameWidth,
+            frameHeight = frameHeight,
+            viewportWidth = viewportWidth,
+            viewportHeight = good.viewportHeight,
+            fillScale = fillScale,
+            rotationMatrix = good.rotationMatrix,
+            displayRotation = good.displayRotation,
+            fovHorizontalDegrees = fovHorizontalDegrees,
+        )
+
+        assertNotNull(SkylineAligner.align(frame, geometry(), profile()))
+        assertEquals("frame of another size", null, SkylineAligner.align(frame, geometry(frameWidth = 270), profile()))
+        assertEquals("frame of another height", null, SkylineAligner.align(frame, geometry(frameHeight = 585), profile()))
+        assertEquals("unmeasured viewport", null, SkylineAligner.align(frame, geometry(viewportWidth = 0f), profile()))
+        assertEquals("no field of view yet", null, SkylineAligner.align(frame, geometry(fovHorizontalDegrees = 0f), profile()))
+        assertEquals("NaN field of view", null, SkylineAligner.align(frame, geometry(fovHorizontalDegrees = Float.NaN), profile()))
+        assertEquals("no fill scale", null, SkylineAligner.align(frame, geometry(fillScale = 0f), profile()))
     }
 
     private companion object {

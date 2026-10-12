@@ -51,9 +51,11 @@ class PoseArbiterTest {
     }
 
     @Test
-    fun `any zoom above 1x belongs to the camera that can zoom`() {
+    fun `any zoom other than 1x belongs to the camera that can zoom`() {
         val a = PoseArbiter(enterDelayNanos = 0)
         assertEquals(Mode.ARCORE, a.all(0, zoom = 1f))
         assertEquals(Mode.SENSOR, a.all(1, zoom = 1.01f))
+        // Below 1x is the ultrawide lens, which only CameraX can select.
+        assertEquals(Mode.SENSOR, a.all(2, zoom = 0.7f))
     }
 }

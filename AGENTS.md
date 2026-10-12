@@ -48,6 +48,12 @@ and it aborts rather than guessing when a value is missing.
 AGP 9.3.1 · Gradle 9.5.0 · Kotlin 2.3.20 · compileSdk 37 (`compileSdkMinor = 1`, platform
 `android-37.1`) · minSdk 33 · targetSdk 37 · JVM target 17.
 
+Filament 1.77.1 (raw, no SceneView) draws both AR skies and the camera picture. `com.google.ar:core`
+1.56.0 is a dependency, but nothing in the app starts it unless the user has turned ARCore on in
+Settings (see the consent invariant below); a Geospatial API key, if you have one, goes in
+`local.properties` as `geospatial.api.key` or in `CAELIS_GEOSPATIAL_API_KEY`, and a build without one is
+a fully working build.
+
 Two AGP 9 facts that each cost a build cycle: the `org.jetbrains.kotlin.android` plugin must **not** be
 applied (Kotlin support is built into AGP 9), and current AndroidX releases refuse AGP below 9.1.
 
@@ -65,9 +71,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (295 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (302 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (209 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (438 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (265 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -83,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **753 JVM tests (295 intervalometer, 302 solar & horizon, 209 night sky — the suites overlap on `domain.arframe` — plus docs/UI), 31
+`skipped`), not from the console. Current baseline: **921 JVM tests (309 intervalometer, 461 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*` and `data.horizon.*` are in `solar`; `NetworkIsolationTest` is in `caelis`.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -101,10 +107,12 @@ a session from the shell.
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
+| `domain/arframe/` | Pure Kotlin geometry and decisions behind the Filament sky and the pose hand-over, no Android imports and no ARCore types: frames and projection (`SkyFrameMath`, `SkyProjector`, `SkyQuadMath`, `AltAzGridBuilder`, `HorizonMeshBuilder`, `HorizonMorph`), the camera picture's crop (`CameraBackgroundUv`), the instant the overlay is drawn at (`PoseTimestampPolicy`), heading (`HeadingLock`, `YawOffset`), and ARCore's side: `ArWorldAlignment`, `ArYawEstimator` + `HeadingFusion`, `RealignTrigger`, `ArCoreFov`, `LumaRotation`, `PoseArbiter` (which tracker draws) and `CameraOwnerPolicy` (which client owns the camera). Tested by both the `solar` and the `nightsky` suite. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
-| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`). |
-| `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the line/disc/star/textured batches, `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
-| `data/` | DataStore settings (`SettingsStore`), advanced settings, and the process-wide `SessionRepository` snapshot. |
+| `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the app-owned preview surface that hands every camera image to the GPU (`CameraFrameSource`, `PreviewFrameClock`, and `CameraBackgroundSink`, the interface a test drives in place of the GPU picture), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`, which takes a `CameraFrameGeometry` — frame size, viewport, fill scale, rotation, FOV — rather than loose parameters, so a CameraX frame and an ARCore frame go through the same fit). |
+| `ar/pose/` | `ArCoreSessionController`: the only place a `com.google.ar.core.Session` is constructed, resumed or installed, behind per-call consent. Other pose code may import ARCore types here and nowhere else. The rest of the package is ARCore-free and what the screens use: `PoseSource` (`SensorPoseSource` wraps `OrientationTracker`, `ArCorePoseSource` turns an ARCore frame into the sky's device→ENU), `PoseHandoff` (which of the two draws), `SkyPoseRig` (who owns the camera and the whole per-vsync decision; built by `ui/rememberSkyPoseRig`), `ArCoreHost` + `ArCoreFrameSource` (the live session, behind the `ArFrameSource` seam a test scripts). |
+| `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
+| `data/` | DataStore settings (`SettingsStore`), advanced settings, the ARCore and Geospatial consent pair (`ArCoreSettings`, both default off, Geospatial never on without ARCore), and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
@@ -112,7 +120,7 @@ a session from the shell.
 | `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
-| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`). |
+| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`); Settings holds the ARCore and Geospatial switches and their disclosure dialogs. `rememberSkyPoseRig` (`SkyPoseRigState.kt`) wires a `SkyPoseRig` to an AR screen's lifecycle and to the consent flow, and `PoseSourceChip` says which tracker is drawing (shown only once the user has consented to ARCore). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/horizon/` | Offline terrain management screen (`OfflineTerrainScreen`) and the terrain metrics debug HUD (`TerrainDebugOverlay`). The standalone Terrain AR screen is gone: the terrain skyline is drawn by Sun AR and Night Sky. |
 | `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), the GPU sky composable (`NightSkyGpuSky`), the CPU overlay and tap hit test over it (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override. |
@@ -146,7 +154,7 @@ Each of these was found by review or on the device and is now covered by a test.
   $\text{effectiveFovH} = 2 \arctan(\tan(\text{rawFovH} / 2) \cdot \text{cropRatio})$.
 - **The AR FOV is measured from the stream, not derived from the lens.** `SENSOR_INFO_PHYSICAL_SIZE`
   describes the whole pixel array; what reaches the screen is a `SCALER_CROP_REGION` inside the
-  active array, at the resolution CameraX chose, scaled by `PreviewView` FILL_CENTER.
+  active array, at the resolution CameraX chose, scaled by FILL_CENTER (`CameraBackgroundUv` now).
   `CameraFovCalculator.computeStreamHorizontalFov` takes all three and
   `CameraPreview` reads the crop region out of the capture results. Deriving it from the lens alone
   reported 36.7° where fitting the terrain profile to the camera image measured ~32° — 14 % wide,
@@ -204,6 +212,24 @@ Each of these was found by review or on the device and is now covered by a test.
   SurfaceView's buffers independently of the window, and on a Pixel 7 Pro the Compose labels slid
   visibly against the stars during a pan. A TextureView is composited in the window's own frame,
   and one `withFrameNanos` loop renders the GPU frame and invalidates the overlay from one pose.
+  The camera picture is part of that same Filament frame (`CameraBackground`, fed by
+  `CameraFrameSource`); there is no `PreviewView` under the sky any more, and putting one back
+  would show a picture composited apart from the overlay, tens of milliseconds older.
+- **The overlay is drawn with the pose at the timestamp of the camera image it is composited with.**
+  Each frame latches the newest image first and takes the pose at *that image's* instant
+  (`CameraFrameSource.poseTimestampNs` -> `OrientationTracker.getRenderMatrix`), and keeps that
+  image's instant for as long as the image stays on screen. The newest sensor sample is only for
+  frames with no picture to match (planetarium sky, no image yet, a stalled or non-realtime-clock
+  camera — `PoseTimestampPolicy`). The newest pose over an older picture ran the overlay ahead of
+  the ridge on every turn.
+- **The camera picture is cropped by `CameraBackgroundUv`, from the same FILL_CENTER fit as the FOV.**
+  `CameraFovCalculator` assumes the stream is turned upright and scaled until it covers the
+  viewport; the UVs do exactly that, so the picture and the overlay cannot disagree about what is
+  on screen. Texture origin is the first row in memory (top-left), v down; `CameraBackgroundDeviceTest`
+  checks that on the GPU. Night vision never tints the picture, only the sky layers.
+- **Every camera image handed to Filament is closed in its release callback, from a fixed pool.**
+  `CameraBackground` owns a few preallocated `Runnable`s (no lambda per frame); a lost callback
+  leaks one of the reader's four images and, after enough of them, freezes the picture.
 - **One matrix feeds the GPU and the CPU.** Labels, bubbles, pointers and the tap hit test project
   through the scene's `SkyProjector`, updated in the same call that sets the Filament camera.
 - **Timing is absolute.** Shot times come from `IntervalSchedule.targetElapsedFor`, never "now +
@@ -238,13 +264,63 @@ Each of these was found by review or on the device and is now covered by a test.
   used to prove "nothing leaves the device" through the *absence* of `INTERNET`; that permission is
   `normal`, so once declared it cannot be withheld or revoked, and the guarantee is now the source's
   to keep. Do not add a second network caller, an analytics SDK, or an HTTP client dependency without
-  deciding, out loud, to give that guarantee up.
+  deciding, out loud, to give that guarantee up. **That guarantee now covers this app's own code only.**
+  The optional ARCore integration (below) puts Google Play Services for AR, which this repository cannot
+  inspect, inside an AR session; what *it* sends is not covered by `NetworkIsolationTest` and the
+  README says so in as many words. What the test does pin is the part the app controls: the one socket
+  file, the one file that may start ARCore, consent in front of it, and the exact permission set (the
+  ARCore library adds none). Do not word a README line, a string or a comment as "nothing leaves the
+  device" without the ARCore qualifier.
 - **Deleting the `INTERNET` line from the manifest must keep working.** It is a documented way to
   build from source without a network. `NetworkAvailability.hasInternetPermission()` is how the UI
   finds out at runtime; never gate that on a build flag, which would drift from the manifest.
 - **Consent is read per call, never captured.** `DemTileDownloader` takes a `suspend () -> Boolean`
   and evaluates it on every download, so revoking consent in settings takes effect immediately rather
   than at the next process start.
+- **ARCore is consent-gated, and `ar/pose/ArCoreSessionController.kt` is the only file that can start
+  it.** ARCore is a client for Google Play Services for AR, which reports to Google on its own terms
+  and cannot be inspected from here. `arcore_consent` and `geospatial_consent` default to off
+  (`ArCoreSettings`; Geospatial can never be on without ARCore), and the controller reads them through
+  a `suspend () -> Boolean` in front of every availability probe, install request and `Session(`
+  construction, treating a failed read as "no". Not even `ArCoreApk.checkAvailability` runs without
+  consent, `requestInstall` is reachable only from a click (`requestInstallFromUserAction`, callable
+  from `ui/` alone), and Geospatial needs a build-time API key (`local.properties`
+  `geospatial.api.key` or `CAELIS_GEOSPATIAL_API_KEY`, never committed; the switch is hidden without
+  it). `NetworkIsolationTest` pins all of this, plus the exact manifest permission set.
+- **ARCore and CameraX never own the camera together, and the hand-over has an order.** ARCore opens
+  the camera device itself. Before anything moves, `ArCoreHost.availability` is asked *while CameraX
+  still has the camera*, so a phone that cannot run ARCore never loses its picture to a failed start
+  (not asked again until consent is flipped). CameraX -> ARCore: `cameraXEnabled` goes false, the preview unbinds and
+  reports the device really closed (`onCameraReleased`; `unbind` alone only starts closing it), then
+  the session starts. ARCore -> CameraX: the session is paused first, then CameraX is re-enabled.
+  A pinch above 1x, a withdrawn consent, a failed start (30 s backoff) or a session that delivers
+  nothing for 4 s each return the camera to CameraX at once; a session still *starting* is `close`d,
+  not paused, because only close makes the controller's suspended start give up before opening the
+  camera. The activity pausing pauses the session and resuming restarts it with no CameraX in between.
+  `CameraOwnerPolicy` decides, `SkyPoseRig` executes, `SkyPoseRigTest` pins the order. With consent
+  off the rig never builds the ARCore host at all.
+- **ARCore may own the picture while the sensors own the pose.** `PoseArbiter` hands the pose to ARCore
+  only when consented, TRACKING, the heading estimate has converged and the zoom is exactly 1x, and
+  hands it back on the very frame any of those fails (a stalled session counts as lost after 250 ms).
+  A dark sky pauses ARCore within moments; the sensors then draw at the ARCore image's own timestamp
+  and the camera does not change. Tracking regained or a new session starts the yaw estimate over
+  (`RealignTrigger`): relocalisation can leave ARCore's world rotated while looking healthy.
+- **The standing calibration is applied on top of both pose sources, identically, and is never in the
+  ARCore north reference.** ARCore's world is turned to ENU by one yaw (`ArYawEstimator`: Geospatial's
+  orientation when consented, keyed and accurate, else the sensor path's heading incl. declination and
+  heading lock, averaged by `HeadingFusion`), measured against `OrientationTracker.getReferenceMatrix`,
+  which excludes the calibration. `ArCorePoseSource.renderMatrix` then applies `applyCalibration` with
+  the tracker's current calibration on every call, so a drag or nudge moves the overlay at once and is
+  never counted twice. `getReferenceMatrix` also refuses a timestamp the history does not cover: the
+  ring buffer clamps, and a clamped pose passed off as the right instant is a yaw error.
+- **In ARCore mode one field of view feeds everything.** It comes from ARCore's projection matrix
+  (`ArCoreFov`, the viewport's own horizontal FOV) and is published through the same `setCameraFov` as
+  CameraX's measured one; the rig forwards CameraX's only while CameraX is the camera, because the
+  layout listener of an unbound preview would otherwise overwrite it. The picture is fitted by ARCore's
+  own display geometry (`Frame.transformCoordinates2d` -> `CameraBackgroundUv.fromCornerSamples`);
+  whether ARCore's TEXTURE_NORMALIZED has v down is `ArCoreFrameSource.TEXTURE_V_IS_DOWN`, the one
+  switch that mirrors the picture and that only a device can confirm. Automatic alignment in ARCore
+  mode uses the frame's own Y plane (`LumaRotation`), pose and fill scale (`LumaFramePose`).
 - **A profile is never computed without the tile the observer is standing in.** Without it every ray
   runs out of data inside two kilometres, gives up, and the profile comes back as a flat ring at the
   geometric dip — which renders exactly like a real skyline. `HorizonRepository` treats that one tile

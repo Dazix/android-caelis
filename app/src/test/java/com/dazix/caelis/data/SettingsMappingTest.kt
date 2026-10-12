@@ -817,6 +817,92 @@ class SettingsMappingTest {
         assertEquals(false, SettingsMapping.readNotificationPermissionPrompted(prefs))
     }
 
+    // ---- ARCore consent ----
+
+    @Test
+    fun `ARCore and Geospatial consent are both off on empty preferences`() {
+        val settings = SettingsMapping.readArCore(emptyPreferences())
+
+        assertFalse(settings.arCoreConsent)
+        assertFalse(settings.geospatialConsent)
+        assertEquals(ArCoreSettings(), settings)
+    }
+
+    @Test
+    fun `ARCore consent is stored under its own documented keys`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeArCore(prefs, ArCoreSettings(arCoreConsent = true, geospatialConsent = true))
+
+        // The key names are the on-disk contract; a rename silently drops everyone's answer.
+        assertEquals(setOf("arcore_consent", "geospatial_consent"), prefs.asMap().keys.map { it.name }.toSet())
+    }
+
+    @Test
+    fun `ARCore consent survives a round trip in every combination it can legally take`() {
+        val legal = listOf(
+            ArCoreSettings(arCoreConsent = false, geospatialConsent = false),
+            ArCoreSettings(arCoreConsent = true, geospatialConsent = false),
+            ArCoreSettings(arCoreConsent = true, geospatialConsent = true),
+        )
+        for (settings in legal) {
+            val prefs = mutablePreferencesOf()
+            SettingsMapping.writeArCore(prefs, settings)
+            assertEquals(settings, SettingsMapping.readArCore(prefs))
+        }
+    }
+
+    @Test
+    fun `a stored Geospatial yes without an ARCore yes is read as no`() {
+        // Hand-edited backup or an older build: the narrower reading is the safe one.
+        val prefs = mutablePreferencesOf()
+        prefs[androidx.datastore.preferences.core.booleanPreferencesKey("geospatial_consent")] = true
+
+        val settings = SettingsMapping.readArCore(prefs)
+
+        assertFalse(settings.arCoreConsent)
+        assertFalse(settings.geospatialConsent)
+    }
+
+    @Test
+    fun `writing an inconsistent pair overwrites the stale Geospatial yes instead of keeping it`() {
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeArCore(prefs, ArCoreSettings(arCoreConsent = true, geospatialConsent = true))
+
+        SettingsMapping.writeArCore(prefs, ArCoreSettings(arCoreConsent = false, geospatialConsent = true))
+
+        assertEquals(
+            false,
+            prefs[androidx.datastore.preferences.core.booleanPreferencesKey("geospatial_consent")],
+        )
+        assertEquals(ArCoreSettings(), SettingsMapping.readArCore(prefs))
+    }
+
+    @Test
+    fun `turning ARCore off turns Geospatial off with it`() {
+        val on = ArCoreSettings(arCoreConsent = true, geospatialConsent = true)
+
+        assertEquals(ArCoreSettings(arCoreConsent = false, geospatialConsent = false), on.withArCoreConsent(false))
+    }
+
+    @Test
+    fun `Geospatial cannot be granted while ARCore is off`() {
+        val off = ArCoreSettings()
+
+        assertEquals(off, off.withGeospatialConsent(true))
+        assertEquals(
+            ArCoreSettings(arCoreConsent = true, geospatialConsent = true),
+            off.withArCoreConsent(true).withGeospatialConsent(true),
+        )
+    }
+
+    @Test
+    fun `granting ARCore does not grant Geospatial`() {
+        val granted = ArCoreSettings().withArCoreConsent(true)
+
+        assertTrue(granted.arCoreConsent)
+        assertFalse(granted.geospatialConsent)
+    }
+
     /** Simulates a record written by a build that did not have these keys yet. */
     private fun MutablePreferences.removeByName(vararg names: String) {
         asMap().keys.filter { it.name in names }.toList().forEach {

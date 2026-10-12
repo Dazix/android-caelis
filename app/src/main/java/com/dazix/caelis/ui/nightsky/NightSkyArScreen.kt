@@ -108,8 +108,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dazix.caelis.R
+import com.dazix.caelis.ar.CameraFrameSource
 import com.dazix.caelis.ar.CameraPreview
 import com.dazix.caelis.ar.DeviceOrientation
+import com.dazix.caelis.ar.PreviewFrameClock
 import com.dazix.caelis.ar.scene.RedPrimary
 import com.dazix.caelis.ar.scene.RedSecondary
 import com.dazix.caelis.ar.scene.paletteForTheme
@@ -123,6 +125,7 @@ import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
+import com.dazix.caelis.ui.rememberSkyPoseRig
 import java.time.ZoneId
 import com.dazix.caelis.ui.solar.HorizonConsentDialog
 
@@ -153,6 +156,12 @@ fun NightSkyArScreen(
 
     var isLayerSheetOpen by remember { mutableStateOf(false) }
     var showDsoLegendInAr by remember { mutableStateOf(false) }
+    val previewFrameClock = remember { PreviewFrameClock() }
+    // The camera picture is drawn by the sky's own Filament frame; see CameraFrameSource.
+    val cameraFrameSource = remember(previewFrameClock) { CameraFrameSource(previewFrameClock) }
+    DisposableEffect(cameraFrameSource) {
+        onDispose { cameraFrameSource.release() }
+    }
 
     val density = LocalDensity.current
     val renderer = viewModel.renderer
@@ -211,6 +220,18 @@ fun NightSkyArScreen(
     var hasCameraPermission by remember {
         mutableStateOf(Permissions.granted(context, Manifest.permission.CAMERA))
     }
+
+    // Who owns the camera (CameraX, or ARCore if the user agreed) and whose pose draws the sky. A
+    // zoom other than 1x always belongs to CameraX, the only camera that can zoom.
+    val poseRig = rememberSkyPoseRig(
+        sensorPose = viewModel.sensorPose,
+        cameraSource = cameraFrameSource,
+        cameraPermission = hasCameraPermission,
+        onFov = viewModel::setCameraFov,
+    )
+    val cameraXEnabled by poseRig.cameraXEnabled.collectAsStateWithLifecycle()
+    val poseIndicator by poseRig.indicator.collectAsStateWithLifecycle()
+    val arCoreConsented by poseRig.consentedFlow.collectAsStateWithLifecycle()
 
     val showConsentDialog by viewModel.showConsentDialog.collectAsStateWithLifecycle()
 
@@ -491,13 +512,19 @@ fun NightSkyArScreen(
                 }
         ) {
             if (hasCameraPermission) {
-                // Live Camera Viewport (rendered underneath AR overlay)
+                // Camera stream and FOV; the picture itself is drawn by NightSkyGpuSky below.
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     lifecycleOwner = lifecycleOwner,
                     isPortrait = isPortrait,
-                    onFovCalculated = viewModel::setCameraFov,
+                    // The rig forwards CameraX's field of view only while CameraX is the camera.
+                    onFovCalculated = poseRig::onCameraXFov,
                     onCameraBound = viewModel::attachCamera,
+                    frameClock = previewFrameClock,
+                    frameSource = cameraFrameSource,
+                    displayRotation = displayRotation,
+                    cameraEnabled = cameraXEnabled,
+                    onCameraReleased = poseRig::onCameraXReleased,
                 )
 
                 NightSkyGpuSky(
@@ -505,6 +532,8 @@ fun NightSkyArScreen(
                     renderer = renderer,
                     orientation = orientation,
                     onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
+                    isLivePoseActive = { viewModel.isLivePoseActive },
+                    rig = poseRig,
                     displayRotation = displayRotation,
                     fovHorizontalDegrees = uiState.cameraFovHorizontal,
                     zoomRatio = uiState.zoomRatio,
@@ -615,13 +644,21 @@ fun NightSkyArScreen(
                         .padding(top = 36.dp, start = 12.dp, end = 12.dp),
                 )
                 val headingState by viewModel.headingState.collectAsStateWithLifecycle()
-                com.dazix.caelis.ui.HeadingStatusChip(
-                    state = headingState,
-                    nightVisionColor = if (uiState.redVisionMode) activePalette.primary else null,
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 100.dp, start = 24.dp, end = 24.dp),
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val chipColor = if (uiState.redVisionMode) activePalette.primary else null
+                    com.dazix.caelis.ui.HeadingStatusChip(state = headingState, nightVisionColor = chipColor)
+                    com.dazix.caelis.ui.PoseSourceChip(
+                        indicator = poseIndicator,
+                        arCoreConsented = arCoreConsented,
+                        nightVisionColor = chipColor,
+                    )
+                }
             }
 
             // Bottom Controls Layer: Absolute Centered HUD + Decoupled Contextual Reset View

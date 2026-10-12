@@ -11,6 +11,8 @@ import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.ar.pose.SensorPose
+import com.dazix.caelis.ar.pose.SensorPoseSource
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.data.horizon.HorizonRepository
@@ -175,13 +177,25 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
 
+    /** The sensor tracker as a pose source, for the screen's pose rig ([com.dazix.caelis.ar.pose.SkyPoseRig]). */
+    val sensorPose: SensorPose = SensorPoseSource(orientationTracker)
+
+    /**
+     * Whether the pose is the phone's: sensor tracking is on and no drag is holding it. In manual mode
+     * the matrix is the view model's own, and no tracker - sensor or ARCore - may replace it.
+     */
+    val isLivePoseActive: Boolean
+        get() = isSensorTrackingEnabled.value && !isSensorTrackingPaused.value
+
     /**
      * Fast zero-allocation accessor for the active camera rotation matrix on the 60 FPS hardware vsync loop.
      * Bypasses Compose StateFlow recomposition for ultra-smooth 60/120 FPS panning.
+     *
+     * [timestampNs] is the camera image's instant (`PreviewFrameClock`), 0 for the live pose.
      */
-    fun getCurrentRenderMatrix(outMatrix: FloatArray): Boolean {
+    fun getCurrentRenderMatrix(timestampNs: Long, outMatrix: FloatArray): Boolean {
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
-            orientationTracker.getLiveMatrix(outMatrix)
+            orientationTracker.getRenderMatrix(timestampNs, outMatrix)
             return true
         } else {
             System.arraycopy(manualMatrixBuffer, 0, outMatrix, 0, minOf(manualMatrixBuffer.size, outMatrix.size))

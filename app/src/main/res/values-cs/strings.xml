@@ -282,6 +282,23 @@
     <string name="horizon_consent_allow">Povolit</string>
     <string name="horizon_consent_never">Nyní ne</string>
 
+    <!-- ARCore (Služby Google Play pro AR), jen se souhlasem -->
+    <string name="arcore_section_title">ARCore (volitelné)</string>
+    <string name="arcore_enabled">Použít ARCore pro sledování v AR</string>
+    <string name="arcore_enabled_desc">Ve výchozím stavu vypnuto. Vypnuto znamená, že AR obrazovky používají jen senzory telefonu a komponenta Googlu se nikdy nespustí ani nekontaktuje.</string>
+    <string name="arcore_geospatial_enabled">Použít Geospatial API od Googlu</string>
+    <string name="arcore_geospatial_desc">Ukotví překryv ke skutečnému světu přes Visual Positioning Service od Googlu. Googlu odesílá data odvozená z kamery a vaši polohu.</string>
+    <string name="arcore_geospatial_needs_arcore">Nejdřív zapněte ARCore.</string>
+    <string name="arcore_presence_preinstalled">Služby Google Play pro AR jsou součástí systému tohoto telefonu (verze %1$s). Nic není potřeba instalovat.</string>
+    <string name="arcore_presence_installed">Služby Google Play pro AR jsou nainstalované (verze %1$s).</string>
+    <string name="arcore_presence_missing">Služby Google Play pro AR v tomto telefonu nejsou nainstalované nebo jsou vypnuté. Aplikace je neinstaluje; AR obrazovky použijí senzory telefonu.</string>
+    <string name="arcore_consent_title">Povolit Služby Google Play pro AR?</string>
+    <string name="arcore_consent_body">ARCore není součástí této aplikace. Jsou to Služby Google Play pro AR, samostatná komponenta vytvářená a provozovaná Googlem. Aplikace ji spouští jen při otevřené AR obrazovce, a jen pokud to tady povolíte.\n\nBěhem provozu může komponenta Googlu odesílat Googlu identifikátory zařízení, údaje o používání a diagnostiku. Aplikace sama nic neodesílá a nevidí ani nemůže omezit, co odesílá komponenta Googlu. Pokud komponenta chybí nebo ji telefon nepodporuje, aplikace ji sama neinstaluje a dál používá senzory telefonu.\n\nKdyž ARCore běží, převezme kameru, takže se obraz při zapnutí a vypnutí krátce zastaví. Přiblížení nad 1× vrátí kameru vlastnímu snímání aplikace a ARCore počká, až budete zpět na 1×.\n\nKdykoli ji můžete v Nastavení znovu vypnout.</string>
+    <string name="geospatial_consent_title">Povolit Geospatial API?</string>
+    <string name="geospatial_consent_body">Geospatial API zjišťuje, kde jste, porovnáním obrazu z kamery se snímky Googlu. Služby Google Play pro AR k tomu Visual Positioning Service od Googlu posílají vizuální data odvozená z kamery a vaši polohu, navíc k tomu, co hlásí samotný ARCore. Aplikace to nevidí a nemůže to omezit.\n\nFunguje jen při otevřené AR obrazovce. Kdykoli ho můžete v Nastavení znovu vypnout.</string>
+    <string name="arcore_consent_allow">Povolit</string>
+    <string name="arcore_consent_cancel">Nyní ne</string>
+
     <string name="horizon_status_locating">Čekám na signál GPS…</string>
     <string name="horizon_status_downloading">Stahuji terén %1$d z %2$d…</string>
     <string name="horizon_status_computing">Počítám linii obzoru…</string>
@@ -370,6 +387,9 @@
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
     <string name="ar_heading_compass_unreliable">Kompas je nespolehlivý. Opište telefonem osmičku, nebo srovnejte podle horizontu.</string>
     <string name="ar_heading_locked">Směr drží gyroskop od srovnání</string>
+    <string name="ar_pose_source_sensor">Sledování: senzory telefonu</string>
+    <string name="ar_pose_source_arcore">Sledování: ARCore</string>
+    <string name="ar_pose_source_switching">Přepínám kameru na ARCore</string>
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Noční obloha</string>

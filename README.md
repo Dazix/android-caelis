@@ -14,7 +14,8 @@ your own disk.
 **Network.** The app declares `INTERNET` for exactly one thing: fetching terrain elevation tiles for
 the real-horizon layer in the AR views, and only after you say yes. Nothing else in the app opens a
 connection, there is no analytics of any kind, and all that is ever sent is the name of a 1°×1° map
-square — no coordinates, no identifiers, no request body.
+square — no coordinates, no identifiers, no request body. (The one optional exception is Google's
+ARCore, which is off by default and is not this app's traffic; see the paragraph on it below.)
 
 `INTERNET` is a `normal` permission: Android grants it at install time and gives you no switch to
 revoke it, so this is a promise the source keeps rather than one the operating system enforces. Three
@@ -27,7 +28,34 @@ things make it checkable instead of merely stated:
   The app notices at runtime, hides the download entirely, and the terrain horizon still works from a
   file you import by hand.
 
-Nothing else leaves the device.
+**ARCore is the one exception to "nothing else leaves the device", it is off by default, and it is
+Google's traffic rather than this app's.** The AR screens can optionally use Google's ARCore for a
+steadier pose. ARCore is not code in this app: it is *Google Play Services for AR*, a separate package
+that the `com.google.ar:core` library talks to. With the **Use ARCore** switch in Settings turned on,
+that package sends Google device identifiers, usage data and diagnostics while an AR screen is open.
+With the additional **Geospatial** switch on, it sends more: camera-derived visual data and your
+location, to Google's Visual Positioning Service. This app cannot see, filter or limit any of it, and
+the claims above about what the app itself sends do not describe it.
+
+- **Both switches are off by default, and with them off the default path never starts ARCore.** Not a
+  session, not an availability probe, not an install prompt: the AR screens run on the phone's own
+  sensors and the camera, as they always did. Geospatial can never be on while ARCore is off, and the
+  switch is not even shown in a build that has no Geospatial API key.
+- **Turning a switch on shows what it sends first**, and turning it off is immediate: the answer is
+  read again on every use, so a session that is starting when you withdraw it gives up before it
+  opens the camera.
+- **A missing Google component is never installed behind your back.** This build does not even offer
+  the install; without the component the app simply stays on its own sensors.
+- **ARCore gives the camera back as soon as you zoom past 1x**, and hands the pose back to the
+  sensors whenever it is not tracking well or has gone quiet.
+- **The key for Geospatial is yours.** It is read from `local.properties` (`geospatial.api.key`) or
+  the `CAELIS_GEOSPATIAL_API_KEY` environment variable when you build, never committed, and it ends up
+  in the APK's manifest, so restrict it by package name and signing certificate in the Google Cloud
+  console.
+
+What the network-isolation test now proves is therefore narrower, and worth saying plainly: it covers
+**this app's own code** (one file opens sockets; one file may start ARCore, and only behind consent; the
+permission set is pinned), not what a Google component does once you have allowed it to run.
 
 ---
 
@@ -263,9 +291,9 @@ camera, and the broadcast entry points that start a session from a shell.
 
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
-scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (295 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (232 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (129 tests)
+scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (309 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (438 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (265 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -281,8 +309,9 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **677 JVM tests (295 intervalometer/caelis, 232 solar & horizon, 129 night sky, plus docs/UI), 31 instrumented
-tests, no failures, no skips, lint clean.**
+what a dead accessibility service produces. Current baseline: **921 JVM tests (309 intervalometer/caelis, 461 solar, horizon & pose, 272 night sky, with the last two
+overlapping on the shared AR frame maths, plus 17 documentation screenshots), 42 instrumented tests, no
+failures, no skips, lint clean.**
 
 ---
 
@@ -295,8 +324,12 @@ com.dazix.caelis
 │   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
 │   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
 │                    star optics, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule, search index)
-├── ar/              AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers, SkyDomeRenderer
-├── data/            DataStore settings, calibrations, and the process-wide session snapshot
+├── ar/              AR projection (R^T matrix), crop-aware FOV calculator, rotation & location providers, the camera
+│   │                picture handed to the GPU (CameraFrameSource), automatic horizon alignment
+│   ├── pose/        which pose draws the overlay: the phone's sensors, or optionally ARCore (consent-gated; the only
+│   │                place ARCore is started), the hand-over between them and who owns the camera
+│   └── scene/       the Filament sky renderer both AR screens draw with, including the camera picture
+├── data/            DataStore settings (incl. the ARCore consent), calibrations, and the process-wide session snapshot
 │   ├── horizon/     elevation tile download (the only network code), import, mmap cache, profile codec
 │   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors (Star, Constellation, Dso, MeteorShower)
 ├── service/         ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
@@ -384,6 +417,11 @@ retrying while the camera is still writing them.
   argument in an app holding the accessibility permission, and it is now a code-level promise instead
   of a system-enforced one. The compensation is the isolation above, the one-line manifest edit that
   takes it back, and a hand-import path that is a first-class citizen rather than a fallback.
+- **The optional ARCore switch weakens that promise further, in a way the source cannot repair.** With
+  it on, Google Play Services for AR runs inside your session and reports to Google on its own terms.
+  The compensation is that it is off by default, consent-gated on every start, started from exactly one
+  file, and that a build without a Geospatial key simply never offers Geospatial. The promise that
+  "nothing leaves the device" now holds for this app's own code only.
 - **The elevation model is bare earth.** It knows the hills; it does not know the trees or the
   buildings on them. The silhouette is where the ground is, which on a wooded ridge is a few degrees
   below where the sky actually starts.

@@ -1,9 +1,16 @@
-// The ARCore camera image behind the sky in ARCore mode (in sensor mode the CameraX PreviewView
-// sits under a translucent Filament surface instead, and this material is not used).
+// The camera picture behind the sky, drawn in the same Filament frame as the overlay so that image
+// and pose cannot be a frame apart. Used in both tracking modes:
+//  - sensor mode: CameraBackground feeds CameraX Preview images (an ImageReader of PRIVATE
+//    HardwareBuffers) into an ACQUIRED Filament stream behind the external texture;
+//  - ARCore mode: the same stream is fed Frame.getHardwareBuffer() instead.
 //
-// A full-screen triangle; its UVs are rewritten by ArCoreBackground whenever ARCore reports a
-// display geometry change (Frame.transformCoordinates2d), because the camera texture is in sensor
-// orientation and aspect, not the screen's. The external OES texture is ARCore's own.
+// A full-screen triangle; its UVs are rewritten whenever the buffer size, the display rotation or the
+// viewport changes, because the camera buffer is in sensor orientation and aspect, not the screen's.
+// In sensor mode CameraBackgroundUv derives them (rotation and FILL_CENTER crop, the same fit
+// CameraFovCalculator assumes); in ARCore mode Frame.transformCoordinates2d supplies them.
+//
+// Night vision is deliberately not applied here: the camera was never tinted by it, only the sky
+// layers were, so this material reads no material global.
 material {
     name : CameraBackground,
     shadingModel : unlit,

@@ -83,6 +83,38 @@ class NightSkyHorizonOrientationTest {
         assertTrue("a ridge at north must not appear at south; got alpha $alpha", alpha < 16)
     }
 
+    /**
+     * Pins the row order of `SkySurface.renderAndRead`, which `CameraBackgroundDeviceTest` reads
+     * camera pictures with: looking level at the ridge, the top row is above the 20° crest (sky) and
+     * the bottom row is ground. Assuming GL's bottom-up order made a correct camera picture read as
+     * upside down.
+     */
+    @Test
+    fun readBackPixelsComeTopRowFirst() {
+        val surface = SkySurface.offscreen(context, frameSize, frameSize)
+        val material = surface.loadMaterial("terrain")
+        val ring = TerrainRing(surface, material, priority = 6)
+        try {
+            ring.setProfile(northOnlyProfile())
+            ring.setVisible(true)
+            val deviceToEnu = FloatArray(16)
+            CelestialMatrixCalculator.computeManualRotationMatrix(0.0, 0.0, deviceToEnu)
+            surface.setCameraPose(deviceToEnu, 0)
+            // 60° wide and square: the frame spans ±30°, so the top row is above the 20° ridge.
+            surface.setFovHorizontal(fovDegrees)
+            surface.setClearColor(0f, 0f, 0f, 0f)
+            val pixels = surface.renderAndRead()
+            val firstRow = pixels[(frameSize / 2) * 4 + 3].toInt() and 0xFF
+            val lastRow = pixels[((frameSize - 1) * frameSize + frameSize / 2) * 4 + 3].toInt() and 0xFF
+            assertTrue("the first row read back must be the top of the screen (sky); alpha $firstRow", firstRow < 16)
+            assertTrue("the last row read back must be the bottom of the screen (ground); alpha $lastRow", lastRow > 200)
+        } finally {
+            ring.destroy()
+            surface.engine.destroyMaterial(material)
+            surface.destroy()
+        }
+    }
+
     @Test
     fun theQuarterTurnsAreSkyToo() {
         for (azimuth in doubleArrayOf(90.0, 270.0)) {
