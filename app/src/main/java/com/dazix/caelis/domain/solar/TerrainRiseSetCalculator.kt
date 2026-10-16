@@ -136,6 +136,24 @@ object TerrainRiseSetCalculator {
     fun isSunHiddenAllDay(trajectory: SolarTrajectory, profile: HorizonProfile): Boolean =
         trajectory.pathPoints.isNotEmpty() && trajectory.pathPoints.none { isAbove(it.coordinates, profile) }
 
+    /** The first time the Moon clears the terrain over its sampled trajectory. */
+    fun terrainMoonrise(
+        trajectory: LunarTrajectory,
+        profile: HorizonProfile,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): TerrainEvent? = lunarEvents(trajectory, profile, zoneId).firstOrNull { it.type == TerrainEventType.RISE }
+
+    /** The last time the Moon goes behind the terrain over its sampled trajectory. */
+    fun terrainMoonset(
+        trajectory: LunarTrajectory,
+        profile: HorizonProfile,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): TerrainEvent? = lunarEvents(trajectory, profile, zoneId).lastOrNull { it.type == TerrainEventType.SET }
+
+    /** True when the Moon never clears the terrain over its sampled trajectory. */
+    fun isMoonHiddenAllDay(trajectory: LunarTrajectory, profile: HorizonProfile): Boolean =
+        trajectory.pathPoints.isNotEmpty() && trajectory.pathPoints.none { isAboveLunar(it.coordinates, profile) }
+
     private fun buildEvent(
         type: TerrainEventType,
         instant: Instant,

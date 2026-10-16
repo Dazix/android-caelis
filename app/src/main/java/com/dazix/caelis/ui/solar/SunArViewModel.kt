@@ -74,7 +74,13 @@ data class TerrainTimes(
     val sunrise: TerrainEvent? = null,
     val sunset: TerrainEvent? = null,
     val hiddenAllDay: Boolean = false,
+    val moonrise: TerrainEvent? = null,
+    val moonset: TerrainEvent? = null,
+    val moonHiddenAllDay: Boolean = false,
+    /** Whether these were computed against a drawn skyline at all; false means "use the almanac". */
+    val terrainActive: Boolean = false,
 ) {
+    /** Whether the day summary has a terrain row to show (the Sun only, as it always did). */
     val hasAny: Boolean get() = sunrise != null || sunset != null || hiddenAllDay
 }
 
@@ -285,16 +291,22 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      */
     val terrainTimes: StateFlow<TerrainTimes> = combine(
         trajectory,
+        lunarTrajectory,
         horizonProfile,
         horizonSettings,
-    ) { traj, prof, cfg ->
+    ) { traj, lTraj, prof, cfg ->
         if (prof == null || !cfg.enabled) {
             TerrainTimes()
         } else {
+            val zone = ZoneId.systemDefault()
             TerrainTimes(
-                sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, ZoneId.systemDefault()),
-                sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, ZoneId.systemDefault()),
+                sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, zone),
+                sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, zone),
                 hiddenAllDay = TerrainRiseSetCalculator.isSunHiddenAllDay(traj, prof),
+                moonrise = TerrainRiseSetCalculator.terrainMoonrise(lTraj, prof, zone),
+                moonset = TerrainRiseSetCalculator.terrainMoonset(lTraj, prof, zone),
+                moonHiddenAllDay = TerrainRiseSetCalculator.isMoonHiddenAllDay(lTraj, prof),
+                terrainActive = true,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TerrainTimes())

@@ -365,6 +365,7 @@ fun SunArScreen(
                 currentMoonPos = uiState.currentMoonPosition,
                 horizonProfile = uiState.horizonProfile.takeIf { uiState.horizonSettings.enabled },
                 shadeOccludedTrajectory = uiState.horizonSettings.shadeOccludedTrajectory,
+                terrainTimes = uiState.terrainTimes,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {

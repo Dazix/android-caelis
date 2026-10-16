@@ -55,6 +55,10 @@ import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarCoordinates
 import com.dazix.caelis.domain.solar.SolarTrajectory
+import com.dazix.caelis.domain.arframe.MarkClearance
+import com.dazix.caelis.domain.solar.RiseSetBadge
+import com.dazix.caelis.domain.solar.RiseSetBadgePolicy
+import com.dazix.caelis.domain.solar.RiseSetBadges
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
 import kotlin.math.cos
@@ -90,9 +94,20 @@ internal fun SunArGpuSky(
     currentMoonPos: LunarCoordinates?,
     horizonProfile: HorizonProfile?,
     shadeOccludedTrajectory: Boolean,
+    terrainTimes: TerrainTimes,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current.density
+    // With the real skyline drawn, the badges say when and where the body meets that skyline.
+    val badges = remember(solarTrajectory, lunarTrajectory, terrainTimes) {
+        val t = terrainTimes
+        RiseSetBadges(
+            sunrise = RiseSetBadgePolicy.sun(solarTrajectory.sunriseMarker, t.sunrise, t.terrainActive, t.hiddenAllDay),
+            sunset = RiseSetBadgePolicy.sun(solarTrajectory.sunsetMarker, t.sunset, t.terrainActive, t.hiddenAllDay),
+            moonrise = RiseSetBadgePolicy.moon(lunarTrajectory.moonriseMarker, t.moonrise, t.terrainActive, t.moonHiddenAllDay),
+            moonset = RiseSetBadgePolicy.moon(lunarTrajectory.moonsetMarker, t.moonset, t.terrainActive, t.moonHiddenAllDay),
+        )
+    }
     var surface by remember { mutableStateOf<SkySurface?>(null) }
     var scene by remember { mutableStateOf<SunArScene?>(null) }
     var viewportWidth by remember { mutableStateOf(1f) }
@@ -135,6 +150,7 @@ internal fun SunArGpuSky(
     val currentRig by rememberUpdatedState(rig)
     val currentSolar by rememberUpdatedState(solarTrajectory)
     val currentLunar by rememberUpdatedState(lunarTrajectory)
+    val currentBadges by rememberUpdatedState(badges)
     val currentSun by rememberUpdatedState(currentSunPos)
     val currentMoon by rememberUpdatedState(currentMoonPos)
     val fontScale = LocalDensity.current.fontScale
@@ -188,7 +204,7 @@ internal fun SunArGpuSky(
                     }
                     sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
                     // Bubbles, badges, discs and grid labels are part of this GPU frame.
-                    marks.update(sc, currentSolar, currentLunar, currentSun, currentMoon, density, currentFontScale)
+                    marks.update(sc, currentSolar, currentLunar, currentBadges, currentSun, currentMoon, density, currentFontScale)
                     sf.renderFrame(nanos)
                     revealed = true
                     frameTick = nanos
@@ -257,12 +273,26 @@ internal class SunArMarks {
     private var builtScene: SunArScene? = null
     private var builtSolar: SolarTrajectory? = null
     private var builtLunar: LunarTrajectory? = null
+    private var builtBadges: RiseSetBadges? = null
     private var builtDensity = 0f
     private var builtFontScale = 0f
     private var builtGridKey = -1
     private var sunBubbleSprites = IntArray(0)
     private var moonBubbleSprites = IntArray(0)
     private val markerSprites = IntArray(4) { -1 }
+
+    // Each badge's slot: its sky direction and its pill's half width, and this frame's projection
+    // of it, so a time bubble under a badge can be left out (MarkClearance).
+    private val markerAzimuth = DoubleArray(4)
+    private val markerElevation = DoubleArray(4)
+    private val markerHalfWidth = FloatArray(4)
+    private val markerScreenX = FloatArray(4)
+    private val markerScreenY = FloatArray(4)
+    private val markerOnScreen = BooleanArray(4)
+    private var badgeHalfHeight = 0f
+    private var badgeCentreLift = 0f
+    private var bubbleHalfWidth = 0f
+    private var bubbleHalfHeight = 0f
 
     /**
      * Lists this frame's marks into [scene], after `scene.update` and before the frame is rendered.
@@ -273,24 +303,34 @@ internal class SunArMarks {
         scene: SunArScene,
         solar: SolarTrajectory,
         lunar: LunarTrajectory,
+        badges: RiseSetBadges,
         sunPos: SolarCoordinates?,
         moonPos: LunarCoordinates?,
         density: Float,
         fontScale: Float,
     ) {
-        ensureAtlas(scene, solar, lunar, density, fontScale)
+        ensureAtlas(scene, solar, lunar, badges, density, fontScale)
         val labels = scene.markLabels
         val glyphs = scene.markGlyphs
+        val projector = scene.projector
         val d = direction
         labels.begin()
         glyphs.begin()
         grid.emit(labels, glyphs)
+
+        for (slot in 0 until 4) {
+            markerOnScreen[slot] = markerSprites[slot] >= 0 &&
+                projector.projectAltAz(markerAzimuth[slot], markerElevation[slot], projected)
+            markerScreenX[slot] = projected[0]
+            markerScreenY[slot] = projected[1] - badgeCentreLift
+        }
 
         // Only points above -15° are labelled, as only those stretches of the arcs are drawn.
         val sunBubbles = solar.timeBubbles
         for (i in sunBubbles.indices) {
             val c = sunBubbles[i].coordinates
             if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
+            if (coveredByBadge(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
             AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
             labels.add(sunBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
         }
@@ -298,14 +338,15 @@ internal class SunArMarks {
         for (i in moonBubbles.indices) {
             val c = moonBubbles[i].coordinates
             if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
+            if (coveredByBadge(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
             AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
             labels.add(moonBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
         }
 
-        solar.sunriseMarker?.let { addMarker(labels, glyphs, 0, it.coordinates, NormalSunrise, density) }
-        solar.sunsetMarker?.let { addMarker(labels, glyphs, 1, it.coordinates, NormalSunset, density) }
-        lunar.moonriseMarker?.let { addMarker(labels, glyphs, 2, it.coordinates, MoonRise, density) }
-        lunar.moonsetMarker?.let { addMarker(labels, glyphs, 3, it.coordinates, MoonSet, density) }
+        if (markerSprites[0] >= 0) addMarkerAt(labels, glyphs, 0, NormalSunrise, density)
+        if (markerSprites[1] >= 0) addMarkerAt(labels, glyphs, 1, NormalSunset, density)
+        if (markerSprites[2] >= 0) addMarkerAt(labels, glyphs, 2, MoonRise, density)
+        if (markerSprites[3] >= 0) addMarkerAt(labels, glyphs, 3, MoonSet, density)
 
         val shape = GlyphBatch.Shape
         if (sunPos != null && isOnScreen(scene.projector, sunPos.azimuthDegrees, sunPos.apparentElevationDegrees)) {
@@ -330,57 +371,58 @@ internal class SunArMarks {
         return projected[0] in 0f..projector.viewportWidth && projected[1] in 0f..projector.viewportHeight
     }
 
-    /** A rise or set badge: a dot on the horizon with the time and azimuth above it. */
-    private fun addMarker(
-        labels: LabelBatch,
-        glyphs: GlyphBatch,
-        slot: Int,
-        c: SolarCoordinates,
-        accent: Color,
-        density: Float,
-    ) = addMarkerAt(labels, glyphs, slot, c.azimuthDegrees, c.apparentElevationDegrees, accent, density)
+    /** Whether a time bubble at this direction would land on one of this frame's badges. */
+    private fun coveredByBadge(projector: SkyProjector, azimuth: Double, elevation: Double): Boolean {
+        if (!projector.projectAltAz(azimuth, elevation, projected)) return false
+        val x = projected[0]
+        val y = projected[1]
+        for (slot in 0 until 4) {
+            if (!markerOnScreen[slot]) continue
+            if (MarkClearance.overlaps(
+                    markerScreenX[slot], markerScreenY[slot], markerHalfWidth[slot], badgeHalfHeight,
+                    x, y, bubbleHalfWidth, bubbleHalfHeight,
+                )
+            ) return true
+        }
+        return false
+    }
 
-    private fun addMarker(
-        labels: LabelBatch,
-        glyphs: GlyphBatch,
-        slot: Int,
-        c: LunarCoordinates,
-        accent: Color,
-        density: Float,
-    ) = addMarkerAt(labels, glyphs, slot, c.azimuthDegrees, c.apparentElevationDegrees, accent, density)
-
+    /** A rise or set badge: a dot on the horizon (or on the skyline) with the time and azimuth above it. */
     private fun addMarkerAt(
         labels: LabelBatch,
         glyphs: GlyphBatch,
         slot: Int,
-        azimuth: Double,
-        elevation: Double,
         accent: Color,
         density: Float,
     ) {
         val d = direction
-        AltAzGridBuilder.direction(azimuth, elevation, d)
-        glyphs.add(GlyphBatch.Shape.DISC, d[0], d[1], d[2], 4f * density, 0f, accent.toArgb())
+        AltAzGridBuilder.direction(markerAzimuth[slot], markerElevation[slot], d)
+        glyphs.add(GlyphBatch.Shape.DISC, d[0], d[1], d[2], BADGE_DOT_DP * density, 0f, accent.toArgb())
         labels.add(markerSprites[slot], d[0], d[1], d[2])
     }
 
-    /** Redraws the atlas when its labels changed: a trajectory, the density, the font scale, the grid. */
+    /**
+     * Redraws the atlas when its labels changed: a trajectory, the badges, the density, the font
+     * scale, the grid.
+     */
     private fun ensureAtlas(
         scene: SunArScene,
         solar: SolarTrajectory,
         lunar: LunarTrajectory,
+        badges: RiseSetBadges,
         density: Float,
         fontScale: Float,
     ) {
         val sp = density * fontScale
         grid.horizonTextPaint.textSize = 5.3f * sp
         grid.gridTextPaint.textSize = 4.5f * sp
-        if (scene === builtScene && solar === builtSolar && lunar === builtLunar && density == builtDensity &&
-            fontScale == builtFontScale && grid.contentKey == builtGridKey
+        if (scene === builtScene && solar === builtSolar && lunar === builtLunar && badges === builtBadges &&
+            density == builtDensity && fontScale == builtFontScale && grid.contentKey == builtGridKey
         ) return
         builtScene = scene
         builtSolar = solar
         builtLunar = lunar
+        builtBadges = badges
         builtDensity = density
         builtFontScale = fontScale
         builtGridKey = grid.contentKey
@@ -402,17 +444,36 @@ internal class SunArMarks {
             val text = lunar.timeBubbles[it].formattedTime
             shared.getOrPut("m$text") { addBubble(atlas, text, MOON_BORDER_ARGB, density) }
         }
-        markerSprites[0] = solar.sunriseMarker?.let { addBadge(atlas, markerLabel("🌅", it.formattedTime, it.coordinates.azimuthDegrees), NormalSunrise, density) } ?: -1
-        markerSprites[1] = solar.sunsetMarker?.let { addBadge(atlas, markerLabel("🌇", it.formattedTime, it.coordinates.azimuthDegrees), NormalSunset, density) } ?: -1
-        markerSprites[2] = lunar.moonriseMarker?.let { addBadge(atlas, markerLabel("🌙", it.formattedTime, it.coordinates.azimuthDegrees), MoonRise, density) } ?: -1
-        markerSprites[3] = lunar.moonsetMarker?.let { addBadge(atlas, markerLabel("🌘", it.formattedTime, it.coordinates.azimuthDegrees), MoonSet, density) } ?: -1
+        bubbleHalfWidth = BUBBLE_WIDTH_DP * density * 0.5f
+        bubbleHalfHeight = BUBBLE_HEIGHT_DP * density * 0.5f
+        // The box a badge keeps clear runs from the top of its pill down to the bottom of its dot.
+        val pillTop = (BADGE_LIFT_DP + BADGE_HEIGHT_DP * 0.5f) * density
+        val dotBottom = BADGE_DOT_DP * density
+        badgeHalfHeight = (pillTop + dotBottom) * 0.5f
+        badgeCentreLift = (pillTop - dotBottom) * 0.5f
+        setBadge(atlas, 0, badges.sunrise, "🌅", NormalSunrise, density)
+        setBadge(atlas, 1, badges.sunset, "🌇", NormalSunset, density)
+        setBadge(atlas, 2, badges.moonrise, "🌙", MoonRise, density)
+        setBadge(atlas, 3, badges.moonset, "🌘", MoonSet, density)
         atlas.end()
+    }
+
+    private fun setBadge(atlas: SpriteAtlas, slot: Int, badge: RiseSetBadge?, emoji: String, accent: Color, density: Float) {
+        if (badge == null) {
+            markerSprites[slot] = -1
+            return
+        }
+        val label = markerLabel(emoji, badge.formattedTime, badge.azimuthDegrees)
+        markerSprites[slot] = addBadge(atlas, label, accent, density)
+        markerAzimuth[slot] = badge.azimuthDegrees
+        markerElevation[slot] = badge.apparentElevationDegrees
+        markerHalfWidth[slot] = (markerText.measureText(label) + 16f * density) * 0.5f
     }
 
     /** A time pill, 46 x 21 dp, centred on its point of the arc. */
     private fun addBubble(atlas: SpriteAtlas, text: String, borderArgb: Int, density: Float): Int {
-        val pw = 46f * density
-        val ph = 21f * density
+        val pw = BUBBLE_WIDTH_DP * density
+        val ph = BUBBLE_HEIGHT_DP * density
         val border = bubbleBorder.strokeWidth
         val w = ceil(pw + border).toInt() + 2
         val h = ceil(ph + border).toInt() + 2
@@ -432,8 +493,8 @@ internal class SunArMarks {
     /** A badge pill, 26 dp tall, centred 16 dp above its dot (the anchor). */
     private fun addBadge(atlas: SpriteAtlas, label: String, accent: Color, density: Float): Int {
         val pw = markerText.measureText(label) + 16f * density
-        val ph = 26f * density
-        val lift = 16f * density
+        val ph = BADGE_HEIGHT_DP * density
+        val lift = BADGE_LIFT_DP * density
         val border = markerBorder.strokeWidth
         val w = ceil(pw + border).toInt() + 2
         val h = ceil(ph + border).toInt() + 2
@@ -468,6 +529,11 @@ internal class SunArMarks {
 
     private companion object {
         const val MIN_BUBBLE_ELEVATION = -15.0
+        const val BUBBLE_WIDTH_DP = 46f
+        const val BUBBLE_HEIGHT_DP = 21f
+        const val BADGE_HEIGHT_DP = 26f
+        const val BADGE_LIFT_DP = 16f
+        const val BADGE_DOT_DP = 4f
         val SUN_BORDER_ARGB = android.graphics.Color.argb(255, 255, 179, 0)
         val MOON_BORDER_ARGB = android.graphics.Color.argb(180, 128, 222, 234)
     }
