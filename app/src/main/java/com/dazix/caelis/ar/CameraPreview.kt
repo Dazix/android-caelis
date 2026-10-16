@@ -150,6 +150,10 @@ fun CameraPreview(
             // so this stays nullable rather than lateinit: an early frame simply updates the crop
             // and the binding below dispatches it.
             var dispatchFov: (() -> Unit)? = null
+            // The stream resolution becomes known some frames after binding, and a crop that never
+            // changes afterwards never asks again: without this the geometry-only FOV from before the
+            // first frame could stay for the whole session.
+            val dispatchedMeasurable = java.util.concurrent.atomic.AtomicBoolean(false)
 
             previewExtender.setSessionCaptureCallback(
                 object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
@@ -165,6 +169,8 @@ fun CameraPreview(
                         if (w != cropWidthPx || h != cropHeightPx) {
                             cropWidthPx = w
                             cropHeightPx = h
+                            viewportView.post { dispatchFov?.invoke() }
+                        } else if (!dispatchedMeasurable.get()) {
                             viewportView.post { dispatchFov?.invoke() }
                         }
                     }
@@ -262,6 +268,18 @@ fun CameraPreview(
                             viewportHeight = h,
                             isPortrait = isPortrait,
                         )
+                        if (com.dazix.caelis.BuildConfig.DEBUG) {
+                            android.util.Log.d(
+                                "CaelisFov",
+                                "active=${activeArraySize?.width()}x${activeArraySize?.height()} crop=${cropWidthPx}x$cropHeightPx" +
+                                    " preview=${resolution?.width}x${resolution?.height}" +
+                                    " analysis=${analysis?.resolutionInfo?.resolution}" +
+                                    " viewport=${w}x$h sensor=${effectiveSensorW}x$effectiveSensorH focal=$primaryFocalLength" +
+                                    " -> fov=${dynamicFov.horizontalDegrees} base=${dynamicFov.baseHorizontalDegrees}" +
+                                    " measured=${dynamicFov.isDynamicStreamCalculated}",
+                            )
+                        }
+                        if (dynamicFov.isDynamicStreamCalculated) dispatchedMeasurable.set(true)
                         onFovCalculated(dynamicFov)
                     }
                 }

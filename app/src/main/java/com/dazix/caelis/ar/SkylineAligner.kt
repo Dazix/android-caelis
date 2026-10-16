@@ -2,8 +2,10 @@ package com.dazix.caelis.ar
 
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.horizon.SkylineExtractor
+import com.dazix.caelis.domain.horizon.SkylineFit
 import com.dazix.caelis.domain.horizon.SkylineMatch
 import com.dazix.caelis.domain.horizon.SkylineMatcher
+import com.dazix.caelis.domain.horizon.SkylineRefusal
 
 /** One camera frame's brightness plane, copied out so the buffer can go back to the camera. */
 class LumaFrame(
@@ -65,11 +67,20 @@ object SkylineAligner {
         frame: LumaFrame,
         geometry: CameraFrameGeometry,
         profile: HorizonProfile,
-    ): SkylineMatch? {
-        if (!geometry.isUsable) return null
+    ): SkylineMatch? = fit(frame, geometry, profile).match
+
+    /** [align], with the reason for a refusal; see [SkylineMatcher.fit]. */
+    fun fit(
+        frame: LumaFrame,
+        geometry: CameraFrameGeometry,
+        profile: HorizonProfile,
+    ): SkylineFit {
+        if (!geometry.isUsable) return SkylineFit.refused(SkylineRefusal.NO_GEOMETRY, 0)
         // A geometry built for another frame size would put every column in the wrong direction
         // while still looking like a measurement, so it is refused rather than trusted.
-        if (frame.width != geometry.frameWidth || frame.height != geometry.frameHeight) return null
+        if (frame.width != geometry.frameWidth || frame.height != geometry.frameHeight) {
+            return SkylineFit.refused(SkylineRefusal.NO_GEOMETRY, 0)
+        }
         val viewportWidth = geometry.viewportWidth
         val viewportHeight = geometry.viewportHeight
 
@@ -83,7 +94,7 @@ object SkylineAligner {
             columnStride = COLUMN_STRIDE,
             outRows = rows,
         )
-        if (sampled <= 0) return null
+        if (sampled <= 0) return SkylineFit.refused(SkylineRefusal.TOO_FEW_COLUMNS, 0)
 
         // For a FILL_CENTER preview the geometry's scale is the one that covers the viewport and crops
         // the rest, so it maps an analysis pixel onto the canvas the overlay is drawn on.
@@ -120,6 +131,6 @@ object SkylineAligner {
             used++
         }
 
-        return SkylineMatcher.match(azimuths, elevations, used, profile)
+        return SkylineMatcher.fit(azimuths, elevations, used, profile)
     }
 }

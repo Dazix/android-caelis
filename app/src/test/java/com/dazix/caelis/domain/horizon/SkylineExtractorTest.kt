@@ -105,6 +105,54 @@ class SkylineExtractorTest {
         }
     }
 
+    /**
+     * Found through a window at Ještěd: a hazy ridge against the sky, and a sunlit wall below it with
+     * twice the contrast. The skyline is the first boundary under the sky, not the strongest one in
+     * the column; reporting the wall put the fit 25° low and refused it.
+     */
+    @Test
+    fun `a faint ridge above a stronger edge below is still the skyline`() {
+        val data = ByteArray(stride * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val value = when {
+                    y < 36 -> 200 // sky
+                    y < 60 -> 150 // hazy ridge
+                    else -> 40 // dark wall below a bright one
+                }
+                data[y * stride + x] = value.toByte()
+            }
+        }
+
+        val rows = extract(data)
+
+        for ((column, row) in rows.withIndex()) {
+            assertEquals("column $column", 36, row)
+        }
+    }
+
+    /** The other side of the same rule: a ripple in the sky must not beat a real ridge below it. */
+    @Test
+    fun `a faint step high in the sky does not outrank a clear ridge`() {
+        val data = ByteArray(stride * height)
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val value = when {
+                    y < 30 -> 225 // brighter sky
+                    y < 55 -> 205 // a cloud base, 20/255 darker
+                    else -> 80 // terrain
+                }
+                data[y * stride + x] = value.toByte()
+            }
+        }
+
+        val rows = extract(data)
+
+        for ((column, row) in rows.withIndex()) {
+            assertEquals("column $column", 55, row)
+        }
+    }
+
     @Test
     fun `sampling every n-th column returns every n-th answer`() {
         val rows = extract(frame { x -> 40 + x / 4 }, columnStride = 4)

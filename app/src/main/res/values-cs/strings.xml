@@ -382,6 +382,10 @@
     <string name="ar_align_auto_done">Srovnáno podle obzoru</string>
     <string name="ar_align_auto_vertical_only">Terén v záběru je příliš plochý na určení azimutu. Srovnána jen výška.</string>
     <string name="ar_align_auto_no_skyline">Obzor se nepodařilo najít. Namiřte kameru na horizont za dobrého světla.</string>
+    <string name="ar_align_auto_searching">Srovnávám podle obzoru – podržte telefon v klidu proti hřebeni</string>
+    <string name="ar_align_auto_no_match">Linie obzoru nalezena, ale neodpovídá terénu. Namiřte na hřeben s volnou oblohou nad ním.</string>
+    <string name="ar_align_auto_ambiguous">Linie obzoru sedí na terén na více místech. Namiřte na výrazný vrchol.</string>
+    <string name="ar_align_auto_out_of_range">Korekce by byla větší než 20°. Zrušte srovnání a zkuste to znovu.</string>
     <string name="ar_align_auto_no_profile">Zatím není profil terénu. Zapněte horizont terénu v Nastavení.</string>
     <string name="ar_align_auto_no_camera">Kamera není k dispozici.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>

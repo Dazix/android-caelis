@@ -98,6 +98,7 @@ import com.dazix.caelis.ar.CameraFrameSource
 import com.dazix.caelis.ar.CameraPreview
 import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.PreviewFrameClock
+import com.dazix.caelis.domain.horizon.SkylineRefusal
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectory
@@ -242,7 +243,19 @@ fun SunArScreen(
             null, AutoAlignResult.Working -> null
             AutoAlignResult.NoProfile -> R.string.ar_align_auto_no_profile
             AutoAlignResult.NoCamera -> R.string.ar_align_auto_no_camera
-            AutoAlignResult.NoSkyline -> R.string.ar_align_auto_no_skyline
+            is AutoAlignResult.NoSkyline -> when (result.reason) {
+                SkylineRefusal.NOT_TERRAIN_SHAPED,
+                SkylineRefusal.NO_DISTINCT_MINIMUM,
+                SkylineRefusal.RESIDUAL_TOO_HIGH,
+                -> R.string.ar_align_auto_no_match
+                SkylineRefusal.AMBIGUOUS_MINIMUM -> R.string.ar_align_auto_ambiguous
+                SkylineRefusal.OUT_OF_RANGE -> R.string.ar_align_auto_out_of_range
+                SkylineRefusal.PROFILE_UNUSABLE -> R.string.ar_align_auto_no_profile
+                SkylineRefusal.NO_GEOMETRY,
+                SkylineRefusal.TOO_FEW_COLUMNS,
+                null,
+                -> R.string.ar_align_auto_no_skyline
+            }
             is AutoAlignResult.Aligned -> if (result.azimuthDetermined) {
                 R.string.ar_align_auto_done
             } else {
@@ -256,6 +269,16 @@ fun SunArScreen(
     }
 
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    // The automatic alignment fits in the viewport the overlay is drawn in, on the sensor path only.
+    LaunchedEffect(viewportSize, displayRotation, poseIndicator) {
+        viewModel.setAutoAlignEnvironment(
+            viewportWidth = viewportSize.width.toFloat(),
+            viewportHeight = viewportSize.height.toFloat(),
+            displayRotation = displayRotation,
+            sensorsOwnPose = poseIndicator == com.dazix.caelis.ar.pose.PoseIndicator.SENSOR,
+        )
+    }
+    val isSearchingForSkyline by viewModel.isSearchingForSkyline.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -383,6 +406,7 @@ fun SunArScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (isSearchingForSkyline) SkylineSearchChip()
             com.dazix.caelis.ui.HeadingStatusChip(state = headingState)
             com.dazix.caelis.ui.PoseSourceChip(indicator = poseIndicator, arCoreConsented = arCoreConsented)
         }
@@ -1270,5 +1294,35 @@ private fun CameraPermissionPrompt(
                 Text(stringResource(R.string.action_back))
             }
         }
+    }
+}
+
+/**
+ * Shown while Sun AR is still aligning itself to the skyline. It says what helps (a ridge in view,
+ * the phone held still) in words, not only by being there.
+ */
+@Composable
+private fun SkylineSearchChip(modifier: Modifier = Modifier) {
+    val text = stringResource(R.string.ar_align_auto_searching)
+    Row(
+        modifier = modifier
+            .background(Color(0xDD1A1A1A), CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { contentDescription = text },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = AppIcons.TerrainHorizon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+        )
     }
 }

@@ -124,6 +124,27 @@ class SkylineMatcherTest {
         assertEquals("the bare ground columns are what sets the height", 0.0, match.elevationOffsetDegrees, 0.15)
     }
 
+    /**
+     * Found on the device: a fifth of the columns read a wall far below the ridge, the low quantile
+     * landed on them, and every fit was refused with a 24° residual in front of a clear Ještěd.
+     */
+    @Test
+    fun `columns misread far below the ridge do not drag the height down`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(
+            profile,
+            azimuthError = 1.5,
+            elevationError = 0.4,
+            noise = { index -> if (index % 4 == 0) -25.0 else 0.0 },
+        )
+
+        val fit = SkylineMatcher.fit(azimuths, elevations, azimuths.size, profile)
+
+        assertNull("refused with ${fit.refusal}", fit.refusal)
+        assertEquals(1.5, fit.match!!.azimuthOffsetDegrees, 0.1)
+        assertEquals(-0.4, fit.match!!.elevationOffsetDegrees, 0.1)
+    }
+
     @Test
     fun `a flat skyline gives the height but refuses to invent a compass correction`() {
         val profile = flatProfile()
@@ -185,6 +206,72 @@ class SkylineMatcherTest {
                 kotlin.math.abs(match.azimuthOffsetDegrees) < SkylineMatcher.SEARCH_AZIMUTH_DEGREES - 0.5,
             )
         }
+    }
+
+    /**
+     * Found on the device: a restart left the heading 11° out, the old ±8° window could not reach
+     * it, and the button said "no skyline" in front of a perfectly clear Ještěd.
+     */
+    @Test
+    fun `a compass error well past the old window is found`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(profile, centreAzimuth = 235.0, azimuthError = 15.0, elevationError = 2.5)
+
+        val fit = SkylineMatcher.fit(azimuths, elevations, azimuths.size, profile)
+
+        assertNull("refused with ${fit.refusal}", fit.refusal)
+        assertEquals(15.0, fit.match!!.azimuthOffsetDegrees, 0.1)
+        assertEquals(-2.5, fit.match!!.elevationOffsetDegrees, 0.1)
+    }
+
+    @Test
+    fun `a large error the other way is found too`() {
+        val profile = ridgeProfile()
+        // Believed 268°, really looking at 250°: the ridge is in view, just not where the compass says.
+        val (azimuths, elevations) = observed(profile, centreAzimuth = 268.0, azimuthError = -18.0, elevationError = -7.0)
+
+        val match = SkylineMatcher.match(azimuths, elevations, azimuths.size, profile)!!
+
+        assertEquals(-18.0, match.azimuthOffsetDegrees, 0.1)
+        assertEquals(7.0, match.elevationOffsetDegrees, 0.1)
+    }
+
+    /**
+     * A wider window means more chances to land on the wrong ridge. A skyline that repeats itself
+     * every few degrees fits just as well one tooth over, and the matcher must say so, not pick one.
+     */
+    @Test
+    fun `a skyline that repeats within the window is refused as ambiguous`() {
+        val elevations = FloatArray(HorizonProfile.SAMPLE_COUNT) { index ->
+            val azimuth = HorizonProfile.azimuthForIndex(index)
+            (2.0 + 1.5 * sin(Math.toRadians(azimuth * 45.0))).toFloat() // one tooth every 8°
+        }
+        val profile = profileOf(elevations)
+        val (azimuths, observedElevations) = observed(profile, azimuthError = 3.0, elevationError = 0.0)
+
+        val fit = SkylineMatcher.fit(azimuths, observedElevations, azimuths.size, profile)
+
+        assertNull("a repeating skyline must not be matched, got ${fit.match}", fit.match)
+        assertEquals(SkylineRefusal.AMBIGUOUS_MINIMUM, fit.refusal)
+    }
+
+    @Test
+    fun `every refusal says which gate refused it`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(profile, azimuthError = 2.0, elevationError = 0.0)
+        assertEquals(
+            SkylineRefusal.TOO_FEW_COLUMNS,
+            SkylineMatcher.fit(azimuths, elevations, SkylineMatcher.MIN_COLUMNS - 1, profile).refusal,
+        )
+
+        val roofs = DoubleArray(160) { 14.0 }
+        val fit = SkylineMatcher.fit(azimuths, roofs, azimuths.size, profile)
+        assertNull(fit.match)
+        assertEquals(SkylineRefusal.NOT_TERRAIN_SHAPED, fit.refusal)
+
+        val accepted = SkylineMatcher.fit(azimuths, elevations, azimuths.size, profile)
+        assertNull(accepted.refusal)
+        assertNotNull(accepted.match)
     }
 
     @Test

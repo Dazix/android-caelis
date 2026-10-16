@@ -376,6 +376,10 @@
     <string name="ar_align_auto_done">Aligned with the skyline</string>
     <string name="ar_align_auto_vertical_only">The terrain in view is too flat to fix the compass. Height aligned only.</string>
     <string name="ar_align_auto_no_skyline">No skyline found. Point the camera at the horizon in good light.</string>
+    <string name="ar_align_auto_searching">Aligning with the skyline — hold the phone still towards a ridge</string>
+    <string name="ar_align_auto_no_match">A skyline was found but it does not match the terrain. Point at a ridge with open sky above it.</string>
+    <string name="ar_align_auto_ambiguous">The skyline fits the terrain in more than one place. Point at a distinctive peak.</string>
+    <string name="ar_align_auto_out_of_range">The correction would be larger than 20°. Reset the alignment and try again.</string>
     <string name="ar_align_auto_no_profile">No terrain profile yet. Switch the terrain horizon on in Settings.</string>
     <string name="ar_align_auto_no_camera">The camera is not available.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>

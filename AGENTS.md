@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **926 JVM tests (309 intervalometer, 466 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
+`skipped`), not from the console. Current baseline: **942 JVM tests (309 intervalometer, 482 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -177,10 +177,23 @@ Each of these was found by review or on the device and is now covered by a test.
   written again. Aligning against a ridge by day is what makes the stars line up at night.
 - **Automatic alignment refuses rather than guesses.** `SkylineMatcher` returns null unless enough
   columns carried a boundary, the photographed skyline has at least half the relief the terrain does,
-  the residual minimum stands out from the average candidate, and the fit is under 0.5°. A confident
+  the residual minimum stands out from the average candidate, no second minimum 2° or more away fits
+  nearly as well (a repeated ridge), the winner is not on the window's edge, and the fit is under 0.5°. A confident
   wrong alignment is worse than none, because from the outside it looks measured. Its vertical offset
   comes from a low quantile of the differences, never the median: trees and roofs stand above the
   bare-earth model and never below it, so a median folds the average tree height into the calibration.
+  Every refusal carries its reason (`SkylineFit.refusal`), shown to the user and logged as `CaelisAlign`
+  in debug builds, which also keep the frame, pose and profile under `filesDir/debug/` (`AlignDiagnostics`).
+- **Sun AR aligns itself at every start, and the fit is the whole calibration.** A stored calibration
+  does not survive a restart: the heading it was measured against was gyro-held from that session's
+  compass reading, and on the device the next start put the ridge 11° out. `AutoAlignPolicy` attempts
+  as soon as a profile, a camera frame and a still phone are there, retries a refusal after 3 s backing
+  off to 10 s, stops for the session on the first accepted fit, and stops for good on any hand alignment
+  (drag, nudge, or a successful press of the button) until a reset. Sensor path only. The fit is made
+  against `getReferenceMatrix` (no calibration in it) over the whole ±20° azimuth range and replaces the
+  calibration with `setCalibration`; a stored value, even one stuck at the clamp, cannot bias it, and an
+  answer outside ±20° is refused rather than clamped. The search window was ±8° once and refused that
+  11° every time.
 - **The search radius is estimated before the ring is fetched, not after.** `HorizonRangeEstimator`
   works from the observer's own tile, which is mandatory anyway, so a valley floor never downloads
   eight neighbours to discover they change nothing. The bound is real: past the distance where a peak

@@ -21,6 +21,53 @@ data class SkylineMatch(
     val azimuthDetermined: Boolean,
 )
 
+/** Which gate turned a fit down, so "no horizon" can say what was actually missing. */
+enum class SkylineRefusal {
+    /** The frame or the geometry could not be turned into skyline directions at all. */
+    NO_GEOMETRY,
+
+    /** Too few image columns carried a sky/terrain boundary: sky, a wall, fog or darkness. */
+    TOO_FEW_COLUMNS,
+
+    /** The profile is not backed by enough elevation data to match against. */
+    PROFILE_UNUSABLE,
+
+    /** The photographed skyline is much flatter than the terrain it would have to be. */
+    NOT_TERRAIN_SHAPED,
+
+    /** The residual curve has no dip: every shift fits about equally badly. */
+    NO_DISTINCT_MINIMUM,
+
+    /** Another, separate shift fits almost as well: a repeated ridge, and no way to tell which. */
+    AMBIGUOUS_MINIMUM,
+
+    /** The best shift is at the edge of the search window, so the real one is probably beyond it. */
+    OUT_OF_RANGE,
+
+    /** Even the best shift leaves the two skylines too far apart. */
+    RESIDUAL_TOO_HIGH,
+}
+
+/**
+ * Everything the matcher found out, accepted or not. [match] is non-null exactly when [refusal] is
+ * null. The numbers are for diagnosis (logs, the debug dump); NaN where a gate fired before them.
+ */
+data class SkylineFit(
+    val match: SkylineMatch?,
+    val refusal: SkylineRefusal?,
+    val usedColumns: Int,
+    val profileReliefDegrees: Double = Double.NaN,
+    val observedReliefDegrees: Double = Double.NaN,
+    val bestAzimuthDegrees: Double = Double.NaN,
+    val bestResidualDegrees: Double = Double.NaN,
+    val averageResidualDegrees: Double = Double.NaN,
+    val runnerUpResidualDegrees: Double = Double.NaN,
+) {
+    companion object {
+        fun refused(refusal: SkylineRefusal, usedColumns: Int) = SkylineFit(null, refusal, usedColumns)
+    }
+}
+
 /**
  * Matches the sky/terrain boundary seen by the camera against the computed [HorizonProfile].
  *
@@ -34,8 +81,23 @@ data class SkylineMatch(
  */
 object SkylineMatcher {
 
-    /** How far either way the compass is allowed to be wrong. Beyond this it is not a calibration. */
-    const val SEARCH_AZIMUTH_DEGREES = 8.0
+    /**
+     * How far either way the compass is allowed to be wrong: the whole range a calibration can take
+     * (`OrientationTracker.MAX_CALIBRATION_AZIMUTH`). It was ±8° once, and on the device a restart
+     * left the heading 11° out (the gyro-held heading of the last session is not this session's), so
+     * the one tool meant to fix that refused every time. A wider window makes a wrong dip likelier;
+     * [MIN_RUNNER_UP_RATIO] is what pays for it.
+     */
+    const val SEARCH_AZIMUTH_DEGREES = 20.0
+
+    /**
+     * Another local minimum at least [RUNNER_UP_SEPARATION_DEGREES] away from the winner has to fit
+     * clearly worse than it, or the fit is refused. Ridges repeat; a shift that lands on the wrong
+     * one still has a small residual, and from the outside it looks exactly like a measured answer.
+     */
+    private const val MIN_RUNNER_UP_RATIO = 1.5
+    private const val RUNNER_UP_SEPARATION_DEGREES = 2.0
+    private const val MIN_RUNNER_UP_MARGIN_DEGREES = 0.05
 
     private const val COARSE_STEP_DEGREES = 0.25
     private const val FINE_STEP_DEGREES = 0.02
@@ -56,6 +118,9 @@ object SkylineMatcher {
      */
     private const val ELEVATION_QUANTILE = 0.2
 
+    /** Further below the median than this, a column is a misread boundary, not bare ground. */
+    private const val BELOW_MEDIAN_OUTLIER_DEGREES = 2.0
+
     /**
      * @param azimuthsDeg direction of each sampled skyline pixel, as the phone currently believes it.
      * @param elevationsDeg elevation of the same pixels.
@@ -67,9 +132,17 @@ object SkylineMatcher {
         elevationsDeg: DoubleArray,
         count: Int,
         profile: HorizonProfile,
-    ): SkylineMatch? {
-        if (count < MIN_COLUMNS) return null
-        if (!profile.isUsable) return null
+    ): SkylineMatch? = fit(azimuthsDeg, elevationsDeg, count, profile).match
+
+    /** [match], with the reason for a refusal and the numbers each gate looked at. */
+    fun fit(
+        azimuthsDeg: DoubleArray,
+        elevationsDeg: DoubleArray,
+        count: Int,
+        profile: HorizonProfile,
+    ): SkylineFit {
+        if (count < MIN_COLUMNS) return SkylineFit.refused(SkylineRefusal.TOO_FEW_COLUMNS, count)
+        if (!profile.isUsable) return SkylineFit.refused(SkylineRefusal.PROFILE_UNUSABLE, count)
 
         // A skyline with no relief across the visible span pins the elevation but says nothing about
         // the azimuth: every horizontal shift fits equally well. Saying so beats inventing a number.
@@ -77,27 +150,36 @@ object SkylineMatcher {
         if (relief < MIN_PROFILE_RELIEF_DEGREES) {
             val gap = elevationGapFor(azimuthsDeg, elevationsDeg, count, profile, 0.0)
             val residual = residualFor(azimuthsDeg, elevationsDeg, count, profile, 0.0, gap)
-            if (residual > MAX_ACCEPTABLE_RESIDUAL_DEGREES) return null
-            return SkylineMatch(0.0, -gap, residual, count, azimuthDetermined = false)
+            val match = if (residual > MAX_ACCEPTABLE_RESIDUAL_DEGREES) {
+                null
+            } else {
+                SkylineMatch(0.0, -gap, residual, count, azimuthDetermined = false)
+            }
+            return SkylineFit(
+                match = match,
+                refusal = if (match == null) SkylineRefusal.RESIDUAL_TOO_HIGH else null,
+                usedColumns = count,
+                profileReliefDegrees = relief,
+                bestAzimuthDegrees = 0.0,
+                bestResidualDegrees = residual,
+            )
         }
 
-        var bestAzimuth = 0.0
-        var bestResidual = Double.MAX_VALUE
+        val steps = (2.0 * SEARCH_AZIMUTH_DEGREES / COARSE_STEP_DEGREES).toInt() + 1
+        val curve = DoubleArray(steps)
+        var bestIndex = 0
         var residualSum = 0.0
-        var candidates = 0
-
-        var azimuth = -SEARCH_AZIMUTH_DEGREES
-        while (azimuth <= SEARCH_AZIMUTH_DEGREES + 1e-9) {
+        for (index in 0 until steps) {
+            val azimuth = -SEARCH_AZIMUTH_DEGREES + index * COARSE_STEP_DEGREES
             val elevation = elevationGapFor(azimuthsDeg, elevationsDeg, count, profile, azimuth)
             val residual = residualFor(azimuthsDeg, elevationsDeg, count, profile, azimuth, elevation)
+            curve[index] = residual
             residualSum += residual
-            candidates++
-            if (residual < bestResidual) {
-                bestResidual = residual
-                bestAzimuth = azimuth
-            }
-            azimuth += COARSE_STEP_DEGREES
+            if (residual < curve[bestIndex]) bestIndex = index
         }
+        val bestAzimuth = -SEARCH_AZIMUTH_DEGREES + bestIndex * COARSE_STEP_DEGREES
+        var bestResidual = curve[bestIndex]
+        val runnerUp = runnerUpMinimum(curve, bestIndex)
 
         // Refine around the coarse winner. The coarse grid is deliberately wider than the precision
         // anyone can see, so this is what turns "about right" into "on the ridge".
@@ -121,25 +203,74 @@ object SkylineMatcher {
         // terrain happens to be gentle there. It cannot, however, have the *shape* of a ridge: what
         // the camera sees must rise and fall about as much as the terrain it is claimed to be.
         val observedRelief = spread(elevationsDeg, count)
-        if (observedRelief < relief * MIN_OBSERVED_RELIEF_RATIO) return null
+        val averageResidual = residualSum / steps
 
-        val averageResidual = residualSum / candidates
+        fun refused(refusal: SkylineRefusal) = SkylineFit(
+            match = null,
+            refusal = refusal,
+            usedColumns = count,
+            profileReliefDegrees = relief,
+            observedReliefDegrees = observedRelief,
+            bestAzimuthDegrees = refined,
+            bestResidualDegrees = bestResidual,
+            averageResidualDegrees = averageResidual,
+            runnerUpResidualDegrees = runnerUp,
+        )
+
+        if (observedRelief < relief * MIN_OBSERVED_RELIEF_RATIO) return refused(SkylineRefusal.NOT_TERRAIN_SHAPED)
+
         // A real ridge produces a sharp dip in the residual curve. A cloud line, a wall or a row of
         // roofs produces a curve that is flat to within noise, and picking its lowest point would be
         // picking noise.
-        if (averageResidual <= 0.0 || bestResidual > averageResidual * MAX_MINIMUM_RATIO) return null
-        if (bestResidual > MAX_ACCEPTABLE_RESIDUAL_DEGREES) return null
+        if (averageResidual <= 0.0 || bestResidual > averageResidual * MAX_MINIMUM_RATIO) {
+            return refused(SkylineRefusal.NO_DISTINCT_MINIMUM)
+        }
+        // The winner on the window's edge is most likely the slope down to a minimum beyond it.
+        if (abs(refined) > SEARCH_AZIMUTH_DEGREES - COARSE_STEP_DEGREES) return refused(SkylineRefusal.OUT_OF_RANGE)
+        // The absolute margin is for the near-zero residuals of a clean fit, where any ratio of
+        // nothing is still nothing and two equally perfect shifts would both pass.
+        if (runnerUp < maxOf(bestResidual * MIN_RUNNER_UP_RATIO, bestResidual + MIN_RUNNER_UP_MARGIN_DEGREES)) {
+            return refused(SkylineRefusal.AMBIGUOUS_MINIMUM)
+        }
+        if (bestResidual > MAX_ACCEPTABLE_RESIDUAL_DEGREES) return refused(SkylineRefusal.RESIDUAL_TOO_HIGH)
 
         // Negated on the way out: the gap is how much higher the camera *believes* the skyline sits,
         // and the calibration has to bring that belief down by the same amount.
         val gap = elevationGapFor(azimuthsDeg, elevationsDeg, count, profile, refined)
-        return SkylineMatch(
-            azimuthOffsetDegrees = refined,
-            elevationOffsetDegrees = -gap,
-            residualDegrees = bestResidual,
+        return SkylineFit(
+            match = SkylineMatch(
+                azimuthOffsetDegrees = refined,
+                elevationOffsetDegrees = -gap,
+                residualDegrees = bestResidual,
+                usedColumns = count,
+                azimuthDetermined = true,
+            ),
+            refusal = null,
             usedColumns = count,
-            azimuthDetermined = true,
+            profileReliefDegrees = relief,
+            observedReliefDegrees = observedRelief,
+            bestAzimuthDegrees = refined,
+            bestResidualDegrees = bestResidual,
+            averageResidualDegrees = averageResidual,
+            runnerUpResidualDegrees = runnerUp,
         )
+    }
+
+    /**
+     * The lowest local minimum of the coarse residual [curve] that lies more than
+     * [RUNNER_UP_SEPARATION_DEGREES] from [bestIndex]; infinity when there is none. The window's ends
+     * count as minima when the curve is still falling into them.
+     */
+    private fun runnerUpMinimum(curve: DoubleArray, bestIndex: Int): Double {
+        val separation = (RUNNER_UP_SEPARATION_DEGREES / COARSE_STEP_DEGREES).toInt()
+        var runnerUp = Double.POSITIVE_INFINITY
+        for (index in curve.indices) {
+            if (abs(index - bestIndex) <= separation) continue
+            val left = if (index > 0) curve[index - 1] else Double.POSITIVE_INFINITY
+            val right = if (index < curve.size - 1) curve[index + 1] else Double.POSITIVE_INFINITY
+            if (curve[index] <= left && curve[index] <= right && curve[index] < runnerUp) runnerUp = curve[index]
+        }
+        return runnerUp
     }
 
     /** Fewer than this and the image is mostly sky, mostly wall, or mostly fog. */
@@ -201,8 +332,14 @@ object SkylineMatcher {
         val diffs = differences(azimuthsDeg, elevationsDeg, count, profile, azimuthOffset)
         val sorted = diffs.copyOf(count)
         sorted.sort()
-        val index = ((count - 1) * ELEVATION_QUANTILE).toInt().coerceIn(0, count - 1)
-        return sorted[index]
+        // The low quantile assumes every wrong column stands above the terrain. A column whose
+        // boundary was found far *below* it (a wall, a window frame) is not a tree but a misread,
+        // and a fifth of those pulled the quantile 25° down on the device; they are left out.
+        val floor = sorted[count / 2] - BELOW_MEDIAN_OUTLIER_DEGREES
+        var start = 0
+        while (start < count - 1 && sorted[start] < floor) start++
+        val index = start + ((count - 1 - start) * ELEVATION_QUANTILE).toInt()
+        return sorted[index.coerceIn(0, count - 1)]
     }
 
     private fun residualFor(
