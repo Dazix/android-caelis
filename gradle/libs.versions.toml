@@ -19,11 +19,17 @@ espresso = "3.7.0"
 uiautomator = "2.4.0"
 camerax = "1.4.1"
 flatbuffers = "24.3.25"
+# One entry for both the runtime and the matc that compiles app/src/main/materials — a .filamat is
+# only valid for the Filament version whose matc produced it.
+filament = "1.77.1"
+arcore = "1.56.0"
 roborazzi = "1.72.0"
 robolectric = "4.16.1"
 
 [libraries]
 flatbuffers-java = { group = "com.google.flatbuffers", name = "flatbuffers-java", version.ref = "flatbuffers" }
+filament-android = { group = "com.google.android.filament", name = "filament-android", version.ref = "filament" }
+arcore = { group = "com.google.ar", name = "core", version.ref = "arcore" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }

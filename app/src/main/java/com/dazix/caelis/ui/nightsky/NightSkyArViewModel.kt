@@ -11,6 +11,8 @@ import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.OrientationTracker
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.ar.pose.SensorPose
+import com.dazix.caelis.ar.pose.SensorPoseSource
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.data.horizon.HorizonRepository
@@ -20,6 +22,7 @@ import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
+import com.dazix.caelis.domain.nightsky.RealHorizonPolicy
 import com.dazix.caelis.domain.nightsky.CelestialSearchIndex
 import com.dazix.caelis.domain.nightsky.CelestialType
 import com.dazix.caelis.domain.nightsky.CelestialVisibility
@@ -108,11 +111,6 @@ data class NightSkyArUiState(
     val selectedBody: CelestialBodyDetails? = null,
     val visibilityState: VisibilityState = VisibilityState.Loading,
     val planetStates: List<com.dazix.caelis.domain.nightsky.PlanetState> = emptyList(),
-    val debugArtOffsetX: Float = 0f,
-    val debugArtOffsetY: Float = 0f,
-    val debugArtScaleMultiplier: Float = 1.0f,
-    val debugArtRotationOffset: Float = 0f,
-    val isDebugCalibrationVisible: Boolean = false,
     val isDebugFocusRegionVisible: Boolean = false,
     val debugFocusRadiusMultiplier: Float = 0.48f,
     val debugFocusDisplayThreshold: Float = 0.0f,
@@ -179,13 +177,25 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     }
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
 
+    /** The sensor tracker as a pose source, for the screen's pose rig ([com.dazix.caelis.ar.pose.SkyPoseRig]). */
+    val sensorPose: SensorPose = SensorPoseSource(orientationTracker)
+
+    /**
+     * Whether the pose is the phone's: sensor tracking is on and no drag is holding it. In manual mode
+     * the matrix is the view model's own, and no tracker - sensor or ARCore - may replace it.
+     */
+    val isLivePoseActive: Boolean
+        get() = isSensorTrackingEnabled.value && !isSensorTrackingPaused.value
+
     /**
      * Fast zero-allocation accessor for the active camera rotation matrix on the 60 FPS hardware vsync loop.
      * Bypasses Compose StateFlow recomposition for ultra-smooth 60/120 FPS panning.
+     *
+     * [timestampNs] is the camera image's instant (`PreviewFrameClock`), 0 for the live pose.
      */
-    fun getCurrentRenderMatrix(outMatrix: FloatArray): Boolean {
+    fun getCurrentRenderMatrix(timestampNs: Long, outMatrix: FloatArray): Boolean {
         if (isSensorTrackingEnabled.value && !isSensorTrackingPaused.value) {
-            orientationTracker.getLiveMatrix(outMatrix)
+            orientationTracker.getRenderMatrix(timestampNs, outMatrix)
             return true
         } else {
             System.arraycopy(manualMatrixBuffer, 0, outMatrix, 0, minOf(manualMatrixBuffer.size, outMatrix.size))
@@ -294,6 +304,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val isSensorTrackingPaused: StateFlow<Boolean> = orientationTracker.isSensorTrackingPaused.asStateFlow()
 
+    val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
+
     val orientation: StateFlow<DeviceOrientation?> = combine(
         isSensorTrackingEnabled,
         isSensorTrackingPaused,
@@ -358,9 +370,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
     val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
 
-    /** Replace the stylised tree line with the terrain around you — only once a profile exists. */
-    val useRealHorizon: StateFlow<Boolean> = combine(horizonSettings, horizonProfile) { cfg, profile ->
-        cfg.enabled && cfg.realHorizonInNightSky && profile != null
+    /**
+     * Replace the stylised tree line with the terrain around you: flat until the profile arrives,
+     * stylised again only if it is not coming ([RealHorizonPolicy]).
+     */
+    val useRealHorizon: StateFlow<Boolean> = combine(horizonSettings, horizonProfile, horizonState) { cfg, profile, state ->
+        RealHorizonPolicy.isWanted(
+            featureEnabled = cfg.enabled,
+            realHorizonInNightSky = cfg.realHorizonInNightSky,
+            hasProfile = profile != null,
+            profileUnavailable = state is HorizonState.Failed || state is HorizonState.NeedsTiles,
+        )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
@@ -479,11 +499,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     // In-App Calibration Debugger StateFlows
-    val debugArtOffsetX = MutableStateFlow(0f)
-    val debugArtOffsetY = MutableStateFlow(0f)
-    val debugArtScaleMultiplier = MutableStateFlow(1.0f)
-    val debugArtRotationOffset = MutableStateFlow(0f)
-    val isDebugCalibrationVisible = MutableStateFlow(false)
     val isDebugFocusRegionVisible = MutableStateFlow(false)
     val debugFocusRadiusMultiplier = MutableStateFlow(0.48f)
     val debugFocusDisplayThreshold = MutableStateFlow(0.0f)
@@ -493,7 +508,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         com.dazix.caelis.data.DebugPreferences(),
     )
     val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugPreferences
-        .map { it.enableNightSkyCalibration || it.enableNightSkyFocusRegion }
+        .map { it.enableNightSkyFocusRegion }
         .stateIn(
             viewModelScope,
             SharingStarted.Eagerly,
@@ -549,11 +564,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedConstellationIndex,
             selectedDsoIndex,
             selectedMeteorIndex,
-            debugArtOffsetX,
-            debugArtOffsetY,
-            debugArtScaleMultiplier,
-            debugArtRotationOffset,
-            isDebugCalibrationVisible,
             isDebugFocusRegionVisible,
             debugFocusRadiusMultiplier,
             debugFocusDisplayThreshold,
@@ -604,24 +614,19 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val constIdx = args[31] as Int
         val dsoIdx = args[32] as Int
         val meteorIdx = args[33] as Int
-        val dbgOffsetX = args[34] as Float
-        val dbgOffsetY = args[35] as Float
-        val dbgScale = args[36] as Float
-        val dbgRot = args[37] as Float
-        val dbgVis = args[38] as Boolean
-        val dbgFocus = args[39] as Boolean
-        val dbgRadius = args[40] as Float
-        val dbgThresh = args[41] as Float
-        val dbgOptions = args[42] as Boolean
+        val dbgFocus = args[34] as Boolean
+        val dbgRadius = args[35] as Float
+        val dbgThresh = args[36] as Float
+        val dbgOptions = args[37] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val planetsList = args[43] as List<PlanetState>
-        val planetId = args[44] as String?
-        val horizState = args[45] as com.dazix.caelis.data.horizon.HorizonState
-        val debugPrefs = args[46] as com.dazix.caelis.data.DebugPreferences
-        val multipleHits = args[47] as NightSkyRenderer.HitTarget.MultipleHits?
-        val tState = args[48] as TimeState
-        val visState = args[49] as VisibilityState
-        val localDate = args[50] as LocalDate?
+        val planetsList = args[38] as List<PlanetState>
+        val planetId = args[39] as String?
+        val horizState = args[40] as com.dazix.caelis.data.horizon.HorizonState
+        val debugPrefs = args[41] as com.dazix.caelis.data.DebugPreferences
+        val multipleHits = args[42] as NightSkyRenderer.HitTarget.MultipleHits?
+        val tState = args[43] as TimeState
+        val visState = args[44] as VisibilityState
+        val localDate = args[45] as LocalDate?
 
         NightSkyArUiState(
             timeState = tState,
@@ -665,11 +670,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             selectedBody = selected,
             visibilityState = visState,
             planetStates = planetsList,
-            debugArtOffsetX = dbgOffsetX,
-            debugArtOffsetY = dbgOffsetY,
-            debugArtScaleMultiplier = dbgScale,
-            debugArtRotationOffset = dbgRot,
-            isDebugCalibrationVisible = dbgVis,
             isDebugFocusRegionVisible = dbgFocus,
             debugFocusRadiusMultiplier = dbgRadius,
             debugFocusDisplayThreshold = dbgThresh,
@@ -771,11 +771,21 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         // Keep a terrain profile for wherever the observer is, on the same terms as the Sun AR
         // screen: debounced, rounded to about 110 m, and a no-op when the layer is switched off.
+        // The first usable fix goes through at once: debouncing it only delayed the stored profile,
+        // and the repository already ignores repeats of the same rounded position.
         viewModelScope.launch {
+            var firstFixSeen = false
             combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
                 Triple(loc, hasFix, cfg)
             }
-                .debounce(1_000L)
+                .debounce { (_, hasFix, _) ->
+                    if (!firstFixSeen && hasFix) {
+                        firstFixSeen = true
+                        0L
+                    } else {
+                        1_000L
+                    }
+                }
                 .collect { (loc, hasFix, cfg) ->
                     if (hasFix && cfg.realHorizonInNightSky) {
                         horizonRepository.ensureProfile(loc, cfg)
@@ -1522,12 +1532,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
     }
 
-    /** Nudges the standing calibration, leaving the sensors live. See [OrientationTracker.setCalibration]. */
+    /**
+     * Nudges the standing calibration, leaving the sensors live. See [OrientationTracker.setCalibration].
+     * It is an alignment, so it also locks the heading ([OrientationTracker.lockHeading]).
+     */
     fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
-        orientationTracker.setCalibration(
-            azimuthDeg = orientationTracker.calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
-            pitchDeg = orientationTracker.calibrationPitchOffsetDeg + deltaElevationDeg,
-        )
+        orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
         persistCalibration()
@@ -1562,7 +1572,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun resumeSensorTracking() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null
-        orientationTracker.setCalibration(0f, 0f)
+        orientationTracker.clearCalibration()
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
@@ -1794,31 +1804,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    // In-App Calibration Debugger controls
-    fun setDebugArtOffsetX(v: Float) {
-        debugArtOffsetX.value = v
-    }
-
-    fun setDebugArtOffsetY(v: Float) {
-        debugArtOffsetY.value = v
-    }
-
-    fun setDebugArtScaleMultiplier(v: Float) {
-        debugArtScaleMultiplier.value = v
-    }
-
-    fun setDebugArtRotationOffset(v: Float) {
-        debugArtRotationOffset.value = v
-    }
-
-    fun toggleDebugCalibration() {
-        isDebugCalibrationVisible.value = !isDebugCalibrationVisible.value
-    }
-
-    fun setDebugCalibrationVisible(visible: Boolean) {
-        isDebugCalibrationVisible.value = visible
-    }
-
     fun toggleDebugFocusRegion() {
         isDebugFocusRegionVisible.value = !isDebugFocusRegionVisible.value
     }
@@ -1859,14 +1844,6 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         setDebugStarTapRadius(com.dazix.caelis.data.DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP)
         setShowTapRadiusIndicator(false)
     }
-
-    fun resetDebugCalibration() {
-        debugArtOffsetX.value = 0f
-        debugArtOffsetY.value = 0f
-        debugArtScaleMultiplier.value = 1.0f
-        debugArtRotationOffset.value = 0f
-    }
-
     fun startSensors() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null

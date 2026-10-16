@@ -1,0 +1,107 @@
+// Stars as camera-facing billboards, one renderable for the whole catalogue.
+//
+// Why billboards and not POINTS: Filament exposes no point-size control, so a POINTS primitive is
+// one pixel wide whatever the magnitude. Each star is four vertices sharing the same celestial
+// position; custom0.xy says which corner a vertex is, and the vertex shader pushes it out in
+// screen space by a size in pixels. A star that is culled collapses to a zero-area quad.
+//
+// Frames: the vertex position is the J2000 unit vector in the catalogue's Y-up convention
+// (cos d cos a, sin d, cos d sin a) scaled to the sky radius; the renderable's transform is
+// celestial -> ENU (world Z is Up). The camera sits at the world origin in every mode, so the
+// world position is also the viewing direction.
+//
+// Sizes are the Canvas renderer's: core diameters 3.2/2.5/2.0/1.6/1.2/0.75 dp per bucket,
+// sprite glow 30/20/13 dp for buckets 0-2, both scaled by density x optic scale x art boost.
+material {
+    name : Star,
+    shadingModel : unlit,
+    blending : add,
+    depthWrite : false,
+    depthCulling : true,
+    doubleSided : true,
+    culling : none,
+    requires : [ custom0, custom1 ],
+    parameters : [
+        { type : float, name : limitMagnitude },
+        { type : float, name : pixelScale },
+        { type : float, name : extinction }
+    ],
+    variables : [ starUv, starColor ]
+}
+
+vertex {
+    float coreDp(int b) {
+        return b == 0 ? 3.2 : b == 1 ? 2.5 : b == 2 ? 2.0 : b == 3 ? 1.6 : b == 4 ? 1.2 : 0.75;
+    }
+
+    float spriteDp(int b) {
+        return b == 0 ? 30.0 : b == 1 ? 20.0 : b == 2 ? 13.0 : 0.0;
+    }
+
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 c = getCustom0();
+        float rawMagnitude = c.z;
+        bool forced = getCustom1().x > 0.5;
+
+        float3 wp = material.worldPosition.xyz;
+        float3 dir = normalize(wp);
+        float elevationDeg = degrees(asin(clamp(dir.z, -1.0, 1.0)));
+
+        // StarOptics.computeAirmassExtinction, gated by the atmosphere switch.
+        float magnitude = rawMagnitude;
+        if (materialParams.extinction > 0.5 && elevationDeg > 0.0 && elevationDeg < 10.0) {
+            magnitude += (1.0 - elevationDeg / 10.0) * 1.5;
+        }
+        // The telescope limit is applied to the catalogue magnitude, as in the Canvas renderer.
+        bool visible = forced || rawMagnitude <= materialParams.limitMagnitude;
+
+        int bucket = magnitude < 1.0 ? 0 : magnitude < 2.0 ? 1 : magnitude < 3.0 ? 2
+                   : magnitude < 4.0 ? 3 : magnitude < 5.0 ? 4 : 5;
+        float corePx = coreDp(bucket) * materialParams.pixelScale;
+        float spritePx = spriteDp(bucket) * materialParams.pixelScale;
+        float quadPx = max(max(corePx, spritePx), 1.0);
+
+        float4 viewPos = mulMat4x4Float3(getViewFromWorldMatrix(), wp);
+        float dist = max(-viewPos.z, 1e-4);
+        float worldPerPx = 2.0 * dist / (getClipFromViewMatrix()[1][1] * getResolution().y);
+        float halfWorld = visible ? 0.5 * quadPx * worldPerPx : 0.0;
+
+        float3 right = getWorldFromViewMatrix()[0].xyz;
+        float3 up = getWorldFromViewMatrix()[1].xyz;
+        material.worldPosition.xyz = wp + (right * c.x + up * c.y) * halfWorld;
+
+        // xy: corner in [-1, 1]; z: core radius as a fraction of the quad; w: has sprite glow.
+        material.starUv = float4(c.xy, corePx / quadPx, spritePx > 0.0 ? 1.0 : 0.0);
+        float3 core = bucket == 1 ? float3(1.0, 250.0 / 255.0, 240.0 / 255.0) : float3(1.0);
+        material.starColor = float4(core, visible ? 1.0 : 0.0);
+    }
+}
+
+fragment {
+    // The 64 px sprite's radial stops: 0 / 0.15 / 0.38 / 0.70 / 1.0 -> alpha 1 / .85 / .38 / .08 / 0.
+    float spriteAlpha(float r) {
+        if (r < 0.15) return mix(1.0, 0.847, r / 0.15);
+        if (r < 0.38) return mix(0.847, 0.376, (r - 0.15) / 0.23);
+        if (r < 0.70) return mix(0.376, 0.082, (r - 0.38) / 0.32);
+        return mix(0.082, 0.0, saturate((r - 0.70) / 0.30));
+    }
+
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float4 uv = variable_starUv;
+        float r = length(uv.xy);
+        float aa = max(fwidth(r), 1e-4);
+        float core = 1.0 - smoothstep(uv.z - aa, uv.z + aa, r);
+        float glow = uv.w > 0.5 ? spriteAlpha(r) : 0.0;
+
+        // Night vision (globals: 0 = shader tint + active flag, 1 = secondary, 2 = primary): the sprite
+        // is recoloured SRC_IN with the primary, the core takes the secondary, as the Paints did.
+        float4 nv = getMaterialGlobal0();
+        float3 coreColor = nv.w > 0.5 ? getMaterialGlobal1().rgb : variable_starColor.rgb;
+        float3 glowColor = nv.w > 0.5 ? getMaterialGlobal2().rgb : float3(1.0);
+
+        float alpha = max(core, glow) * variable_starColor.a;
+        float3 rgb = mix(glowColor * glow, coreColor, core);
+        material.baseColor = float4(rgb * alpha, alpha);
+    }
+}

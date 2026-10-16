@@ -253,6 +253,7 @@ private fun CaelisScreen(
 ) {
     val context = LocalContext.current
     val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
+    val arCoreSettings by viewModel.arCoreSettings.collectAsStateWithLifecycle()
     val horizonState by viewModel.horizonState.collectAsStateWithLifecycle()
     val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
     val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
@@ -375,6 +376,10 @@ private fun CaelisScreen(
             debugPreferences = debugPreferences,
             storageMetrics = storageMetrics,
             horizonSettings = horizonSettings,
+            arCoreSettings = arCoreSettings,
+            geospatialAvailable = viewModel.geospatialAvailable,
+            onArCoreConsentChange = viewModel::setArCoreConsent,
+            onGeospatialConsentChange = viewModel::setGeospatialConsent,
             horizonState = horizonState,
             canDownloadTerrain = viewModel.canDownloadTerrain,
             missingTerrainTiles = remember(horizonState, horizonSettings, horizonLocation) { viewModel.missingTerrainTiles() },

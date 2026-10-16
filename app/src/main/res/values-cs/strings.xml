@@ -282,6 +282,23 @@
     <string name="horizon_consent_allow">Povolit</string>
     <string name="horizon_consent_never">Nyní ne</string>
 
+    <!-- ARCore (Služby Google Play pro AR), jen se souhlasem -->
+    <string name="arcore_section_title">ARCore (volitelné)</string>
+    <string name="arcore_enabled">Použít ARCore pro sledování v AR</string>
+    <string name="arcore_enabled_desc">Ve výchozím stavu vypnuto. Vypnuto znamená, že AR obrazovky používají jen senzory telefonu a komponenta Googlu se nikdy nespustí ani nekontaktuje.</string>
+    <string name="arcore_geospatial_enabled">Použít Geospatial API od Googlu</string>
+    <string name="arcore_geospatial_desc">Ukotví překryv ke skutečnému světu přes Visual Positioning Service od Googlu. Googlu odesílá data odvozená z kamery a vaši polohu.</string>
+    <string name="arcore_geospatial_needs_arcore">Nejdřív zapněte ARCore.</string>
+    <string name="arcore_presence_preinstalled">Služby Google Play pro AR jsou součástí systému tohoto telefonu (verze %1$s). Nic není potřeba instalovat.</string>
+    <string name="arcore_presence_installed">Služby Google Play pro AR jsou nainstalované (verze %1$s).</string>
+    <string name="arcore_presence_missing">Služby Google Play pro AR v tomto telefonu nejsou nainstalované nebo jsou vypnuté. Aplikace je neinstaluje; AR obrazovky použijí senzory telefonu.</string>
+    <string name="arcore_consent_title">Povolit Služby Google Play pro AR?</string>
+    <string name="arcore_consent_body">ARCore není součástí této aplikace. Jsou to Služby Google Play pro AR, samostatná komponenta vytvářená a provozovaná Googlem. Aplikace ji spouští jen při otevřené AR obrazovce, a jen pokud to tady povolíte.\n\nBěhem provozu může komponenta Googlu odesílat Googlu identifikátory zařízení, údaje o používání a diagnostiku. Aplikace sama nic neodesílá a nevidí ani nemůže omezit, co odesílá komponenta Googlu. Pokud komponenta chybí nebo ji telefon nepodporuje, aplikace ji sama neinstaluje a dál používá senzory telefonu.\n\nKdyž ARCore běží, převezme kameru, takže se obraz při zapnutí a vypnutí krátce zastaví. Přiblížení nad 1× vrátí kameru vlastnímu snímání aplikace a ARCore počká, až budete zpět na 1×.\n\nKdykoli ji můžete v Nastavení znovu vypnout.</string>
+    <string name="geospatial_consent_title">Povolit Geospatial API?</string>
+    <string name="geospatial_consent_body">Geospatial API zjišťuje, kde jste, porovnáním obrazu z kamery se snímky Googlu. Služby Google Play pro AR k tomu Visual Positioning Service od Googlu posílají vizuální data odvozená z kamery a vaši polohu, navíc k tomu, co hlásí samotný ARCore. Aplikace to nevidí a nemůže to omezit.\n\nFunguje jen při otevřené AR obrazovce. Kdykoli ho můžete v Nastavení znovu vypnout.</string>
+    <string name="arcore_consent_allow">Povolit</string>
+    <string name="arcore_consent_cancel">Nyní ne</string>
+
     <string name="horizon_status_locating">Čekám na signál GPS…</string>
     <string name="horizon_status_downloading">Stahuji terén %1$d z %2$d…</string>
     <string name="horizon_status_computing">Počítám linii obzoru…</string>
@@ -365,9 +382,18 @@
     <string name="ar_align_auto_done">Srovnáno podle obzoru</string>
     <string name="ar_align_auto_vertical_only">Terén v záběru je příliš plochý na určení azimutu. Srovnána jen výška.</string>
     <string name="ar_align_auto_no_skyline">Obzor se nepodařilo najít. Namiřte kameru na horizont za dobrého světla.</string>
+    <string name="ar_align_auto_searching">Srovnávám podle obzoru – podržte telefon v klidu proti hřebeni</string>
+    <string name="ar_align_auto_no_match">Linie obzoru nalezena, ale neodpovídá terénu. Namiřte na hřeben s volnou oblohou nad ním.</string>
+    <string name="ar_align_auto_ambiguous">Linie obzoru sedí na terén na více místech. Namiřte na výrazný vrchol.</string>
+    <string name="ar_align_auto_out_of_range">Korekce by byla větší než 20°. Zrušte srovnání a zkuste to znovu.</string>
     <string name="ar_align_auto_no_profile">Zatím není profil terénu. Zapněte horizont terénu v Nastavení.</string>
     <string name="ar_align_auto_no_camera">Kamera není k dispozici.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
+    <string name="ar_heading_compass_unreliable">Kompas je nespolehlivý. Opište telefonem osmičku, nebo srovnejte podle horizontu.</string>
+    <string name="ar_heading_locked">Směr drží gyroskop od srovnání</string>
+    <string name="ar_pose_source_sensor">Sledování: senzory telefonu</string>
+    <string name="ar_pose_source_arcore">Sledování: ARCore</string>
+    <string name="ar_pose_source_switching">Přepínám kameru na ARCore</string>
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Noční obloha</string>
@@ -497,14 +523,9 @@
     <string name="dso_legend_close">Zavřít</string>
 
     <!-- Calibration Debugger -->
-    <string name="night_sky_debug_calibration">Ladění zarovnání ilustrací</string>
     <string name="night_sky_debug_focus_region">Oblast aktivace souhvězdí</string>
     <string name="night_sky_debug_focus_radius">Poloměr oblasti: %1$.0f %%</string>
     <string name="night_sky_debug_focus_threshold">Práh zobrazení: %1$.0f %%</string>
-    <string name="night_sky_debug_offset_x">Posun X: %1$.1f px</string>
-    <string name="night_sky_debug_offset_y">Posun Y: %1$.1f px</string>
-    <string name="night_sky_debug_scale">Měřítko: %1$.2fx</string>
-    <string name="night_sky_debug_rotation">Rotace: %1$.1f°</string>
     <string name="night_sky_debug_tap_radius">Rádius dotyku: %1$d dp</string>
     <string name="night_sky_debug_show_tap_indicator">Zobrazit kroužek dotyku</string>
     <string name="night_sky_debug_reset">Obnovit</string>
@@ -540,8 +561,6 @@
     <string name="settings_debug_group_touch">Detekce dotyku a výběr</string>
     <string name="settings_debug_group_night_sky">Noční obloha AR</string>
     <string name="settings_debug_group_terrain">Terénní horizont</string>
-    <string name="settings_debug_night_sky_calibration">Ladění zarovnání ilustrací</string>
-    <string name="settings_debug_night_sky_calibration_desc">Povolí ovládací prvky ladění zarovnání souhvězdí v noční obloze</string>
     <string name="settings_debug_night_sky_focus_region">Oblast aktivace souhvězdí</string>
     <string name="settings_debug_night_sky_focus_region_desc">Zobrazí aktivní oblast zaměření a práh zobrazení souhvězdí v noční obloze</string>
     <string name="settings_debug_terrain_metrics">Metriky terénního horizontu</string>

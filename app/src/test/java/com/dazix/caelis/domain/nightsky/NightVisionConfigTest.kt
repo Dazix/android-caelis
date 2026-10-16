@@ -1,9 +1,9 @@
 package com.dazix.caelis.domain.nightsky
 
-import com.dazix.caelis.ar.AmberNightVisionPalette
-import com.dazix.caelis.ar.GreenNightVisionPalette
-import com.dazix.caelis.ar.RedNightVisionPalette
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.AmberNightVisionPalette
+import com.dazix.caelis.ar.scene.GreenNightVisionPalette
+import com.dazix.caelis.ar.scene.RedNightVisionPalette
+import com.dazix.caelis.ar.scene.paletteForTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

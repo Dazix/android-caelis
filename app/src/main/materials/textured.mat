@@ -1,0 +1,35 @@
+// A textured quad on the sky: constellation artwork, DSO photographs, planet discs.
+//
+// The four corners are real directions on the sky (celestial or ENU, via the renderable's
+// transform), so a quad drawn through the camera is the same projective map the Canvas renderer
+// built with Matrix.setPolyToPoly — and it is oriented to celestial north for free.
+//
+// The texture is premultiplied (uploaded from a Bitmap). `opacity` is the Paint alpha of the old
+// code (90 * progress for art, 230 for DSOs). Night vision multiplies by material global 3, the old
+// MULTIPLY PorterDuffColorFilter.
+material {
+    name : Textured,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    doubleSided : true,
+    requires : [ uv0 ],
+    parameters : [
+        { type : sampler2d, name : image, precision : medium },
+        { type : float, name : opacity }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float4 color = texture(materialParams_image, getUV0());
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5) {
+            color.rgb *= getMaterialGlobal3().rgb;
+        }
+        material.baseColor = color * materialParams.opacity;
+    }
+}

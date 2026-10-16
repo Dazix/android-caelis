@@ -11,6 +11,50 @@ import kotlin.math.sqrt
 class OrientationTrackerMathTest {
 
     @Test
+    fun `the orientation flow is emitted at about a display frame, not at the 200 Hz sensor rate`() {
+        val periodNs = 5_000_000L
+        var last = 0L
+        var emitted = 0
+        for (i in 1..200) { // one second of samples
+            val ts = i * periodNs
+            if (OrientationTracker.publishDue(ts, last)) {
+                last = ts
+                emitted++
+            }
+        }
+        assertTrue("emitted $emitted of 200", emitted in 55..70)
+    }
+
+    @Test
+    fun `the first sample is always published and a clock that went backwards does not stall the flow`() {
+        assertTrue(OrientationTracker.publishDue(1_000_000_000L, 0L))
+        assertFalse(OrientationTracker.publishDue(1_005_000_000L, 1_000_000_000L))
+        assertTrue(OrientationTracker.publishDue(1_015_000_000L, 1_000_000_000L))
+        assertTrue("a restarted sensor clock", OrientationTracker.publishDue(10_000_000L, 1_000_000_000L))
+    }
+
+    @Test
+    fun `the heading YawOffset extracts is the angle applyMagneticDeclination takes`() {
+        // Dual mode composes Rz(declination + psi) onto the game matrix through this function; if the
+        // two disagreed on sign, the compass correction would double instead of cancel.
+        val game = floatArrayOf(
+            0.6f, 0f, -0.8f, 0f,
+            -0.8f, 0f, -0.6f, 0f,
+            0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f,
+        )
+        val magnetic = FloatArray(16)
+        OrientationTracker.applyMagneticDeclination(game, 14.2f, magnetic)
+
+        val psi = com.dazix.caelis.domain.arframe.YawOffset.extractDegrees(magnetic, game)
+        assertEquals(14.2f, psi, 1e-3f)
+
+        val rebuilt = FloatArray(16)
+        OrientationTracker.applyMagneticDeclination(game, psi, rebuilt)
+        for (i in 0 until 16) assertEquals("element $i", magnetic[i], rebuilt[i], 1e-5f)
+    }
+
+    @Test
     fun `verifies magnetic declination 0 degrees preserves matrix identity`() {
         val identity = floatArrayOf(
             1f, 0f, 0f, 0f,

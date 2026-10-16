@@ -242,6 +242,13 @@ class HorizonRepository private constructor(
 
         val positionKey = roundPosition(location.latitude) to roundPosition(location.longitude)
         estimatedRangeKm[positionKey]?.let { return requested.copy(maxRangeKm = it) }
+        // The estimate is stored next to the profiles: working it out again opens the observer's
+        // tile and marches its rays, which kept a stored profile off the screen for over a second
+        // after every process start.
+        withContext(Dispatchers.IO) { readStoredRange(positionKey) }?.let {
+            estimatedRangeKm[positionKey] = it
+            return requested.copy(maxRangeKm = it)
+        }
 
         if (cache.partition(listOf(observerKey)).second.isNotEmpty()) {
             if (!fetchMissing(listOf(observerKey), requested)) return null
@@ -267,7 +274,29 @@ class HorizonRepository private constructor(
             ?: HorizonSettings.RANGE_CHOICES_KM.last()
         Log.i(TAG, "automatic range for ${observerKey.name}: ${(suggested / 1000).toInt()} km -> $km km")
         estimatedRangeKm[positionKey] = km
+        withContext(Dispatchers.IO) { writeStoredRange(positionKey, km) }
         return requested.copy(maxRangeKm = km)
+    }
+
+    private fun rangeFile(position: Pair<Double, Double>) =
+        File(profileDirectory, "auto-range_${position.first}_${position.second}.txt")
+
+    /** A stored automatic radius, or null when there is none or it is not one of the offered values. */
+    private fun readStoredRange(position: Pair<Double, Double>): Int? = try {
+        rangeFile(position).takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull()
+            ?.takeIf { it in HorizonSettings.RANGE_CHOICES_KM }
+    } catch (e: IOException) {
+        null
+    }
+
+    private fun writeStoredRange(position: Pair<Double, Double>, km: Int) {
+        try {
+            profileDirectory.mkdirs()
+            rangeFile(position).writeText(km.toString())
+        } catch (e: IOException) {
+            // Losing it costs one estimate next time, nothing more.
+            Log.w(TAG, "cannot store automatic range", e)
+        }
     }
 
     /** @return true when every missing tile is now on disk. */
@@ -372,9 +401,10 @@ class HorizonRepository private constructor(
     /** Drops every downloaded tile. Computed profiles are untouched: they cost nothing and are the point. */
     fun clearTileCache() = clearDemCache()
 
-    /** Drops all stored .bin horizon profiles from filesDir/horizons/ and invalidates in-memory profile. */
+    /** Drops all stored horizon profiles and automatic radii from filesDir/horizons/ and invalidates in-memory profile. */
     fun clearProfiles() {
-        profileDirectory.listFiles()?.filter { it.extension == "bin" }?.forEach { it.delete() }
+        profileDirectory.listFiles()?.filter { it.extension == "bin" || it.name.startsWith("auto-range_") }?.forEach { it.delete() }
+        estimatedRangeKm.clear()
         _profile.value = null
         invalidate()
     }

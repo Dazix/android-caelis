@@ -35,6 +35,12 @@
         * deleting the INTERNET line below is a supported way to build from source without any
           network at all. NetworkAvailability.hasInternetPermission() notices at runtime, the app
           hides the download entirely, and the hand-import path still delivers the whole feature.
+
+      One more consumer, and it is not a socket of this app: the ARCore Geospatial API (off unless
+      the user turns it on twice in Settings) is documented to require the host app to hold
+      INTERNET, and the traffic is Google Play Services for AR's, not ours. It adds no permission
+      and no code that opens a connection here; what it does send is spelled out in Settings and in
+      the README, and ar/pose/ArCoreSessionController is the only thing that can start it.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -61,6 +67,28 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Caelis">
+
+        <!--
+          ARCore is optional: the app is fully usable on the phone's own sensors, and the library is
+          inert until the user turns it on in Settings. "required" would hide the app on Google Play
+          from every device without ARCore and make Play install Google Play Services for AR
+          alongside it, before anyone has agreed to anything. Starting it, and even asking whether it
+          is present, is gated on consent by ar/pose/ArCoreSessionController; NetworkIsolationTest
+          pins this value.
+        -->
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="optional" />
+
+        <!--
+          Geospatial API key, injected at build time from local.properties (geospatial.api.key) or the
+          CAELIS_GEOSPATIAL_API_KEY environment variable. It is never written here: the test suite
+          fails if a literal key appears in the sources. Empty in a build without one, and then the
+          Geospatial switch is not offered and the API is never requested.
+        -->
+        <meta-data
+            android:name="com.google.android.ar.API_KEY"
+            android:value="${geospatialApiKey}" />
 
         <activity
             android:name=".ui.MainActivity"

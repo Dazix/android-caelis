@@ -4,23 +4,34 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.view.Surface
+import android.view.View
 import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraControl
+import androidx.camera.core.CameraState
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 
 /**
  * Reusable CameraX preview surface that reports the field of view actually visible in the viewport.
@@ -38,6 +49,23 @@ import androidx.lifecycle.LifecycleOwner
  * @param onFrameGrabber receives a [FrameGrabber] when frame analysis is wanted, or null when the
  *   camera could not be bound. Pass `analyzeFrames = false` (the default) to skip the use case
  *   entirely: an analysis stream that is never read still costs the camera a buffer queue.
+ * @param frameClock receives the exposure instant of every preview frame, so the overlay can be
+ *   drawn with the pose of the picture it sits on ([PreviewFrameClock]).
+ * @param frameSource when given, the `Preview` use case renders into it instead of a `PreviewView`
+ *   and this composable shows nothing itself: the owner draws the picture in Filament, in the same
+ *   frame as the overlay ([CameraFrameSource]). The composable still fills its layout box, which
+ *   must be the same box the sky surface fills, because the FOV is computed for that viewport
+ *   exactly as `PreviewView` FILL_CENTER fitted the stream into it. Leaving the composition then
+ *   unbinds the use cases, since a camera nobody is drawing is a camera left running for nothing.
+ * @param displayRotation `Surface.ROTATION_*` of the display, used only with a [frameSource]:
+ *   `PreviewView` kept the preview's target rotation current by itself, and without it the picture
+ *   would not turn when the phone is turned between the two landscapes. Negative leaves CameraX's default.
+ * @param cameraEnabled false unbinds the use cases and keeps them unbound. ARCore cannot open a camera
+ *   CameraX holds, so the pose rig turns this off to hand the camera over; the layout box and the
+ *   viewport view stay, only the camera goes.
+ * @param onCameraReleased called when the camera is really free after [cameraEnabled] turned false -
+ *   the device reported closed, or nothing was bound, or two seconds passed - because `unbind` alone
+ *   only *starts* closing the camera, and a session that starts in that gap fails to open it.
  */
 @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
 @Composable
@@ -49,13 +77,54 @@ fun CameraPreview(
     onCameraBound: (control: CameraControl?, minZoomRatio: Float, maxZoomRatio: Float) -> Unit = { _, _, _ -> },
     analyzeFrames: Boolean = false,
     onFrameGrabber: (FrameGrabber?) -> Unit = {},
+    frameClock: PreviewFrameClock? = null,
+    frameSource: CameraFrameSource? = null,
+    displayRotation: Int = -1,
+    cameraEnabled: Boolean = true,
+    onCameraReleased: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val previewView = remember { PreviewView(context) }
+    // The view whose size is the viewport. A PreviewView when it shows the picture; a plain View
+    // otherwise, which exists only so the FOV keeps being computed from a laid-out size.
+    val viewportView: View = remember(frameSource == null) {
+        if (frameSource == null) PreviewView(context) else View(context)
+    }
+    val bound = remember { BoundUseCases() }
+    val latestDisplayRotation by rememberUpdatedState(displayRotation)
 
-    LaunchedEffect(lifecycleOwner, isPortrait) {
+    LaunchedEffect(displayRotation) {
+        if (frameSource != null && displayRotation >= 0) bound.preview?.targetRotation = surfaceRotation(displayRotation)
+    }
+    DisposableEffect(frameSource) {
+        onDispose {
+            bound.disposed = true
+            if (frameSource != null) {
+                val provider = bound.provider
+                val preview = bound.preview
+                val analysis = bound.analysis
+                if (provider != null && preview != null) {
+                    if (analysis != null) provider.unbind(preview, analysis) else provider.unbind(preview)
+                }
+            }
+        }
+    }
+
+    val latestCameraEnabled by rememberUpdatedState(cameraEnabled)
+
+    LaunchedEffect(lifecycleOwner, isPortrait, cameraEnabled) {
+        if (!cameraEnabled) {
+            releaseCamera(bound, viewportView)
+            onFrameGrabber(null)
+            onCameraBound(null, 1f, 1f)
+            onCameraReleased()
+            return@LaunchedEffect
+        }
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
+            // The screen may be gone by the time the provider is ready; binding then would leave a
+            // camera running that nobody is looking at. The same goes for a camera that was handed
+            // to ARCore while the provider was still being fetched.
+            if (bound.disposed || !latestCameraEnabled) return@addListener
             val cameraProvider = cameraProviderFuture.get()
 
             // Sensor crop region, read from the capture results rather than guessed. It moves with
@@ -65,6 +134,7 @@ fun CameraPreview(
             var cropHeightPx = 0
 
             val previewBuilder = Preview.Builder()
+            if (frameSource != null && latestDisplayRotation >= 0) previewBuilder.setTargetRotation(surfaceRotation(latestDisplayRotation))
             val previewExtender = Camera2Interop.Extender(previewBuilder)
             // Explicitly disable optical and digital stabilization to prevent IMU/viewfinder desynchronization
             previewExtender.setCaptureRequestOption(
@@ -80,6 +150,10 @@ fun CameraPreview(
             // so this stays nullable rather than lateinit: an early frame simply updates the crop
             // and the binding below dispatches it.
             var dispatchFov: (() -> Unit)? = null
+            // The stream resolution becomes known some frames after binding, and a crop that never
+            // changes afterwards never asks again: without this the geometry-only FOV from before the
+            // first frame could stay for the whole session.
+            val dispatchedMeasurable = java.util.concurrent.atomic.AtomicBoolean(false)
 
             previewExtender.setSessionCaptureCallback(
                 object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
@@ -88,20 +162,23 @@ fun CameraPreview(
                         request: CaptureRequest,
                         result: TotalCaptureResult,
                     ) {
+                        frameClock?.onCaptureCompleted(result)
                         val crop = result.get(CaptureResult.SCALER_CROP_REGION) ?: return
                         val w = crop.width()
                         val h = crop.height()
                         if (w != cropWidthPx || h != cropHeightPx) {
                             cropWidthPx = w
                             cropHeightPx = h
-                            previewView.post { dispatchFov?.invoke() }
+                            viewportView.post { dispatchFov?.invoke() }
+                        } else if (!dispatchedMeasurable.get()) {
+                            viewportView.post { dispatchFov?.invoke() }
                         }
                     }
                 },
             )
 
             val preview = previewBuilder.build().also {
-                it.surfaceProvider = previewView.surfaceProvider
+                it.surfaceProvider = frameSource ?: (viewportView as PreviewView).surfaceProvider
             }
 
             // Bound with no analyzer attached. One is set only for the single frame the automatic
@@ -132,11 +209,15 @@ fun CameraPreview(
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             try {
                 cameraProvider.unbindAll()
+                bound.provider = cameraProvider
+                bound.preview = preview
+                bound.analysis = analysis
                 val camera = if (analysis != null) {
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
                 } else {
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
                 }
+                bound.camera = camera
                 onFrameGrabber(analysis?.let { frameGrabberFor(it, context) })
                 val zoomState = camera.cameraInfo.zoomState.value
                 onCameraBound(
@@ -147,6 +228,11 @@ fun CameraPreview(
 
                 // Dynamically extract physical sensor dimensions, active pixel array, and primary focal length
                 val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
+                // Frame timestamps are comparable with sensor events only on the realtime clock; a
+                // camera on its own time base leaves the overlay on the live pose.
+                frameClock?.sharesSensorClock = camera2Info.getCameraCharacteristic(
+                    CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE,
+                ) == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
                 val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
                 val activeArraySize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
                 val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
@@ -182,21 +268,37 @@ fun CameraPreview(
                             viewportHeight = h,
                             isPortrait = isPortrait,
                         )
+                        if (com.dazix.caelis.BuildConfig.DEBUG) {
+                            android.util.Log.d(
+                                "CaelisFov",
+                                "active=${activeArraySize?.width()}x${activeArraySize?.height()} crop=${cropWidthPx}x$cropHeightPx" +
+                                    " preview=${resolution?.width}x${resolution?.height}" +
+                                    " analysis=${analysis?.resolutionInfo?.resolution}" +
+                                    " viewport=${w}x$h sensor=${effectiveSensorW}x$effectiveSensorH focal=$primaryFocalLength" +
+                                    " -> fov=${dynamicFov.horizontalDegrees} base=${dynamicFov.baseHorizontalDegrees}" +
+                                    " measured=${dynamicFov.isDynamicStreamCalculated}",
+                            )
+                        }
+                        if (dynamicFov.isDynamicStreamCalculated) dispatchedMeasurable.set(true)
                         onFovCalculated(dynamicFov)
                     }
                 }
 
-                val initialW = previewView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
-                val initialH = previewView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
+                val initialW = viewportView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
+                val initialH = viewportView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
                 dispatchFov = {
-                    val w = previewView.width.toFloat().takeIf { it > 10f } ?: initialW
-                    val h = previewView.height.toFloat().takeIf { it > 10f } ?: initialH
+                    val w = viewportView.width.toFloat().takeIf { it > 10f } ?: initialW
+                    val h = viewportView.height.toFloat().takeIf { it > 10f } ?: initialH
                     calculateAndDispatchFov(w, h)
                 }
                 calculateAndDispatchFov(initialW, initialH)
 
                 // Listen for real layout dimensions to guarantee exact optical crop ratio matching screen geometry
-                previewView.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                // One listener per binding, removed with it: a camera that is unbound and bound again
+                // (ARCore takes it and gives it back) would otherwise leave the old listeners
+                // dispatching a field of view computed from a preview that no longer exists.
+                bound.layoutListener?.let { viewportView.removeOnLayoutChangeListener(it) }
+                val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                     val newW = (right - left).toFloat()
                     val newH = (bottom - top).toFloat()
                     val oldW = (oldRight - oldLeft).toFloat()
@@ -205,6 +307,8 @@ fun CameraPreview(
                         calculateAndDispatchFov(newW, newH)
                     }
                 }
+                bound.layoutListener = layoutListener
+                viewportView.addOnLayoutChangeListener(layoutListener)
             } catch (_: Exception) {
                 onCameraBound(null, 1f, 1f)
                 onFrameGrabber(null)
@@ -212,8 +316,70 @@ fun CameraPreview(
         }, ContextCompat.getMainExecutor(context))
     }
 
-    AndroidView(factory = { previewView }, modifier = modifier)
+    AndroidView(factory = { viewportView }, modifier = modifier)
 }
+
+/**
+ * A display rotation as the `Surface.ROTATION_*` constant CameraX wants. The app passes the rotation
+ * around as a plain 0..3 (the same as the constants' values), and spelling the mapping out is what
+ * lets the platform's constant check see that nothing else can reach `setTargetRotation`.
+ */
+private fun surfaceRotation(rotation: Int): Int = when (rotation) {
+    1 -> Surface.ROTATION_90
+    2 -> Surface.ROTATION_180
+    3 -> Surface.ROTATION_270
+    else -> Surface.ROTATION_0
+}
+
+/** What this composable has bound, so that leaving the screen can unbind exactly that. Main thread only. */
+private class BoundUseCases {
+    var provider: ProcessCameraProvider? = null
+    var preview: Preview? = null
+    var analysis: ImageAnalysis? = null
+    var camera: Camera? = null
+    var layoutListener: View.OnLayoutChangeListener? = null
+    var disposed = false
+}
+
+/**
+ * Unbinds what was bound and waits until the camera device is actually closed.
+ *
+ * `unbind` only asks CameraX to close the camera; the device is released a moment later, and an
+ * ARCore session started in between cannot open it. The wait ends on the camera state reaching
+ * CLOSED (or a pending open, which is as free as a camera gets), and after [CAMERA_RELEASE_TIMEOUT_MS]
+ * regardless, so a camera that never reports cannot hold the hand-over forever.
+ */
+private suspend fun releaseCamera(bound: BoundUseCases, viewportView: View) {
+    val provider = bound.provider
+    val preview = bound.preview
+    val analysis = bound.analysis
+    val camera = bound.camera
+    bound.preview = null
+    bound.analysis = null
+    bound.camera = null
+    bound.layoutListener?.let { viewportView.removeOnLayoutChangeListener(it) }
+    bound.layoutListener = null
+    if (provider == null || preview == null) return
+    if (analysis != null) provider.unbind(preview, analysis) else provider.unbind(preview)
+    if (camera == null) return
+    withTimeoutOrNull(CAMERA_RELEASE_TIMEOUT_MS) {
+        suspendCancellableCoroutine<Unit> { continuation ->
+            val liveData = camera.cameraInfo.cameraState
+            val observer = object : Observer<CameraState> {
+                override fun onChanged(value: CameraState) {
+                    if (value.type == CameraState.Type.CLOSED || value.type == CameraState.Type.PENDING_OPEN) {
+                        liveData.removeObserver(this)
+                        if (continuation.isActive) continuation.resume(Unit)
+                    }
+                }
+            }
+            liveData.observeForever(observer)
+            continuation.invokeOnCancellation { liveData.removeObserver(observer) }
+        }
+    }
+}
+
+private const val CAMERA_RELEASE_TIMEOUT_MS = 2_000L
 
 /**
  * Hands back exactly one frame's brightness plane, then detaches.

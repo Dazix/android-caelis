@@ -39,7 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.data.nightsky.DsoType
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 

@@ -1,0 +1,34 @@
+// The camera picture behind the sky, drawn in the same Filament frame as the overlay so that image
+// and pose cannot be a frame apart. Used in both tracking modes:
+//  - sensor mode: CameraBackground feeds CameraX Preview images (an ImageReader of PRIVATE
+//    HardwareBuffers) into an ACQUIRED Filament stream behind the external texture;
+//  - ARCore mode: the same stream is fed Frame.getHardwareBuffer() instead.
+//
+// A full-screen triangle; its UVs are rewritten whenever the buffer size, the display rotation or the
+// viewport changes, because the camera buffer is in sensor orientation and aspect, not the screen's.
+// In sensor mode CameraBackgroundUv derives them (rotation and FILL_CENTER crop, the same fit
+// CameraFovCalculator assumes); in ARCore mode Frame.transformCoordinates2d supplies them.
+//
+// Night vision is deliberately not applied here: the camera was never tinted by it, only the sky
+// layers were, so this material reads no material global.
+material {
+    name : CameraBackground,
+    shadingModel : unlit,
+    blending : opaque,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    flipUV : false,
+    requires : [ uv0 ],
+    parameters : [
+        { type : samplerExternal, name : cameraFeed, precision : medium }
+    ]
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = float4(texture(materialParams_cameraFeed, getUV0()).rgb, 1.0);
+    }
+}

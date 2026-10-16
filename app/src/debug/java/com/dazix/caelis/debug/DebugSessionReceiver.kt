@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.dazix.caelis.ar.PreviewFrameClock
 import com.dazix.caelis.data.AdvancedSettings
 import com.dazix.caelis.domain.RampCurve
 import com.dazix.caelis.domain.RampDomain
@@ -32,6 +33,11 @@ class DebugSessionReceiver : BroadcastReceiver() {
             ACTION_CLEAR_LOG -> {
                 FakeCameraTapLog.clear(context)
                 Log.i(TAG, "tap log cleared")
+            }
+            ACTION_SET_AR_DISPLAY_LAG -> {
+                val lagMs = intent.longExtra(EXTRA_LAG_MS, 0L)
+                PreviewFrameClock.displayLagNs = lagMs * 1_000_000L
+                Log.i(TAG, "AR display lag set to $lagMs ms")
             }
             else -> Log.w(TAG, "ignoring unknown action ${intent.action}")
         }
@@ -123,6 +129,10 @@ class DebugSessionReceiver : BroadcastReceiver() {
         const val ACTION_START = "com.dazix.caelis.debug.START_SESSION"
         const val ACTION_STOP = "com.dazix.caelis.debug.STOP_SESSION"
         const val ACTION_CLEAR_LOG = "com.dazix.caelis.debug.CLEAR_TAP_LOG"
+
+        /** Tunes `PreviewFrameClock.displayLagNs` live; extra `lag_ms` (may be negative). */
+        const val ACTION_SET_AR_DISPLAY_LAG = "com.dazix.caelis.debug.SET_AR_DISPLAY_LAG"
+        const val EXTRA_LAG_MS = "lag_ms"
 
         const val EXTRA_TARGET_PACKAGE = "target_package"
         const val EXTRA_INTERVAL_MS = "interval_ms"

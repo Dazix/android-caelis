@@ -131,6 +131,33 @@ class SettingsStore(context: Context) {
     /** One-shot read for the places that need the current settings without collecting a flow. */
     suspend fun currentHorizon(): HorizonSettings = SettingsMapping.readHorizon(currentPreferences())
 
+    val arCore: Flow<ArCoreSettings> = preferences.map { SettingsMapping.readArCore(it) }
+
+    /**
+     * One-shot read for [com.dazix.caelis.ar.pose.ArCoreSessionController], which asks again on every
+     * use. Deliberately goes through [currentPreferences] and so propagates an unreadable store
+     * instead of reporting "nothing stored": the controller treats a failed read as *no consent*, and
+     * that has to be its decision to make rather than something this layer papers over.
+     */
+    suspend fun currentArCore(): ArCoreSettings = SettingsMapping.readArCore(currentPreferences())
+
+    /**
+     * Read-modify-write inside one transaction. Both switches live in one record, and turning ARCore
+     * off has to turn geospatial off in the same write or a collector could briefly see the pair
+     * the user can never create.
+     */
+    suspend fun setArCoreConsent(granted: Boolean) {
+        dataStore.edit {
+            SettingsMapping.writeArCore(it, SettingsMapping.readArCore(it).withArCoreConsent(granted))
+        }
+    }
+
+    suspend fun setGeospatialConsent(granted: Boolean) {
+        dataStore.edit {
+            SettingsMapping.writeArCore(it, SettingsMapping.readArCore(it).withGeospatialConsent(granted))
+        }
+    }
+
     suspend fun saveNightVisionTheme(theme: NightVisionTheme) {
         dataStore.edit { SettingsMapping.writeNightVisionTheme(it, theme) }
     }
@@ -392,11 +419,13 @@ internal object SettingsMapping {
     private val CUSTOM_START_MINUTES_KEY = intPreferencesKey("custom_start_minutes")
     private val CUSTOM_END_MINUTES_KEY = intPreferencesKey("custom_end_minutes")
     private val DEBUG_MODE_ENABLED = booleanPreferencesKey("debug_mode_enabled")
-    private val DEBUG_NIGHT_SKY_CALIBRATION = booleanPreferencesKey("debug_night_sky_calibration")
     private val DEBUG_NIGHT_SKY_FOCUS_REGION = booleanPreferencesKey("debug_night_sky_focus_region")
     private val DEBUG_SHOW_TERRAIN_METRICS = booleanPreferencesKey("debug_show_terrain_metrics")
     private val DEBUG_STAR_TAP_RADIUS = intPreferencesKey("debug_star_tap_radius")
     private val DEBUG_SHOW_TAP_RADIUS_INDICATOR = booleanPreferencesKey("debug_show_tap_radius_indicator")
+
+    private val ARCORE_CONSENT = booleanPreferencesKey("arcore_consent")
+    private val GEOSPATIAL_CONSENT = booleanPreferencesKey("geospatial_consent")
 
     private val HORIZON_ENABLED = booleanPreferencesKey("horizon_enabled")
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
@@ -838,7 +867,6 @@ internal object SettingsMapping {
     fun readDebugPreferences(prefs: Preferences): DebugPreferences {
         val legacyDebug = prefs[DEBUG_MODE_ENABLED] ?: false
         return DebugPreferences(
-            enableNightSkyCalibration = prefs[DEBUG_NIGHT_SKY_CALIBRATION] ?: legacyDebug,
             enableNightSkyFocusRegion = prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] ?: legacyDebug,
             showTerrainMetrics = prefs[DEBUG_SHOW_TERRAIN_METRICS] ?: false,
             starTapRadiusDp = prefs[DEBUG_STAR_TAP_RADIUS] ?: DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP,
@@ -847,11 +875,27 @@ internal object SettingsMapping {
     }
 
     fun writeDebugPreferences(prefs: MutablePreferences, preferences: DebugPreferences) {
-        prefs[DEBUG_NIGHT_SKY_CALIBRATION] = preferences.enableNightSkyCalibration
         prefs[DEBUG_NIGHT_SKY_FOCUS_REGION] = preferences.enableNightSkyFocusRegion
         prefs[DEBUG_SHOW_TERRAIN_METRICS] = preferences.showTerrainMetrics
         prefs[DEBUG_STAR_TAP_RADIUS] = preferences.starTapRadiusDp
         prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] = preferences.showTapRadiusIndicator
+    }
+
+    /**
+     * Absent means "never agreed", which for these two is the same as "no": unlike the terrain
+     * download there is no first-run prompt to tell the two apart, the question is only ever asked
+     * from Settings.
+     */
+    fun readArCore(prefs: Preferences): ArCoreSettings = ArCoreSettings(
+        arCoreConsent = prefs[ARCORE_CONSENT] ?: false,
+        geospatialConsent = prefs[GEOSPATIAL_CONSENT] ?: false,
+    ).normalized()
+
+    /** Writes the normalised pair, so a stale geospatial `true` is overwritten, not just ignored. */
+    fun writeArCore(prefs: MutablePreferences, settings: ArCoreSettings) {
+        val normalized = settings.normalized()
+        prefs[ARCORE_CONSENT] = normalized.arCoreConsent
+        prefs[GEOSPATIAL_CONSENT] = normalized.geospatialConsent
     }
 
     fun readHorizon(prefs: Preferences): HorizonSettings = HorizonSettings(

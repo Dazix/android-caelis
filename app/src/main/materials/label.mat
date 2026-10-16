@@ -1,0 +1,58 @@
+// Pre-rendered labels and badges (a SpriteAtlas) pinned to a sky direction, 1:1 in screen pixels.
+//
+// These were drawn by a Compose overlay once, which the TextureView showed 2-3 vsyncs apart from
+// the GPU frame, so held in the hand the names jumped against the stars. Here they are part of the
+// same frame. Colours, shadows and emoji are baked into the atlas (themed on the CPU, like line and
+// disc), so the fragment only fades the sprite.
+//
+// Per-vertex: position = the anchor's sky direction (model space), uv0 = atlas coordinate,
+// custom0 = (dxPx, dyPx, alpha, 0): this corner's offset from the anchor in screen pixels, Y down,
+// custom1 = (marginXPx, marginYPx, 0, 0): hide the sprite while its anchor is that close to an edge.
+material {
+    name : Label,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    doubleSided : true,
+    requires : [ uv0, custom0, custom1 ],
+    parameters : [
+        { type : sampler2d, name : atlas, precision : medium }
+    ],
+    variables : [ labelAlpha ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 c = getCustom0();
+        float4 m = getCustom1();
+        float3 wp = material.worldPosition.xyz;
+        float4 viewPos = mulMat4x4Float3(getViewFromWorldMatrix(), wp);
+        float dist = -viewPos.z;
+        // Behind the camera: collapse, never mirror onto the screen.
+        bool visible = dist > 1e-4;
+        if (visible && (m.x > 0.0 || m.y > 0.0)) {
+            float4 clip = mulMat4x4Float3(getClipFromViewMatrix(), viewPos.xyz);
+            float2 res = getResolution().xy;
+            float2 px = (clip.xy / clip.w * 0.5 + 0.5) * res;
+            visible = px.x >= m.x && px.x <= res.x - m.x && px.y >= m.y && px.y <= res.y - m.y;
+        }
+        // World units per screen pixel at the anchor's depth, as in disc.mat.
+        float worldPerPx = visible
+            ? 2.0 * dist / (getClipFromViewMatrix()[1][1] * getResolution().y)
+            : 0.0;
+        float3 right = getWorldFromViewMatrix()[0].xyz;
+        float3 up = getWorldFromViewMatrix()[1].xyz;
+        material.worldPosition.xyz = wp + (right * c.x - up * c.y) * worldPerPx;
+        material.labelAlpha = float4(visible ? c.z : 0.0, 0.0, 0.0, 0.0);
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        // The atlas is premultiplied (uploaded from a Bitmap).
+        material.baseColor = texture(materialParams_atlas, getUV0()) * variable_labelAlpha.x;
+    }
+}

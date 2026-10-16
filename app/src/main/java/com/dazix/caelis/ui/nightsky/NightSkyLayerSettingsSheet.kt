@@ -67,7 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
-import com.dazix.caelis.ar.paletteForTheme
+import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.ui.AppIcons
@@ -105,9 +105,7 @@ fun NightSkyLayerSettingsSheet(
     redVisionMode: Boolean,
     isSensorTrackingEnabled: Boolean = true,
     isKeepScreenOn: Boolean = false,
-    isDebugCalibrationVisible: Boolean = false,
     isDebugFocusRegionVisible: Boolean = false,
-    enableNightSkyCalibration: Boolean = false,
     enableNightSkyFocusRegion: Boolean = false,
     isDebugOptionsEnabled: Boolean = false,
     timeState: TimeState = TimeState(),
@@ -128,7 +126,6 @@ fun NightSkyLayerSettingsSheet(
     onToggleRedVisionMode: () -> Unit,
     onToggleSensorTracking: () -> Unit = {},
     onToggleKeepScreenOn: () -> Unit = {},
-    onToggleDebugCalibration: () -> Unit = {},
     onToggleDebugFocusRegion: () -> Unit = {},
     alignAzimuthOffsetDeg: Float = 0f,
     alignElevationOffsetDeg: Float = 0f,
@@ -442,42 +439,22 @@ fun NightSkyLayerSettingsSheet(
         }
 
         // 6. Debug Options (conditional)
-        val showDebugCalib = enableNightSkyCalibration || (isDebugOptionsEnabled && !enableNightSkyFocusRegion)
-        val showDebugFocus = enableNightSkyFocusRegion || (isDebugOptionsEnabled && !enableNightSkyCalibration)
-        if (showDebugCalib || showDebugFocus) {
+        if (enableNightSkyFocusRegion || isDebugOptionsEnabled) {
             LayerGroupCard(
                 title = stringResource(R.string.night_sky_group_debug),
                 titleColor = groupTitleColor,
                 containerColor = cardContainerColor,
                 borderColor = cardBorderColor,
             ) {
-                var hasPrevious = false
-                if (showDebugCalib) {
-                    LayerToggleRow(
-                        label = stringResource(R.string.night_sky_debug_calibration),
-                        icon = AppIcons.Setup,
-                        isChecked = isDebugCalibrationVisible,
-                        headlineColor = headlineColor,
-                        iconColor = iconColor,
-                        switchColors = switchColors,
-                        onCheckedChange = { onToggleDebugCalibration() },
-                    )
-                    hasPrevious = true
-                }
-                if (showDebugFocus) {
-                    if (hasPrevious) {
-                        HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
-                    }
-                    LayerToggleRow(
-                        label = stringResource(R.string.night_sky_debug_focus_region),
-                        icon = AppIcons.FocusArea,
-                        isChecked = isDebugFocusRegionVisible,
-                        headlineColor = headlineColor,
-                        iconColor = iconColor,
-                        switchColors = switchColors,
-                        onCheckedChange = { onToggleDebugFocusRegion() },
-                    )
-                }
+                LayerToggleRow(
+                    label = stringResource(R.string.night_sky_debug_focus_region),
+                    icon = AppIcons.FocusArea,
+                    isChecked = isDebugFocusRegionVisible,
+                    headlineColor = headlineColor,
+                    iconColor = iconColor,
+                    switchColors = switchColors,
+                    onCheckedChange = { onToggleDebugFocusRegion() },
+                )
             }
         }
 
@@ -702,7 +679,7 @@ private fun TimeTravelSectionContent(
     onStepVirtualTime: (Duration) -> Unit,
     onResetToLive: () -> Unit,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
 ) {
     val activeInstant = timeState.activeInstant()
     val zone = remember { ZoneId.systemDefault() }
@@ -969,7 +946,7 @@ private fun DateTimeChip(
 private fun NightSkyDatePickerDialog(
     initialDate: LocalDate,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1042,7 +1019,7 @@ private fun NightSkyDatePickerDialog(
 private fun NightSkyTimePickerDialog(
     initialTime: LocalTime,
     redVisionMode: Boolean,
-    palette: com.dazix.caelis.ar.NightVisionPalette,
+    palette: com.dazix.caelis.ar.scene.NightVisionPalette,
     onTimeSelected: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {

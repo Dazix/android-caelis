@@ -27,6 +27,17 @@
             android:theme="@style/Theme.Caelis" />
 
         <!--
+          P0 spike for the Filament sky (ARCore/Filament migration). Exported so adb can start it
+          in the development user; debug variant only.
+        -->
+        <activity
+            android:name=".debug.FilamentSpikeActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/debug_filament_spike_label"
+            android:theme="@style/Theme.Caelis" />
+
+        <!--
           Debug-only session entry point for scripts/e2e_pixel_camera.sh. Exported because adb
           broadcasts arrive from the shell uid; debug variant only, never shipped.
         -->
@@ -38,6 +49,7 @@
                 <action android:name="com.dazix.caelis.debug.START_SESSION" />
                 <action android:name="com.dazix.caelis.debug.STOP_SESSION" />
                 <action android:name="com.dazix.caelis.debug.CLEAR_TAP_LOG" />
+                <action android:name="com.dazix.caelis.debug.SET_AR_DISPLAY_LAG" />
             </intent-filter>
         </receiver>
 

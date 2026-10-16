@@ -62,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -75,6 +76,8 @@ import androidx.compose.ui.unit.dp
 import com.dazix.caelis.R
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
 import com.dazix.caelis.data.DebugPreferences
+import com.dazix.caelis.ar.pose.ArCorePresence
+import com.dazix.caelis.data.ArCoreSettings
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.horizon.DemTileDownloader
 import com.dazix.caelis.data.horizon.HorizonState
@@ -115,6 +118,11 @@ fun SettingsScreen(
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
     onClearDemCache: () -> Unit = onClearTerrainCache,
+    arCoreSettings: ArCoreSettings = ArCoreSettings(),
+    /** False in a build made without a Geospatial API key: the switch is then not shown at all. */
+    geospatialAvailable: Boolean = false,
+    onArCoreConsentChange: (Boolean) -> Unit = {},
+    onGeospatialConsentChange: (Boolean) -> Unit = {},
     onStartLocationUpdates: () -> Unit = {},
     onStopLocationUpdates: () -> Unit = {},
     onRefreshLocation: () -> Unit = {},
@@ -132,6 +140,8 @@ fun SettingsScreen(
     var showAttribution by remember { mutableStateOf(false) }
     var showConsentDialog by remember { mutableStateOf(false) }
     var showClearCacheConfirmation by remember { mutableStateOf(false) }
+    var showArCoreConsentDialog by remember { mutableStateOf(false) }
+    var showGeospatialConsentDialog by remember { mutableStateOf(false) }
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
@@ -414,6 +424,53 @@ fun SettingsScreen(
             }
         }
 
+        // ---- ARCore (Google Play Services for AR) ----
+        //
+        // Nothing here touches ARCore: asking Play Services whether this phone is supported is
+        // already contact with Google, so that check waits for consent. Whether the package is
+        // installed comes from the local package list (ArCorePresence), which contacts no one.
+        // Turning a switch ON goes through a dialog that says what Google's component sends;
+        // turning it OFF is immediate and needs no dialog.
+        SectionHeader(
+            text = stringResource(R.string.arcore_section_title),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SectionCard {
+            // Re-read on every return to the screen: the user may have installed, updated or
+            // disabled the component in the meantime.
+            var arCorePresence by remember { mutableStateOf<ArCorePresence?>(null) }
+            LifecycleResumeEffect(Unit) {
+                arCorePresence = ArCorePresence.read(context.packageManager)
+                onPauseOrDispose { }
+            }
+            arCorePresence?.let { ArCorePresenceRow(it) }
+
+            SwitchRow(
+                title = stringResource(R.string.arcore_enabled),
+                description = stringResource(R.string.arcore_enabled_desc),
+                checked = arCoreSettings.arCoreConsent,
+                onCheckedChange = { checked ->
+                    if (checked) showArCoreConsentDialog = true else onArCoreConsentChange(false)
+                },
+            )
+
+            // The switch is not offered at all in a build without a key, rather than shown dead:
+            // there is nothing the user could do to make it work.
+            if (geospatialAvailable) {
+                SwitchRow(
+                    title = stringResource(R.string.arcore_geospatial_enabled),
+                    description = stringResource(R.string.arcore_geospatial_desc),
+                    checked = arCoreSettings.geospatialConsent,
+                    enabled = arCoreSettings.arCoreConsent,
+                    disabledReason = stringResource(R.string.arcore_geospatial_needs_arcore),
+                    onCheckedChange = { checked ->
+                        if (checked) showGeospatialConsentDialog = true else onGeospatialConsentChange(false)
+                    },
+                )
+            }
+        }
+
         // ---- Section 4: Data Management ----
         SectionCard(
             title = stringResource(R.string.settings_section_storage),
@@ -633,12 +690,6 @@ fun SettingsScreen(
                         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
                     )
                     SwitchRow(
-                        title = stringResource(R.string.settings_debug_night_sky_calibration),
-                        description = stringResource(R.string.settings_debug_night_sky_calibration_desc),
-                        checked = debugPreferences.enableNightSkyCalibration,
-                        onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(enableNightSkyCalibration = it)) },
-                    )
-                    SwitchRow(
                         title = stringResource(R.string.settings_debug_night_sky_focus_region),
                         description = stringResource(R.string.settings_debug_night_sky_focus_region_desc),
                         checked = debugPreferences.enableNightSkyFocusRegion,
@@ -787,6 +838,30 @@ fun SettingsScreen(
         )
     }
 
+    if (showArCoreConsentDialog) {
+        ArCoreConsentDialog(
+            title = stringResource(R.string.arcore_consent_title),
+            body = stringResource(R.string.arcore_consent_body),
+            onAllow = {
+                showArCoreConsentDialog = false
+                onArCoreConsentChange(true)
+            },
+            onCancel = { showArCoreConsentDialog = false },
+        )
+    }
+
+    if (showGeospatialConsentDialog) {
+        ArCoreConsentDialog(
+            title = stringResource(R.string.geospatial_consent_title),
+            body = stringResource(R.string.geospatial_consent_body),
+            onAllow = {
+                showGeospatialConsentDialog = false
+                onGeospatialConsentChange(true)
+            },
+            onCancel = { showGeospatialConsentDialog = false },
+        )
+    }
+
     if (showClearCacheConfirmation) {
         AlertDialog(
             onDismissRequest = { showClearCacheConfirmation = false },
@@ -898,6 +973,41 @@ private fun TimePickerSettingDialog(
     )
 }
 
+/**
+ * The disclosure shown before ARCore or the Geospatial API is allowed. Cancelling is a real answer
+ * (nothing changes) and so is tapping outside, unlike the terrain consent that has to be answered:
+ * here "no" is the state the app is already in.
+ */
+@Composable
+private fun ArCoreConsentDialog(
+    title: String,
+    body: String,
+    onAllow: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(title) },
+        text = {
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onAllow) {
+                Text(stringResource(R.string.arcore_consent_allow))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.arcore_consent_cancel))
+            }
+        },
+    )
+}
+
 @Composable
 private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
@@ -906,6 +1016,38 @@ private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.primary,
         modifier = modifier.padding(start = 4.dp, top = 4.dp, bottom = 2.dp),
     )
+}
+
+/**
+ * Whether Google Play Services for AR is on the phone, so the switch is not a mystery: on a Pixel
+ * it ships with the system and nothing has to be installed; elsewhere it may be missing, and this
+ * app never installs it.
+ */
+@Composable
+private fun ArCorePresenceRow(presence: ArCorePresence) {
+    val (icon, text) = when (presence) {
+        is ArCorePresence.Installed -> AppIcons.Check to if (presence.preinstalled) {
+            stringResource(R.string.arcore_presence_preinstalled, presence.versionName)
+        } else {
+            stringResource(R.string.arcore_presence_installed, presence.versionName)
+        }
+        ArCorePresence.NotInstalled -> AppIcons.Info to stringResource(R.string.arcore_presence_missing)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The text says it all; the icon only repeats it.
+        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /** One line saying what the terrain layer is doing, including when it is stuck and why. */

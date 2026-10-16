@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.roborazzi)
+}
+
+// The Geospatial API key. It comes from the machine (local.properties, gitignored, or the
+// CAELIS_GEOSPATIAL_API_KEY environment variable of a CI job) and is never in the repository. A build
+// without it is a complete, working build: the Geospatial switch is simply not offered
+// (BuildConfig.HAS_GEOSPATIAL_API_KEY is false) and ArCoreSessionController never requests Geospatial.
+//
+// A key in a manifest is readable by anyone who unpacks the APK, so restrict it in the Google Cloud
+// console to this package name and the signing certificate and to the ARCore API alone.
+val geospatialApiKey: String = run {
+    val localProperties = Properties()
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { localProperties.load(it) }
+    (localProperties.getProperty("geospatial.api.key") ?: System.getenv("CAELIS_GEOSPATIAL_API_KEY") ?: "").trim()
 }
 
 android {
@@ -16,6 +32,9 @@ android {
         versionCode = System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 2
         versionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        manifestPlaceholders["geospatialApiKey"] = geospatialApiKey
+        buildConfigField("boolean", "HAS_GEOSPATIAL_API_KEY", geospatialApiKey.isNotEmpty().toString())
     }
 
     signingConfigs {
@@ -77,6 +96,25 @@ android {
     }
 }
 
+// Filament materials: app/src/main/materials/*.mat -> generated assets/*.filamat, compiled by the
+// matc of exactly the Filament version the app links against (see CompileFilamentMaterialsTask).
+val compileFilamentMaterials = tasks.register<CompileFilamentMaterialsTask>("compileFilamentMaterials") {
+    filamentVersion.set(libs.versions.filament)
+    checksumFile.set(rootProject.layout.projectDirectory.file("gradle/filament-tools.sha256"))
+    materialSources.from(layout.projectDirectory.dir("src/main/materials").asFileTree.matching { include("*.mat") })
+    backends.set("opengl")
+    toolsCacheDir.set(File(gradle.gradleUserHomeDir, "caches/caelis-filament-tools"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(
+            compileFilamentMaterials,
+            CompileFilamentMaterialsTask::outputDir,
+        )
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -94,6 +132,9 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.flatbuffers.java)
+    implementation(libs.filament.android)
+    // Consent-gated at runtime (ArCoreSessionController); `optional` in the manifest.
+    implementation(libs.arcore)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

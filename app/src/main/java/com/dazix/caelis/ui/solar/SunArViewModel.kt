@@ -4,20 +4,28 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dazix.caelis.BuildConfig
+import com.dazix.caelis.ar.AlignDiagnostics
 import com.dazix.caelis.ar.CameraFovCalculator
+import com.dazix.caelis.ar.CameraFrameGeometry
 import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.FovResult
 import com.dazix.caelis.ar.FrameGrabber
 import com.dazix.caelis.ar.OrientationTracker
-import com.dazix.caelis.ar.SkyDomeRenderer
 import com.dazix.caelis.ar.SkylineAligner
 import com.dazix.caelis.ar.SolarLocationProvider
+import com.dazix.caelis.ar.pose.SensorPose
+import com.dazix.caelis.ar.pose.SensorPoseSource
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.data.horizon.DemTileImporter
 import com.dazix.caelis.data.horizon.HorizonRepository
 import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.domain.arframe.LatestRequestGate
+import com.dazix.caelis.domain.horizon.AutoAlignPolicy
 import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.horizon.StillnessDetector
+import com.dazix.caelis.domain.horizon.SkylineRefusal
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.solar.LunarCoordinates
@@ -32,6 +40,7 @@ import com.dazix.caelis.domain.solar.TerrainEvent
 import com.dazix.caelis.domain.solar.TerrainRiseSetCalculator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,6 +60,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlin.math.abs
 
 /**
  * When the Sun actually clears, and is lost behind, the real terrain — as opposed to the flat-Earth
@@ -64,7 +74,13 @@ data class TerrainTimes(
     val sunrise: TerrainEvent? = null,
     val sunset: TerrainEvent? = null,
     val hiddenAllDay: Boolean = false,
+    val moonrise: TerrainEvent? = null,
+    val moonset: TerrainEvent? = null,
+    val moonHiddenAllDay: Boolean = false,
+    /** Whether these were computed against a drawn skyline at all; false means "use the almanac". */
+    val terrainActive: Boolean = false,
 ) {
+    /** Whether the day summary has a terrain row to show (the Sun only, as it always did). */
     val hasAny: Boolean get() = sunrise != null || sunset != null || hiddenAllDay
 }
 
@@ -85,8 +101,11 @@ sealed interface AutoAlignResult {
     /** The camera is not bound — no permission, or it failed to open. */
     data object NoCamera : AutoAlignResult
 
-    /** Nothing in the frame looked like a skyline: fog, darkness, a wall, a fit that did not stand out. */
-    data object NoSkyline : AutoAlignResult
+    /**
+     * Nothing in the frame looked like this terrain's skyline: fog, darkness, a wall, a fit that did
+     * not stand out. [reason] is the gate that refused it, null when it is not known.
+     */
+    data class NoSkyline(val reason: SkylineRefusal? = null) : AutoAlignResult
 
     /**
      * The calibration has been moved onto the skyline.
@@ -150,8 +169,6 @@ data class SunArUiState(
 @OptIn(FlowPreview::class)
 class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
-    val renderer = SkyDomeRenderer()
-
     private val settingsStore = SettingsStore(application)
     private val orientationTracker = OrientationTracker(application)
     private val locationProvider = SolarLocationProvider(application)
@@ -202,6 +219,13 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     val orientation: StateFlow<DeviceOrientation?> = orientationTracker.orientation
+
+    /** The sensor tracker as a pose source, for the screen's pose rig ([com.dazix.caelis.ar.pose.SkyPoseRig]). */
+    val sensorPose: SensorPose = SensorPoseSource(orientationTracker)
+
+    /** The frame loop's pose, at the camera image's instant [timestampNs] (0 = live). Allocation-free. */
+    fun getRenderMatrix(timestampNs: Long, out: FloatArray) = orientationTracker.getRenderMatrix(timestampNs, out)
+    val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
     val location: StateFlow<GeoLocation> = locationProvider.location
     val hasGpsFix: StateFlow<Boolean> = locationProvider.hasGpsFix
 
@@ -267,16 +291,22 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      */
     val terrainTimes: StateFlow<TerrainTimes> = combine(
         trajectory,
+        lunarTrajectory,
         horizonProfile,
         horizonSettings,
-    ) { traj, prof, cfg ->
+    ) { traj, lTraj, prof, cfg ->
         if (prof == null || !cfg.enabled) {
             TerrainTimes()
         } else {
+            val zone = ZoneId.systemDefault()
             TerrainTimes(
-                sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, ZoneId.systemDefault()),
-                sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, ZoneId.systemDefault()),
+                sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, zone),
+                sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, zone),
                 hiddenAllDay = TerrainRiseSetCalculator.isSunHiddenAllDay(traj, prof),
+                moonrise = TerrainRiseSetCalculator.terrainMoonrise(lTraj, prof, zone),
+                moonset = TerrainRiseSetCalculator.terrainMoonset(lTraj, prof, zone),
+                moonHiddenAllDay = TerrainRiseSetCalculator.isMoonHiddenAllDay(lTraj, prof),
+                terrainActive = true,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, TerrainTimes())
@@ -450,7 +480,83 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * the real ridge while the overlay keeps following the phone.
      */
     fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        // A hand alignment outranks an automatic one for the rest of the session.
+        autoAlignPolicy.onManualAlignment()
         orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
+        panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+        panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
+    }
+
+    private val autoAlignPolicy = AutoAlignPolicy()
+    private val stillness = StillnessDetector()
+    private var automaticAttemptInFlight = false
+    private val stillnessMatrix = FloatArray(16)
+
+    /** What the automatic alignment needs from the screen; see [setAutoAlignEnvironment]. */
+    private var autoViewportWidth = 0f
+    private var autoViewportHeight = 0f
+    private var autoDisplayRotation = 0
+    private var sensorsOwnPose = false
+    private var autoAlignLoop: Job? = null
+
+    private val autoAligningState = MutableStateFlow(false)
+
+    /**
+     * True while Sun AR is still looking for the skyline by itself: a profile is drawn, the session
+     * has not been aligned yet (by a fit or by hand), and the sensors own the pose.
+     */
+    val isSearchingForSkyline: StateFlow<Boolean> = autoAligningState.asStateFlow()
+
+    /**
+     * The viewport the overlay is drawn in, the display rotation, and whether the sensors (not
+     * ARCore) currently draw the pose. The automatic alignment runs only on the sensor path: ARCore's
+     * world is aligned to north by its own estimator, and a fit fighting it would just move the
+     * calibration back and forth.
+     */
+    fun setAutoAlignEnvironment(viewportWidth: Float, viewportHeight: Float, displayRotation: Int, sensorsOwnPose: Boolean) {
+        autoViewportWidth = viewportWidth
+        autoViewportHeight = viewportHeight
+        autoDisplayRotation = displayRotation
+        this.sensorsOwnPose = sensorsOwnPose
+    }
+
+    private fun finishAutomaticAttempt(accepted: Boolean) {
+        if (!automaticAttemptInFlight) return
+        automaticAttemptInFlight = false
+        autoAlignPolicy.onAttemptFinished(android.os.SystemClock.elapsedRealtime(), accepted)
+    }
+
+    /**
+     * Polls [AutoAlignPolicy] while the screen's sensors run. Five times a second is plenty for "is
+     * the phone still and is everything there", and it touches no allocation but the attempt itself.
+     */
+    private fun startAutoAlignLoop() {
+        autoAlignLoop?.cancel()
+        autoAlignPolicy.reset()
+        stillness.reset()
+        autoAlignLoop = viewModelScope.launch {
+            while (isActive) {
+                delay(AUTO_ALIGN_POLL_MS)
+                val now = android.os.SystemClock.elapsedRealtime()
+                orientationTracker.getRenderMatrix(0L, stillnessMatrix)
+                // The back camera's optical axis in the world: minus the device Z column.
+                val still = stillness.add(now, -stillnessMatrix[2].toDouble(), -stillnessMatrix[6].toDouble(), -stillnessMatrix[10].toDouble())
+                val ready = sensorsOwnPose &&
+                    horizonProfile.value != null && horizonSettings.value.enabled &&
+                    frameGrabber != null &&
+                    autoViewportWidth > 1f && autoViewportHeight > 1f &&
+                    autoAlignState.value != AutoAlignResult.Working
+                autoAligningState.value = ready && !autoAlignPolicy.isSettled
+                if (autoAlignPolicy.decide(now, ready, still) == AutoAlignPolicy.Decision.ATTEMPT) {
+                    autoAlign(autoViewportWidth, autoViewportHeight, autoDisplayRotation, automatic = true)
+                }
+            }
+        }
+    }
+
+    /** Replaces the standing calibration with a measured one (the automatic alignment). */
+    private fun applyCalibration(azimuthDeg: Float, pitchDeg: Float) {
+        orientationTracker.setCalibration(azimuthDeg, pitchDeg)
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
     }
@@ -463,6 +569,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val autoAlignState = MutableStateFlow<AutoAlignResult?>(null)
+    private val autoAlignGate = LatestRequestGate()
+    private var autoAlignTimeout: Job? = null
 
     /** The outcome of the last automatic alignment, for the UI to report. Cleared when consumed. */
     val autoAlign: StateFlow<AutoAlignResult?> = autoAlignState.asStateFlow()
@@ -478,47 +586,166 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * the user has no way to tell a fit to a cloud bank from a fit to a ridge, so the decision is
      * made here on the residual and reported either way.
      */
-    fun autoAlign(viewportWidth: Float, viewportHeight: Float, displayRotation: Int) {
+    fun autoAlign(viewportWidth: Float, viewportHeight: Float, displayRotation: Int) =
+        autoAlign(viewportWidth, viewportHeight, displayRotation, automatic = false)
+
+    /**
+     * @param automatic started by [AutoAlignPolicy] rather than the button: nothing is reported
+     *   except a success, and the outcome goes back to the policy, which decides about a retry.
+     */
+    private fun autoAlign(viewportWidth: Float, viewportHeight: Float, displayRotation: Int, automatic: Boolean) {
+        // Whatever was still outstanding is abandoned first, also when this call is refused below:
+        // an old timer or a late frame must not speak for a request that is no longer the one shown.
+        autoAlignTimeout?.cancel()
+        autoAlignGate.invalidate()
+        finishAutomaticAttempt(accepted = false)
+        if (automatic) {
+            automaticAttemptInFlight = true
+            autoAlignPolicy.onAttemptStarted()
+        }
+        fun publish(result: AutoAlignResult) {
+            if (!automatic) {
+                if (result is AutoAlignResult.Aligned) autoAlignPolicy.onManualAlignment()
+                autoAlignState.value = result
+                return
+            }
+            finishAutomaticAttempt(accepted = result is AutoAlignResult.Aligned)
+            if (result is AutoAlignResult.Aligned) autoAlignState.value = result
+        }
         val grabber = frameGrabber
         val profile = horizonProfile.value
         when {
             profile == null || !horizonSettings.value.enabled -> {
-                autoAlignState.value = AutoAlignResult.NoProfile
+                publish(AutoAlignResult.NoProfile)
                 return
             }
             grabber == null -> {
-                autoAlignState.value = AutoAlignResult.NoCamera
+                publish(AutoAlignResult.NoCamera)
                 return
             }
         }
 
-        autoAlignState.value = AutoAlignResult.Working
+        if (!automatic) autoAlignState.value = AutoAlignResult.Working
+        // A camera that was handed over (ARCore <-> CameraX) while the frame was being awaited takes
+        // the request with it; without this the screen would say "working" for ever.
+        // The timer belongs to this request alone (token) and ends with its frame: a bare "is it still
+        // Working?" check let an earlier timer fail a later request after a fraction of its window.
+        val request = autoAlignGate.begin()
+        autoAlignTimeout = viewModelScope.launch {
+            delay(AUTO_ALIGN_FRAME_TIMEOUT_MS)
+            if (autoAlignGate.finish(request)) publish(AutoAlignResult.NoCamera)
+        }
         grabber.grabNext { frame ->
+            // The camera may call back from its own thread; the gate and the timer are main-thread state.
             viewModelScope.launch {
-                val syncMatrix = FloatArray(16)
-                orientationTracker.getSynchronizedMatrix(frame.timestampNs, syncMatrix)
-                val match = withContext(Dispatchers.Default) {
-                    SkylineAligner.align(
-                        frame = frame,
+                // A frame that arrives after the timeout, or for a request that was replaced, is not ours.
+                if (!autoAlignGate.isCurrent(request)) return@launch
+                autoAlignTimeout?.cancel()
+                val arPose = frame.pose
+                // The sensor path fits against the pose *without* the standing calibration, so the
+                // answer is the whole calibration rather than a step on top of whatever was stored.
+                // A stored value from another session (the gyro-held heading it was measured against
+                // is gone) or one stuck at the clamp then cannot bias the fit or push it off its range.
+                // ARCore's frame pose has the calibration in, and its answer stays a step.
+                val referenceMatrix = FloatArray(16)
+                val absolute = arPose == null &&
+                    orientationTracker.getReferenceMatrix(frame.timestampNs, referenceMatrix)
+                val geometry = if (arPose != null) {
+                    // ARCore frame: the Y plane, the pose the overlay was drawn with for *that* frame
+                    // (nothing to interpolate) and the field of view and image-to-screen scale as
+                    // ARCore maps this very image onto the viewport.
+                    CameraFrameGeometry(
+                        frameWidth = frame.width,
+                        frameHeight = frame.height,
                         viewportWidth = viewportWidth,
                         viewportHeight = viewportHeight,
-                        rotationMatrix = syncMatrix,
+                        fillScale = arPose.fillScale,
+                        rotationMatrix = arPose.rotationMatrix,
+                        displayRotation = displayRotation,
+                        fovHorizontalDegrees = arPose.fovHorizontalDegrees,
+                    )
+                } else {
+                    // Sensor path: CameraX luma, and the rotation-vector pose SLERPed to that frame's
+                    // timestamp.
+                    val poseMatrix = if (absolute) {
+                        referenceMatrix
+                    } else {
+                        FloatArray(16).also { orientationTracker.getSynchronizedMatrix(frame.timestampNs, it) }
+                    }
+                    CameraFrameGeometry.fillCenter(
+                        frameWidth = frame.width,
+                        frameHeight = frame.height,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        rotationMatrix = poseMatrix,
                         displayRotation = displayRotation,
                         fovHorizontalDegrees = cameraFovHorizontal.value,
-                        profile = profile,
                     )
                 }
-                if (match == null) {
-                    autoAlignState.value = AutoAlignResult.NoSkyline
+                val calibrationAz = orientationTracker.calibrationAzimuthOffsetDeg
+                val calibrationPitch = orientationTracker.calibrationPitchOffsetDeg
+                val fit = withContext(Dispatchers.Default) {
+                    SkylineAligner.fit(frame = frame, geometry = geometry, profile = profile)
+                }
+                if (BuildConfig.DEBUG) {
+                    AlignDiagnostics.record(
+                        context = getApplication(),
+                        frame = frame,
+                        geometry = geometry,
+                        absolute = absolute,
+                        calibrationAzimuthDeg = calibrationAz,
+                        calibrationPitchDeg = calibrationPitch,
+                        fov = baseCameraFovState.value,
+                        profile = profile,
+                        fit = fit,
+                    )
+                }
+                // The user may have asked again, or reset, while the fit ran off the main thread.
+                if (!autoAlignGate.finish(request)) return@launch
+                // ...or dragged the overlay onto the ridge by hand, which outranks this fit.
+                if (automatic && autoAlignPolicy.isSettled) {
+                    finishAutomaticAttempt(accepted = false)
                     return@launch
                 }
-                nudgeCalibration(
-                    deltaAzimuthDeg = match.azimuthOffsetDegrees.toFloat(),
-                    deltaElevationDeg = match.elevationOffsetDegrees.toFloat(),
+                val match = fit.match
+                if (match == null) {
+                    publish(AutoAlignResult.NoSkyline(fit.refusal))
+                    return@launch
+                }
+                val targetAz: Float
+                val targetPitch: Float
+                if (absolute) {
+                    targetAz = match.azimuthOffsetDegrees.toFloat()
+                    targetPitch = match.elevationOffsetDegrees.toFloat()
+                } else {
+                    targetAz = calibrationAz + match.azimuthOffsetDegrees.toFloat()
+                    targetPitch = calibrationPitch + match.elevationOffsetDegrees.toFloat()
+                }
+                // Clamping a measured answer would apply something that was never measured.
+                if (abs(targetAz) > OrientationTracker.MAX_CALIBRATION_AZIMUTH ||
+                    abs(targetPitch) > OrientationTracker.MAX_CALIBRATION_PITCH
+                ) {
+                    publish(AutoAlignResult.NoSkyline(SkylineRefusal.OUT_OF_RANGE))
+                    return@launch
+                }
+                // A flat skyline determines the height only: the azimuth stays what it was.
+                applyCalibration(
+                    azimuthDeg = if (match.azimuthDetermined) targetAz else calibrationAz,
+                    pitchDeg = targetPitch,
                 )
-                autoAlignState.value = AutoAlignResult.Aligned(
-                    residualDegrees = match.residualDegrees,
-                    azimuthDetermined = match.azimuthDetermined,
+                // A determined fit is a measured heading even when its correction rounds to zero.
+                if (match.azimuthDetermined) orientationTracker.lockHeading()
+                if (automatic && !match.azimuthDetermined) {
+                    // The height is in, the compass is not: keep looking for a ridge that pins it,
+                    // without announcing a half result on every retry.
+                    finishAutomaticAttempt(accepted = false)
+                    return@launch
+                }
+                publish(
+                    AutoAlignResult.Aligned(
+                        residualDegrees = match.residualDegrees,
+                        azimuthDetermined = match.azimuthDetermined,
+                    ),
                 )
             }
         }
@@ -544,7 +771,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resumeSensorTracking() {
-        orientationTracker.setCalibration(0f, 0f)
+        orientationTracker.clearCalibration()
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
         panPitchOffset.value = 0f
@@ -555,14 +782,23 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetCalibration() {
         resumeSensorTracking()
+        // A reset says "the alignment is wrong": look for the skyline again.
+        finishAutomaticAttempt(accepted = false)
+        autoAlignPolicy.reset()
     }
 
     fun startSensors() {
         orientationTracker.start()
         locationProvider.startUpdates()
+        // A new session is a fresh compass reference (start() unlocks the heading), so it needs
+        // aligning again however well the last one was.
+        startAutoAlignLoop()
     }
 
     fun stopSensors() {
+        autoAlignLoop?.cancel()
+        autoAlignLoop = null
+        autoAligningState.value = false
         orientationTracker.stop()
         locationProvider.stopUpdates()
     }
@@ -683,5 +919,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         /** Steps the alignment panel nudges by: coarse enough to see, fine enough to land on. */
         const val COARSE_NUDGE_DEGREES = 0.5f
         const val FINE_NUDGE_DEGREES = 0.1f
+
+        /** How long an automatic alignment waits for the camera to hand over its frame. */
+        const val AUTO_ALIGN_FRAME_TIMEOUT_MS = 4_000L
+
+        /** How often the automatic alignment checks whether it can try. */
+        const val AUTO_ALIGN_POLL_MS = 200L
     }
 }

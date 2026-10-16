@@ -9,5 +9,6 @@
 <resources>
 
     <string name="debug_fake_camera_label">Falešný fotoaparát (debug)</string>
+    <string name="debug_filament_spike_label">Filament obloha – test (debug)</string>
 
 </resources>
