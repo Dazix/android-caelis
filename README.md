@@ -309,8 +309,8 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **942 JVM tests (309 intervalometer/caelis, 482 solar, horizon & pose, 272 night sky, with the last two
-overlapping on the shared AR frame maths, plus 17 documentation screenshots), 42 instrumented tests, no
+what a dead accessibility service produces. Current baseline: **949 JVM tests (309 intervalometer/caelis, 489 solar, horizon & pose, 279 night sky, with the last two
+overlapping on the shared AR frame maths, plus 17 documentation screenshots), 47 instrumented tests, no
 failures, no skips, lint clean.**
 
 ---

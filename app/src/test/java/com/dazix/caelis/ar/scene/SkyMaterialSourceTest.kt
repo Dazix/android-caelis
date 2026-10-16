@@ -61,4 +61,32 @@ class SkyMaterialSourceTest {
             assertContains(material(name), "getMaterialGlobal", "$name must follow night vision")
         }
     }
+
+    /**
+     * The marks (names, glyphs, reticle) are themed on the CPU like line and disc: their colours are
+     * baked into the atlas or written per vertex from the night-vision palette, so they must not also
+     * be tinted by the global, which would tint them twice.
+     */
+    @Test
+    fun `marks are themed on the CPU and never tinted by the night vision global`() {
+        for (name in listOf("label", "glyph", "line", "disc")) {
+            assertTrue("$name is CPU-themed and must not read the night-vision global", !material(name).contains("getMaterialGlobal"))
+        }
+    }
+
+    /**
+     * Marks are drawn over everything and never hidden by the ground's depth (a mark below the ground
+     * is left out on the CPU instead), and one behind the camera collapses rather than being mirrored
+     * onto the screen.
+     */
+    @Test
+    fun `marks ignore depth and collapse behind the camera`() {
+        for (name in listOf("label", "glyph")) {
+            val src = material(name)
+            assertContains(src, "depthWrite : false", "$name writes no depth")
+            assertContains(src, "depthCulling : false", "$name is not hidden by the ground's depth")
+            assertContains(src, "dist > 1e-4", "$name collapses behind the camera")
+            assertContains(src, "getResolution().y", "$name sizes itself in screen pixels")
+        }
+    }
 }

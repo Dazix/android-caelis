@@ -26,8 +26,9 @@ import com.dazix.caelis.domain.nightsky.StarOptics
 import kotlin.math.tan
 
 /**
- * The CPU half of the Night Sky screen: the text and screen-space vector overlay drawn on top of the
- * Filament scene ([drawGpuOverlay]), tap hit testing against what that scene last drew
+ * The CPU half of the Night Sky screen: what goes into the Filament scene's marks (names, glyphs,
+ * reticle, grid labels; [updateGpuMarks]), the little Compose still draws on top (the off-screen
+ * chevron and debug layers; [drawScreenOverlay]), tap hit testing against what that scene last drew
  * ([prepareHitTest] + [findHitAt]), and the selection state the screen and the scene share.
  *
  * The stars, figures, artwork, planets, Milky Way, atmosphere and ground are drawn by
@@ -115,7 +116,6 @@ class NightSkyRenderer {
     var selectedDsoIndex: Int = -1
 
     private val reusableDso = DeepSkyObject()
-    private val dsoRectF = RectF()
 
     val dsoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -192,6 +192,8 @@ class NightSkyRenderer {
         const val MAX_STARS = 100_000
         const val MAX_DSOS = 128
         const val MAX_METEOR_SHOWERS = 32
+        private const val TAG = "NightSkyRenderer"
+        private const val SQRT_2 = 1.4142135f
 
         data class IndicatorTransform(
             val arrowX: Float,
@@ -321,8 +323,6 @@ class NightSkyRenderer {
         close()
     }
 
-    // 3 line segments * 4 coordinates (x0, y0, x1, y1) = 12 floats (Left, Right, Bottom arms)
-    private val reticleLinesBuffer = FloatArray(12)
     private val indicatorBuffer = FloatArray(4)
     private val tempReticleVec = FloatArray(3)
 
@@ -894,12 +894,12 @@ class NightSkyRenderer {
     }
 
     /**
-     * Renders the zero-allocation broken-crosshair selection reticle and name label for the selected celestial body.
-     * Rendered on top of all celestial, atmospheric, landscape, and grid layers.
+     * The chevron on the screen edge pointing to the selected body while it is off screen or behind
+     * the observer. The reticle itself, on the sky, is a GPU mark ([updateGpuMarks]).
      *
      * Zero heap allocations per frame.
      */
-    fun drawSelectionReticle(
+    fun drawSelectionPointer(
         drawScope: DrawScope,
         selectedBody: CelestialBodyDetails?,
         matrix: FloatArray,
@@ -945,53 +945,18 @@ class NightSkyRenderer {
 
         val isVisible = isInFront && (screenX in 0f..w) && (screenY in 0f..h)
 
-        if (!isVisible) {
-            drawOffscreenIndicator(
-                drawScope = drawScope,
-                xs = xs,
-                ys = ys,
-                zs = zs,
-                screenX = screenX,
-                screenY = screenY,
-                w = w,
-                h = h,
-                density = density,
-            )
-            return
-        }
-
-        // Only draw broken crosshair if a Star, Planet, DSO, or Meteor Shower is selected (not a Constellation)
-        if (selectedStarIndex >= 0 || selectedPlanetId != null || selectedDsoIndex >= 0 || selectedMeteorIndex >= 0) {
-            // Scaled to 75% of original radii (r1: 13dp -> 9.75dp, r2: 24dp -> 18dp):
-            val r1 = 9.75f * density
-            val r2 = 18.0f * density
-
-            // Left arm
-            reticleLinesBuffer[0] = screenX - r2
-            reticleLinesBuffer[1] = screenY
-            reticleLinesBuffer[2] = screenX - r1
-            reticleLinesBuffer[3] = screenY
-
-            // Right arm
-            reticleLinesBuffer[4] = screenX + r1
-            reticleLinesBuffer[5] = screenY
-            reticleLinesBuffer[6] = screenX + r2
-            reticleLinesBuffer[7] = screenY
-
-            // Bottom arm
-            reticleLinesBuffer[8] = screenX
-            reticleLinesBuffer[9] = screenY + r1
-            reticleLinesBuffer[10] = screenX
-            reticleLinesBuffer[11] = screenY + r2
-
-            val nativeCanvas = drawScope.drawContext.canvas.nativeCanvas
-            nativeCanvas.drawLines(reticleLinesBuffer, 0, 12, reticlePaint)
-
-            // Position star name text centered in the upper opening (approx. 1/3 of the removed top arm):
-            // Removed top arm was at r1..r2; 1/3 position is r1 + (r2 - r1)/3 = 9.75dp + 2.75dp = 12.5dp
-            val textY = screenY - (12.5f * density)
-            nativeCanvas.drawText(selectedBody.name, screenX, textY, reticleTextPaint)
-        }
+        if (isVisible) return
+        drawOffscreenIndicator(
+            drawScope = drawScope,
+            xs = xs,
+            ys = ys,
+            zs = zs,
+            screenX = screenX,
+            screenY = screenY,
+            w = w,
+            h = h,
+            density = density,
+        )
     }
 
     /**
@@ -1095,18 +1060,46 @@ class NightSkyRenderer {
         nativeCanvas.drawText(label, x, y - radius - 12f, debugTapLabelPaint)
     }
 
-    // ==== GPU sky: the screen-space half ====================================================
+    // ==== GPU sky: the marks ================================================================
     //
-    // With the Filament scene drawing stars, figures, art, planets and the ground, what is left
-    // for the Canvas is what the GPU has no good primitive for: text, the DSO and meteor vector
-    // glyphs, and the grid's markers. Every position comes from the scene's own [SkyProjector] and
-    // celestial matrix, i.e. from the pose the GPU frame was just drawn with.
+    // Names, DSO and meteor glyphs, the selection reticle and the grid's labels are drawn by the
+    // Filament frame itself (the mark batches of NightSkyScene); [updateGpuMarks] lists them. They
+    // were a Compose overlay once. Measured on a Pixel 7 Pro, the TextureView showed a GPU frame about
+    // 20 ms (2-3 vsyncs) after it was rendered, while the overlay drew every vsync with the newest
+    // pose, so held in the hand the names jumped against the stars. Only what sits on the screen
+    // edge rather than on the sky (the off-screen chevron) and the debug layers stay in Compose
+    // ([drawScreenOverlay]).
 
     private val overlayProjected = FloatArray(3)
     private val overlayEnu = FloatArray(3)
+    private val reticleCel = FloatArray(3)
     private var dsoLabels: Array<String> = emptyArray()
     private var meteorLabels: Array<String> = emptyArray()
+
+    /** Constellation names by index; null for an asterism, which carries no name. */
+    private var constellationLabels: Array<String?> = emptyArray()
     private var overlayCatalog: NightSkyCatalog? = null
+
+    // The mark atlas sprite of each name, -1 for none.
+    private var constellationSprites = IntArray(0)
+    private var dsoSprites = IntArray(0)
+    private var meteorSprites = IntArray(0)
+    private var markAtlasScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
+    private val markStyle = IntArray(9)
+    private val builtMarkStyle = IntArray(9)
+
+    // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
+    private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
+    private val highlightStyle = IntArray(8)
+    private val builtHighlightStyle = IntArray(8)
+    private var builtHighlightConstellation = Int.MIN_VALUE
+    private var builtHighlightDso = Int.MIN_VALUE
+    private var builtHighlightMeteor = Int.MIN_VALUE
+    private var builtReticleName: String? = null
+    private var highlightConstellationSprite = -1
+    private var highlightDsoSprite = -1
+    private var highlightMeteorSprite = -1
+    private var reticleNameSprite = -1
 
     /** Strings read once per catalogue instead of once per frame. */
     private fun ensureOverlayLabels(catalog: NightSkyCatalog) {
@@ -1120,9 +1113,15 @@ class NightSkyRenderer {
             catalog.meteorShowers(reusableMeteor, it)
             reusableMeteor.localizedName() ?: ""
         }
+        constellationLabels = Array(minOf(catalog.constellationsLength(), maxConstellations)) {
+            catalog.constellations(reusableConstellation, it)
+            if (reusableConstellation.isAsterism()) null
+            else reusableConstellation.localizedName() ?: reusableConstellation.name()
+        }
+        markAtlasScene = null
     }
 
-    /** Ground occlusion of the overlay, the same test the tap hit test uses. */
+    /** Ground occlusion of the marks, the same test the tap hit test uses. */
     private fun isBelowGround(frame: com.dazix.caelis.ar.scene.NightSkyFrame, x: Float, y: Float, z: Float): Boolean =
         StarHitTester.isOccludedByLandscape(
             x, y, z,
@@ -1134,22 +1133,248 @@ class NightSkyRenderer {
             alignElevationOffsetDeg = frame.alignElevationOffsetDeg,
         )
 
+    private fun celestialBelowGround(
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        c2e: FloatArray,
+        x: Float, y: Float, z: Float,
+    ): Boolean {
+        SkyFrameMath.transformDirection(c2e, x, y, z, overlayEnu)
+        return isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])
+    }
+
     /**
-     * Draws everything of the night sky that is text or screen-space vector art, on top of the GPU
-     * frame [scene] just rendered from [frame].
-     *
-     * The Canvas renderer drew constellation names, DSO glyphs and radiants before the landscape,
-     * which then covered whatever was below ground; here they are on top of the GPU, so each one is
-     * skipped when its direction is occluded instead.
+     * Draws a constellation name with the paint's colour at full alpha: the Canvas set the alpha per
+     * draw (200 or 255 x progress), which is now the sprite's alpha in [LabelBatch].
      */
-    fun drawGpuOverlay(
-        drawScope: DrawScope,
+    private fun addOpaqueText(atlas: com.dazix.caelis.ar.scene.SpriteAtlas, text: String, paint: Paint): Int {
+        val alpha = paint.alpha
+        paint.alpha = 255
+        val sprite = atlas.addText(text, paint)
+        paint.alpha = alpha
+        return sprite
+    }
+
+    private fun styleOf(paint: Paint, out: IntArray, at: Int) {
+        out[at] = paint.color
+        out[at + 1] = paint.textSize.toRawBits()
+    }
+
+    /** Redraws the catalogue's names and the grid's labels when their text, colour or size changed. */
+    private fun ensureMarkAtlas(scene: com.dazix.caelis.ar.scene.NightSkyScene) {
+        styleOf(constellationLabelPaint, markStyle, 0)
+        styleOf(dsoLabelPaint, markStyle, 2)
+        styleOf(radiantLabelPaint, markStyle, 4)
+        markStyle[6] = gridMarkers.horizonTextPaint.textSize.toRawBits()
+        markStyle[7] = gridMarkers.gridTextPaint.textSize.toRawBits()
+        markStyle[8] = gridMarkers.contentKey
+        if (markAtlasScene === scene && markStyle.contentEquals(builtMarkStyle)) return
+        markStyle.copyInto(builtMarkStyle)
+        markAtlasScene = scene
+        val atlas = scene.markAtlas
+        atlas.begin()
+        constellationSprites = IntArray(constellationLabels.size) { c ->
+            val name = constellationLabels[c]
+            if (name == null) -1 else addOpaqueText(atlas, name, constellationLabelPaint)
+        }
+        dsoSprites = IntArray(dsoLabels.size) { atlas.addText(dsoLabels[it], dsoLabelPaint) }
+        meteorSprites = IntArray(meteorLabels.size) { atlas.addText(meteorLabels[it], radiantLabelPaint) }
+        gridMarkers.addSprites(atlas)
+        atlas.end()
+        if (atlas.spriteCount < constellationSprites.size + dsoSprites.size + meteorSprites.size + com.dazix.caelis.ar.scene.SkyGridMarkers.SPRITE_COUNT) {
+            android.util.Log.e(TAG, "mark atlas full: ${atlas.spriteCount} sprites fit, some names are not drawn")
+        }
+    }
+
+    /** Redraws the highlighted name and the reticle's caption when the selection or style changed. */
+    private fun ensureHighlightAtlas(
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        reticleName: String?,
+    ) {
+        styleOf(constellationHighlightLabelPaint, highlightStyle, 0)
+        styleOf(dsoHighlightLabelPaint, highlightStyle, 2)
+        styleOf(radiantHighlightLabelPaint, highlightStyle, 4)
+        styleOf(reticleTextPaint, highlightStyle, 6)
+        val c = frame.selectedConstellation
+        val d = frame.selectedDso
+        val m = selectedMeteorIndex
+        if (highlightScene === scene && highlightStyle.contentEquals(builtHighlightStyle) &&
+            c == builtHighlightConstellation && d == builtHighlightDso && m == builtHighlightMeteor &&
+            reticleName == builtReticleName
+        ) return
+        highlightStyle.copyInto(builtHighlightStyle)
+        highlightScene = scene
+        builtHighlightConstellation = c
+        builtHighlightDso = d
+        builtHighlightMeteor = m
+        builtReticleName = reticleName
+        val atlas = scene.highlightAtlas
+        atlas.begin()
+        val constellationName = constellationLabels.getOrNull(c)
+        highlightConstellationSprite = if (constellationName == null) -1 else addOpaqueText(atlas, constellationName, constellationHighlightLabelPaint)
+        highlightDsoSprite = dsoLabels.getOrNull(d)?.let { atlas.addText(it, dsoHighlightLabelPaint) } ?: -1
+        highlightMeteorSprite = meteorLabels.getOrNull(m)?.let { atlas.addText(it, radiantHighlightLabelPaint) } ?: -1
+        reticleNameSprite = reticleName?.let { atlas.addText(it, reticleTextPaint) } ?: -1
+        atlas.end()
+    }
+
+    /**
+     * Lists this frame's marks into [scene]'s batches: constellation names (fading and sliding up
+     * with their figures), Messier numbers and DSO glyphs, meteor radiants and names, the selection
+     * reticle with its caption, and the grid's labels. Call after `scene.update(frame)` and before
+     * the frame is rendered.
+     *
+     * Nothing here depends on the pose except through the focus progress: the GPU projects every
+     * mark and hides it behind the camera, so a pan over a settled sky lists the same marks and the
+     * batches upload nothing. A mark whose direction is below the ground is left out, as the
+     * Canvas renderer's landscape used to cover it.
+     */
+    fun updateGpuMarks(
         scene: com.dazix.caelis.ar.scene.NightSkyScene,
         frame: com.dazix.caelis.ar.scene.NightSkyFrame,
         catalog: NightSkyCatalog,
-        displayRotation: Int,
         showConstellations: Boolean,
         showMeteorShowers: Boolean,
+        selectedBody: CelestialBodyDetails?,
+        debugFocusDisplayThreshold: Float,
+    ) {
+        ensureOverlayLabels(catalog)
+        ensureStaticCelestialVectors(catalog)
+        val pointSelected = selectedStarIndex >= 0 || selectedPlanetId != null || selectedDsoIndex >= 0 || selectedMeteorIndex >= 0
+        val reticleRa = selectedBody?.raDegrees
+        val reticleDec = selectedBody?.decDegrees
+        val showReticle = pointSelected && reticleRa != null && reticleDec != null
+        ensureMarkAtlas(scene)
+        ensureHighlightAtlas(scene, frame, if (showReticle) selectedBody?.name else null)
+
+        val density = frame.density
+        val c2e = scene.celestialToEnu
+        val focus = scene.focus
+        val labels = scene.celestialLabels
+        val highlight = scene.highlightLabels
+        val glyphs = scene.celestialGlyphs
+        labels.begin()
+        highlight.begin()
+        glyphs.begin()
+
+        // Constellation names, sliding up as the figure grows (asterisms carry no name).
+        for (c in 0 until scene.constellationCount) {
+            val isSelected = c == frame.selectedConstellation
+            if (!showConstellations && !isSelected) continue
+            if (constellationLabels.getOrNull(c) == null) continue
+            val p = focus.progress[c]
+            if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) continue
+            val x = constellationCentroidCelX[c]
+            val y = constellationCentroidCelY[c]
+            val z = constellationCentroidCelZ[c]
+            if (celestialBelowGround(frame, c2e, x, y, z)) continue
+            val effectiveP = when {
+                isSelected -> 1f
+                debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
+                else -> p
+            }
+            val offsetY = -40f * (1f - effectiveP)
+            if (isSelected) {
+                highlight.add(highlightConstellationSprite, x, y, z, offsetYPx = offsetY, alpha = effectiveP)
+            } else {
+                labels.add(constellationSprites[c], x, y, z, offsetYPx = offsetY, alpha = 200f / 255f * effectiveP)
+            }
+        }
+
+        // Deep-sky glyphs (only where no photograph is on screen) and Messier numbers.
+        val opticScale = StarOptics.computeOpticScale(frame.zoomRatio)
+        val focal = scene.projector.focalLengthPixels
+        for (d in 0 until minOf(scene.dsoCount, dsoLabels.size)) {
+            val isSelected = d == frame.selectedDso
+            if (!frame.showDsos && !isSelected) continue
+            val x = scene.dsoCel[d * 3]
+            val y = scene.dsoCel[d * 3 + 1]
+            val z = scene.dsoCel[d * 3 + 2]
+            if (celestialBelowGround(frame, c2e, x, y, z)) continue
+            catalog.dsos(reusableDso, d)
+            val radius = dsoRenderedRadiusPx(reusableDso.sizeArcmin(), focal, density, opticScale)
+            if (!scene.dsoArtShown[d]) addDsoGlyph(glyphs, reusableDso, x, y, z, radius, density)
+            val offsetY = radius + 14f * density
+            if (isSelected) highlight.add(highlightDsoSprite, x, y, z, offsetYPx = offsetY)
+            else labels.add(dsoSprites[d], x, y, z, offsetYPx = offsetY)
+        }
+
+        // Meteor shower radiants. The starburst is raw pixels (dot r = 4, rays from 8 to 24 along
+        // the diagonals), as the Canvas path was.
+        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS, meteorLabels.size)
+        val radiantArgb = radiantGlyphColor()
+        for (m in 0 until meteorCount) {
+            val isSelected = m == selectedMeteorIndex
+            if (!showMeteorShowers && !isSelected) continue
+            val x = meteorCelX[m]
+            val y = meteorCelY[m]
+            val z = meteorCelZ[m]
+            if (celestialBelowGround(frame, c2e, x, y, z)) continue
+            glyphs.add(
+                com.dazix.caelis.ar.scene.GlyphBatch.Shape.RADIANT, x, y, z,
+                radiusPx = 4f, strokePx = radiantPaint.strokeWidth, argb = radiantArgb,
+                a = 8f * SQRT_2, b = 24f * SQRT_2,
+            )
+            val offsetY = 32f * density
+            if (isSelected) highlight.add(highlightMeteorSprite, x, y, z, offsetYPx = offsetY)
+            else labels.add(meteorSprites[m], x, y, z, offsetYPx = offsetY)
+        }
+
+        // The selection reticle: three arms around a star, planet, DSO or radiant (r1 9.75 dp,
+        // r2 18 dp, the top arm left open), its name in the opening. Not for a constellation, whose
+        // figure is its own highlight.
+        if (showReticle) {
+            celestialUnitVector(reticleRa!!, reticleDec!!, reticleCel)
+            val x = reticleCel[0]
+            val y = reticleCel[1]
+            val z = reticleCel[2]
+            glyphs.add(
+                com.dazix.caelis.ar.scene.GlyphBatch.Shape.RETICLE, x, y, z,
+                radiusPx = 0f, strokePx = reticlePaint.strokeWidth, argb = reticlePaint.color,
+                a = 9.75f * density, b = 18f * density,
+            )
+            highlight.add(reticleNameSprite, x, y, z, offsetYPx = -12.5f * density)
+        }
+
+        glyphs.end()
+        labels.end()
+        highlight.end()
+
+        scene.gridLabels.begin()
+        scene.gridGlyphs.begin()
+        if (frame.showGrid) gridMarkers.emit(scene.gridLabels, scene.gridGlyphs)
+        scene.gridGlyphs.end()
+        scene.gridLabels.end()
+    }
+
+    /** The radiant paint's colour as drawn: in night vision its SRC_IN filter replaced it. */
+    private fun radiantGlyphColor(): Int = when (radiantPaint.colorFilter) {
+        redVisionFilter -> AndroidColor.rgb(255, 23, 68)
+        amberVisionFilter -> AndroidColor.rgb(255, 179, 0)
+        greenVisionFilter -> AndroidColor.rgb(0, 230, 118)
+        else -> radiantPaint.color
+    }
+
+    /** The celestial-frame unit vector of the scene (x = cos dec cos ra, y = sin dec, z = cos dec sin ra). */
+    private fun celestialUnitVector(raDeg: Double, decDeg: Double, out: FloatArray) {
+        val ra = Math.toRadians(raDeg)
+        val dec = Math.toRadians(decDeg)
+        val cosDec = kotlin.math.cos(dec)
+        out[0] = (cosDec * kotlin.math.cos(ra)).toFloat()
+        out[1] = kotlin.math.sin(dec).toFloat()
+        out[2] = (cosDec * kotlin.math.sin(ra)).toFloat()
+    }
+
+    /**
+     * What remains for Compose over the GPU frame: the debug focus region, the off-screen chevron
+     * (it sits on the screen edge, not on the sky, so a vsync of lag does not show) and the debug
+     * tap radius.
+     */
+    fun drawScreenOverlay(
+        drawScope: DrawScope,
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        displayRotation: Int,
         lstDegrees: Double,
         latitudeDegrees: Double,
         selectedBody: CelestialBodyDetails?,
@@ -1158,80 +1383,12 @@ class NightSkyRenderer {
         debugFocusDisplayThreshold: Float,
         showTapRadiusIndicator: Boolean,
     ) {
-        ensureOverlayLabels(catalog)
         val canvas = drawScope.drawContext.canvas.nativeCanvas
         val density = drawScope.density
         val w = drawScope.size.width
         val h = drawScope.size.height
-        val projector = scene.projector
-        val c2e = scene.celestialToEnu
         val focus = scene.focus
         val margin = 40f
-
-        // Constellation names, sliding up as the figure grows (asterisms carry no name).
-        val constCount = scene.constellationCount
-        for (c in 0 until constCount) {
-            val isSelected = c == frame.selectedConstellation
-            if (!showConstellations && !isSelected) continue
-            if (!focus.centroidInFront[c]) continue
-            val p = focus.progress[c]
-            if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) continue
-            catalog.constellations(reusableConstellation, c)
-            if (reusableConstellation.isAsterism()) continue
-            SkyFrameMath.transformDirection(c2e, constellationCentroidCelX[c], constellationCentroidCelY[c], constellationCentroidCelZ[c], overlayEnu)
-            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
-            val effectiveP = when {
-                isSelected -> 1f
-                debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
-                else -> p
-            }
-            val cx = focus.centroidScreenX[c]
-            val textY = focus.centroidScreenY[c] - (40f * (1f - effectiveP))
-            if (cx !in -margin..(w + margin) || textY !in -margin..(h + margin)) continue
-            val label = reusableConstellation.localizedName() ?: reusableConstellation.name() ?: continue
-            val paint = if (isSelected) constellationHighlightLabelPaint else constellationLabelPaint
-            paint.alpha = ((if (isSelected) 255f else 200f) * effectiveP).toInt().coerceIn(0, 255)
-            canvas.drawText(label, cx, textY, paint)
-        }
-
-        // Deep-sky glyphs (only where no photograph is on screen) and Messier numbers.
-        val opticScale = StarOptics.computeOpticScale(frame.zoomRatio)
-        val focal = projector.focalLengthPixels
-        for (d in 0 until minOf(scene.dsoCount, dsoLabels.size)) {
-            val isSelected = d == frame.selectedDso
-            if (!frame.showDsos && !isSelected) continue
-            if (!projector.projectCelestial(c2e, scene.dsoCel[d * 3], scene.dsoCel[d * 3 + 1], scene.dsoCel[d * 3 + 2], overlayProjected)) continue
-            val pX = overlayProjected[0]
-            val pY = overlayProjected[1]
-            if (pX !in -100f..(w + 100f) || pY !in -100f..(h + 100f)) continue
-            SkyFrameMath.transformDirection(c2e, scene.dsoCel[d * 3], scene.dsoCel[d * 3 + 1], scene.dsoCel[d * 3 + 2], overlayEnu)
-            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
-            catalog.dsos(reusableDso, d)
-            val radius = dsoRenderedRadiusPx(reusableDso.sizeArcmin(), focal, density, opticScale)
-            if (!scene.dsoArtShown[d]) drawDsoGlyph(canvas, reusableDso, pX, pY, radius, density)
-            canvas.drawText(dsoLabels[d], pX, pY + radius + 14f * density, if (isSelected) dsoHighlightLabelPaint else dsoLabelPaint)
-        }
-
-        // Meteor shower radiants.
-        val meteorCount = minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS, meteorLabels.size)
-        if (meteorCount > 0) ensureStaticCelestialVectors(catalog)
-        for (m in 0 until meteorCount) {
-            val isSelected = m == selectedMeteorIndex
-            if (!showMeteorShowers && !isSelected) continue
-            if (!projector.projectCelestial(c2e, meteorCelX[m], meteorCelY[m], meteorCelZ[m], overlayProjected)) continue
-            val pX = overlayProjected[0]
-            val pY = overlayProjected[1]
-            if (pX !in -80f..(w + 80f) || pY !in -80f..(h + 80f)) continue
-            SkyFrameMath.transformDirection(c2e, meteorCelX[m], meteorCelY[m], meteorCelZ[m], overlayEnu)
-            if (isBelowGround(frame, overlayEnu[0], overlayEnu[1], overlayEnu[2])) continue
-            canvas.save()
-            canvas.translate(pX, pY)
-            canvas.drawPath(radiantPath, radiantPaint)
-            canvas.restore()
-            canvas.drawText(meteorLabels[m], pX, pY + 32f * density, if (isSelected) radiantHighlightLabelPaint else radiantLabelPaint)
-        }
-
-        if (frame.showGrid) gridMarkers.draw(canvas, projector, w, h)
 
         if (isDebugFocusRegionVisible) {
             val halfW = w * 0.5f
@@ -1245,7 +1402,7 @@ class NightSkyRenderer {
             val pctOut = ((radiusOut / w) * 100f).toInt()
             val threshPct = (debugFocusDisplayThreshold * 100f).toInt()
             canvas.drawText("FOCUS AREA (In=$pctIn% W, Out=$pctOut% W, thresh=$threshPct%)", halfW, halfH - radiusOut - 16f, debugFocusLabelPaint)
-            for (c in 0 until constCount) {
+            for (c in 0 until scene.constellationCount) {
                 if (!focus.centroidInFront[c]) continue
                 val x = focus.centroidScreenX[c]
                 val y = focus.centroidScreenY[c]
@@ -1255,7 +1412,7 @@ class NightSkyRenderer {
             }
         }
 
-        drawSelectionReticle(
+        drawSelectionPointer(
             drawScope = drawScope,
             selectedBody = selectedBody,
             matrix = frame.deviceToEnu,
@@ -1278,50 +1435,56 @@ class NightSkyRenderer {
         return (focal * tan(baseSizeRad * 0.5f)).coerceIn(8f * density * opticScale, 70f * density * opticScale)
     }
 
-    private fun drawDsoGlyph(canvas: android.graphics.Canvas, dso: DeepSkyObject, pX: Float, pY: Float, radius: Float, density: Float) {
+    /**
+     * The Canvas DSO glyphs as distance-field shapes: a galaxy is an oval turned by its position
+     * angle, a globular cluster a circle with a cross, an open cluster a dashed circle, a nebula a
+     * rounded square, a planetary nebula a circle with four ticks. Each but the last two kinds has a
+     * core dot; the outline sits on a faint halo. Stroke widths are the paints' raw pixels.
+     */
+    private fun addDsoGlyph(
+        glyphs: com.dazix.caelis.ar.scene.GlyphBatch,
+        dso: DeepSkyObject,
+        x: Float, y: Float, z: Float,
+        radius: Float,
+        density: Float,
+    ) {
+        val shape = com.dazix.caelis.ar.scene.GlyphBatch.Shape
+        val stroke = dsoPaint.strokeWidth
+        val color = dsoPaint.color
+        val halo = dsoHaloPaint.strokeWidth
+        val haloColor = dsoHaloPaint.color
+        val core = dsoCorePaint.color
         when (dso.type()) {
             DsoType.GALAXY -> {
-                val axisRatio = dso.axisRatio().coerceIn(0.15f, 1.0f)
-                canvas.save()
-                canvas.translate(pX, pY)
-                canvas.rotate(dso.positionAngleDeg())
-                dsoRectF.set(-radius, -radius * axisRatio, radius, radius * axisRatio)
-                canvas.drawOval(dsoRectF, dsoHaloPaint)
-                canvas.drawOval(dsoRectF, dsoPaint)
-                canvas.drawCircle(0f, 0f, 1.8f * density, dsoCorePaint)
-                canvas.restore()
+                val ratio = dso.axisRatio().coerceIn(0.15f, 1.0f)
+                glyphs.add(
+                    shape.ELLIPSE, x, y, z, radius, stroke, color, a = ratio,
+                    angleRad = Math.toRadians(dso.positionAngleDeg().toDouble()).toFloat(),
+                    haloPx = halo, haloArgb = haloColor,
+                )
+                glyphs.add(shape.DISC, x, y, z, 1.8f * density, 0f, core)
             }
             DsoType.GLOBULAR_CLUSTER -> {
-                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
-                canvas.drawCircle(pX, pY, radius, dsoPaint)
-                canvas.drawLine(pX - radius, pY, pX + radius, pY, dsoPaint)
-                canvas.drawLine(pX, pY - radius, pX, pY + radius, dsoPaint)
-                canvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                glyphs.add(shape.RING_CROSS, x, y, z, radius, stroke, color, haloPx = halo, haloArgb = haloColor)
+                glyphs.add(shape.DISC, x, y, z, 1.8f * density, 0f, core)
             }
             DsoType.OPEN_CLUSTER -> {
-                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
-                canvas.drawCircle(pX, pY, radius, dsoDashedPaint)
-                canvas.drawCircle(pX, pY, 1.8f * density, dsoCorePaint)
+                glyphs.add(
+                    shape.DASHED_RING, x, y, z, radius, dsoDashedPaint.strokeWidth, dsoDashedPaint.color,
+                    a = 6f, b = 4f, haloPx = halo, haloArgb = haloColor,
+                )
+                glyphs.add(shape.DISC, x, y, z, 1.8f * density, 0f, core)
             }
             DsoType.NEBULA -> {
-                val r = radius * 0.85f
-                dsoRectF.set(pX - r, pY - r, pX + r, pY + r)
-                canvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoHaloPaint)
-                canvas.drawRoundRect(dsoRectF, 4f * density, 4f * density, dsoPaint)
-                canvas.drawCircle(pX, pY, 1.5f * density, dsoCorePaint)
+                glyphs.add(shape.ROUNDED_SQUARE, x, y, z, radius * 0.85f, stroke, color, a = 4f * density, haloPx = halo, haloArgb = haloColor)
+                glyphs.add(shape.DISC, x, y, z, 1.5f * density, 0f, core)
             }
-            DsoType.PLANETARY_NEBULA -> {
-                canvas.drawCircle(pX, pY, radius, dsoHaloPaint)
-                canvas.drawCircle(pX, pY, radius, dsoPaint)
-                val tick = 4f * density
-                canvas.drawLine(pX - radius - tick, pY, pX - radius, pY, dsoPaint)
-                canvas.drawLine(pX + radius, pY, pX + radius + tick, pY, dsoPaint)
-                canvas.drawLine(pX, pY - radius - tick, pX, pY - radius, dsoPaint)
-                canvas.drawLine(pX, pY + radius, pX, pY + radius + tick, dsoPaint)
-            }
-            else -> canvas.drawCircle(pX, pY, radius, dsoPaint)
+            DsoType.PLANETARY_NEBULA ->
+                glyphs.add(shape.RING_TICKS, x, y, z, radius, stroke, color, a = 4f * density, haloPx = halo, haloArgb = haloColor)
+            else -> glyphs.add(shape.RING, x, y, z, radius, stroke, color)
         }
     }
+
     /**
      * The HUD's visible-star count for the GPU path: stars within the telescope limit (or forced
      * by a figure or the selection) whose position is on screen. Writes [lastVisibleStarCount].

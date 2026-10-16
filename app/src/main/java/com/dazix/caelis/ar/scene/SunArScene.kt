@@ -10,14 +10,14 @@ import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectory
 
 /**
- * What the Sun AR screen draws on the GPU: the alt-az grid, the terrain silhouette and the sun and
- * moon day arcs, all Earth-fixed in ENU (no sidereal rotation). The discs, time bubbles, rise/set
- * badges, grid labels and off-screen pointers are text and screen-space UI and stay in the Compose
- * overlay, which projects through [projector] — the same camera this scene was rendered with.
+ * What the Sun AR screen draws on the GPU: the alt-az grid, the terrain silhouette, the sun and
+ * moon day arcs and the marks on them (time bubbles, rise/set badges, the live discs, the grid's
+ * labels), all Earth-fixed in ENU (no sidereal rotation). Only the off-screen pointers stay in the
+ * Compose overlay: they sit on the screen edge, not on the sky, and project through [projector].
  *
  * All geometry is static between data changes: the grid is built once, the silhouette when the
- * profile changes, the arcs when a trajectory, the profile or the shading switch changes. A frame
- * is a camera write and nothing else.
+ * profile changes, the arcs when a trajectory, the profile or the shading switch changes, the
+ * mark atlas when its labels do. A frame is a camera write, plus a mark upload when a mark moved.
  */
 class SunArScene(private val surface: SkySurface) {
 
@@ -33,6 +33,16 @@ class SunArScene(private val surface: SkySurface) {
     private val silhouette = LineBatch(surface, lineMaterial, HorizonProfile.SAMPLE_COUNT, 1, Priority.SILHOUETTE)
     private val arcCasing = LineBatch(surface, lineMaterial, MAX_ARC_SEGMENTS, 1, Priority.ARC_CASING)
     private val arcs = LineBatch(surface, lineMaterial, MAX_ARC_SEGMENTS, 1, Priority.ARC)
+
+    // Marks over the arcs: time bubbles, rise/set badges, the grid's labels (sprites of [markAtlas])
+    // and the sun and moon discs, badge dots and grid markers (glyphs). Listed by the screen each
+    // frame after [update]; they were a Compose overlay once, which the TextureView showed 2-3 vsyncs
+    // apart from the arcs.
+    private val labelMaterial = surface.loadMaterial("label")
+    private val glyphMaterial = surface.loadMaterial("glyph")
+    val markAtlas = SpriteAtlas(surface.engine, 2048, 1024, MAX_MARK_SPRITES)
+    val markGlyphs = GlyphBatch(surface, glyphMaterial, MAX_MARK_GLYPHS, Priority.MARKS, 1)
+    val markLabels = LabelBatch(surface, labelMaterial, markAtlas, MAX_MARK_SPRITES, Priority.MARKS, 2)
 
     private val cameraModel = FloatArray(16)
     private val a = FloatArray(3)
@@ -172,6 +182,11 @@ class SunArScene(private val surface: SkySurface) {
     fun destroy() {
         if (destroyed) return
         destroyed = true
+        markLabels.destroy()
+        markGlyphs.destroy()
+        markAtlas.destroy()
+        surface.engine.destroyMaterial(labelMaterial)
+        surface.engine.destroyMaterial(glyphMaterial)
         arcs.destroy()
         arcCasing.destroy()
         silhouette.destroy()
@@ -186,6 +201,7 @@ class SunArScene(private val surface: SkySurface) {
         const val SILHOUETTE = 4
         const val ARC_CASING = 5
         const val ARC = 6
+        const val MARKS = 7
     }
 
     companion object {
@@ -195,6 +211,10 @@ class SunArScene(private val surface: SkySurface) {
         /** The longest polyline: the terrain ring, larger than either day path. */
         private const val MAX_PATH_POINTS = HorizonProfile.SAMPLE_COUNT
         private const val MIN_ARC_ELEVATION = -15.0
+
+        /** Two days of bubbles every 15 minutes, four badges and the grid's labels. */
+        val MAX_MARK_SPRITES = 2 * 96 + 4 + SkyGridMarkers.LABEL_COUNT
+        private const val MAX_MARK_GLYPHS = 4 + 8 + SkyGridMarkers.GLYPH_COUNT
 
         /** The moon's arc and pointer colour (the screen's `MoonSilverCyan`). */
         val MoonArc = Color(0xFF80DEEA)

@@ -31,9 +31,11 @@ import kotlin.math.sin
  *
  * Layers, in draw order (see [SkyPriority]): Milky Way, atmosphere, stars, constellation artwork,
  * DSO photographs and planet glows, constellation lines and planet discs, the stylised landscape or
- * the real terrain ring, the alt-az grid. Labels, DSO and meteor glyphs, the reticle and the
- * off-screen chevron are not here — they are text and screen-space vector UI, drawn by the Compose
- * overlay through the same [SkyProjector] this scene updates, so they cannot drift from the sky.
+ * the real terrain ring, the alt-az grid, and on top the marks: names, DSO and meteor glyphs, the
+ * selection reticle and the grid's labels. The marks' batches and atlases are here, so they are in
+ * the same Filament frame as the stars; what goes into them is listed by `NightSkyRenderer` each
+ * frame after [update]. Only the off-screen chevron is left to Compose: it sits on the screen edge,
+ * not on the sky.
  *
  * Per-frame work is matrix writes, uniform writes and uploads only when something changed; the
  * frame loop allocates nothing.
@@ -56,6 +58,8 @@ class NightSkyScene(
     private val landscapeMaterial = surface.loadMaterial("landscape")
     private val terrainMaterial = surface.loadMaterial("terrain")
     private val discMaterial = surface.loadMaterial("disc")
+    private val labelMaterial = surface.loadMaterial("label")
+    private val glyphMaterial = surface.loadMaterial("glyph")
 
     private val milkyWay = FullScreenLayer(surface, milkyWayMaterial, SkyPriority.MILKY_WAY)
     private val atmosphere = FullScreenLayer(surface, atmosphereMaterial, SkyPriority.ATMOSPHERE)
@@ -64,6 +68,18 @@ class NightSkyScene(
     private val landscape = FullScreenLayer(surface, landscapeMaterial, SkyPriority.LANDSCAPE)
     private val terrain = TerrainRing(surface, terrainMaterial, SkyPriority.LANDSCAPE)
     private val grid = LineBatch(surface, lineMaterial, AltAzGridBuilder.SEGMENT_COUNT, 1, SkyPriority.GRID)
+
+    // Marks, over everything (the grid's priority, blended after its lines). Constellation, DSO and
+    // meteor names and the grid's labels are drawn once into [markAtlas]; the highlighted name of a
+    // selection and the reticle's caption change with the selection and live in the small
+    // [highlightAtlas], so selecting something does not redraw the catalogue's names.
+    val markAtlas = SpriteAtlas(surface.engine, 2048, 1024, MAX_MARK_SPRITES)
+    val highlightAtlas = SpriteAtlas(surface.engine, 1024, 256, HIGHLIGHT_SPRITES)
+    val celestialGlyphs = GlyphBatch(surface, glyphMaterial, MAX_CELESTIAL_GLYPHS, SkyPriority.GRID, 1)
+    val celestialLabels = LabelBatch(surface, labelMaterial, markAtlas, MAX_CELESTIAL_LABELS, SkyPriority.GRID, 2)
+    val highlightLabels = LabelBatch(surface, labelMaterial, highlightAtlas, HIGHLIGHT_SPRITES, SkyPriority.GRID, 3)
+    val gridGlyphs = GlyphBatch(surface, glyphMaterial, SkyGridMarkers.GLYPH_COUNT, SkyPriority.GRID, 1)
+    val gridLabels = LabelBatch(surface, labelMaterial, markAtlas, SkyGridMarkers.LABEL_COUNT, SkyPriority.GRID, 2)
 
     private var milkyWayTexture: Texture? = null
     private var landscapeTexture: Texture? = null
@@ -175,6 +191,9 @@ class NightSkyScene(
         // Celestial layers turn with the sky; the grid, landscape and terrain are Earth-fixed.
         stars.setTransform(celestialToEnu)
         constellationLines.setTransform(celestialToEnu)
+        celestialGlyphs.setTransform(celestialToEnu)
+        celestialLabels.setTransform(celestialToEnu)
+        highlightLabels.setTransform(celestialToEnu)
         milkyWay.materialInstance.setParameter(
             "enuToCelestial",
             com.google.android.filament.MaterialInstance.FloatElement.MAT3,
@@ -234,6 +253,13 @@ class NightSkyScene(
         planetQuads.forEach { it?.destroy() }
         dsoArtQuads.forEach { it?.destroy() }
         planetGlows.destroy()
+        gridLabels.destroy()
+        gridGlyphs.destroy()
+        highlightLabels.destroy()
+        celestialLabels.destroy()
+        celestialGlyphs.destroy()
+        highlightAtlas.destroy()
+        markAtlas.destroy()
         artTextures.values.forEach { surface.engine.destroyTexture(it) }
         artTextures.clear()
         milkyWayTexture?.let { surface.engine.destroyTexture(it) }
@@ -252,6 +278,7 @@ class NightSkyScene(
     private fun materials() = listOf(
         starMaterial, lineMaterial, texturedMaterial, milkyWayMaterial,
         atmosphereMaterial, landscapeMaterial, terrainMaterial, discMaterial,
+        labelMaterial, glyphMaterial,
     )
 
     private val enuToCel3 = FloatArray(9)
@@ -578,6 +605,13 @@ class NightSkyScene(
         const val MAX_DSOS = 128
         private const val MAX_SELECTED_SEGMENTS = 256
         private const val MIN_DISPLAY_PROGRESS = 0.001f
+
+        /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
+        const val MAX_MARK_SPRITES = 1024
+        const val HIGHLIGHT_SPRITES = 4
+        private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
+        /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
+        private const val MAX_CELESTIAL_GLYPHS = 2 * MAX_DSOS + 32 + 1
 
         // Normal-mode colours of NightSkyRenderer.applyTheme (alpha is overridden per draw).
         private val CONSTELLATION = androidx.compose.ui.graphics.Color(77, 208, 225)

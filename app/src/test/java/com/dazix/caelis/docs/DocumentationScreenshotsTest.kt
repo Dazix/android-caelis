@@ -407,9 +407,10 @@ class DocumentationScreenshotsTest {
                         .fillMaxSize()
                         .background(Color(0xFF0F141C))
                 ) {
-                    // The grid, silhouette and arcs are Filament geometry, which Robolectric cannot
-                    // render; this captures the Compose overlay drawn over them (labels, bubbles,
-                    // badges, the sun and the moon) through the projector the GPU frame would use.
+                    // The grid, silhouette, arcs and every mark on them (labels, bubbles, badges,
+                    // the sun and the moon) are drawn by Filament, which Robolectric cannot render;
+                    // this captures the Compose overlay over them, the off-screen pointers, through
+                    // the projector the GPU frame would use.
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val heightPx = with(LocalDensity.current) { maxHeight.toPx() }
@@ -423,8 +424,6 @@ class DocumentationScreenshotsTest {
                         SunArOverlay(
                             projector = projector,
                             frameTick = 0L,
-                            solarTrajectory = solarTrajectory,
-                            lunarTrajectory = lunarTrajectory,
                             currentSunPos = currentSunCoordinates,
                             currentMoonPos = currentMoonCoordinates,
                             modifier = Modifier.fillMaxSize(),

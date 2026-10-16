@@ -266,7 +266,7 @@ class NightSkyRendererTest {
             renderer.selectedStarIndex = star
             renderer.selectedConstellationIndex = constellation
             scope.draw(Density(2.5f), LayoutDirection.Ltr, canvas, androidx.compose.ui.geometry.Size(1080f, 2400f)) {
-                renderer.drawSelectionReticle(
+                renderer.drawSelectionPointer(
                     drawScope = this, selectedBody = behind, matrix = northMatrix, lstDegrees = 0.0,
                     latitudeDegrees = 0.0, displayRotation = android.view.Surface.ROTATION_0,
                     fovHorizontalDegrees = 60f, w = 1080f, h = 2400f, density = 2.5f,

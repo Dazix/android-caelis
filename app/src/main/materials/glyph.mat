@@ -1,0 +1,137 @@
+// Vector marks pinned to a sky direction, sized in screen pixels: DSO glyphs, meteor radiants, the
+// selection reticle, the grid's cardinal dots and zenith/nadir crosses, the sun and moon discs.
+//
+// They were Canvas strokes in a Compose overlay once, which the TextureView showed 2-3 vsyncs apart
+// from the GPU frame. Here each is one quad whose fragment draws the shape procedurally from a
+// distance field, so strokes stay crisp and their width stays in pixels at every zoom.
+//
+// Per-vertex (see GlyphBatch):
+//   position = anchor direction (model space)
+//   custom0  = (cornerX, cornerY, halfExtentPx, shape)
+//   custom1  = (radiusPx, a, b, strokePx)        a, b depend on the shape
+//   custom2  = (angleRad, haloPx, 0, 0)          rotation (screen, clockwise) and halo width
+//   color    = stroke colour, straight RGBA, themed on the CPU
+//   custom3  = halo colour, straight RGBA
+//
+// Shapes: 0 filled disc, 1 ring, 2 ellipse ring (a = axis ratio), 3 dashed ring (a = dash, b = gap),
+// 4 rounded-square outline (a = corner radius), 5 ring + cross, 6 ring + ticks (a = tick length),
+// 7 radiant (ring + diagonal rays from a to b), 8 reticle (left, right, bottom arms from a to b,
+// square caps), 9 grid cross (arms of half-length a and width b, ring of width strokePx).
+// The halo follows the outline only (ring, ellipse, rounded square), as the Canvas halo paint did.
+material {
+    name : Glyph,
+    shadingModel : unlit,
+    blending : transparent,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    doubleSided : true,
+    requires : [ color, custom0, custom1, custom2, custom3 ],
+    variables : [ glyphLocal, glyphShape, glyphHalo ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float4 c = getCustom0();
+        float4 s = getCustom1();
+        float4 t = getCustom2();
+        float3 wp = material.worldPosition.xyz;
+        float4 viewPos = mulMat4x4Float3(getViewFromWorldMatrix(), wp);
+        float dist = -viewPos.z;
+        // Behind the camera: collapse, never mirror onto the screen.
+        float extent = dist > 1e-4 ? c.z : 0.0;
+        float worldPerPx = 2.0 * max(dist, 1e-4) / (getClipFromViewMatrix()[1][1] * getResolution().y);
+        float3 right = getWorldFromViewMatrix()[0].xyz;
+        float3 up = getWorldFromViewMatrix()[1].xyz;
+        material.worldPosition.xyz = wp + (right * c.x + up * c.y) * extent * worldPerPx;
+
+        // Local pixel coordinates with Y down (the Canvas convention), turned into the shape's
+        // own frame: a Canvas rotate(angle) turns the shape clockwise on screen.
+        float2 p = float2(c.x, -c.y) * c.z;
+        float ca = cos(t.x);
+        float sa = sin(t.x);
+        float2 q = float2(ca * p.x + sa * p.y, -sa * p.x + ca * p.y);
+        material.glyphLocal = float4(q, c.w, s.x);
+        material.glyphShape = float4(s.y, s.z, s.w, t.y);
+        material.glyphHalo = getCustom3();
+    }
+}
+
+fragment {
+    float strokeCoverage(float d, float width) {
+        return clamp(0.5 * width - d + 0.5, 0.0, 1.0);
+    }
+
+    float boxDistance(float2 p, float2 centre, float2 halfSize) {
+        float2 q = abs(p - centre) - halfSize;
+        return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+    }
+
+    // Distance to an axis-aligned segment of the cross (butt caps): along x through the centre.
+    float axisSegment(float along, float across, float from, float to) {
+        float a = abs(along);
+        return (a >= from && a <= to) ? abs(across) : 1e4;
+    }
+
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float2 p = variable_glyphLocal.xy;
+        int shape = int(variable_glyphLocal.z + 0.5);
+        float r = variable_glyphLocal.w;
+        float a = variable_glyphShape.x;
+        float b = variable_glyphShape.y;
+        float strokeW = variable_glyphShape.z;
+        float haloW = variable_glyphShape.w;
+        float len = length(p);
+
+        float outline = 1e4;
+        float stroke = 0.0;
+        if (shape == 0) {
+            stroke = clamp(r - len + 0.5, 0.0, 1.0);
+        } else if (shape == 2) {
+            // Inigo Quilez's ellipse distance estimate; exact enough for a stroke a few pixels wide.
+            float2 ab = float2(r, max(r * a, 1e-3));
+            float k0 = length(p / ab);
+            float k1 = length(p / (ab * ab));
+            outline = abs(k0 * (k0 - 1.0) / max(k1, 1e-4));
+        } else if (shape == 4) {
+            float2 q = abs(p) - float2(r - a);
+            outline = abs(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - a);
+        } else if (shape >= 1 && shape <= 7) {
+            outline = abs(len - r);
+        }
+        if (shape >= 1 && shape <= 7) stroke = strokeCoverage(outline, strokeW);
+        if (shape == 3) {
+            // Dashes along the circumference, starting at 3 o'clock like a DashPathEffect circle.
+            float s = (atan(p.y, p.x) + 3.14159265) * r;
+            stroke *= mod(s, a + b) < a ? 1.0 : 0.0;
+        } else if (shape == 5) {
+            float d = min(axisSegment(p.x, p.y, 0.0, r), axisSegment(p.y, p.x, 0.0, r));
+            stroke = max(stroke, strokeCoverage(d, strokeW));
+        } else if (shape == 6) {
+            float d = min(axisSegment(p.x, p.y, r, r + a), axisSegment(p.y, p.x, r, r + a));
+            stroke = max(stroke, strokeCoverage(d, strokeW));
+        } else if (shape == 7) {
+            float2 q = float2(p.x + p.y, p.x - p.y) * 0.70710678;
+            float d = min(axisSegment(q.x, q.y, a, b), axisSegment(q.y, q.x, a, b));
+            stroke = max(stroke, strokeCoverage(d, strokeW));
+        } else if (shape == 8) {
+            float h = 0.5 * strokeW;
+            float mid = 0.5 * (a + b);
+            float2 halfArm = float2(0.5 * (b - a) + h, h);
+            float d = min(boxDistance(p, float2(-mid, 0.0), halfArm), boxDistance(p, float2(mid, 0.0), halfArm));
+            d = min(d, boxDistance(p, float2(0.0, mid), halfArm.yx));
+            stroke = clamp(0.5 - d, 0.0, 1.0);
+        } else if (shape == 9) {
+            float arms = min(axisSegment(p.x, p.y, 0.0, a), axisSegment(p.y, p.x, 0.0, a));
+            stroke = max(strokeCoverage(abs(len - r), strokeW), strokeCoverage(arms, b));
+        }
+
+        float halo = (haloW > 0.0 && outline < 1e3) ? strokeCoverage(outline, haloW) : 0.0;
+        float4 sc = getColor();
+        float4 hc = variable_glyphHalo;
+        float sa = sc.a * stroke;
+        float ha = hc.a * halo * (1.0 - sa);
+        material.baseColor = float4(sc.rgb * sa + hc.rgb * ha, sa + ha);
+    }
+}

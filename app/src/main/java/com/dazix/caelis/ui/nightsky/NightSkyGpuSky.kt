@@ -59,12 +59,14 @@ class NightSkyGpuHandle {
 }
 
 /**
- * The night sky drawn by Filament, with the Compose overlay for text and vector glyphs on top.
+ * The night sky drawn by Filament, names, glyphs and reticle included, with a thin Compose overlay
+ * for what sits on the screen edge rather than the sky (the off-screen chevron) and debug layers.
  *
- * Takes the same inputs as the Canvas `NightSkyOverlayCanvas` it replaces. One frame loop drives
- * both halves: in each vsync it samples the pose once, updates and renders the GPU scene, and then
- * invalidates the overlay, which draws through the scene's projector — so a label can never be a
- * frame behind its star.
+ * Takes the same inputs as the Canvas `NightSkyOverlayCanvas` it replaces. In each vsync the frame
+ * loop samples the pose once, updates the scene, lists its marks and renders. The marks used to be
+ * the Compose overlay, drawn with the same pose in the same vsync; measured on a Pixel 7 Pro, the
+ * TextureView put the GPU frame on screen about 20 ms (2-3 vsyncs) later than the overlay, so held
+ * in the hand the names jumped against the stars. In one GPU frame they cannot.
  *
  * The camera picture is drawn by that same Filament frame ([CameraBackground], fed by
  * [CameraFrameSource]), and the pose is taken at the instant of the image being drawn, so a star
@@ -73,9 +75,9 @@ class NightSkyGpuHandle {
  *
  * The sky renders into a TextureView, not a SurfaceView. A SurfaceView's buffers are presented by
  * SurfaceFlinger on their own schedule, and with the labels in the window they slid visibly against
- * the stars during a pan on a Pixel 7 Pro; a TextureView is composited by the window's own frame,
- * the same frame the overlay is in. It is translucent only where no camera image covers it: the
- * picture is opaque.
+ * the stars during a pan on a Pixel 7 Pro. A TextureView is composited by the window, but not in the
+ * vsync its frame was rendered in (see above), which is why nothing that sits on the sky is drawn by
+ * Compose any more. It is translucent only where no camera image covers it: the picture is opaque.
  */
 @Composable
 internal fun NightSkyGpuSky(
@@ -220,6 +222,11 @@ internal fun NightSkyGpuSky(
     val currentRotation by rememberUpdatedState(displayRotation)
     val currentZoom by rememberUpdatedState(zoomRatio)
     val currentIsLive by rememberUpdatedState(isLivePoseActive)
+    val currentCatalog by rememberUpdatedState(catalog)
+    val currentSelectedBody by rememberUpdatedState(selectedBody)
+    val currentShowConstellations by rememberUpdatedState(isConstellationsVisible)
+    val currentShowMeteorShowers by rememberUpdatedState(isMeteorShowersVisible)
+    val currentDisplayThreshold by rememberUpdatedState(debugFocusDisplayThreshold)
     val poseFrame = remember { SkyPoseFrame() }
     var frameTick by remember { mutableLongStateOf(0L) }
     var frameLst by remember { mutableStateOf(0.0) }
@@ -272,6 +279,19 @@ internal fun NightSkyGpuSky(
                     frame.selectedStar = renderer.selectedStarIndex
                     frame.selectedDso = renderer.selectedDsoIndex
                     sc.update(frame)
+                    // The marks are part of this GPU frame, listed after update() moved the focus.
+                    currentCatalog?.let {
+                        renderer.updateOpticalPaints(density = frame.density)
+                        renderer.updateGpuMarks(
+                            scene = sc,
+                            frame = frame,
+                            catalog = it,
+                            showConstellations = currentShowConstellations,
+                            showMeteorShowers = currentShowMeteorShowers,
+                            selectedBody = currentSelectedBody,
+                            debugFocusDisplayThreshold = currentDisplayThreshold,
+                        )
+                    }
                     sf.renderFrame(nanos)
                     revealed = true
                 }
@@ -309,15 +329,11 @@ internal fun NightSkyGpuSky(
             val tick = frameTick
             val sc = scene ?: return@Canvas
             val cat = catalog ?: return@Canvas
-            renderer.updateOpticalPaints(density = density)
-            renderer.drawGpuOverlay(
+            renderer.drawScreenOverlay(
                 drawScope = this,
                 scene = sc,
                 frame = frame,
-                catalog = cat,
                 displayRotation = displayRotation,
-                showConstellations = isConstellationsVisible,
-                showMeteorShowers = isMeteorShowersVisible,
                 lstDegrees = frameLst,
                 latitudeDegrees = latitudeDegrees,
                 selectedBody = selectedBody,

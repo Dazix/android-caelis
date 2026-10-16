@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (438 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (265 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (489 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (279 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **942 JVM tests (309 intervalometer, 482 solar, horizon & pose, 272 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 42
+`skipped`), not from the console. Current baseline: **949 JVM tests (309 intervalometer, 489 solar, horizon & pose, 279 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -111,7 +111,7 @@ a session from the shell.
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
 | `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the app-owned preview surface that hands every camera image to the GPU (`CameraFrameSource`, `PreviewFrameClock`, and `CameraBackgroundSink`, the interface a test drives in place of the GPU picture), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`, which takes a `CameraFrameGeometry` — frame size, viewport, fill scale, rotation, FOV — rather than loose parameters, so a CameraX frame and an ARCore frame go through the same fit). |
 | `ar/pose/` | `ArCoreSessionController`: the only place a `com.google.ar.core.Session` is constructed, resumed or installed, behind per-call consent. Other pose code may import ARCore types here and nowhere else. The rest of the package is ARCore-free and what the screens use: `PoseSource` (`SensorPoseSource` wraps `OrientationTracker`, `ArCorePoseSource` turns an ARCore frame into the sky's device→ENU), `PoseHandoff` (which of the two draws), `SkyPoseRig` (who owns the camera and the whole per-vsync decision; built by `ui/rememberSkyPoseRig`), `ArCoreHost` + `ArCoreFrameSource` (the live session, behind the `ArFrameSource` seam a test scripts). |
-| `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
+| `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, the marks (`SpriteAtlas` + `LabelBatch` for pre-rendered names and badges, `GlyphBatch` for distance-field glyphs; the packing is `domain/arframe/AtlasPacker`), `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, the ARCore and Geospatial consent pair (`ArCoreSettings`, both default off, Geospatial never on without ARCore), and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
@@ -220,14 +220,26 @@ Each of these was found by review or on the device and is now covered by a test.
   clear `pan*` and keep `calibration*`; only an explicit reset clears both.
 - **Zero allocations on the AR render loop.** A frame of either AR screen is matrix and uniform writes
   plus uploads only when data changed; geometry is rebuilt on data changes (`SunArScene`,
-  `NightSkyScene`), and the Compose overlays draw through pre-allocated paints and buffers.
+  `NightSkyScene`), the mark batches (`LabelBatch`, `GlyphBatch`) upload only a listing that differs
+  from the last one, the atlas is redrawn only when its text or style changes, and the Compose
+  overlays draw through pre-allocated paints and buffers.
 - **The AR skies render into a TextureView, never a SurfaceView.** SurfaceFlinger presents a
   SurfaceView's buffers independently of the window, and on a Pixel 7 Pro the Compose labels slid
-  visibly against the stars during a pan. A TextureView is composited in the window's own frame,
-  and one `withFrameNanos` loop renders the GPU frame and invalidates the overlay from one pose.
-  The camera picture is part of that same Filament frame (`CameraBackground`, fed by
-  `CameraFrameSource`); there is no `PreviewView` under the sky any more, and putting one back
-  would show a picture composited apart from the overlay, tens of milliseconds older.
+  visibly against the stars during a pan. A TextureView is composited by the window, but **not in the
+  vsync its frame was rendered in** (next invariant). The camera picture is part of the Filament frame
+  (`CameraBackground`, fed by `CameraFrameSource`); there is no `PreviewView` under the sky any more,
+  and putting one back would show a picture composited apart from the sky, tens of milliseconds older.
+- **Everything anchored to the sky is drawn in the Filament frame; Compose draws only what is fixed to
+  the screen.** Names, DSO and meteor glyphs, the selection reticle, the grid's labels and dots, Sun
+  AR's time bubbles, rise/set badges and the sun and moon discs are sprites of a `SpriteAtlas`
+  (`label.mat`, drawn with Android's own text stack, colours baked in) and distance-field glyphs
+  (`glyph.mat`), pinned to a sky direction and sized in screen pixels. They were a Compose overlay
+  drawn in the same vsync from the same pose; measured on a Pixel 7 Pro (`onSurfaceTextureUpdated`
+  against `renderFrame`), the TextureView latched a GPU frame a median 19.8 ms after it was rendered,
+  only every other frame at 120 Hz, so the overlay ran 2 or 3 renders ahead of the stars, changing
+  frame to frame — held in the hand the names shook against the sky, still they did not. Only the
+  off-screen chevron and pointers (on the screen edge, not the sky) and debug layers stay in Compose.
+  `OverlaySpriteDeviceTest` checks on the GPU that a mark lands within a pixel of `SkyProjector`.
 - **The overlay is drawn with the pose at the timestamp of the camera image it is composited with.**
   Each frame latches the newest image first and takes the pose at *that image's* instant
   (`CameraFrameSource.poseTimestampNs` -> `OrientationTracker.getRenderMatrix`), and keeps that
@@ -243,8 +255,9 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Every camera image handed to Filament is closed in its release callback, from a fixed pool.**
   `CameraBackground` owns a few preallocated `Runnable`s (no lambda per frame); a lost callback
   leaks one of the reader's four images and, after enough of them, freezes the picture.
-- **One matrix feeds the GPU and the CPU.** Labels, bubbles, pointers and the tap hit test project
-  through the scene's `SkyProjector`, updated in the same call that sets the Filament camera.
+- **One matrix feeds the GPU and the CPU.** The tap hit test, the off-screen pointers and which marks
+  are listed project through the scene's `SkyProjector`, updated in the same call that sets the
+  Filament camera; the marks themselves are projected by the GPU from that camera.
 - **Timing is absolute.** Shot times come from `IntervalSchedule.targetElapsedFor`, never "now +
   interval". A late shot must not push the series.
 - **A tap is not a shot.** With verification armed, `shotsTaken` moves only when verification resolves

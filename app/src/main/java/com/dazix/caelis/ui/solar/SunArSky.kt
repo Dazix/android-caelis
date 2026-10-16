@@ -37,7 +37,13 @@ import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.pose.SkyPoseFrame
 import com.dazix.caelis.ar.pose.SkyPoseRig
 import com.dazix.caelis.ar.scene.CameraBackground
+import com.dazix.caelis.ar.scene.GlyphBatch
+import com.dazix.caelis.ar.scene.LabelBatch
 import com.dazix.caelis.ar.scene.NormalGoldSolar
+import com.dazix.caelis.ar.scene.SpriteAtlas
+import com.dazix.caelis.domain.arframe.AltAzGridBuilder
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.ceil
 import com.dazix.caelis.ar.scene.NormalSunrise
 import com.dazix.caelis.ar.scene.NormalSunset
 import com.dazix.caelis.ar.scene.SkyGridMarkers
@@ -60,16 +66,16 @@ private val MoonSet = Color(0xFF26A69A)
 private val Casing = Color(0x99000000)
 
 /**
- * The Sun AR sky drawn by Filament ([SunArScene]: grid, terrain silhouette, day arcs), with the
- * Compose overlay for everything that is text or screen-space UI on top.
+ * The Sun AR sky drawn by Filament ([SunArScene]: grid, terrain silhouette, day arcs and the marks
+ * on them), with a Compose overlay only for the off-screen pointers.
  *
- * Both halves come from one frame loop: each vsync latches the newest camera image, samples the pose
- * at that image's instant, renders the GPU frame and invalidates the overlay, which projects through
- * the scene's projector, so a time bubble cannot lag its arc. The camera picture is drawn by the
- * same Filament frame ([CameraBackground]) rather than by a `PreviewView` underneath, because only
- * then are image and overlay certain to come from the same pose; the sky renders into a TextureView
- * for the reason Night Sky does (see `NightSkyGpuSky`): a SurfaceView is presented apart from the
- * window and the overlay slid against it during a pan.
+ * Each vsync latches the newest camera image, samples the pose at that image's instant, updates the
+ * scene, lists its marks ([SunArMarks]) and renders. The bubbles, badges and discs were the Compose
+ * overlay once, drawn with the same pose in the same vsync; but the TextureView puts a GPU frame on
+ * screen 2-3 vsyncs later than the overlay, so held in the hand they jumped against the arcs. The
+ * camera picture is drawn by the same Filament frame ([CameraBackground]) rather than by a
+ * `PreviewView` underneath, for the same reason; the sky renders into a TextureView for the reason
+ * Night Sky does (see `NightSkyGpuSky`).
  */
 @Composable
 internal fun SunArGpuSky(
@@ -127,6 +133,27 @@ internal fun SunArGpuSky(
     val currentRotation by rememberUpdatedState(displayRotation)
     val currentFov by rememberUpdatedState(fovHorizontalDegrees)
     val currentRig by rememberUpdatedState(rig)
+    val currentSolar by rememberUpdatedState(solarTrajectory)
+    val currentLunar by rememberUpdatedState(lunarTrajectory)
+    val currentSun by rememberUpdatedState(currentSunPos)
+    val currentMoon by rememberUpdatedState(currentMoonPos)
+    val fontScale = LocalDensity.current.fontScale
+    val currentFontScale by rememberUpdatedState(fontScale)
+    val marks = remember { SunArMarks() }
+    marks.grid.updateLabels(
+        stringResource(R.string.sun_ar_zenith),
+        stringResource(R.string.sun_ar_nadir),
+        arrayOf(
+            stringResource(R.string.sun_ar_cardinal_n),
+            stringResource(R.string.sun_ar_cardinal_ne),
+            stringResource(R.string.sun_ar_cardinal_e),
+            stringResource(R.string.sun_ar_cardinal_se),
+            stringResource(R.string.sun_ar_cardinal_s),
+            stringResource(R.string.sun_ar_cardinal_sw),
+            stringResource(R.string.sun_ar_cardinal_w),
+            stringResource(R.string.sun_ar_cardinal_nw),
+        ),
+    )
     val poseFrame = remember { SkyPoseFrame() }
     var frameTick by remember { mutableLongStateOf(0L) }
 
@@ -160,6 +187,8 @@ internal fun SunArGpuSky(
                         currentGetMatrix(poseFrame.poseTimestampNs, renderMatrix)
                     }
                     sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
+                    // Bubbles, badges, discs and grid labels are part of this GPU frame.
+                    marks.update(sc, currentSolar, currentLunar, currentSun, currentMoon, density, currentFontScale)
                     sf.renderFrame(nanos)
                     revealed = true
                     frameTick = nanos
@@ -195,8 +224,6 @@ internal fun SunArGpuSky(
             SunArOverlay(
                 projector = sc.projector,
                 frameTick = frameTick,
-                solarTrajectory = solarTrajectory,
-                lunarTrajectory = lunarTrajectory,
                 currentSunPos = currentSunPos,
                 currentMoonPos = currentMoonPos,
                 modifier = Modifier.fillMaxSize().graphicsLayer { alpha = skyAlpha },
@@ -205,22 +232,223 @@ internal fun SunArGpuSky(
     }
 }
 
-/** Paints and scratch space for [SunArOverlay], allocated once. Colours are the Canvas ones. */
-internal class SunArOverlayPaints {
+/**
+ * What Sun AR draws as marks in its GPU frame ([SunArScene.markLabels] / [SunArScene.markGlyphs]):
+ * the grid's labels, the time bubbles, the rise/set badges and the live sun and moon. They were the
+ * Compose overlay once, which the TextureView showed 2-3 vsyncs apart from the arcs. Bubbles and
+ * badges are drawn into the scene's atlas as whole sprites (pill, border and text) when a
+ * trajectory, the density or the font scale changes; each frame only lists them.
+ *
+ * Paints, sizes and colours are the Canvas ones. Zero allocations per frame.
+ */
+internal class SunArMarks {
     val grid = SkyGridMarkers()
-    val rect = RectF()
-    val projected = FloatArray(3)
-    val bearing = FloatArray(2)
+    private val rect = RectF()
+    private val projected = FloatArray(3)
+    private val direction = FloatArray(3)
 
-    val bubbleText = textPaint(android.graphics.Color.WHITE)
-    val bubbleBg = fillPaint(android.graphics.Color.argb(220, 20, 20, 20))
-    val bubbleBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
-    val markerText = textPaint(android.graphics.Color.WHITE)
-    val markerBg = fillPaint(android.graphics.Color.argb(230, 20, 20, 20))
-    val markerBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
-    val pointerText = textPaint(android.graphics.Color.argb(255, 255, 179, 0))
-    val pointerBg = fillPaint(android.graphics.Color.argb(220, 20, 20, 20))
-    val pointerBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
+    private val bubbleText = textPaint(android.graphics.Color.WHITE)
+    private val bubbleBg = fillPaint(android.graphics.Color.argb(220, 20, 20, 20))
+    private val bubbleBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
+    private val markerText = textPaint(android.graphics.Color.WHITE)
+    private val markerBg = fillPaint(android.graphics.Color.argb(230, 20, 20, 20))
+    private val markerBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
+
+    private var builtScene: SunArScene? = null
+    private var builtSolar: SolarTrajectory? = null
+    private var builtLunar: LunarTrajectory? = null
+    private var builtDensity = 0f
+    private var builtFontScale = 0f
+    private var builtGridKey = -1
+    private var sunBubbleSprites = IntArray(0)
+    private var moonBubbleSprites = IntArray(0)
+    private val markerSprites = IntArray(4) { -1 }
+
+    /**
+     * Lists this frame's marks into [scene], after `scene.update` and before the frame is rendered.
+     * The sun and moon discs are listed while they are on screen; off it, the Compose pointer
+     * ([SunArOverlay]) takes over.
+     */
+    fun update(
+        scene: SunArScene,
+        solar: SolarTrajectory,
+        lunar: LunarTrajectory,
+        sunPos: SolarCoordinates?,
+        moonPos: LunarCoordinates?,
+        density: Float,
+        fontScale: Float,
+    ) {
+        ensureAtlas(scene, solar, lunar, density, fontScale)
+        val labels = scene.markLabels
+        val glyphs = scene.markGlyphs
+        val d = direction
+        labels.begin()
+        glyphs.begin()
+        grid.emit(labels, glyphs)
+
+        // Only points above -15° are labelled, as only those stretches of the arcs are drawn.
+        val sunBubbles = solar.timeBubbles
+        for (i in sunBubbles.indices) {
+            val c = sunBubbles[i].coordinates
+            if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
+            AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
+            labels.add(sunBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
+        }
+        val moonBubbles = lunar.timeBubbles
+        for (i in moonBubbles.indices) {
+            val c = moonBubbles[i].coordinates
+            if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
+            AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
+            labels.add(moonBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
+        }
+
+        solar.sunriseMarker?.let { addMarker(labels, glyphs, 0, it.coordinates, NormalSunrise, density) }
+        solar.sunsetMarker?.let { addMarker(labels, glyphs, 1, it.coordinates, NormalSunset, density) }
+        lunar.moonriseMarker?.let { addMarker(labels, glyphs, 2, it.coordinates, MoonRise, density) }
+        lunar.moonsetMarker?.let { addMarker(labels, glyphs, 3, it.coordinates, MoonSet, density) }
+
+        val shape = GlyphBatch.Shape
+        if (sunPos != null && isOnScreen(scene.projector, sunPos.azimuthDegrees, sunPos.apparentElevationDegrees)) {
+            AltAzGridBuilder.direction(sunPos.azimuthDegrees, sunPos.apparentElevationDegrees, d)
+            glyphs.add(shape.DISC, d[0], d[1], d[2], 11f * density, 0f, NormalGoldSolar.toArgb())
+            glyphs.add(shape.DISC, d[0], d[1], d[2], 4f * density, 0f, android.graphics.Color.WHITE)
+            glyphs.add(shape.RING, d[0], d[1], d[2], 11.5f * density, 1.2f * density, Casing.toArgb())
+        }
+        if (moonPos != null && isOnScreen(scene.projector, moonPos.azimuthDegrees, moonPos.apparentElevationDegrees)) {
+            AltAzGridBuilder.direction(moonPos.azimuthDegrees, moonPos.apparentElevationDegrees, d)
+            glyphs.add(shape.DISC, d[0], d[1], d[2], 10.5f * density, 0f, SunArScene.MoonArc.toArgb())
+            glyphs.add(shape.DISC, d[0], d[1], d[2], 7.5f * density, 0f, MoonDisk.toArgb())
+            glyphs.add(shape.DISC, d[0], d[1], d[2], 3.5f * density, 0f, android.graphics.Color.WHITE)
+            glyphs.add(shape.RING, d[0], d[1], d[2], 11f * density, 1.2f * density, Casing.toArgb())
+        }
+        glyphs.end()
+        labels.end()
+    }
+
+    private fun isOnScreen(projector: SkyProjector, azimuth: Double, elevation: Double): Boolean {
+        if (!projector.projectAltAz(azimuth, elevation, projected)) return false
+        return projected[0] in 0f..projector.viewportWidth && projected[1] in 0f..projector.viewportHeight
+    }
+
+    /** A rise or set badge: a dot on the horizon with the time and azimuth above it. */
+    private fun addMarker(
+        labels: LabelBatch,
+        glyphs: GlyphBatch,
+        slot: Int,
+        c: SolarCoordinates,
+        accent: Color,
+        density: Float,
+    ) = addMarkerAt(labels, glyphs, slot, c.azimuthDegrees, c.apparentElevationDegrees, accent, density)
+
+    private fun addMarker(
+        labels: LabelBatch,
+        glyphs: GlyphBatch,
+        slot: Int,
+        c: LunarCoordinates,
+        accent: Color,
+        density: Float,
+    ) = addMarkerAt(labels, glyphs, slot, c.azimuthDegrees, c.apparentElevationDegrees, accent, density)
+
+    private fun addMarkerAt(
+        labels: LabelBatch,
+        glyphs: GlyphBatch,
+        slot: Int,
+        azimuth: Double,
+        elevation: Double,
+        accent: Color,
+        density: Float,
+    ) {
+        val d = direction
+        AltAzGridBuilder.direction(azimuth, elevation, d)
+        glyphs.add(GlyphBatch.Shape.DISC, d[0], d[1], d[2], 4f * density, 0f, accent.toArgb())
+        labels.add(markerSprites[slot], d[0], d[1], d[2])
+    }
+
+    /** Redraws the atlas when its labels changed: a trajectory, the density, the font scale, the grid. */
+    private fun ensureAtlas(
+        scene: SunArScene,
+        solar: SolarTrajectory,
+        lunar: LunarTrajectory,
+        density: Float,
+        fontScale: Float,
+    ) {
+        val sp = density * fontScale
+        grid.horizonTextPaint.textSize = 5.3f * sp
+        grid.gridTextPaint.textSize = 4.5f * sp
+        if (scene === builtScene && solar === builtSolar && lunar === builtLunar && density == builtDensity &&
+            fontScale == builtFontScale && grid.contentKey == builtGridKey
+        ) return
+        builtScene = scene
+        builtSolar = solar
+        builtLunar = lunar
+        builtDensity = density
+        builtFontScale = fontScale
+        builtGridKey = grid.contentKey
+        bubbleText.textSize = 11f * sp
+        bubbleBorder.strokeWidth = 1.2f * density
+        markerText.textSize = 12f * sp
+        markerBorder.strokeWidth = 1.5f * density
+
+        val atlas = scene.markAtlas
+        atlas.begin()
+        grid.addSprites(atlas)
+        // A bubble is the same sprite wherever its time repeats on the same arc.
+        val shared = HashMap<String, Int>()
+        sunBubbleSprites = IntArray(solar.timeBubbles.size) {
+            val text = solar.timeBubbles[it].formattedTime
+            shared.getOrPut("s$text") { addBubble(atlas, text, SUN_BORDER_ARGB, density) }
+        }
+        moonBubbleSprites = IntArray(lunar.timeBubbles.size) {
+            val text = lunar.timeBubbles[it].formattedTime
+            shared.getOrPut("m$text") { addBubble(atlas, text, MOON_BORDER_ARGB, density) }
+        }
+        markerSprites[0] = solar.sunriseMarker?.let { addBadge(atlas, markerLabel("🌅", it.formattedTime, it.coordinates.azimuthDegrees), NormalSunrise, density) } ?: -1
+        markerSprites[1] = solar.sunsetMarker?.let { addBadge(atlas, markerLabel("🌇", it.formattedTime, it.coordinates.azimuthDegrees), NormalSunset, density) } ?: -1
+        markerSprites[2] = lunar.moonriseMarker?.let { addBadge(atlas, markerLabel("🌙", it.formattedTime, it.coordinates.azimuthDegrees), MoonRise, density) } ?: -1
+        markerSprites[3] = lunar.moonsetMarker?.let { addBadge(atlas, markerLabel("🌘", it.formattedTime, it.coordinates.azimuthDegrees), MoonSet, density) } ?: -1
+        atlas.end()
+    }
+
+    /** A time pill, 46 x 21 dp, centred on its point of the arc. */
+    private fun addBubble(atlas: SpriteAtlas, text: String, borderArgb: Int, density: Float): Int {
+        val pw = 46f * density
+        val ph = 21f * density
+        val border = bubbleBorder.strokeWidth
+        val w = ceil(pw + border).toInt() + 2
+        val h = ceil(ph + border).toInt() + 2
+        val ax = w * 0.5f
+        val ay = h * 0.5f
+        return atlas.add(w, h, ax, ay) { canvas, left, top ->
+            val cx = left + ax
+            val cy = top + ay
+            rect.set(cx - pw * 0.5f, cy - ph * 0.5f, cx + pw * 0.5f, cy + ph * 0.5f)
+            canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, bubbleBg)
+            bubbleBorder.color = borderArgb
+            canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, bubbleBorder)
+            canvas.drawText(text, cx, cy + bubbleText.textSize * 0.35f, bubbleText)
+        }
+    }
+
+    /** A badge pill, 26 dp tall, centred 16 dp above its dot (the anchor). */
+    private fun addBadge(atlas: SpriteAtlas, label: String, accent: Color, density: Float): Int {
+        val pw = markerText.measureText(label) + 16f * density
+        val ph = 26f * density
+        val lift = 16f * density
+        val border = markerBorder.strokeWidth
+        val w = ceil(pw + border).toInt() + 2
+        val h = ceil(ph + border).toInt() + 2
+        val ax = w * 0.5f
+        val ay = h * 0.5f + lift
+        return atlas.add(w, h, ax, ay) { canvas, left, top ->
+            val cx = left + w * 0.5f
+            val cy = top + h * 0.5f
+            rect.set(cx - pw * 0.5f, cy - ph * 0.5f, cx + pw * 0.5f, cy + ph * 0.5f)
+            markerBorder.color = accent.toArgb()
+            canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, markerBg)
+            canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, markerBorder)
+            canvas.drawText(label, cx, cy + markerText.textSize * 0.35f, markerText)
+        }
+    }
 
     private fun textPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         isFakeBoldText = true
@@ -238,46 +466,53 @@ internal class SunArOverlayPaints {
         this.color = color
     }
 
+    private companion object {
+        const val MIN_BUBBLE_ELEVATION = -15.0
+        val SUN_BORDER_ARGB = android.graphics.Color.argb(255, 255, 179, 0)
+        val MOON_BORDER_ARGB = android.graphics.Color.argb(180, 128, 222, 234)
+    }
+}
+
+/** Paints and scratch space for [SunArOverlay], allocated once. Colours are the Canvas ones. */
+internal class SunArPointerPaints {
+    val rect = RectF()
+    val projected = FloatArray(3)
+    val bearing = FloatArray(2)
+    val pointerText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFakeBoldText = true
+        textAlign = Paint.Align.CENTER
+        color = android.graphics.Color.argb(255, 255, 179, 0)
+    }
+    val pointerBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.argb(220, 20, 20, 20)
+    }
+    val pointerBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = android.graphics.Color.argb(255, 255, 179, 0)
+    }
+
     companion object {
         val MOON_BORDER_ARGB = android.graphics.Color.argb(180, 128, 222, 234)
     }
 }
 
 /**
- * The Sun AR overlay: grid labels, time bubbles, rise/set badges, the live sun and moon, and the
- * pointer to either when it is off screen — everything Filament cannot draw, projected through
- * [projector]. [frameTick] only has to change to redraw it after the projector moved.
+ * The Compose half of Sun AR: the pointer to the sun or the moon while it is off screen. It sits on
+ * the screen edge, not on the sky, so it may lag the GPU frame by the vsync or two a TextureView
+ * takes without anything sliding against the picture; every mark that does sit on the sky is in
+ * the GPU frame ([SunArMarks]). [frameTick] only has to change to redraw it after [projector] moved.
  */
 @Composable
 internal fun SunArOverlay(
     projector: SkyProjector,
     frameTick: Long,
-    solarTrajectory: SolarTrajectory,
-    lunarTrajectory: LunarTrajectory,
     currentSunPos: SolarCoordinates?,
     currentMoonPos: LunarCoordinates?,
     modifier: Modifier = Modifier,
 ) {
-    val paints = remember { SunArOverlayPaints() }
-    paints.grid.updateLabels(
-        stringResource(R.string.sun_ar_zenith),
-        stringResource(R.string.sun_ar_nadir),
-        arrayOf(
-            stringResource(R.string.sun_ar_cardinal_n),
-            stringResource(R.string.sun_ar_cardinal_ne),
-            stringResource(R.string.sun_ar_cardinal_e),
-            stringResource(R.string.sun_ar_cardinal_se),
-            stringResource(R.string.sun_ar_cardinal_s),
-            stringResource(R.string.sun_ar_cardinal_sw),
-            stringResource(R.string.sun_ar_cardinal_w),
-            stringResource(R.string.sun_ar_cardinal_nw),
-        ),
-    )
+    val paints = remember { SunArPointerPaints() }
     // Strings built when the data changes, not on every frame.
-    val sunriseLabel = remember(solarTrajectory) { solarTrajectory.sunriseMarker?.let { markerLabel("🌅", it.formattedTime, it.coordinates.azimuthDegrees) } }
-    val sunsetLabel = remember(solarTrajectory) { solarTrajectory.sunsetMarker?.let { markerLabel("🌇", it.formattedTime, it.coordinates.azimuthDegrees) } }
-    val moonriseLabel = remember(lunarTrajectory) { lunarTrajectory.moonriseMarker?.let { markerLabel("🌙", it.formattedTime, it.coordinates.azimuthDegrees) } }
-    val moonsetLabel = remember(lunarTrajectory) { lunarTrajectory.moonsetMarker?.let { markerLabel("🌘", it.formattedTime, it.coordinates.azimuthDegrees) } }
     val sunPointerLabel = remember(currentSunPos) { currentSunPos?.let { signedDegrees(it.elevationDegrees) } }
     val moonPointerLabel = remember(currentMoonPos) { currentMoonPos?.let { "${it.phaseGlyph} ${signedDegrees(it.elevationDegrees)}" } }
 
@@ -286,32 +521,8 @@ internal fun SunArOverlay(
         val tick = frameTick
         val w = size.width
         val h = size.height
-        paints.grid.horizonTextPaint.textSize = 5.3.sp.toPx()
-        paints.grid.gridTextPaint.textSize = 4.5.sp.toPx()
-        paints.bubbleText.textSize = 11.sp.toPx()
-        paints.bubbleBorder.strokeWidth = 1.2.dp.toPx()
-        paints.markerText.textSize = 12.sp.toPx()
-        paints.markerBorder.strokeWidth = 1.5.dp.toPx()
         paints.pointerText.textSize = 11.sp.toPx()
         paints.pointerBorder.strokeWidth = 1.2.dp.toPx()
-
-        paints.grid.draw(drawContext.canvas.nativeCanvas, projector, w, h)
-
-        val sunBubbles = solarTrajectory.timeBubbles
-        for (i in sunBubbles.indices) {
-            val c = sunBubbles[i].coordinates
-            drawTimeBubble(projector, paints, c.azimuthDegrees, c.apparentElevationDegrees, sunBubbles[i].formattedTime, borderArgb = null)
-        }
-        val moonBubbles = lunarTrajectory.timeBubbles
-        for (i in moonBubbles.indices) {
-            val c = moonBubbles[i].coordinates
-            drawTimeBubble(projector, paints, c.azimuthDegrees, c.apparentElevationDegrees, moonBubbles[i].formattedTime, SunArOverlayPaints.MOON_BORDER_ARGB)
-        }
-
-        solarTrajectory.sunriseMarker?.let { drawMarker(projector, paints, it.coordinates.azimuthDegrees, it.coordinates.apparentElevationDegrees, sunriseLabel!!, NormalSunrise) }
-        solarTrajectory.sunsetMarker?.let { drawMarker(projector, paints, it.coordinates.azimuthDegrees, it.coordinates.apparentElevationDegrees, sunsetLabel!!, NormalSunset) }
-        lunarTrajectory.moonriseMarker?.let { drawMarker(projector, paints, it.coordinates.azimuthDegrees, it.coordinates.apparentElevationDegrees, moonriseLabel!!, MoonRise) }
-        lunarTrajectory.moonsetMarker?.let { drawMarker(projector, paints, it.coordinates.azimuthDegrees, it.coordinates.apparentElevationDegrees, moonsetLabel!!, MoonSet) }
 
         if (currentSunPos != null) {
             val az = currentSunPos.azimuthDegrees
@@ -319,8 +530,7 @@ internal fun SunArOverlay(
             val inFront = projector.projectAltAz(az, el, paints.projected)
             val x = paints.projected[0]
             val y = paints.projected[1]
-            if (inFront && x in 0f..w && y in 0f..h) drawLiveSun(x, y)
-            else drawOffscreenPointer(projector, paints, az, el, sunPointerLabel!!, isMoon = false)
+            if (!(inFront && x in 0f..w && y in 0f..h)) drawOffscreenPointer(projector, paints, az, el, sunPointerLabel!!, isMoon = false)
         }
         if (currentMoonPos != null) {
             val az = currentMoonPos.azimuthDegrees
@@ -328,8 +538,7 @@ internal fun SunArOverlay(
             val inFront = projector.projectAltAz(az, el, paints.projected)
             val x = paints.projected[0]
             val y = paints.projected[1]
-            if (inFront && x in 0f..w && y in 0f..h) drawLiveMoon(x, y)
-            else drawOffscreenPointer(projector, paints, az, el, moonPointerLabel!!, isMoon = true)
+            if (!(inFront && x in 0f..w && y in 0f..h)) drawOffscreenPointer(projector, paints, az, el, moonPointerLabel!!, isMoon = true)
         }
     }
 }
@@ -338,91 +547,13 @@ private fun markerLabel(emoji: String, time: String, azimuthDegrees: Double) = "
 
 private fun signedDegrees(elevation: Double) = "${if (elevation >= 0) "+" else ""}${elevation.toInt()}°"
 
-/** A time pill on an arc. Only points above -15° are labelled, as only those stretches are drawn. */
-private fun DrawScope.drawTimeBubble(
-    projector: SkyProjector,
-    paints: SunArOverlayPaints,
-    azimuth: Double,
-    elevation: Double,
-    text: String,
-    borderArgb: Int?,
-) {
-    if (elevation < -15.0) return
-    if (!projector.projectAltAz(azimuth, elevation, paints.projected)) return
-    val px = paints.projected[0]
-    val py = paints.projected[1]
-    val margin = 60f
-    if (px !in -margin..(size.width + margin) || py !in -margin..(size.height + margin)) return
-    val pw = 46.dp.toPx()
-    val ph = 21.dp.toPx()
-    val radius = ph * 0.5f
-    val left = px - pw * 0.5f
-    val top = py - ph * 0.5f
-    paints.rect.set(left, top, left + pw, top + ph)
-    val canvas = drawContext.canvas.nativeCanvas
-    canvas.drawRoundRect(paints.rect, radius, radius, paints.bubbleBg)
-    val border = paints.bubbleBorder.color
-    if (borderArgb != null) paints.bubbleBorder.color = borderArgb
-    canvas.drawRoundRect(paints.rect, radius, radius, paints.bubbleBorder)
-    paints.bubbleBorder.color = border
-    canvas.drawText(text, px, py + paints.bubbleText.textSize * 0.35f, paints.bubbleText)
-}
-
-/** A rise or set badge: a dot on the horizon with the time and azimuth above it. */
-private fun DrawScope.drawMarker(
-    projector: SkyProjector,
-    paints: SunArOverlayPaints,
-    azimuth: Double,
-    elevation: Double,
-    label: String,
-    accent: Color,
-) {
-    if (!projector.projectAltAz(azimuth, elevation, paints.projected)) return
-    val px = paints.projected[0]
-    val py = paints.projected[1]
-    val margin = 80f
-    if (px !in -margin..(size.width + margin) || py !in -margin..(size.height + margin)) return
-    val textW = paints.markerText.measureText(label) + 16.dp.toPx()
-    val ph = 26.dp.toPx()
-    val radius = ph * 0.5f
-    val left = px - textW * 0.5f
-    val top = py - ph * 0.5f - 16.dp.toPx()
-    paints.rect.set(left, top, left + textW, top + ph)
-    paints.markerBorder.color = android.graphics.Color.argb(
-        (accent.alpha * 255).toInt(),
-        (accent.red * 255).toInt(),
-        (accent.green * 255).toInt(),
-        (accent.blue * 255).toInt(),
-    )
-    drawCircle(color = accent, radius = 4.dp.toPx(), center = Offset(px, py))
-    val canvas = drawContext.canvas.nativeCanvas
-    canvas.drawRoundRect(paints.rect, radius, radius, paints.markerBg)
-    canvas.drawRoundRect(paints.rect, radius, radius, paints.markerBorder)
-    canvas.drawText(label, px, top + ph * 0.5f + paints.markerText.textSize * 0.35f, paints.markerText)
-}
-
-private fun DrawScope.drawLiveSun(x: Float, y: Float) {
-    val c = Offset(x, y)
-    drawCircle(color = NormalGoldSolar, radius = 11.dp.toPx(), center = c)
-    drawCircle(color = Color.White, radius = 4.dp.toPx(), center = c)
-    drawCircle(color = Casing, radius = 11.5.dp.toPx(), center = c, style = Stroke(width = 1.2.dp.toPx()))
-}
-
-private fun DrawScope.drawLiveMoon(x: Float, y: Float) {
-    val c = Offset(x, y)
-    drawCircle(color = SunArScene.MoonArc, radius = 10.5.dp.toPx(), center = c)
-    drawCircle(color = MoonDisk, radius = 7.5.dp.toPx(), center = c)
-    drawCircle(color = Color.White, radius = 3.5.dp.toPx(), center = c)
-    drawCircle(color = Casing, radius = 11.0.dp.toPx(), center = c, style = Stroke(width = 1.2.dp.toPx()))
-}
-
 /**
  * The sun or moon pinned to the screen edge in the direction to turn, with an arrow outwards and
  * its elevation on a tag inwards. The edge keeps clear of the top bar and the bottom controls.
  */
 private fun DrawScope.drawOffscreenPointer(
     projector: SkyProjector,
-    paints: SunArOverlayPaints,
+    paints: SunArPointerPaints,
     azimuth: Double,
     elevation: Double,
     tag: String,
@@ -503,7 +634,7 @@ private fun DrawScope.drawOffscreenPointer(
     val canvas = drawContext.canvas.nativeCanvas
     canvas.drawRoundRect(paints.rect, radius, radius, paints.pointerBg)
     val border = paints.pointerBorder.color
-    if (isMoon) paints.pointerBorder.color = SunArOverlayPaints.MOON_BORDER_ARGB
+    if (isMoon) paints.pointerBorder.color = SunArPointerPaints.MOON_BORDER_ARGB
     canvas.drawRoundRect(paints.rect, radius, radius, paints.pointerBorder)
     paints.pointerBorder.color = border
     canvas.drawText(tag, tagX, top + ph * 0.5f + paints.pointerText.textSize * 0.35f, paints.pointerText)
