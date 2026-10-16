@@ -38,7 +38,7 @@ object AlignDiagnostics {
             "refusal=${fit.refusal} columns=${fit.usedColumns} best=${fit.bestAzimuthDegrees}" +
                 " residual=${fit.bestResidualDegrees} average=${fit.averageResidualDegrees}" +
                 " runnerUp=${fit.runnerUpResidualDegrees} relief=${fit.profileReliefDegrees}" +
-                " observedRelief=${fit.observedReliefDegrees} match=${fit.match}" +
+                " observedRelief=${fit.observedReliefDegrees} support=${fit.supportingShare} match=${fit.match}" +
                 " absolute=$absolute calibration=$calibrationAzimuthDeg/$calibrationPitchDeg" +
                 " fov=${geometry.fovHorizontalDegrees} frame=${frame.width}x${frame.height}" +
                 " fill=${geometry.fillScale}",
@@ -89,6 +89,7 @@ object AlignDiagnostics {
                     appendLine("runnerUpResidualDeg=${fit.runnerUpResidualDegrees}")
                     appendLine("profileReliefDeg=${fit.profileReliefDegrees}")
                     appendLine("observedReliefDeg=${fit.observedReliefDegrees}")
+                    appendLine("supportingShare=${fit.supportingShare}")
                     appendLine("matchAzimuthDeg=${fit.match?.azimuthOffsetDegrees}")
                     appendLine("matchElevationDeg=${fit.match?.elevationOffsetDegrees}")
                 },

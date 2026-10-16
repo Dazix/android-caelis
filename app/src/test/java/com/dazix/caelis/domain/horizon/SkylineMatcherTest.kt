@@ -274,6 +274,117 @@ class SkylineMatcherTest {
         assertNotNull(accepted.match)
     }
 
+    /** Flattens per-column candidate elevations (all at the column's azimuth) and fits them. */
+    private fun fitCandidates(
+        azimuths: DoubleArray,
+        candidates: List<List<Double>>,
+        profile: HorizonProfile,
+    ): SkylineFit {
+        val total = candidates.sumOf { it.size }
+        val flatAzimuths = DoubleArray(total)
+        val flatElevations = DoubleArray(total)
+        val start = IntArray(candidates.size)
+        val count = IntArray(candidates.size)
+        var n = 0
+        for ((c, column) in candidates.withIndex()) {
+            start[c] = n
+            count[c] = column.size
+            for (elevation in column) {
+                flatAzimuths[n] = azimuths[c]
+                flatElevations[n] = elevation
+                n++
+            }
+        }
+        return SkylineMatcher.fitCandidates(flatAzimuths, flatElevations, start, count, candidates.size, profile)
+    }
+
+    /**
+     * The candidate fit replaces the single one in the aligner; with nothing to choose between it
+     * must decide exactly what [SkylineMatcher.fit] decides, refusals included.
+     */
+    @Test
+    fun `one candidate per column is decided exactly as the single fit decides it`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(profile, azimuthError = 2.9, elevationError = 1.3)
+        val (_, misread) = observed(profile, azimuthError = 1.5, elevationError = 0.4, noise = { if (it % 4 == 0) -25.0 else 0.0 })
+        val repeating = profileOf(
+            FloatArray(HorizonProfile.SAMPLE_COUNT) { index ->
+                (2.0 + 1.5 * sin(Math.toRadians(HorizonProfile.azimuthForIndex(index) * 45.0))).toFloat()
+            },
+        )
+        val (_, teeth) = observed(repeating, azimuthError = 3.0, elevationError = 0.0)
+        val cases = listOf(
+            Triple("clean ridge", elevations, profile),
+            Triple("walls below", misread, profile),
+            Triple("roofs", DoubleArray(160) { 14.0 }, profile),
+            Triple("repeating ridge", teeth, repeating),
+            Triple("open water", observed(flatProfile(), azimuthError = 3.0, elevationError = 1.0).second, flatProfile()),
+        )
+        for ((name, values, against) in cases) {
+            val single = SkylineMatcher.fit(azimuths, values, azimuths.size, against)
+            val candidates = fitCandidates(azimuths, values.map { listOf(it) }, against)
+            assertEquals("$name: refusal", single.refusal, candidates.refusal)
+            assertEquals("$name: match", single.match, candidates.match)
+        }
+    }
+
+    /**
+     * The backlit rooftop in miniature: in every column a cloud base somewhere above the ridge and a
+     * parapet below it are as clear as the ridge itself. The terrain decides which one is the skyline.
+     */
+    @Test
+    fun `clouds above and a parapet below the ridge do not move the fit`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(profile, azimuthError = 2.9, elevationError = 1.3)
+        val random = java.util.Random(20261016L)
+        val candidates = elevations.map { ridge ->
+            listOf(ridge + 3.0 + random.nextDouble() * 12.0, ridge, ridge - 2.0 - random.nextDouble() * 3.0)
+        }
+
+        val fit = fitCandidates(azimuths, candidates, profile)
+
+        assertNull("refused with ${fit.refusal}", fit.refusal)
+        assertEquals(2.9, fit.match!!.azimuthOffsetDegrees, 0.1)
+        assertEquals(-1.3, fit.match!!.elevationOffsetDegrees, 0.1)
+        assertEquals(1.0, fit.supportingShare, 1e-9)
+    }
+
+    /**
+     * More candidates are more ways to fit by chance, which is what the gates are for: a sky with
+     * nothing but cloud edges in it, one a flat cloud base and the other broken cloud, has no answer.
+     */
+    @Test
+    fun `cloud edges alone are refused however many there are`() {
+        val profile = ridgeProfile()
+        val azimuths = DoubleArray(160) { 232.0 + 36.0 * it / 159.0 }
+        val random = java.util.Random(7L)
+        val candidates = List(160) {
+            listOf(9.0, 3.0 + random.nextDouble() * 20.0, 3.0 + random.nextDouble() * 20.0).sorted()
+        }
+
+        val fit = fitCandidates(azimuths, candidates, profile)
+
+        assertNull("clouds must not be matched, got ${fit.match}", fit.match)
+    }
+
+    /**
+     * A median under the limit says only that half the columns fit. With the ridge in barely more
+     * than half of them and scattered edges in the rest, the fit is refused for that.
+     */
+    @Test
+    fun `a shift that only a bare majority of the columns supports is refused`() {
+        val profile = ridgeProfile()
+        val (azimuths, elevations) = observed(profile, azimuthError = 2.9, elevationError = 1.3)
+        val random = java.util.Random(11L)
+        val candidates = elevations.mapIndexed { i, ridge ->
+            if (i % 20 < 11) listOf(ridge) else listOf(ridge + (if (random.nextBoolean()) 1 else -1) * (4.0 + random.nextDouble() * 10.0))
+        }
+
+        val fit = fitCandidates(azimuths, candidates, profile)
+
+        assertEquals("support was ${fit.supportingShare}", SkylineRefusal.TOO_FEW_SUPPORTING, fit.refusal)
+    }
+
     @Test
     fun `moderate noise still lands on the right answer`() {
         val profile = ridgeProfile()

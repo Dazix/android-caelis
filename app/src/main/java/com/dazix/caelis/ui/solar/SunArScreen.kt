@@ -247,6 +247,7 @@ fun SunArScreen(
                 SkylineRefusal.NOT_TERRAIN_SHAPED,
                 SkylineRefusal.NO_DISTINCT_MINIMUM,
                 SkylineRefusal.RESIDUAL_TOO_HIGH,
+                SkylineRefusal.TOO_FEW_SUPPORTING,
                 -> R.string.ar_align_auto_no_match
                 SkylineRefusal.AMBIGUOUS_MINIMUM -> R.string.ar_align_auto_ambiguous
                 SkylineRefusal.OUT_OF_RANGE -> R.string.ar_align_auto_out_of_range

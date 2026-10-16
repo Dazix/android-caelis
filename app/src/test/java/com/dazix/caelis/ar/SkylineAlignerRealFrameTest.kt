@@ -2,9 +2,13 @@ package com.dazix.caelis.ar
 
 import android.view.Surface
 import com.dazix.caelis.data.horizon.HorizonProfileCodec
+import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.horizon.SkylineExtractor
 import com.dazix.caelis.domain.horizon.SkylineMatch
 import com.dazix.caelis.domain.horizon.SkylineMatcher
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
@@ -108,9 +112,10 @@ class SkylineAlignerRealFrameTest {
     fun `it finds the real compass error in the photograph it was diagnosed from`() {
         val frame = frameFromMeasuredRidge()
 
-        val match = SkylineAligner.align(frame, believedGeometry(frame), profile())
+        val fit = SkylineAligner.fit(frame, believedGeometry(frame), profile())
+        val match = fit.match
 
-        assertNotNull("a clear ridge over an overcast sky must be matched", match)
+        assertNotNull("a clear ridge over an overcast sky must be matched: $fit", match)
         match!!
         assertTrue("a ridge like Ještěd pins the compass", match.azimuthDetermined)
 
@@ -185,43 +190,50 @@ class SkylineAlignerRealFrameTest {
     ): SkylineMatch? {
         val stride = SkylineAligner.COLUMN_STRIDE
         val columns = (frame.width + stride - 1) / stride
-        val rows = IntArray(columns)
-        val sampled = SkylineExtractor.extract(
+        val k = SkylineExtractor.MAX_CANDIDATES
+        val rows = IntArray(columns * k)
+        val counts = IntArray(columns)
+        val sampled = SkylineExtractor.extractCandidates(
             luma = frame.data,
             width = frame.width,
             height = frame.height,
             rowStride = frame.rowStride,
             columnStride = stride,
             outRows = rows,
+            outCounts = counts,
         )
         if (sampled <= 0) return null
         val scale = maxOf(viewportWidth / frame.width, viewportHeight / frame.height)
-        val azimuths = DoubleArray(sampled)
-        val elevations = DoubleArray(sampled)
+        val azimuths = DoubleArray(sampled * k)
+        val elevations = DoubleArray(sampled * k)
+        val columnStart = IntArray(sampled)
+        val columnCount = IntArray(sampled)
         val azEl = DoubleArray(2)
         var used = 0
         for (i in 0 until sampled) {
-            val row = rows[i]
-            if (row == SkylineExtractor.NO_EDGE) continue
+            columnStart[i] = used
             val screenX = (i * stride - frame.width * 0.5f) * scale + viewportWidth * 0.5f
-            val screenY = (row - frame.height * 0.5f) * scale + viewportHeight * 0.5f
             if (screenX < 0f || screenX > viewportWidth) continue
-            if (screenY < 0f || screenY > viewportHeight) continue
-            CameraProjection.unprojectFast(
-                screenX = screenX,
-                screenY = screenY,
-                rotationMatrix = rotationMatrix,
-                viewportWidth = viewportWidth,
-                viewportHeight = viewportHeight,
-                displayRotation = displayRotation,
-                fovHorizontalDegrees = fovHorizontalDegrees,
-                outAzEl = azEl,
-            )
-            azimuths[used] = azEl[0]
-            elevations[used] = azEl[1]
-            used++
+            for (j in 0 until counts[i]) {
+                val screenY = (rows[i * k + j] - frame.height * 0.5f) * scale + viewportHeight * 0.5f
+                if (screenY < 0f || screenY > viewportHeight) continue
+                CameraProjection.unprojectFast(
+                    screenX = screenX,
+                    screenY = screenY,
+                    rotationMatrix = rotationMatrix,
+                    viewportWidth = viewportWidth,
+                    viewportHeight = viewportHeight,
+                    displayRotation = displayRotation,
+                    fovHorizontalDegrees = fovHorizontalDegrees,
+                    outAzEl = azEl,
+                )
+                azimuths[used] = azEl[0]
+                elevations[used] = azEl[1]
+                used++
+            }
+            columnCount[i] = used - columnStart[i]
         }
-        return SkylineMatcher.match(azimuths, elevations, used, profile())
+        return SkylineMatcher.fitCandidates(azimuths, elevations, columnStart, columnCount, sampled, profile()).match
     }
 
     @Test
@@ -313,8 +325,103 @@ class SkylineAlignerRealFrameTest {
         assertEquals("no fill scale", null, SkylineAligner.align(frame, geometry(fillScale = 0f), profile()))
     }
 
+    /**
+     * A rooftop in Liberec on 16 October 2026, backlit, the sun in the frame and cumulus over Ještěd:
+     * every one of six automatic attempts was refused and the horizon had to be aligned by hand.
+     *
+     * The ridge was a clear step (37–50/255) in every column, but the clouds above it had edges as
+     * strong, and the parapet below it twice as strong. Taking the first step from the top put the
+     * boundary on a cloud in most columns and on a roof in the rest. The fixture is that frame's
+     * measured downward steps, column by column (`rooftop-steps.txt`), rebuilt into a luma plane the
+     * same way the Vratislavice ridge is, so no photograph of the place is committed. The profile is
+     * the one the phone used, its 1440 elevations only; where it was computed is not part of it.
+     */
+    private fun rooftopFrame(): LumaFrame {
+        val width = 480
+        val height = 640
+        val data = ByteArray(width * height)
+        val column = IntArray(height)
+        val lines = String(resource("rooftop-steps.txt")).lines().filter { it.isNotBlank() && !it.startsWith("#") }
+        check(lines.size == width / SkylineAligner.COLUMN_STRIDE) { "fixture has ${lines.size} columns" }
+        for (line in lines) {
+            val fields = line.trim().split(' ')
+            val x = fields[0].toInt()
+            // Each step drops the brightness from its row down; a drop that would go below black is
+            // preceded by a jump back up halfway from the previous step, an upward edge, which is
+            // not a candidate.
+            column.fill(ROOFTOP_TOP_LUMA)
+            var value = ROOFTOP_TOP_LUMA
+            var previous = 0
+            for (step in fields.drop(1)) {
+                val (row, contrast) = step.split(':').map { it.toInt() }
+                if (value - contrast < 0) {
+                    column.fill(ROOFTOP_TOP_LUMA, (previous + row) / 2, height)
+                    value = ROOFTOP_TOP_LUMA
+                }
+                value -= contrast
+                column.fill(value, row, height)
+                previous = row
+            }
+            for (xx in x until minOf(width, x + SkylineAligner.COLUMN_STRIDE)) {
+                for (y in 0 until height) data[y * width + xx] = column[y].toByte()
+            }
+        }
+        return LumaFrame(data, width, height, width)
+    }
+
+    private fun rooftopProfile(): HorizonProfile {
+        val buffer = ByteBuffer.wrap(resource("rooftop-elevations.bin")).order(ByteOrder.LITTLE_ENDIAN)
+        val elevations = FloatArray(HorizonProfile.SAMPLE_COUNT) { buffer.getFloat() }
+        return HorizonProfile(
+            elevationsDegrees = elevations,
+            observer = GeoLocation(0.0, 0.0, 0.0),
+            observerGroundElevationMeters = 432.0,
+            eyeHeightMeters = 1.6,
+            maxRangeMeters = 20_000.0,
+            generatedAtEpochMillis = 0L,
+        )
+    }
+
+    /** The pose of that attempt as the aligner got it: the reference matrix, no calibration in it. */
+    private fun rooftopGeometry(frame: LumaFrame) = CameraFrameGeometry(
+        frameWidth = frame.width,
+        frameHeight = frame.height,
+        viewportWidth = 1080f,
+        viewportHeight = 2340f,
+        fillScale = 3.65625f,
+        rotationMatrix = floatArrayOf(
+            -0.12176826f, -0.03785989f, 0.99183637f, 0f,
+            0.99248976f, -0.016423f, 0.12122149f, 0f,
+            0.011699349f, 0.99914825f, 0.03957522f, 0f,
+            0f, 0f, 0f, 1f,
+        ),
+        displayRotation = Surface.ROTATION_0,
+        fovHorizontalDegrees = 36.713722f,
+    )
+
+    @Test
+    fun `a ridge under clouds and over roofs is found by the terrain, not by the first edge`() {
+        val frame = rooftopFrame()
+
+        val fit = SkylineAligner.fit(frame, rooftopGeometry(frame), rooftopProfile())
+
+        assertEquals("the backlit rooftop frame must be accepted", null, fit.refusal)
+        val match = checkNotNull(fit.match)
+        assertTrue(match.azimuthDetermined)
+        // The fit itself, replayed offline from the dump, put the compass 16.0° and the pitch 0.5°
+        // out; by hand, right after these attempts, the user dragged the ridge on at -16.4° / -0.47°.
+        // The heading was not locked in between, so the hand value is a check to a degree, the
+        // offline fit to a quarter.
+        assertEquals("compass", -16.0, match.azimuthOffsetDegrees, 0.25)
+        assertEquals("pitch", -0.5, match.elevationOffsetDegrees, 0.25)
+        assertEquals("compass against the hand alignment", -16.4, match.azimuthOffsetDegrees, 1.0)
+        assertEquals("pitch against the hand alignment", -0.47, match.elevationOffsetDegrees, 1.0)
+        assertTrue("residual ${match.residualDegrees}", match.residualDegrees < 0.2)
+    }
+
     private companion object {
         const val SKY_LUMA: Byte = 205.toByte()
         const val GROUND_LUMA: Byte = 95.toByte()
+        const val ROOFTOP_TOP_LUMA = 250
     }
 }

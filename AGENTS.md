@@ -72,7 +72,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (489 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (496 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (279 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **949 JVM tests (309 intervalometer, 489 solar, horizon & pose, 279 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **956 JVM tests (309 intervalometer, 496 solar, horizon & pose, 279 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 17 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -184,6 +184,17 @@ Each of these was found by review or on the device and is now covered by a test.
   bare-earth model and never below it, so a median folds the average tree height into the calibration.
   Every refusal carries its reason (`SkylineFit.refusal`), shown to the user and logged as `CaelisAlign`
   in debug builds, which also keep the frame, pose and profile under `filesDir/debug/` (`AlignDiagnostics`).
+- **The extractor proposes, the terrain chooses.** `SkylineExtractor` keeps every clear downward step
+  of a column as a candidate (up to six) and never decides which one is the skyline; each shift of
+  `SkylineMatcher.fitCandidates` takes, column by column, the candidate nearest the terrain under that
+  shift, and the gates are judged on that curve, where every shift had the same freedom — never after
+  the winner had chosen, which would make the fit confirm itself. On top of the gates above, 60 % of
+  the columns must have a candidate on the terrain at the winner, and the relief the photographed
+  skyline is compared against is the terrain's under the *corrected* compass. Any single rule per
+  column was wrong somewhere: the strongest step put the boundary on a sunlit wall below a hazy ridge,
+  the first step from the top put it on the underside of a cloud above it on a backlit roof, and all
+  six attempts there were refused. With one candidate per column the fit decides exactly what
+  `SkylineMatcher.fit` does.
 - **Sun AR aligns itself at every start, and the fit is the whole calibration.** A stored calibration
   does not survive a restart: the heading it was measured against was gyro-held from that session's
   compass reading, and on the device the next start put the ridge 11° out. `AutoAlignPolicy` attempts
