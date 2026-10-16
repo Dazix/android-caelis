@@ -195,6 +195,13 @@ class NightSkyRenderer {
         private const val TAG = "NightSkyRenderer"
         private const val SQRT_2 = 1.4142135f
 
+        /**
+         * How far below its final place a constellation name starts its slide, in dp. The drawn
+         * offset and the tap hit test both read this: they once disagreed (40 px drawn, 40 dp
+         * tested), so on a dense screen a tap on a half-grown name missed it.
+         */
+        const val CONSTELLATION_LABEL_SLIDE_DP = 40f
+
         data class IndicatorTransform(
             val arrowX: Float,
             val arrowY: Float,
@@ -782,7 +789,7 @@ class NightSkyRenderer {
                 centroidInFront = constellationCentroidInFront,
                 constellationProgress = constellationProgress,
                 totalConstellations = constCount,
-                textOffsetYPx = 40f * density,
+                textOffsetYPx = CONSTELLATION_LABEL_SLIDE_DP * density,
                 halfWidthPx = 75f * density,
                 halfHeightPx = 30f * density,
                 minProgress = 0.3f,
@@ -1273,7 +1280,7 @@ class NightSkyRenderer {
                 debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
                 else -> p
             }
-            val offsetY = -40f * (1f - effectiveP)
+            val offsetY = -CONSTELLATION_LABEL_SLIDE_DP * density * (1f - effectiveP)
             if (isSelected) {
                 highlight.add(highlightConstellationSprite, x, y, z, offsetYPx = offsetY, alpha = effectiveP)
             } else {

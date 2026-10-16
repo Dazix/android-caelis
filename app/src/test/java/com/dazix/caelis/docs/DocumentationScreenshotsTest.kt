@@ -47,9 +47,7 @@ import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.SearchResultItem
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.GeoLocation
-import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectoryPlanner
-import com.dazix.caelis.domain.solar.SolarCoordinates
 import com.dazix.caelis.domain.solar.SolarTrajectoryPlanner
 import com.dazix.caelis.service.CameraProfiles
 import com.dazix.caelis.ui.AdvancedScreen
@@ -61,7 +59,6 @@ import com.dazix.caelis.ui.OnboardingScreen
 import com.dazix.caelis.ui.PermissionState
 import com.dazix.caelis.ui.RampScreen
 import com.dazix.caelis.ui.Screen
-import com.dazix.caelis.ui.SegmentedChoice
 import com.dazix.caelis.ui.SettingsScreen
 import com.dazix.caelis.ui.SetupScreen
 import com.dazix.caelis.ui.SetupUiState
@@ -71,14 +68,7 @@ import com.dazix.caelis.ui.nightsky.CelestialSearchBar
 import com.dazix.caelis.ui.nightsky.NightSkyBottomHud
 import com.dazix.caelis.ui.nightsky.NightSkyLayerSettingsSheet
 import com.dazix.caelis.ui.nightsky.NightSkyTopBar
-import com.dazix.caelis.ui.solar.DateNavigatorBar
-import com.dazix.caelis.ui.solar.SunArOverlay
-import com.dazix.caelis.domain.arframe.SkyFrameMath
-import com.dazix.caelis.domain.arframe.SkyProjector
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.remember
-import com.dazix.caelis.ui.solar.SunArTopBar
 import com.dazix.caelis.ui.solar.SunMoonTimesInfoCard
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
@@ -154,19 +144,6 @@ class DocumentationScreenshotsTest {
         location = pragueLocation,
         bubbleInterval = BubbleInterval.ONE_HOUR,
         zoneId = ZoneId.of("Europe/Prague"),
-    )
-
-    private val currentSunCoordinates = SolarCoordinates(
-        azimuthDegrees = 180.0,
-        elevationDegrees = 63.4,
-        apparentElevationDegrees = 63.4,
-    )
-
-    private val currentMoonCoordinates = LunarCoordinates(
-        azimuthDegrees = 135.0,
-        elevationDegrees = 32.0,
-        apparentElevationDegrees = 32.0,
-        phaseName = "Waxing Crescent",
     )
 
     private val siriusDetails = CelestialBodyDetails(
@@ -397,86 +374,6 @@ class DocumentationScreenshotsTest {
     // =========================================================================
     // 2. Sun & Moon AR Trajectory Screens
     // =========================================================================
-
-    @Test
-    fun capture09_SunArTrajectory() {
-        composeTestRule.setContent {
-            CaelisTheme(darkTheme = true) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF0F141C))
-                ) {
-                    // The grid, silhouette, arcs and every mark on them (labels, bubbles, badges,
-                    // the sun and the moon) are drawn by Filament, which Robolectric cannot render;
-                    // this captures the Compose overlay over them, the off-screen pointers, through
-                    // the projector the GPU frame would use.
-                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
-                        val heightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val projector = remember(widthPx, heightPx) {
-                            SkyProjector().also {
-                                val model = FloatArray(16)
-                                SkyFrameMath.cameraModelMatrix(sampleOrientation.rotationMatrix, 0, model)
-                                it.update(model, widthPx, heightPx, 56f)
-                            }
-                        }
-                        SunArOverlay(
-                            projector = projector,
-                            frameTick = 0L,
-                            currentSunPos = currentSunCoordinates,
-                            currentMoonPos = currentMoonCoordinates,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-
-                    // Top HUD Bar
-                    SunArTopBar(
-                        hasGpsFix = true,
-                        locationText = "50.08° N, 14.44° E",
-                        orientation = sampleOrientation,
-                        cameraFovHorizontal = 56f,
-                        isCalibrated = true,
-                        onBack = {},
-                        onToggleInfo = {},
-                        onResetCalibration = {},
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopCenter)
-                            .padding(top = 36.dp, start = 12.dp, end = 12.dp),
-                    )
-
-                    // Bottom Controls Bar
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 28.dp, start = 12.dp, end = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        DateNavigatorBar(
-                            selectedDate = solsticeDate,
-                            isToday = true,
-                            onPrevDay = {},
-                            onNextDay = {},
-                            onToday = {},
-                            onOpenDatePicker = {},
-                        )
-
-                        SegmentedChoice(
-                            options = BubbleInterval.entries,
-                            selected = BubbleInterval.ONE_HOUR,
-                            onSelect = {},
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { interval ->
-                            interval.formatLabel()
-                        }
-                    }
-                }
-            }
-        }
-        composeTestRule.onRoot().captureRoboImage(screenshotPath("09_sun_ar_trajectory.png"))
-    }
 
     @Test
     fun capture10_SunArDaySummary() {
