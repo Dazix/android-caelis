@@ -290,6 +290,18 @@ class NightSkyRenderer {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
 
+    /**
+     * An asterism's name: smaller, regular weight and in the asterism lines' blue, so the Great
+     * Square reads as a named pattern inside Pegasus rather than as a figure of its own. Without a
+     * name it looked like an unexplained square floating over Pisces.
+     */
+    val asterismLabelPaint = Paint().apply {
+        isAntiAlias = true
+        textSize = 24f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+    }
+
     val constellationHighlightLabelPaint = Paint().apply {
         isAntiAlias = true
         textSize = 32f
@@ -426,6 +438,7 @@ class NightSkyRenderer {
 
             val primaryInt = AndroidColor.rgb(pr, pg, pb)
             constellationLabelPaint.color = AndroidColor.argb(210, pr, pg, pb)
+            asterismLabelPaint.color = AndroidColor.argb(160, pr, pg, pb)
             constellationHighlightLabelPaint.color = primaryInt
             dsoPaint.color = AndroidColor.argb(200, pr, pg, pb)
             dsoDashedPaint.color = AndroidColor.argb(200, pr, pg, pb)
@@ -459,6 +472,7 @@ class NightSkyRenderer {
             radiantHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
 
             constellationLabelPaint.color = AndroidColor.argb(220, 77, 208, 225)
+            asterismLabelPaint.color = AndroidColor.argb(190, 144, 202, 249)
             constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
             dsoPaint.color = AndroidColor.argb(220, 255, 183, 77)
             dsoDashedPaint.color = AndroidColor.argb(220, 255, 183, 77)
@@ -487,6 +501,7 @@ class NightSkyRenderer {
     fun updateOpticalPaints(density: Float = 1.0f) {
         val densityScale = density.coerceAtLeast(0.5f)
         constellationLabelPaint.textSize = 13f * densityScale
+        asterismLabelPaint.textSize = 11f * densityScale
         constellationHighlightLabelPaint.textSize = 15f * densityScale
         radiantPaint.strokeWidth = 2.0f * densityScale
         radiantLabelPaint.textSize = 12f * densityScale
@@ -1087,8 +1102,9 @@ class NightSkyRenderer {
     private var dsoLabels: Array<String> = emptyArray()
     private var meteorLabels: Array<String> = emptyArray()
 
-    /** Constellation names by index; null for an asterism, which carries no name. */
+    /** Constellation and asterism names by index; null where the catalogue has none. */
     private var constellationLabels: Array<String?> = emptyArray()
+    private var labelIsAsterism = BooleanArray(0)
     private var overlayCatalog: NightSkyCatalog? = null
 
     // The mark atlas sprite of each name, -1 for none.
@@ -1096,8 +1112,8 @@ class NightSkyRenderer {
     private var dsoSprites = IntArray(0)
     private var meteorSprites = IntArray(0)
     private var markAtlasScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
-    private val markStyle = IntArray(9)
-    private val builtMarkStyle = IntArray(9)
+    private val markStyle = IntArray(11)
+    private val builtMarkStyle = IntArray(11)
 
     // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
     private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
@@ -1124,12 +1140,20 @@ class NightSkyRenderer {
             catalog.meteorShowers(reusableMeteor, it)
             reusableMeteor.localizedName() ?: ""
         }
-        constellationLabels = Array(minOf(catalog.constellationsLength(), maxConstellations)) {
+        val count = minOf(catalog.constellationsLength(), maxConstellations)
+        labelIsAsterism = BooleanArray(count)
+        constellationLabels = Array(count) {
             catalog.constellations(reusableConstellation, it)
-            if (reusableConstellation.isAsterism()) null
-            else reusableConstellation.localizedName() ?: reusableConstellation.name()
+            labelIsAsterism[it] = reusableConstellation.isAsterism()
+            reusableConstellation.localizedName() ?: reusableConstellation.name()
         }
         markAtlasScene = null
+    }
+
+    /** The name drawn for constellation or asterism [index] of [catalog], and whether it is an asterism's. */
+    internal fun constellationLabelOf(catalog: NightSkyCatalog, index: Int): Pair<String?, Boolean> {
+        ensureOverlayLabels(catalog)
+        return constellationLabels.getOrNull(index) to labelIsAsterism.getOrElse(index) { false }
     }
 
     /** Ground occlusion of the marks, the same test the tap hit test uses. */
@@ -1178,6 +1202,7 @@ class NightSkyRenderer {
         markStyle[6] = gridMarkers.horizonTextPaint.textSize.toRawBits()
         markStyle[7] = gridMarkers.gridTextPaint.textSize.toRawBits()
         markStyle[8] = gridMarkers.contentKey
+        styleOf(asterismLabelPaint, markStyle, 9)
         if (markAtlasScene === scene && markStyle.contentEquals(builtMarkStyle)) return
         markStyle.copyInto(builtMarkStyle)
         markAtlasScene = scene
@@ -1185,7 +1210,11 @@ class NightSkyRenderer {
         atlas.begin()
         constellationSprites = IntArray(constellationLabels.size) { c ->
             val name = constellationLabels[c]
-            if (name == null) -1 else addOpaqueText(atlas, name, constellationLabelPaint)
+            when {
+                name == null -> -1
+                labelIsAsterism[c] -> addOpaqueText(atlas, name, asterismLabelPaint)
+                else -> addOpaqueText(atlas, name, constellationLabelPaint)
+            }
         }
         dsoSprites = IntArray(dsoLabels.size) { atlas.addText(dsoLabels[it], dsoLabelPaint) }
         meteorSprites = IntArray(meteorLabels.size) { atlas.addText(meteorLabels[it], radiantLabelPaint) }
@@ -1268,7 +1297,7 @@ class NightSkyRenderer {
         highlight.begin()
         glyphs.begin()
 
-        // Constellation names, sliding up as the figure grows (asterisms carry no name).
+        // Constellation and asterism names, sliding up as the figure grows.
         for (c in 0 until scene.constellationCount) {
             val isSelected = c == frame.selectedConstellation
             if (!showConstellations && !isSelected) continue

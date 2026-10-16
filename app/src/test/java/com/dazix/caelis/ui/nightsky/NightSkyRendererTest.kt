@@ -223,6 +223,47 @@ class NightSkyRendererTest {
     }
 
     @Test
+    fun `asterisms are named, smaller and apart from constellation names`() {
+        val catalog = catalog { fbb ->
+            val peg = Constellation.createConstellation(
+                fbb, fbb.createString("Pegasus"), 340f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("Pegas"), 0, 0, false,
+            )
+            val square = Constellation.createConstellation(
+                fbb, fbb.createString("Great Square of Pegasus"), 355f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("Pegasův čtverec"), 0, 0, true,
+            )
+            val unnamed = Constellation.createConstellation(
+                fbb, fbb.createString("Unnamed"), 10f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                0, 0, 0, true,
+            )
+            val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(peg, square, unnamed))
+            val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+            NightSkyCatalog.startStarsVector(fbb, 2)
+            Star.createStar(fbb, 0f, 20f, 2f)
+            Star.createStar(fbb, 350f, 20f, 2f)
+            NightSkyCatalog.createNightSkyCatalog(fbb, fbb.endVector(), meta, consts)
+        }
+        val renderer = NightSkyRenderer()
+
+        assertEquals("Pegas" to false, renderer.constellationLabelOf(catalog, 0))
+        assertEquals("Pegasův čtverec" to true, renderer.constellationLabelOf(catalog, 1))
+        assertEquals("falls back to the English name", "Unnamed" to true, renderer.constellationLabelOf(catalog, 2))
+
+        renderer.updateOpticalPaints(density = 2.5f)
+        assertEquals(11f * 2.5f, renderer.asterismLabelPaint.textSize, 0.001f)
+        assertTrue(renderer.asterismLabelPaint.textSize < renderer.constellationLabelPaint.textSize)
+
+        renderer.applyTheme(NightVisionState(isActive = false))
+        val normal = renderer.asterismLabelPaint.color
+        assertTrue("asterism names are not drawn in the constellation colour", normal != renderer.constellationLabelPaint.color)
+        for (theme in NightVisionTheme.entries) {
+            renderer.applyTheme(NightVisionState(isActive = true, theme = theme))
+            assertTrue("$theme must recolour the asterism names", renderer.asterismLabelPaint.color != normal)
+        }
+    }
+
+    @Test
     fun `a constellation just above the drawn ground is tappable and one just below it is not`() {
         // On the equator at LST 0 the pole sits on the north horizon, so a centroid at dec 85 is
         // 5 degrees above it at RA 0 (upper culmination) and 5 degrees below it at RA 180.
