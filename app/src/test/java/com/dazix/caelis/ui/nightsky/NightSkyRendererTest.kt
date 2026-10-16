@@ -223,6 +223,48 @@ class NightSkyRendererTest {
     }
 
     @Test
+    fun `a constellation just above the drawn ground is tappable and one just below it is not`() {
+        // On the equator at LST 0 the pole sits on the north horizon, so a centroid at dec 85 is
+        // 5 degrees above it at RA 0 (upper culmination) and 5 degrees below it at RA 180.
+        val catalog = catalog { fbb ->
+            val low = Constellation.createConstellation(
+                fbb, fbb.createString("Capricornus"), 0f, 85f, Constellation.createLinesVector(fbb, intArrayOf(0)),
+                fbb.createString("Kozoroh"), 0, 0,
+            )
+            val under = Constellation.createConstellation(
+                fbb, fbb.createString("Under"), 180f, 85f, Constellation.createLinesVector(fbb, intArrayOf(1)),
+                fbb.createString("Pod"), 0, 0,
+            )
+            val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(low, under))
+            val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+            NightSkyCatalog.startStarsVector(fbb, 2)
+            Star.createStar(fbb, 180f, 85f, 3f)
+            Star.createStar(fbb, 0f, 85f, 3f)
+            NightSkyCatalog.createNightSkyCatalog(fbb, fbb.endVector(), meta, consts)
+        }
+        val sky = SkyFrame(catalog).also { it.settle() }
+        val renderer = NightSkyRenderer()
+        sky.prepare(renderer)
+        assertTrue(renderer.constellationProgress[0] > 0.3f)
+        assertTrue(renderer.constellationProgress[1] > 0.3f)
+
+        // The screen asks with the ground drawn (a flat one here); the frame's own offsets are the
+        // only ones applied, so a stored compass calibration cannot lift the ground under the tap.
+        val above = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[0], renderer.constellationCentroidScreenY[0],
+            1f, 2.5f, catalog, isLandscapeVisible = true,
+        )
+        assertTrue("5 degrees above the ground must be tappable, was $above", above is NightSkyRenderer.HitTarget.ConstellationHit)
+        assertEquals(0, (above as NightSkyRenderer.HitTarget.ConstellationHit).index)
+
+        val below = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[1], renderer.constellationCentroidScreenY[1],
+            1f, 2.5f, catalog, isLandscapeVisible = true,
+        )
+        assertFalse("5 degrees below the ground is hidden, was $below", below is NightSkyRenderer.HitTarget.ConstellationHit)
+    }
+
+    @Test
     fun `off-screen bearing indicator for all directions and behind the camera`() {
         val w = 1080f
         val h = 2400f

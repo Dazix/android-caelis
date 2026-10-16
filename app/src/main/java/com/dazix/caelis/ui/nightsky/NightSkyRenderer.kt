@@ -596,6 +596,12 @@ class NightSkyRenderer {
     /**
      * Performs adaptive 2D screen-space hit testing with brightness-distance weighting
      * and disambiguation for close celestial objects.
+     *
+     * What is behind the ground is judged with the ground the last frame was drawn with
+     * ([prepareHitTest] takes its offsets from the frame), never with the compass calibration:
+     * that is already inside the pose. Passing it here a second time once raised the ground by the
+     * stored -19° pitch correction, and every constellation lower than that above the skyline was
+     * drawn but could not be tapped.
      */
     fun findHitAt(
         tapX: Float,
@@ -607,8 +613,6 @@ class NightSkyRenderer {
         isLandscapeVisible: Boolean = false,
         useRealHorizon: Boolean = false,
         horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = currentHorizonProfile,
-        alignAzimuthOffsetDeg: Float = 0f,
-        alignElevationOffsetDeg: Float = 0f,
     ): HitTarget {
         val bodyCandidates = ArrayList<CelestialCandidate>(8)
         val activeProfile = horizonProfile ?: currentHorizonProfile
@@ -635,8 +639,8 @@ class NightSkyRenderer {
             isLandscapeVisible = isLandscapeVisible,
             useRealHorizon = useRealHorizon,
             horizonProfile = activeProfile,
-            alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
-            alignElevationOffsetDeg = alignElevationOffsetDeg,
+            alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
+            alignElevationOffsetDeg = hitAlignElevationDeg,
         )
         val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
         for (i in 0 until planetCount) {
@@ -675,8 +679,8 @@ class NightSkyRenderer {
                 isLandscapeVisible = isLandscapeVisible,
                 useRealHorizon = useRealHorizon,
                 horizonProfile = activeProfile,
-                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
-                alignElevationOffsetDeg = alignElevationOffsetDeg,
+                alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
+                alignElevationOffsetDeg = hitAlignElevationDeg,
             )
             for (i in 0 until dsoTopCount) {
                 val dIdx = topDsoIndices[i]
@@ -719,8 +723,8 @@ class NightSkyRenderer {
                 isLandscapeVisible = isLandscapeVisible,
                 useRealHorizon = useRealHorizon,
                 horizonProfile = activeProfile,
-                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
-                alignElevationOffsetDeg = alignElevationOffsetDeg,
+                alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
+                alignElevationOffsetDeg = hitAlignElevationDeg,
             )
             for (i in 0 until meteorTopCount) {
                 val mIdx = topMeteorIndices[i]
@@ -759,8 +763,8 @@ class NightSkyRenderer {
                 isLandscapeVisible = isLandscapeVisible,
                 useRealHorizon = useRealHorizon,
                 horizonProfile = activeProfile,
-                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
-                alignElevationOffsetDeg = alignElevationOffsetDeg,
+                alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
+                alignElevationOffsetDeg = hitAlignElevationDeg,
             )
             for (i in 0 until starCount) {
                 val sIdx = topStarIndices[i]
@@ -799,8 +803,8 @@ class NightSkyRenderer {
                 isLandscapeVisible = isLandscapeVisible,
                 useRealHorizon = useRealHorizon,
                 horizonProfile = activeProfile,
-                alignAzimuthOffsetDeg = alignAzimuthOffsetDeg,
-                alignElevationOffsetDeg = alignElevationOffsetDeg,
+                alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
+                alignElevationOffsetDeg = hitAlignElevationDeg,
             )
         } else -1
 
@@ -1530,6 +1534,10 @@ class NightSkyRenderer {
      */
     private val hitAppearance = com.dazix.caelis.domain.nightsky.PlanetAppearance()
 
+    /** The ground offsets of the frame [prepareHitTest] last projected, which [findHitAt] occludes with. */
+    private var hitAlignAzimuthDeg = 0f
+    private var hitAlignElevationDeg = 0f
+
     fun prepareHitTest(
         scene: com.dazix.caelis.ar.scene.NightSkyScene,
         frame: com.dazix.caelis.ar.scene.NightSkyFrame,
@@ -1558,6 +1566,8 @@ class NightSkyRenderer {
     ) {
         ensureStaticCelestialVectors(catalog)
         val c2e = celestialToEnu
+        hitAlignAzimuthDeg = frame.alignAzimuthOffsetDeg
+        hitAlignElevationDeg = frame.alignElevationOffsetDeg
 
         // Which stars are drawn regardless of the telescope limit, as the scene forces them.
         val constCount = minOf(catalog.constellationsLength(), maxConstellations, focus.capacity)

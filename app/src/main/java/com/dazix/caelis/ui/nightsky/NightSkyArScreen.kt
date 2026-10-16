@@ -347,8 +347,6 @@ fun NightSkyArScreen(
     val currentLandscapeVisible by rememberUpdatedState(uiState.isLandscapeVisible)
     val currentUseRealHorizon by rememberUpdatedState(horizonSettings.realHorizonInNightSky && horizonSettings.enabled)
     val currentHorizonProfile by rememberUpdatedState(horizonProfile)
-    val currentAlignAzimuthOffset by rememberUpdatedState(alignAzimuthOffset)
-    val currentAlignElevationOffset by rememberUpdatedState(alignElevationOffset)
     val gpuSky = remember { NightSkyGpuHandle() }
     val currentConstellationsVisible by rememberUpdatedState(uiState.isConstellationsVisible)
     val currentMeteorShowersVisible by rememberUpdatedState(uiState.isMeteorShowersVisible)
@@ -428,8 +426,6 @@ fun NightSkyArScreen(
                                 isLandscapeVisible = currentLandscapeVisible || currentUseRealHorizon,
                                 useRealHorizon = currentUseRealHorizon,
                                 horizonProfile = currentHorizonProfile,
-                                alignAzimuthOffsetDeg = currentAlignAzimuthOffset,
-                                alignElevationOffsetDeg = currentAlignElevationOffset,
                             )
                             when (hitTarget) {
                                 is NightSkyRenderer.HitTarget.ConstellationHit -> {
