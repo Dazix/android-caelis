@@ -7,6 +7,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.Surface
+import com.dazix.caelis.domain.arframe.CoarseHeading
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
 import com.dazix.caelis.domain.arframe.YawOffset
@@ -86,6 +87,21 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     /** [HeadingLock.correctionDegrees], folded into the world-Z term next to the declination. */
     @Volatile
     private var headingOffsetDeg = 0f
+
+    /**
+     * The part of an alignment the ±[MAX_CALIBRATION_AZIMUTH] calibration cannot hold, while the
+     * compass is not trusted and the gyro holds the heading ([CoarseHeading]). Session-only: never
+     * stored, cleared by [start] and [clearCalibration]. Folded into the world-Z term next to the
+     * declination, so it is in [getReferenceMatrix] — the automatic alignment searches around the
+     * coarsely corrected heading, and the calibration stays a fine correction on top. ARCore's north
+     * ([getCompassReferenceMatrix]) leaves it out and gets it on top instead.
+     */
+    @Volatile
+    var coarseHeadingOffsetDeg: Float = 0f
+        private set
+
+    /** The rotation vector's own heading uncertainty (`values[4]`), degrees; NaN when not reported. */
+    private var headingUncertaintyDeg = Float.NaN
     private var compassAccuracy = SensorManager.SENSOR_STATUS_ACCURACY_HIGH
     private val compassMatrix = FloatArray(16)
     private val gameMatrix = FloatArray(16)
@@ -194,11 +210,11 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      * @return true if interpolated from bracketing sensor events; false if falling back to live matrix.
      */
     fun getSynchronizedMatrix(timestampNs: Long, outMatrix16: FloatArray): Boolean =
-        synchronizedMatrix(timestampNs, outMatrix16, calibrationAzimuthOffsetDeg, calibrationPitchOffsetDeg)
+        synchronizedMatrix(timestampNs, outMatrix16, northCorrectionDeg(), calibrationAzimuthOffsetDeg, calibrationPitchOffsetDeg)
 
     /**
-     * The same pose as [getSynchronizedMatrix] but without the standing calibration: declination and
-     * the heading lock are in, what the user nudged by hand is not.
+     * The same pose as [getSynchronizedMatrix] but without the standing calibration: declination,
+     * the heading lock and the coarse heading correction are in, the calibration the user nudged is not.
      *
      * This is the north reference ARCore's world is aligned to. The calibration is applied on top of
      * either pose source afterwards, identically, so it stays instantly editable and is never counted
@@ -209,11 +225,25 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      * instant: not older than its oldest sample, and not more than [REFERENCE_MAX_EXTRAPOLATION_NS]
      * past its newest (one sample period or so at 200 Hz).
      */
-    fun getReferenceMatrix(timestampNs: Long, outMatrix16: FloatArray): Boolean {
+    fun getReferenceMatrix(timestampNs: Long, outMatrix16: FloatArray): Boolean =
+        referenceMatrix(timestampNs, outMatrix16, northCorrectionDeg())
+
+    /**
+     * [getReferenceMatrix] without the coarse heading correction either: the north the sensors
+     * themselves measure (declination and heading lock in), which is what ARCore's world is aligned
+     * to. The coarse correction is then applied on top of ARCore's pose together with the
+     * calibration ([coarseHeadingOffsetDeg] + [calibrationAzimuthOffsetDeg]). Inside this reference
+     * a coarse drag would arrive at `HeadingFusion` as a jump of tens of degrees, be rejected as an
+     * outlier for 30 samples and only then restart the estimate.
+     */
+    fun getCompassReferenceMatrix(timestampNs: Long, outMatrix16: FloatArray): Boolean =
+        referenceMatrix(timestampNs, outMatrix16, northCorrectionDeg() - coarseHeadingOffsetDeg)
+
+    private fun referenceMatrix(timestampNs: Long, outMatrix16: FloatArray, northDeg: Float): Boolean {
         require(outMatrix16.size >= 16) { "outMatrix16 must have at least 16 elements" }
         if (timestampNs <= 0L || !ringBuffer.findBracket(timestampNs, syncQ1, syncQ2, syncTimestamps)) return false
         if (timestampNs < syncTimestamps[0] || timestampNs > syncTimestamps[1] + REFERENCE_MAX_EXTRAPOLATION_NS) return false
-        return synchronizedMatrix(timestampNs, outMatrix16, 0f, 0f)
+        return synchronizedMatrix(timestampNs, outMatrix16, northDeg, 0f, 0f)
     }
 
     /**
@@ -226,6 +256,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private fun synchronizedMatrix(
         timestampNs: Long,
         outMatrix16: FloatArray,
+        northDeg: Float,
         calibrationAzimuthDeg: Float,
         calibrationPitchDeg: Float,
     ): Boolean {
@@ -249,7 +280,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         applyCalibration(
             sensorMatrix = syncRawMatrix,
-            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
+            declinationDeg = northDeg,
             panAzimuthOffsetDeg = calibrationAzimuthDeg,
             panPitchOffsetDeg = calibrationPitchDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -315,7 +346,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     fun setCalibration(azimuthDeg: Float, pitchDeg: Float) {
         // Clamped, not wrapped. A calibration corrects a compass by single degrees; allowing it to
         // run all the way round would turn a careless swipe into "the sky is now facing the other
-        // way", indistinguishable on the next launch from a broken magnetometer.
+        // way", indistinguishable on the next launch from a broken magnetometer. A compass that really
+        // is that far out is corrected by the session-only coarseHeadingOffsetDeg instead.
         calibrationAzimuthOffsetDeg = signedAzimuth(azimuthDeg)
             .coerceIn(-MAX_CALIBRATION_AZIMUTH, MAX_CALIBRATION_AZIMUTH)
         calibrationPitchOffsetDeg = pitchDeg.coerceIn(-MAX_CALIBRATION_PITCH, MAX_CALIBRATION_PITCH)
@@ -324,7 +356,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // the next sensor sample, and while tracking is paused there will not be one.
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
+            declinationDeg = northCorrectionDeg(),
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -348,10 +380,28 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // Only an azimuth correction measures the heading. A pitch-only nudge (the up/down
         // buttons, an auto-align on terrain too flat for the compass) says nothing about north.
         if (deltaAzimuthDeg != 0f) lockHeading()
-        setCalibration(
-            azimuthDeg = calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
+        setAlignment(
+            totalAzimuthDeg = coarseHeadingOffsetDeg + calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
             pitchDeg = calibrationPitchOffsetDeg + deltaPitchDeg,
         )
+    }
+
+    /**
+     * Applies a hand alignment of [totalAzimuthDeg] in all: the calibration takes what its bound
+     * allows and, while [CoarseHeading.isAllowed], the coarse correction takes the rest.
+     */
+    private fun setAlignment(totalAzimuthDeg: Float, pitchDeg: Float) {
+        val allowed = CoarseHeading.isAllowed(
+            locked = headingLock.isLocked,
+            compassState = HeadingLock.compassState(compassAccuracy, headingUncertaintyDeg, MAX_CALIBRATION_AZIMUTH),
+        )
+        coarseHeadingOffsetDeg = CoarseHeading.coarseFor(
+            totalAzimuthDegrees = totalAzimuthDeg,
+            currentCoarseDegrees = coarseHeadingOffsetDeg,
+            boundDegrees = MAX_CALIBRATION_AZIMUTH,
+            allowed = allowed,
+        )
+        setCalibration(azimuthDeg = totalAzimuthDeg - coarseHeadingOffsetDeg, pitchDeg = pitchDeg)
     }
 
     /**
@@ -367,7 +417,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         panPitchOffsetDeg = 0f
         isSensorTrackingPaused.value = false
         if (azimuth != calibrationAzimuthOffsetDeg) lockHeading()
-        setCalibration(azimuth, pitch)
+        setAlignment(coarseHeadingOffsetDeg + azimuth, pitch)
     }
 
     /**
@@ -385,6 +435,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     /** Explicit reset: no calibration, and back to the compass for the heading. */
     fun clearCalibration() {
         headingLock.reset()
+        coarseHeadingOffsetDeg = 0f
         publishHeadingState()
         setCalibration(0f, 0f)
     }
@@ -410,7 +461,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // dropping a pan is "stop dragging", not "forget where north is".
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
+            declinationDeg = northCorrectionDeg(),
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -483,6 +534,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // A new session: the game vector's north restarts and the user has not aligned anything yet.
         headingLock.reset()
         headingOffsetDeg = 0f
+        coarseHeadingOffsetDeg = 0f
+        headingUncertaintyDeg = Float.NaN
         hasGameSample = false
         hasCompassSample = false
         lastPairedTimestampNs = Long.MIN_VALUE
@@ -520,6 +573,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         ringBuffer.push(event.timestamp, qx, qy, qz, qw)
         val previousSampleNs = lastRotationSampleNs
         lastRotationSampleNs = event.timestamp
+        // Game events have returned above; what is left is the rotation sensor, and only a vector
+        // with a magnetometer in it has a heading uncertainty to report.
+        if (rotationSensor?.type != Sensor.TYPE_GAME_ROTATION_VECTOR) {
+            headingUncertaintyDeg = HeadingLock.headingUncertaintyDegrees(event.values)
+            if (!dualMode) publishHeadingState()
+        }
         if (dualMode) {
             System.arraycopy(sampleQuat, 0, latestCompassQuat, 0, 4)
             latestCompassTimestampNs = event.timestamp
@@ -578,7 +637,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // of the world frame, so they compose into the single offset applyCalibration already takes.
         applyCalibration(
             sensorMatrix = rawMatrix,
-            declinationDeg = magneticDeclinationDeg + headingOffsetDeg,
+            declinationDeg = northCorrectionDeg(),
             panAzimuthOffsetDeg = calibrationAzimuthOffsetDeg,
             panPitchOffsetDeg = calibrationPitchOffsetDeg,
             tempDeclinationBuffer = tempDeclinationMatrix,
@@ -619,8 +678,11 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     private fun publishHeadingState() {
-        headingStateFlow.value = headingLock.state(compassAccuracy)
+        headingStateFlow.value = headingLock.state(compassAccuracy, headingUncertaintyDeg, MAX_CALIBRATION_AZIMUTH)
     }
+
+    /** Everything that turns the rotation vector's north into true north, except the calibration. */
+    private fun northCorrectionDeg(): Float = magneticDeclinationDeg + headingOffsetDeg + coarseHeadingOffsetDeg
 
     private fun readQuaternion(values: FloatArray, out: FloatArray) {
         out[0] = values[0]

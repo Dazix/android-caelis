@@ -1,5 +1,6 @@
 package com.dazix.caelis.ar.pose
 
+import android.hardware.HardwareBuffer
 import com.dazix.caelis.domain.arframe.ArCoreFov
 import com.dazix.caelis.domain.arframe.ArWorldAlignment
 import com.dazix.caelis.domain.arframe.CameraBackgroundUv
@@ -129,10 +130,15 @@ class ArCoreFrameSource(private val controller: ArCoreSessionController) : ArFra
         }
 
         try {
-            val buffer = frame.hardwareBuffer
-            out.buffer = buffer
-            out.imageWidth = buffer.width
-            out.imageHeight = buffer.height
+            // Declared non-null by nothing: on a Pixel 10 Pro it returned null instead of throwing
+            // NotYetAvailableException, and reading its width crashed Sun AR on every entry with
+            // ARCore on. Null is the same "no picture this frame".
+            val buffer: HardwareBuffer? = frame.hardwareBuffer
+            if (buffer != null) {
+                out.buffer = buffer
+                out.imageWidth = buffer.width
+                out.imageHeight = buffer.height
+            }
         } catch (_: NotYetAvailableException) {
             // The first frames can arrive before the first camera image does.
         } catch (_: IllegalStateException) {

@@ -23,11 +23,14 @@ class SensorPoseSource(private val tracker: OrientationTracker) : SensorPose {
     }
 
     override fun referenceMatrix(timestampNs: Long, out16: FloatArray): Boolean =
-        tracker.getReferenceMatrix(timestampNs, out16)
+        tracker.getCompassReferenceMatrix(timestampNs, out16)
 
     override val headingAccuracy: Int get() = tracker.headingAccuracy
 
-    override val calibrationAzimuthDegrees: Float get() = tracker.calibrationAzimuthOffsetDeg
+    // The coarse heading correction rides with the calibration, not in the reference: see
+    // OrientationTracker.getCompassReferenceMatrix.
+    override val calibrationAzimuthDegrees: Float
+        get() = tracker.coarseHeadingOffsetDeg + tracker.calibrationAzimuthOffsetDeg
 
     override val calibrationPitchDegrees: Float get() = tracker.calibrationPitchOffsetDeg
 }

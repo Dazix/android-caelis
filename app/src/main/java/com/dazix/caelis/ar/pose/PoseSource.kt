@@ -29,15 +29,16 @@ interface PoseSource {
  */
 interface SensorReference {
     /**
-     * device -> ENU at [timestampNs] with declination and heading lock but no calibration. False (and
-     * [out16] untouched) when the sensor history has nothing bracketing that instant.
+     * device -> ENU at [timestampNs] with declination and heading lock but no calibration and no
+     * coarse heading correction. False (and [out16] untouched) when the sensor history has nothing
+     * bracketing that instant.
      */
     fun referenceMatrix(timestampNs: Long, out16: FloatArray): Boolean
 
     /** `SensorManager.SENSOR_STATUS_ACCURACY_*` of the heading the reference rests on. */
     val headingAccuracy: Int
 
-    /** The standing compass correction, world-Z, degrees. */
+    /** The compass correction applied on top, world-Z, degrees: the coarse heading correction plus the calibration. */
     val calibrationAzimuthDegrees: Float
 
     /** The standing pitch correction, camera-X, degrees. */
