@@ -649,6 +649,7 @@ fun NightSkyArScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     val chipColor = if (uiState.redVisionMode) activePalette.primary else null
+                    com.dazix.caelis.ui.TerrainStatusChip(state = uiState.horizonState, nightVisionColor = chipColor)
                     com.dazix.caelis.ui.HeadingStatusChip(state = headingState, nightVisionColor = chipColor)
                     com.dazix.caelis.ui.PoseSourceChip(
                         indicator = poseIndicator,
@@ -947,21 +948,8 @@ internal fun NightSkyTopBar(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )
-                } else if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
-                    horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
-                ) {
-                    val pct = when (horizonState) {
-                        is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
-                        is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
-                    }
-                    Text(
-                        text = "• ⛰ $pct %",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
                 }
+                // Download and compute progress is TerrainStatusChip's, under the bar.
             }
 
             // Row 2: Azimuth, Elevation, FOV Data

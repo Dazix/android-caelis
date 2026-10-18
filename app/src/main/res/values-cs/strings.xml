@@ -392,6 +392,8 @@
     <string name="ar_align_auto_no_camera">Kamera není k dispozici.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
     <string name="ar_heading_compass_unreliable">Kompas je nespolehlivý. Opište telefonem osmičku, nebo srovnejte podle horizontu.</string>
+    <string name="ar_terrain_downloading">Stahuji terén %1$d z %2$d · %3$d %%</string>
+    <string name="ar_terrain_computing">Počítám linii obzoru · %1$d %%</string>
     <string name="ar_heading_locked">Směr drží gyroskop od srovnání</string>
     <string name="ar_pose_source_sensor">Sledování: senzory telefonu</string>
     <string name="ar_pose_source_arcore">Sledování: ARCore</string>

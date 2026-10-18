@@ -386,6 +386,8 @@
     <string name="ar_align_auto_no_camera">The camera is not available.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
     <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon.</string>
+    <string name="ar_terrain_downloading">Downloading terrain %1$d of %2$d · %3$d %%</string>
+    <string name="ar_terrain_computing">Computing the skyline · %1$d %%</string>
     <string name="ar_heading_locked">Heading held by gyroscope since alignment</string>
     <string name="ar_pose_source_sensor">Tracking: phone sensors</string>
     <string name="ar_pose_source_arcore">Tracking: ARCore</string>
