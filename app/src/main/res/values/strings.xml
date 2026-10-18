@@ -296,7 +296,7 @@
     <string name="arcore_consent_cancel">Not now</string>
 
     <string name="horizon_status_locating">Waiting for GPS signal…</string>
-    <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d…</string>
+    <string name="horizon_status_downloading">Downloading terrain %1$d of %2$d · %3$s</string>
     <string name="horizon_status_computing">Computing the skyline…</string>
     <string name="horizon_status_ready">Terrain horizon ready</string>
     <string name="horizon_status_needs_tiles">Elevation data missing for this place</string>
@@ -385,9 +385,12 @@
     <string name="ar_align_auto_no_profile">No terrain profile yet. Switch the terrain horizon on in Settings.</string>
     <string name="ar_align_auto_no_camera">The camera is not available.</string>
     <string name="sun_ar_fov_label">FOV: %.1f°</string>
-    <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon.</string>
-    <string name="ar_terrain_downloading">Downloading terrain %1$d of %2$d · %3$d %%</string>
+    <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon by hand.</string>
+    <string name="ar_terrain_downloading">Downloading terrain %1$d of %2$d · %3$s</string>
+    <string name="horizon_download_size_of">%1$s of %2$s</string>
     <string name="ar_terrain_computing">Computing the skyline · %1$d %%</string>
+    <string name="ar_terrain_missing">Elevation data for the real horizon is missing. Download or import it in Settings.</string>
+    <string name="ar_terrain_missing_action">Open terrain settings</string>
     <string name="ar_heading_locked">Heading held by gyroscope since alignment</string>
     <string name="ar_pose_source_sensor">Tracking: phone sensors</string>
     <string name="ar_pose_source_arcore">Tracking: ARCore</string>
@@ -629,6 +632,9 @@
     <string name="settings_storage_clear_dialog_title">Clear terrain cache?</string>
     <string name="settings_storage_clear_dialog_message">Are you sure you want to delete cached terrain data? New locations will need to download tiles again to compute horizons.</string>
     <string name="settings_storage_clear_confirm">Delete</string>
+    <string name="settings_storage_clear_profiles_button">Delete calculated horizons</string>
+    <string name="settings_storage_clear_profiles_dialog_title">Delete calculated horizons?</string>
+    <string name="settings_storage_clear_profiles_dialog_message">The stored horizons, peak names included, will be deleted. They are calculated again from the elevation data; where that is no longer cached, it has to be downloaded again.</string>
 
     <string name="settings_section_version">Version</string>
     <string name="settings_version_name_label">Version Name</string>

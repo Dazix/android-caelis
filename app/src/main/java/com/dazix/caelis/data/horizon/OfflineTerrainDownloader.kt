@@ -161,7 +161,8 @@ class OfflineTerrainDownloader(
                     )
 
                     tempPart.outputStream().use { out ->
-                        downloader.download(key, out) { tileProgress ->
+                        downloader.download(key, out) { received, total ->
+                            val tileProgress = DemTileDownloader.fraction(received, total)
                             val overall = (tileIndex - 1 + tileProgress) / totalCount
                             _state.value = OfflineDownloadState.Downloading(
                                 regionName = name,

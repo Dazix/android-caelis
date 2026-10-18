@@ -406,12 +406,13 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Show consent dialog immediately if terrain is enabled but consent not answered
+        // The first visit to an AR screen asks the download question, whether or not the layer is on:
+        // answering it is what switches the real horizon on. Read from the store, not from
+        // [horizonSettings], whose placeholder before the first read has no answer and would flash the
+        // dialog at everyone who already gave one.
         viewModelScope.launch {
-            horizonSettings.collect { cfg ->
-                if (cfg.enabled && !cfg.networkConsentAnswered && canDownloadTerrain) {
-                    showConsentDialogState.value = true
-                }
+            if (!settingsStore.currentHorizon().networkConsentAnswered && canDownloadTerrain) {
+                showConsentDialogState.value = true
             }
         }
 
@@ -857,10 +858,12 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Records the user's answer to the network question and, on a yes, switches the layer on.
+     * Records the user's answer to the network question and switches the real horizon on, here and
+     * in Night Sky: the question is asked once for the whole feature.
      *
      * A "no" is stored just as durably as a yes: the prompt must not come back on the next launch.
-     * It leaves the layer itself alone, because the hand-import path still works without a network.
+     * The layer is on either way, because the hand-import path still works without a network, and
+     * until tiles are there the screen says they are missing.
      */
     fun answerNetworkConsent(granted: Boolean, wifiOnly: Boolean? = null) {
         showConsentDialogState.value = false
@@ -869,9 +872,13 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             val updated = current.copy(
                 networkConsent = granted,
                 enabled = true,
+                realHorizonInNightSky = true,
                 wifiOnly = if (granted && wifiOnly != null) wifiOnly else current.wifiOnly,
             )
             settingsStore.saveHorizon(updated)
+            // Night Sky's two ground switches are exclusive; its stylised landscape still stands in
+            // while the real skyline is missing (RealHorizonPolicy.showsStylisedLandscape).
+            settingsStore.saveNightSkyLandscapeVisible(false)
             if (granted) {
                 if (locationProvider.hasGpsFix.value) {
                     horizonRepository.ensureProfile(locationProvider.location.value, updated)

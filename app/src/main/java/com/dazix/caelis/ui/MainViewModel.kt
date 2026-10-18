@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import com.dazix.caelis.data.horizon.DownloadEstimate
@@ -435,6 +436,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var calibrationJob: Job? = null
 
     init {
+        // The sizes in Settings were measured once and then only on resume, so a download made in an
+        // AR screen showed up there late. Measure again whenever the terrain work moves to another
+        // phase (a tile stored, a profile written, a failure) — not on every byte of a download.
+        viewModelScope.launch {
+            horizonRepository.state
+                .distinctUntilChangedBy { it::class }
+                .collect { refreshStorageMetrics() }
+        }
         viewModelScope.launch {
             val stored = settings.lastConfig.first()
             if (stored != null) {
@@ -466,6 +475,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun navigate(target: Screen) {
         if (target == screenState.value) return
+        if (target == Screen.SETTINGS) refreshStorageMetrics()
         if (target == Screen.HOME) {
             backStack.clear()
             backStack.add(Screen.HOME)
@@ -487,6 +497,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         screenState.value = target
+    }
+
+    private val focusTerrainDownloadState = MutableStateFlow(false)
+
+    /** Settings should scroll to the terrain download once it is shown; cleared when it has. */
+    val focusTerrainDownload: StateFlow<Boolean> = focusTerrainDownloadState.asStateFlow()
+
+    /** From an AR screen's "data missing" chip: Settings, at the place where the data is fetched. */
+    fun openTerrainDownloadSettings() {
+        focusTerrainDownloadState.value = true
+        navigate(Screen.SETTINGS)
+    }
+
+    fun terrainDownloadFocused() {
+        focusTerrainDownloadState.value = false
     }
 
     fun back() {

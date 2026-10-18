@@ -383,6 +383,18 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /** The stylised landscape, by its own switch or in place of a real skyline that is not coming. */
+    val showStylisedLandscape: StateFlow<Boolean> =
+        combine(isLandscapeVisible, horizonSettings, horizonProfile, horizonState) { switch, cfg, profile, state ->
+            RealHorizonPolicy.showsStylisedLandscape(
+                landscapeSwitch = switch,
+                featureEnabled = cfg.enabled,
+                realHorizonInNightSky = cfg.realHorizonInNightSky,
+                hasProfile = profile != null,
+                profileUnavailable = state is HorizonState.Failed || state is HorizonState.NeedsTiles,
+            )
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
 
     private val showConsentDialogState = MutableStateFlow(false)
@@ -768,12 +780,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        // Show consent dialog immediately if real horizon is enabled in night sky but consent not answered
+        // The first visit to an AR screen asks the download question, as Sun AR does: answering it is
+        // what switches the real horizon on. Read from the store, not from [horizonSettings], whose
+        // placeholder before the first read has no answer.
         viewModelScope.launch {
-            horizonSettings.collect { cfg ->
-                if (cfg.realHorizonInNightSky && !cfg.networkConsentAnswered && canDownloadTerrain) {
-                    showConsentDialogState.value = true
-                }
+            if (!settingsStore.currentHorizon().networkConsentAnswered && canDownloadTerrain) {
+                showConsentDialogState.value = true
             }
         }
 

@@ -47,13 +47,14 @@ open class DemTileDownloader(
      * Decompression happens in the stream rather than on the heap: a 1 arcsecond tile is 26 MB
      * expanded, which is more than an app should hold in memory to read 1440 numbers out of it.
      *
-     * @param onProgress 0..1, driven by compressed bytes received against `Content-Length`. Absent
-     *   when the server does not send a length, in which case it is never called.
+     * @param onProgress compressed bytes received so far and the `Content-Length` they count towards,
+     *   [UNKNOWN_LENGTH] when the server sends none. These are the bytes that cross the network, which
+     *   is what a user asking "how much is this" wants, not the 26 MB the tile expands to.
      */
     open suspend fun download(
         key: DemTileKey,
         out: OutputStream,
-        onProgress: ((Float) -> Unit)? = null,
+        onProgress: ((receivedBytes: Long, totalBytes: Long) -> Unit)? = null,
     ) {
         if (!consent()) throw NotPermittedException()
 
@@ -63,7 +64,7 @@ open class DemTileDownloader(
             val status = connection.responseCode
             if (status != HttpURLConnection.HTTP_OK) throw ServerException(status)
 
-            val totalBytes = connection.contentLengthLong
+            val totalBytes = connection.contentLengthLong.takeIf { it > 0 } ?: UNKNOWN_LENGTH
             var received = 0L
 
             connection.inputStream.use { raw ->
@@ -72,9 +73,7 @@ open class DemTileDownloader(
                         val n = super.read(b, off, len)
                         if (n > 0) {
                             received += n
-                            if (onProgress != null && totalBytes > 0) {
-                                onProgress((received.toFloat() / totalBytes).coerceIn(0f, 1f))
-                            }
+                            onProgress?.invoke(received, totalBytes)
                         }
                         return n
                     }
@@ -82,7 +81,8 @@ open class DemTileDownloader(
                 GZIPInputStream(counting, GZIP_BUFFER).use { it.copyTo(out, COPY_BUFFER) }
             }
             out.flush()
-            onProgress?.invoke(1f)
+            // Done is done even when the length was never announced.
+            onProgress?.invoke(received, received)
         } finally {
             connection.disconnect()
         }
@@ -149,6 +149,13 @@ open class DemTileDownloader(
         const val DEFAULT_LANDMARK_BASE_URL = "https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles"
 
         private const val MAX_LANDMARK_BYTES = 4L * 1024 * 1024
+
+        /** The total handed to `onProgress` when the server sent no `Content-Length`. */
+        const val UNKNOWN_LENGTH = -1L
+
+        /** 0..1 of a download, or 0 while its length is unknown. */
+        fun fraction(receivedBytes: Long, totalBytes: Long): Float =
+            if (totalBytes > 0) (receivedBytes.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f
 
         /**
          * Tilezen terrain tiles in the AWS Open Data programme. No account, no API key, no SLA.
