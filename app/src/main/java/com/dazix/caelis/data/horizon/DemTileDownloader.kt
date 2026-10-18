@@ -8,7 +8,7 @@ import java.net.URL
 import java.util.zip.GZIPInputStream
 
 /**
- * Fetches one elevation tile over HTTPS.
+ * Fetches one elevation tile, or one tile of named peaks, over HTTPS.
  *
  * ## This is the only file in `app/src/main` that is allowed to touch the network
  *
@@ -32,6 +32,7 @@ import java.util.zip.GZIPInputStream
 open class DemTileDownloader(
     private val consent: suspend () -> Boolean,
     private val baseUrl: String = DEFAULT_BASE_URL,
+    private val landmarkBaseUrl: String = DEFAULT_LANDMARK_BASE_URL,
 ) {
 
     /** Thrown instead of connecting when the user has not agreed, or has said no. */
@@ -56,14 +57,7 @@ open class DemTileDownloader(
     ) {
         if (!consent()) throw NotPermittedException()
 
-        val connection = (URL("$baseUrl/${key.remotePath}").openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = true
-            // No cookies, no custom identifying headers: the request carries the tile name and nothing else.
-            setRequestProperty("Accept-Encoding", "identity")
-        }
+        val connection = connect("$baseUrl/${key.remotePath}")
 
         try {
             val status = connection.responseCode
@@ -94,7 +88,68 @@ open class DemTileDownloader(
         }
     }
 
+    /**
+     * Downloads the `.peaks` file of [key] — the named summits in that 1° square — into [out], as is.
+     *
+     * Same rules as [download]: [consent] is asked on this call, and the URL carries the tile number
+     * and nothing else. The data lives in a public repository, pinned to a tag, so the format a build
+     * can read never changes under it.
+     *
+     * @return false when the server has no such file. The pipeline writes a file for every tile of a
+     *   region it covers, so a 404 means "this part of the world is not covered", which is a normal
+     *   answer and not a failure to retry.
+     * @throws ServerException for any other status, [NotPermittedException] without consent.
+     */
+    open suspend fun downloadLandmarks(key: DemTileKey, out: OutputStream): Boolean {
+        if (!consent()) throw NotPermittedException()
+
+        val connection = connect("$landmarkBaseUrl/${key.directory}/${key.name}.peaks")
+        try {
+            val status = connection.responseCode
+            if (status == HttpURLConnection.HTTP_NOT_FOUND) return false
+            if (status != HttpURLConnection.HTTP_OK) throw ServerException(status)
+
+            connection.inputStream.use { raw ->
+                var total = 0L
+                val buffer = ByteArray(COPY_BUFFER)
+                while (true) {
+                    val n = raw.read(buffer)
+                    if (n < 0) break
+                    total += n
+                    // A tile is a few kilobytes; anything near this is not one, and must not fill the cache.
+                    if (total > MAX_LANDMARK_BYTES) throw IOException("peak tile larger than $MAX_LANDMARK_BYTES bytes")
+                    out.write(buffer, 0, n)
+                }
+            }
+            out.flush()
+            return true
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun connect(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = CONNECT_TIMEOUT_MS
+        readTimeout = READ_TIMEOUT_MS
+        instanceFollowRedirects = true
+        // No cookies, no custom identifying headers: the request carries the tile name and nothing else.
+        setRequestProperty("Accept-Encoding", "identity")
+    }
+
     companion object {
+        /**
+         * Named peaks per 1° tile, from OpenStreetMap, in the public `Dazix/caelis-landmarks` repository.
+         *
+         * Pinned to the `v1` tag rather than a branch: a change of file layout is a new tag and a new
+         * version in the code, so an installed app never downloads something it cannot read. Not the
+         * private app repository, which cannot be fetched anonymously. Attribution (© OpenStreetMap
+         * contributors, ODbL) is shown in Settings.
+         */
+        const val DEFAULT_LANDMARK_BASE_URL = "https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles"
+
+        private const val MAX_LANDMARK_BYTES = 4L * 1024 * 1024
+
         /**
          * Tilezen terrain tiles in the AWS Open Data programme. No account, no API key, no SLA.
          *

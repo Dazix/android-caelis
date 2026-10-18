@@ -57,6 +57,8 @@ class OfflineTerrainDownloader(
     private val regionRepository: OfflineRegionRepository,
     private val tileCache: DemTileCache,
     private val downloader: DemTileDownloader,
+    // The user started this download on purpose, so no Wi-Fi-only policy here; consent is still the downloader's.
+    private val landmarks: LandmarkSource = LandmarkSource(LandmarkTileCache(context), downloader, mayDownload = { true }),
 ) {
 
     private val offlineDirectory = File(context.filesDir, OfflineRegionRepository.OFFLINE_DIR_NAME)
@@ -185,6 +187,12 @@ class OfflineTerrainDownloader(
                     tempPart.delete()
                 }
             }
+
+            // Peak names for the same square, so a profile made later with no signal can probably be named.
+            // Best effort only: the tiles go to the reclaimable cacheDir (the region's elevation tiles
+            // are in filesDir), so Android may drop them, and a failed prefetch is only logged. The
+            // region is downloaded either way, and a profile without names is filled in when online.
+            if (!landmarks.prefetch(requiredTiles)) Log.i(TAG, "peak tiles for $name were not all fetched")
 
             // Calculate actual physical size of all required tiles on disk
             val actualTotalBytes = requiredTiles.sumOf { regionRepository.fileFor(it).length() }

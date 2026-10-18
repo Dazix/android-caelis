@@ -49,6 +49,13 @@ data class HorizonSettings(
     val wifiOnly: Boolean = false,
     /** Use the real profile instead of the stylised landscape texture in Night Sky AR. */
     val realHorizonInNightSky: Boolean = false,
+    /**
+     * Print peak names on the skyline in Sun AR. On by default: the layer only draws once the terrain
+     * is on and a profile carries names, so it adds nothing for anyone who has not opted in to terrain.
+     */
+    val peakNamesInSunAr: Boolean = true,
+    /** The same for Night Sky AR, where the skyline is the real one only if [realHorizonInNightSky]. */
+    val peakNamesInNightSky: Boolean = true,
 ) {
 
     val maxRangeMeters: Double get() = maxRangeKm * 1000.0

@@ -456,6 +456,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     fun toggleRealHorizonInNightSky() = setRealHorizonInNightSky(!horizonSettings.value.realHorizonInNightSky)
 
+    /** Show or hide the peak names on the real skyline. Needs no download: the names are in the profile. */
+    fun togglePeakNames() {
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(current.copy(peakNamesInNightSky = !current.peakNamesInNightSky))
+        }
+    }
+
     val isGridVisible: StateFlow<Boolean> = settingsStore.nightSkyGridVisible.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,

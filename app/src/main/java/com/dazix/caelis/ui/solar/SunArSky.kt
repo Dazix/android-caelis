@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,9 @@ import com.dazix.caelis.ar.pose.SkyPoseFrame
 import com.dazix.caelis.ar.pose.SkyPoseRig
 import com.dazix.caelis.ar.scene.CameraBackground
 import com.dazix.caelis.ar.scene.GlyphBatch
+import com.dazix.caelis.ar.scene.NormalTerrain
 import com.dazix.caelis.ar.scene.LabelBatch
+import com.dazix.caelis.ar.scene.LandmarkMarks
 import com.dazix.caelis.ar.scene.NormalGoldSolar
 import com.dazix.caelis.ar.scene.SpriteAtlas
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
@@ -50,6 +53,7 @@ import com.dazix.caelis.ar.scene.SkyGridMarkers
 import com.dazix.caelis.ar.scene.SkySurface
 import com.dazix.caelis.ar.scene.SunArScene
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectory
@@ -95,9 +99,11 @@ internal fun SunArGpuSky(
     horizonProfile: HorizonProfile?,
     shadeOccludedTrajectory: Boolean,
     terrainTimes: TerrainTimes,
+    showPeakNames: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current.density
+    val languageTag = LocalConfiguration.current.locales[0].toLanguageTag()
     // With the real skyline drawn, the badges say when and where the body meets that skyline.
     val badges = remember(solarTrajectory, lunarTrajectory, terrainTimes) {
         val t = terrainTimes
@@ -153,6 +159,10 @@ internal fun SunArGpuSky(
     val currentBadges by rememberUpdatedState(badges)
     val currentSun by rememberUpdatedState(currentSunPos)
     val currentMoon by rememberUpdatedState(currentMoonPos)
+    // Peak names exist only on a profile that is drawn, and only while the layer is switched on.
+    val peakNames = if (showPeakNames) horizonProfile?.landmarks.orEmpty() else emptyList()
+    val currentPeakNames by rememberUpdatedState(peakNames)
+    val currentLanguageTag by rememberUpdatedState(languageTag)
     val fontScale = LocalDensity.current.fontScale
     val currentFontScale by rememberUpdatedState(fontScale)
     val marks = remember { SunArMarks() }
@@ -204,7 +214,10 @@ internal fun SunArGpuSky(
                     }
                     sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
                     // Bubbles, badges, discs and grid labels are part of this GPU frame.
-                    marks.update(sc, currentSolar, currentLunar, currentBadges, currentSun, currentMoon, density, currentFontScale)
+                    marks.update(
+                        sc, currentSolar, currentLunar, currentBadges, currentSun, currentMoon,
+                        currentPeakNames, currentLanguageTag, density, currentFontScale,
+                    )
                     sf.renderFrame(nanos)
                     revealed = true
                     frameTick = nanos
@@ -259,6 +272,7 @@ internal fun SunArGpuSky(
  */
 internal class SunArMarks {
     val grid = SkyGridMarkers()
+    private val peaks = LandmarkMarks()
     private val rect = RectF()
     private val projected = FloatArray(3)
     private val direction = FloatArray(3)
@@ -277,6 +291,7 @@ internal class SunArMarks {
     private var builtDensity = 0f
     private var builtFontScale = 0f
     private var builtGridKey = -1
+    private var builtPeaksRevision = -1
     private var sunBubbleSprites = IntArray(0)
     private var moonBubbleSprites = IntArray(0)
     private val markerSprites = IntArray(4) { -1 }
@@ -306,9 +321,12 @@ internal class SunArMarks {
         badges: RiseSetBadges,
         sunPos: SolarCoordinates?,
         moonPos: LunarCoordinates?,
+        peakNames: List<HorizonLandmark>,
+        languageTag: String,
         density: Float,
         fontScale: Float,
     ) {
+        peaks.update(peakNames, languageTag, NormalTerrain.toArgb(), density, fontScale)
         ensureAtlas(scene, solar, lunar, badges, density, fontScale)
         val labels = scene.markLabels
         val glyphs = scene.markGlyphs
@@ -318,11 +336,14 @@ internal class SunArMarks {
         glyphs.begin()
         grid.emit(labels, glyphs)
 
+        // What the peak names have to keep clear of: the badges, then the bubbles that were drawn.
+        peaks.beginClearance()
         for (slot in 0 until 4) {
             markerOnScreen[slot] = markerSprites[slot] >= 0 &&
                 projector.projectAltAz(markerAzimuth[slot], markerElevation[slot], projected)
             markerScreenX[slot] = projected[0]
             markerScreenY[slot] = projected[1] - badgeCentreLift
+            if (markerOnScreen[slot]) peaks.reserve(markerScreenX[slot], markerScreenY[slot], markerHalfWidth[slot], badgeHalfHeight)
         }
 
         // Only points above -15° are labelled, as only those stretches of the arcs are drawn.
@@ -330,7 +351,7 @@ internal class SunArMarks {
         for (i in sunBubbles.indices) {
             val c = sunBubbles[i].coordinates
             if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
-            if (coveredByBadge(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
+            if (!bubbleFits(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
             AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
             labels.add(sunBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
         }
@@ -338,7 +359,7 @@ internal class SunArMarks {
         for (i in moonBubbles.indices) {
             val c = moonBubbles[i].coordinates
             if (c.apparentElevationDegrees < MIN_BUBBLE_ELEVATION) continue
-            if (coveredByBadge(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
+            if (!bubbleFits(projector, c.azimuthDegrees, c.apparentElevationDegrees)) continue
             AltAzGridBuilder.direction(c.azimuthDegrees, c.apparentElevationDegrees, d)
             labels.add(moonBubbleSprites.getOrElse(i) { -1 }, d[0], d[1], d[2])
         }
@@ -362,6 +383,8 @@ internal class SunArMarks {
             glyphs.add(shape.DISC, d[0], d[1], d[2], 3.5f * density, 0f, android.graphics.Color.WHITE)
             glyphs.add(shape.RING, d[0], d[1], d[2], 11f * density, 1.2f * density, Casing.toArgb())
         }
+        // Last, so every peak name yields to a bubble or a badge it would land on.
+        peaks.emit(labels, projector)
         glyphs.end()
         labels.end()
     }
@@ -371,9 +394,12 @@ internal class SunArMarks {
         return projected[0] in 0f..projector.viewportWidth && projected[1] in 0f..projector.viewportHeight
     }
 
-    /** Whether a time bubble at this direction would land on one of this frame's badges. */
-    private fun coveredByBadge(projector: SkyProjector, azimuth: Double, elevation: Double): Boolean {
-        if (!projector.projectAltAz(azimuth, elevation, projected)) return false
+    /**
+     * Whether a time bubble at this direction may be drawn: not when it would land on one of this
+     * frame's badges. A bubble that is drawn on screen is reserved, so the peak names keep off it.
+     */
+    private fun bubbleFits(projector: SkyProjector, azimuth: Double, elevation: Double): Boolean {
+        if (!projector.projectAltAz(azimuth, elevation, projected)) return true
         val x = projected[0]
         val y = projected[1]
         for (slot in 0 until 4) {
@@ -382,9 +408,10 @@ internal class SunArMarks {
                     markerScreenX[slot], markerScreenY[slot], markerHalfWidth[slot], badgeHalfHeight,
                     x, y, bubbleHalfWidth, bubbleHalfHeight,
                 )
-            ) return true
+            ) return false
         }
-        return false
+        peaks.reserve(x, y, bubbleHalfWidth, bubbleHalfHeight)
+        return true
     }
 
     /** A rise or set badge: a dot on the horizon (or on the skyline) with the time and azimuth above it. */
@@ -417,7 +444,8 @@ internal class SunArMarks {
         grid.horizonTextPaint.textSize = 5.3f * sp
         grid.gridTextPaint.textSize = 4.5f * sp
         if (scene === builtScene && solar === builtSolar && lunar === builtLunar && badges === builtBadges &&
-            density == builtDensity && fontScale == builtFontScale && grid.contentKey == builtGridKey
+            density == builtDensity && fontScale == builtFontScale && grid.contentKey == builtGridKey &&
+            peaks.revision == builtPeaksRevision
         ) return
         builtScene = scene
         builtSolar = solar
@@ -426,6 +454,7 @@ internal class SunArMarks {
         builtDensity = density
         builtFontScale = fontScale
         builtGridKey = grid.contentKey
+        builtPeaksRevision = peaks.revision
         bubbleText.textSize = 11f * sp
         bubbleBorder.strokeWidth = 1.2f * density
         markerText.textSize = 12f * sp
@@ -434,6 +463,7 @@ internal class SunArMarks {
         val atlas = scene.markAtlas
         atlas.begin()
         grid.addSprites(atlas)
+        peaks.addSprites(atlas)
         // A bubble is the same sprite wherever its time repeats on the same arc.
         val shared = HashMap<String, Int>()
         sunBubbleSprites = IntArray(solar.timeBubbles.size) {

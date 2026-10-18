@@ -212,8 +212,8 @@ class SunArScene(private val surface: SkySurface) {
         private const val MAX_PATH_POINTS = HorizonProfile.SAMPLE_COUNT
         private const val MIN_ARC_ELEVATION = -15.0
 
-        /** Two days of bubbles every 15 minutes, four badges and the grid's labels. */
-        val MAX_MARK_SPRITES = 2 * 96 + 4 + SkyGridMarkers.LABEL_COUNT
+        /** Two days of bubbles every 15 minutes, four badges, the grid's labels and the peak names. */
+        val MAX_MARK_SPRITES = 2 * 96 + 4 + SkyGridMarkers.LABEL_COUNT + LandmarkMarks.MAX_LANDMARKS
         private const val MAX_MARK_GLYPHS = 4 + 8 + SkyGridMarkers.GLYPH_COUNT
 
         /** The moon's arc and pointer colour (the screen's `MoonSilverCyan`). */

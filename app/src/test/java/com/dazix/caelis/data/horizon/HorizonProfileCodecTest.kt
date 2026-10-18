@@ -1,5 +1,6 @@
 package com.dazix.caelis.data.horizon
 
+import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.GeoLocation
 import java.io.ByteArrayInputStream
@@ -53,7 +54,96 @@ class HorizonProfileCodecTest {
 
         assertTrue("expected under 8 kB, was ${bytes.size}", bytes.size < 8 * 1024)
         // magic + version + six doubles + timestamp + coverage + sample count + the samples
-        assertEquals(4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4, bytes.size)
+        // + the resolved flag + the peak count (this profile names none)
+        assertEquals(4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4 + 1 + 4, bytes.size)
+    }
+
+    private val sneka = HorizonLandmark(
+        name = "Śnieżka",
+        nameCs = "Sněžka",
+        nameEn = "",
+        elevationMeters = 1603,
+        distanceMeters = 41_250.5,
+        azimuthDegrees = 12.75,
+        apparentElevationDegrees = 1.8125,
+    )
+
+    @Test
+    fun `named peaks and the resolved flag survive a round trip`() {
+        val named = profile.withLandmarks(listOf(sneka, sneka.copy(name = "Lysá hora", nameCs = "", elevationMeters = 1323)), resolved = true)
+
+        val restored = roundTrip(named)!!
+
+        assertEquals(named.landmarks, restored.landmarks)
+        assertTrue(restored.landmarksResolved)
+        assertArrayEquals(named.elevationsDegrees, restored.elevationsDegrees, 0f)
+    }
+
+    @Test
+    fun `an unresolved profile stays unresolved so it is filled in later`() {
+        val restored = roundTrip(profile)!!
+
+        assertTrue(restored.landmarks.isEmpty())
+        assertEquals(false, restored.landmarksResolved)
+    }
+
+    /** What the app wrote before peak names: the layout of version 2, byte for byte. */
+    private fun versionTwoBytes(source: HorizonProfile): ByteArray {
+        val bytes = ByteArrayOutputStream()
+        java.io.DataOutputStream(bytes).apply {
+            writeInt(0x4341485A)
+            writeInt(2)
+            writeDouble(source.observer.latitude)
+            writeDouble(source.observer.longitude)
+            writeDouble(source.observer.altitudeMeters)
+            writeDouble(source.observerGroundElevationMeters)
+            writeDouble(source.eyeHeightMeters)
+            writeDouble(source.maxRangeMeters)
+            writeLong(source.generatedAtEpochMillis)
+            writeInt(source.coveredSamples)
+            writeInt(source.elevationsDegrees.size)
+            source.elevationsDegrees.forEach { writeFloat(it) }
+            flush()
+        }
+        return bytes.toByteArray()
+    }
+
+    @Test
+    fun `a version 2 profile still reads, with no names and not resolved`() {
+        val restored = HorizonProfileCodec.read(ByteArrayInputStream(versionTwoBytes(profile)))
+
+        assertNotNull("a stored skyline must not be thrown away for lacking names", restored)
+        restored!!
+        assertArrayEquals(profile.elevationsDegrees, restored.elevationsDegrees, 0f)
+        assertEquals(profile.observer, restored.observer)
+        assertEquals(profile.coveredSamples, restored.coveredSamples)
+        assertTrue(restored.landmarks.isEmpty())
+        assertEquals("the peaks have never been asked for", false, restored.landmarksResolved)
+    }
+
+    @Test
+    fun `a version 3 file cut short inside the peaks reads as absent`() {
+        val bytes = ByteArrayOutputStream().also {
+            HorizonProfileCodec.write(it, profile.withLandmarks(listOf(sneka), resolved = true))
+        }.toByteArray()
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes.copyOf(bytes.size - 5))))
+    }
+
+    @Test
+    fun `an unknown future version reads as absent`() {
+        val bytes = versionTwoBytes(profile).also { it[7] = 9 }
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
+    }
+
+    @Test
+    fun `an absurd peak count reads as absent instead of allocating`() {
+        val bytes = ByteArrayOutputStream().also { HorizonProfileCodec.write(it, profile) }.toByteArray()
+        // The peak count is the last four bytes of a profile with no peaks.
+        bytes[bytes.size - 4] = 0x7f
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
     }
 
     @Test

@@ -910,6 +910,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Show or hide the peak names on the terrain skyline. Needs no download: the names are in the profile. */
+    fun togglePeakNames() {
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(current.copy(peakNamesInSunAr = !current.peakNamesInSunAr))
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopSensors()

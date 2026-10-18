@@ -81,6 +81,10 @@ class NightSkyScene(
     val gridGlyphs = GlyphBatch(surface, glyphMaterial, SkyGridMarkers.GLYPH_COUNT, SkyPriority.GRID, 1)
     val gridLabels = LabelBatch(surface, labelMaterial, markAtlas, SkyGridMarkers.LABEL_COUNT, SkyPriority.GRID, 2)
 
+    // Peak names are Earth-fixed like the grid's labels (no celestial transform): pinned to the
+    // terrain skyline by azimuth and altitude.
+    val landmarkLabels = LabelBatch(surface, labelMaterial, markAtlas, LandmarkMarks.MAX_LANDMARKS, SkyPriority.GRID, 2)
+
     private var milkyWayTexture: Texture? = null
     private var landscapeTexture: Texture? = null
 
@@ -253,6 +257,7 @@ class NightSkyScene(
         planetQuads.forEach { it?.destroy() }
         dsoArtQuads.forEach { it?.destroy() }
         planetGlows.destroy()
+        landmarkLabels.destroy()
         gridLabels.destroy()
         gridGlyphs.destroy()
         highlightLabels.destroy()
@@ -607,7 +612,7 @@ class NightSkyScene(
         private const val MIN_DISPLAY_PROGRESS = 0.001f
 
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
-        const val MAX_MARK_SPRITES = 1024
+        const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.MAX_LANDMARKS
         const val HIGHLIGHT_SPRITES = 4
         private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
         /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
@@ -646,6 +651,12 @@ class NightSkyFrame {
     var showLandscape = true
     /** Terrain skyline wanted: the real one once a profile exists, a flat ring until then. */
     var useRealHorizon = false
+
+    /** Print the names of the peaks on the real skyline (only drawn while [useRealHorizon]). */
+    var showPeakNames = false
+
+    /** The app language, which picks the name a peak is printed with. */
+    var languageTag = "en"
     var showGrid = false
     var showPlanets = true
     var showDsos = true

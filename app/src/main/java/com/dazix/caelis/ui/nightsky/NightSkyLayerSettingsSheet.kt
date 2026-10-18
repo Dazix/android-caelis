@@ -93,6 +93,7 @@ fun NightSkyLayerSettingsSheet(
     isLandscapeVisible: Boolean,
     isRealHorizonEnabled: Boolean = false,
     isRealHorizonAvailable: Boolean = false,
+    isPeakNamesVisible: Boolean = true,
     isAtmosphereVisible: Boolean,
     isMilkyWayVisible: Boolean,
     isPlanetsVisible: Boolean,
@@ -114,6 +115,7 @@ fun NightSkyLayerSettingsSheet(
     onResetToLive: () -> Unit = {},
     onToggleLandscapeVisible: () -> Unit,
     onToggleRealHorizon: () -> Unit = {},
+    onTogglePeakNames: () -> Unit = {},
     onToggleAtmosphereVisible: () -> Unit,
     onToggleMilkyWayVisible: () -> Unit,
     onTogglePlanetsVisible: () -> Unit,
@@ -338,6 +340,18 @@ fun NightSkyLayerSettingsSheet(
                 iconColor = iconColor,
                 switchColors = switchColors,
                 onCheckedChange = { onToggleRealHorizon() },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // Names stand on the real skyline, so the switch works only while that is drawn.
+            LayerToggleRow(
+                label = stringResource(R.string.horizon_peak_names),
+                icon = AppIcons.TerrainHorizon,
+                isChecked = isPeakNamesVisible && isRealHorizonEnabled && isRealHorizonAvailable,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                enabled = isRealHorizonEnabled && isRealHorizonAvailable,
+                onCheckedChange = { onTogglePeakNames() },
             )
         }
 
@@ -616,6 +630,7 @@ private fun LayerToggleRow(
     switchColors: androidx.compose.material3.SwitchColors,
     onCheckedChange: (Boolean) -> Unit,
     onInfoClick: (() -> Unit)? = null,
+    enabled: Boolean = true,
 ) {
     ListItem(
         leadingContent = {
@@ -647,6 +662,7 @@ private fun LayerToggleRow(
                 Switch(
                     checked = isChecked,
                     onCheckedChange = onCheckedChange,
+                    enabled = enabled,
                     colors = switchColors,
                 )
             }
@@ -656,12 +672,12 @@ private fun LayerToggleRow(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!isChecked) }
+            .clickable(enabled = enabled) { onCheckedChange(!isChecked) }
             .padding(horizontal = 4.dp),
     ) {
         Text(
             text = label,
-            color = headlineColor,
+            color = if (enabled) headlineColor else headlineColor.copy(alpha = 0.5f),
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
         )
