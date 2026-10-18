@@ -2,6 +2,7 @@ package com.dazix.caelis.data.horizon
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
@@ -14,6 +15,8 @@ import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.notify.TerrainNotifications
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,6 +76,17 @@ class HorizonRepository private constructor(
         consent = { settingsStore.currentHorizon().networkDownloadAllowed },
     )
 
+    private val landmarkCache = LandmarkTileCache(appContext)
+    private val landmarkSource = LandmarkSource(
+        cache = landmarkCache,
+        downloader = downloader,
+        mayDownload = {
+            val settings = settingsStore.currentHorizon()
+            canDownload && settings.networkDownloadAllowed &&
+                !(settings.wifiOnly && NetworkAvailability.isMetered(appContext))
+        },
+    )
+
     private val profileDirectory = File(appContext.filesDir, "horizons")
     private val notifications = TerrainNotifications(appContext)
 
@@ -92,6 +106,10 @@ class HorizonRepository private constructor(
     val profile: StateFlow<HorizonProfile?> = _profile.asStateFlow()
 
     private var inFlight: Job? = null
+
+    /** Names being added to a profile that is already shown; separate from [inFlight], which is a whole resolve. */
+    private var namingJob: Job? = null
+    private var lastNamingAttemptMs: Long? = null
     private val _effectiveRangeKm = MutableStateFlow<Int?>(null)
 
     /** The radius actually in use, which with an automatic setting is worked out from the terrain. */
@@ -136,15 +154,39 @@ class HorizonRepository private constructor(
             eyeCm = settings.eyeHeightCm,
         )
         if (request == lastRequest && inFlight?.isActive == true) return
-        if (request == lastRequest && _profile.value != null) return
+        if (request == lastRequest && _profile.value != null) {
+            // Same spot, same settings, a profile on screen: nothing to compute, but one shown without
+            // names (offline at the time, consent since given) is named now, from its stored form.
+            retryNames(location, settings)
+            return
+        }
 
         lastRequest = request
+        namingJob?.cancel()
         inFlight?.cancel()
         inFlight = scope.launch { resolve(location, settings) }
     }
 
+    /**
+     * Names the profile on screen again when it was published without. Needs only the profile and the
+     * peak tiles, never the DEM, so it works with the elevation tiles long reclaimed.
+     */
+    private fun retryNames(location: GeoLocation, requested: HorizonSettings) {
+        val shown = _profile.value
+        val last = lastNamingAttemptMs
+        val since = last?.let { SystemClock.elapsedRealtime() - it }
+        if (!ProfileNamer.needsNames(shown, namingJob?.isActive == true, since)) return
+        // The radius the profile was made with, not the requested one: it names the stored file and
+        // the tiles to ask for. Unknown only before the first resolve has got that far.
+        val rangeKm = _effectiveRangeKm.value ?: return
+        val settings = requested.copy(maxRangeKm = rangeKm)
+        namingJob = scope.launch { addLandmarks(shown ?: return@launch, tilesFor(location, settings), settings) }
+    }
+
     /** Forgets the current position so the next [ensureProfile] recomputes rather than reusing. */
     fun invalidate() {
+        namingJob?.cancel()
+        lastNamingAttemptMs = null
         lastRequest = null
         _profile.value = null
         _effectiveRangeKm.value = null
@@ -183,6 +225,8 @@ class HorizonRepository private constructor(
         val cached = withContext(Dispatchers.IO) { readStoredProfile(location, settings) }
         if (cached != null) {
             publish(cached)
+            // A profile from before peak names existed, or from a run with no connection, gets them now.
+            if (!cached.landmarksResolved) addLandmarks(cached, keys, settings)
             return
         }
 
@@ -222,8 +266,21 @@ class HorizonRepository private constructor(
             return
         }
 
+        // The skyline is stored and shown before any name is looked for: peak tiles are a second round
+        // of requests, and a slow or absent connection must not hold the horizon back.
         withContext(Dispatchers.IO) { writeStoredProfile(profile, settings) }
         publish(profile)
+        addLandmarks(profile, keys, settings)
+    }
+
+    private suspend fun addLandmarks(profile: HorizonProfile, keys: List<DemTileKey>, settings: HorizonSettings) {
+        lastNamingAttemptMs = SystemClock.elapsedRealtime()
+        ProfileNamer(
+            source = landmarkSource,
+            store = { withContext(Dispatchers.IO) { writeStoredProfile(it, settings) } },
+            current = { _profile.value },
+            publish = ::publish,
+        ).name(profile, keys)
     }
 
     /**
@@ -393,6 +450,7 @@ class HorizonRepository private constructor(
         inFlight?.cancel()
         inFlight = null
         cache.clear()
+        landmarkCache.clear()
         _activeTileCount.value = 0
         _effectiveRangeKm.value = null
         lastRequest = null
@@ -403,7 +461,7 @@ class HorizonRepository private constructor(
 
     /** Drops all stored horizon profiles and automatic radii from filesDir/horizons/ and invalidates in-memory profile. */
     fun clearProfiles() {
-        profileDirectory.listFiles()?.filter { it.extension == "bin" || it.name.startsWith("auto-range_") }?.forEach { it.delete() }
+        profileDirectory.listFiles()?.filter { it.extension == "bin" || it.extension == "part" || it.name.startsWith("auto-range_") }?.forEach { it.delete() }
         estimatedRangeKm.clear()
         _profile.value = null
         invalidate()
@@ -441,8 +499,20 @@ class HorizonRepository private constructor(
     private fun writeStoredProfile(profile: HorizonProfile, settings: HorizonSettings) {
         try {
             profileDirectory.mkdirs()
-            profileFile(profile.observer, settings).outputStream().use {
-                HorizonProfileCodec.write(it, profile)
+            // Temp file then atomic move: this also rewrites an already good profile when names are
+            // added, and a kill or full disk halfway through a direct write left a truncated file that
+            // reads as null, losing the skyline and the DEM download behind it.
+            val temporary = File.createTempFile("profile-", ".part", profileDirectory)
+            try {
+                temporary.outputStream().use { HorizonProfileCodec.write(it, profile) }
+                Files.move(
+                    temporary.toPath(),
+                    profileFile(profile.observer, settings).toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE,
+                )
+            } finally {
+                temporary.delete()
             }
         } catch (e: IOException) {
             // A profile that cannot be cached is still a profile that can be drawn. Losing the cache

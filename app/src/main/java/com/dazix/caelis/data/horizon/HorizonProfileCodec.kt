@@ -1,5 +1,6 @@
 package com.dazix.caelis.data.horizon
 
+import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.GeoLocation
 import java.io.DataInputStream
@@ -10,7 +11,7 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * On-disk form of a [HorizonProfile]: about 5.8 kB of big-endian primitives.
+ * On-disk form of a [HorizonProfile]: about 5.8 kB of big-endian primitives, plus the few named peaks.
  *
  * Deliberately hand-rolled rather than serialised through a library. This is the one artefact of the
  * terrain pipeline that is kept forever, it has to survive app updates, and a format that is eight
@@ -24,12 +25,18 @@ object HorizonProfileCodec {
     private const val MAGIC = 0x4341485A
 
     /**
-     * 2 added the coverage count.
+     * 2 added the coverage count. 3 appended the named peaks.
      *
      * A version bump is how a v1 profile — which could be the flat, observer-tile-missing kind —
-     * is discarded and recomputed rather than trusted. [read] returns null on any other version.
+     * is discarded and recomputed rather than trusted. [read] returns null on any version it does not
+     * know. Version 2 is still read, as a profile whose peaks are not resolved yet: its skyline is
+     * as good as ever and throwing it away would cost a 26 MB download to learn the same ridge.
      */
-    private const val VERSION = 2
+    private const val VERSION = 3
+    private const val VERSION_WITHOUT_LANDMARKS = 2
+
+    /** A sanity bound, not a limit anyone reaches: the selector keeps a dozen. */
+    private const val MAX_LANDMARKS = 1000
 
     fun write(out: OutputStream, profile: HorizonProfile) {
         DataOutputStream(out.buffered()).apply {
@@ -45,6 +52,17 @@ object HorizonProfileCodec {
             writeInt(profile.coveredSamples)
             writeInt(profile.elevationsDegrees.size)
             profile.elevationsDegrees.forEach { writeFloat(it) }
+            writeBoolean(profile.landmarksResolved)
+            writeInt(profile.landmarks.size)
+            for (landmark in profile.landmarks) {
+                writeUTF(landmark.name)
+                writeUTF(landmark.nameCs)
+                writeUTF(landmark.nameEn)
+                writeInt(landmark.elevationMeters)
+                writeDouble(landmark.distanceMeters)
+                writeDouble(landmark.azimuthDegrees)
+                writeDouble(landmark.apparentElevationDegrees)
+            }
             flush()
         }
     }
@@ -59,7 +77,8 @@ object HorizonProfileCodec {
     fun read(input: InputStream): HorizonProfile? = try {
         DataInputStream(input.buffered()).run {
             if (readInt() != MAGIC) return null
-            if (readInt() != VERSION) return null
+            val version = readInt()
+            if (version != VERSION && version != VERSION_WITHOUT_LANDMARKS) return null
 
             val latitude = readDouble()
             val longitude = readDouble()
@@ -76,6 +95,25 @@ object HorizonProfileCodec {
             val elevations = FloatArray(count)
             for (i in 0 until count) elevations[i] = readFloat()
 
+            var resolved = false
+            val landmarks = ArrayList<HorizonLandmark>()
+            if (version == VERSION) {
+                resolved = readBoolean()
+                val landmarkCount = readInt()
+                if (landmarkCount !in 0..MAX_LANDMARKS) return null
+                repeat(landmarkCount) {
+                    landmarks += HorizonLandmark(
+                        name = readUTF(),
+                        nameCs = readUTF(),
+                        nameEn = readUTF(),
+                        elevationMeters = readInt(),
+                        distanceMeters = readDouble(),
+                        azimuthDegrees = readDouble(),
+                        apparentElevationDegrees = readDouble(),
+                    )
+                }
+            }
+
             HorizonProfile(
                 elevationsDegrees = elevations,
                 observer = GeoLocation(latitude, longitude, altitude),
@@ -84,6 +122,8 @@ object HorizonProfileCodec {
                 maxRangeMeters = maxRange,
                 generatedAtEpochMillis = generatedAt,
                 coveredSamples = covered,
+                landmarks = landmarks,
+                landmarksResolved = resolved,
             )
         }
     } catch (e: EOFException) {

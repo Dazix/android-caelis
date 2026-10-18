@@ -29,6 +29,23 @@ class HorizonProfile(
      * answer that drew exactly like a right one.
      */
     val coveredSamples: Int = SAMPLE_COUNT,
+    /**
+     * Named peaks that stand on this skyline, chosen by [LandmarkVisibility] when the profile was made.
+     *
+     * Kept with the profile, not looked up at draw time: the peak tiles are cache and Android may
+     * reclaim them, while a drawn skyline has to keep its names with no signal.
+     */
+    val landmarks: List<HorizonLandmark> = emptyList(),
+    /**
+     * Whether every peak tile covering the profile gave an answer, and at least one of them was real
+     * data (a tile that exists, even with no peaks in it) rather than "this region is not covered".
+     *
+     * An empty [landmarks] means different things: a covered region with no visible named peak, a fetch
+     * that never happened (no network, no consent), and a region the data does not cover (yet). Only the
+     * first is final; this flag is what lets the repository fill in the others later without asking
+     * again about the first.
+     */
+    val landmarksResolved: Boolean = false,
 ) {
 
     init {
@@ -39,6 +56,19 @@ class HorizonProfile(
             "coveredSamples must be in [0, $SAMPLE_COUNT], got $coveredSamples"
         }
     }
+
+    /** The same skyline with a (new) set of peak names. The samples array is shared, not copied. */
+    fun withLandmarks(landmarks: List<HorizonLandmark>, resolved: Boolean) = HorizonProfile(
+        elevationsDegrees = elevationsDegrees,
+        observer = observer,
+        observerGroundElevationMeters = observerGroundElevationMeters,
+        eyeHeightMeters = eyeHeightMeters,
+        maxRangeMeters = maxRangeMeters,
+        generatedAtEpochMillis = generatedAtEpochMillis,
+        coveredSamples = coveredSamples,
+        landmarks = landmarks,
+        landmarksResolved = resolved,
+    )
 
     /** Fraction of the sky whose skyline came from real elevation data, in [0, 1]. */
     val coverage: Float get() = coveredSamples.toFloat() / SAMPLE_COUNT

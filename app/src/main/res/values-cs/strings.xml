@@ -273,12 +273,14 @@
     <string name="horizon_shade_occluded">Ztlumit skrytou část dráhy</string>
     <string name="horizon_shade_occluded_desc">Úsek trajektorie za terénem se kreslí slabě, takže je vidět, kolik ze zlaté hodinky spolknou kopce.</string>
     <string name="horizon_wifi_only">Stahovat jen přes Wi‑Fi</string>
-    <string name="horizon_wifi_only_desc">Jedna výšková dlaždice má 5 až 19 MB.</string>
+    <string name="horizon_wifi_only_desc">Jedna výšková dlaždice má 5 až 19 MB a názvy vrcholů k ní o několik kB navíc. Výšky se berou z AWS, názvy vrcholů z veřejného repozitáře na GitHubu; povolení stahování se týká obou.</string>
     <string name="horizon_night_sky_real">Skutečný horizont i v Noční obloze</string>
     <string name="horizon_night_sky_real_desc">Nahradí stylizované stromořadí okolním terénem a schová za něj hvězdy.</string>
+    <string name="horizon_peak_names">Názvy vrcholů</string>
+    <string name="horizon_peak_names_desc">Popíše vrcholy, které stojí na skutečném horizontu, jménem a výškou. Vyžaduje skutečný horizont.</string>
 
     <string name="horizon_consent_title">Stáhnout výškopis terénu?</string>
-    <string name="horizon_consent_body">Aby aplikace mohla vykreslit skutečný obzor, potřebuje výšková data pro čtverec mapy, ve kterém právě stojíte. Po povolení se data pro aktuální polohu budou podle potřeby stahovat automaticky na pozadí a ukládat pro offline použití. Ze zařízení odejde pouze název této jednostupňové dlaždice — žádné souřadnice, žádné identifikátory, nic o vás.\n\nSoubor můžete místo toho naimportovat ručně nebo si to později rozmyslet v Nastavení.</string>
+    <string name="horizon_consent_body">Aby aplikace mohla vykreslit skutečný obzor, potřebuje výšková data pro čtverec mapy, ve kterém právě stojíte. Po povolení se data pro aktuální polohu budou podle potřeby stahovat automaticky na pozadí a ukládat pro offline použití. Názvy vrcholů (několik kB na dlaždici) se stahují stejně z veřejného repozitáře na GitHubu. Každý požadavek nese jen název této jednostupňové dlaždice — žádné souřadnice, žádné identifikátory, nic o vás — ale server, jako každý, ke kterému se připojíte, vidí vaši IP adresu.\n\nSoubor můžete místo toho naimportovat ručně nebo si to později rozmyslet v Nastavení.</string>
     <string name="horizon_consent_allow">Povolit</string>
     <string name="horizon_consent_never">Nyní ne</string>
 
@@ -334,8 +336,8 @@
     <string name="horizon_notif_ready_detail">Obzor sahá %1$d° nad horizont</string>
     <string name="horizon_notif_failed">Horizont terénu není k dispozici</string>
 
-    <string name="horizon_attribution_title">Zdroje výškových dat</string>
-    <string name="horizon_attribution_body">Výškopis pochází z Tilezen Terrain Tiles v programu AWS Open Data, který kombinuje:\n\n• 3DEP, SRTM a GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nModel popisuje holý terén: zná kopce, ale ne stromy ani budovy na nich.</string>
+    <string name="horizon_attribution_title">Zdroje dat o terénu a vrcholech</string>
+    <string name="horizon_attribution_body">Výškopis pochází z Tilezen Terrain Tiles v programu AWS Open Data, který kombinuje:\n\n• 3DEP, SRTM a GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nModel popisuje holý terén: zná kopce, ale ne stromy ani budovy na nich.\n\nNázvy a výšky vrcholů: © přispěvatelé OpenStreetMap, dostupné pod licencí Open Database License (ODbL, openstreetmap.org/copyright), šířeno jako mapové výřezy projektu mapsforge.</string>
     <string name="sun_ar_max_elevation">Nejvyšší výška</string>
     <string name="sun_ar_current_elevation">Výška</string>
     <string name="sun_ar_current_azimuth">Azimut</string>

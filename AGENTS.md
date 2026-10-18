@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (508 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (286 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (591 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (292 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **969 JVM tests (309 intervalometer, 508 solar, horizon & pose, 286 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1052 JVM tests (309 intervalometer, 591 solar, horizon & pose, 292 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -106,14 +106,14 @@ a session from the shell.
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
-| `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
+| `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, the peak model and `.peaks` tile codec (`HorizonLandmark`, `LandmarkTileCodec`) and which peaks stand on the skyline (`LandmarkVisibility`), ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/arframe/` | Pure Kotlin geometry and decisions behind the Filament sky and the pose hand-over, no Android imports and no ARCore types: frames and projection (`SkyFrameMath`, `SkyProjector`, `SkyQuadMath`, `AltAzGridBuilder`, `HorizonMeshBuilder`, `HorizonMorph`), the camera picture's crop (`CameraBackgroundUv`), the instant the overlay is drawn at (`PoseTimestampPolicy`), heading (`HeadingLock`, `YawOffset`), and ARCore's side: `ArWorldAlignment`, `ArYawEstimator` + `HeadingFusion`, `RealignTrigger`, `ArCoreFov`, `LumaRotation`, `PoseArbiter` (which tracker draws) and `CameraOwnerPolicy` (which client owns the camera). Tested by both the `solar` and the `nightsky` suite. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
 | `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the app-owned preview surface that hands every camera image to the GPU (`CameraFrameSource`, `PreviewFrameClock`, and `CameraBackgroundSink`, the interface a test drives in place of the GPU picture), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`, which takes a `CameraFrameGeometry` — frame size, viewport, fill scale, rotation, FOV — rather than loose parameters, so a CameraX frame and an ARCore frame go through the same fit). |
 | `ar/pose/` | `ArCoreSessionController`: the only place a `com.google.ar.core.Session` is constructed, resumed or installed, behind per-call consent. Other pose code may import ARCore types here and nowhere else. The rest of the package is ARCore-free and what the screens use: `PoseSource` (`SensorPoseSource` wraps `OrientationTracker`, `ArCorePoseSource` turns an ARCore frame into the sky's device→ENU), `PoseHandoff` (which of the two draws), `SkyPoseRig` (who owns the camera and the whole per-vsync decision; built by `ui/rememberSkyPoseRig`), `ArCoreHost` + `ArCoreFrameSource` (the live session, behind the `ArFrameSource` seam a test scripts). |
 | `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, the marks (`SpriteAtlas` + `LabelBatch` for pre-rendered names and badges, `GlyphBatch` for distance-field glyphs; the packing is `domain/arframe/AtlasPacker`), `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, the ARCore and Geospatial consent pair (`ArCoreSettings`, both default off, Geospatial never on without ARCore), and the process-wide `SessionRepository` snapshot. |
-| `data/horizon/` | Elevation tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the profile codec, and `HorizonRepository` which orchestrates the three. |
+| `data/horizon/` | Elevation and peak tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the peak tile cache (`LandmarkTileCache`), the profile codec (v3 carries the named peaks), `LandmarkSource` + `ProfileNamer` (peak tiles -> names on a stored profile), and `HorizonRepository` which orchestrates them. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
@@ -308,6 +308,41 @@ Each of these was found by review or on the device and is now covered by a test.
   file, the one file that may start ARCore, consent in front of it, and the exact permission set (the
   ARCore library adds none). Do not word a README line, a string or a comment as "nothing leaves the
   device" without the ARCore qualifier.
+- **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
+  `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles/N50/N50E015.peaks` — the public
+  data repository (built by `data_pipeline/generate_peaks.py` from mapsforge POI extracts of OpenStreetMap),
+  never the private app repository, never a branch. A change of file format is a new tag **and** a new
+  constant in the code. The request carries the tile name and nothing else, behind the same per-call
+  consent as terrain; it is the same file, so `NetworkIsolationTest` is unchanged. The pipeline writes an
+  empty file for every tile of a region it covers, which is why a 404 means "not covered" and not "no
+  peaks". OSM data is ODbL: the attribution in Settings (`horizon_attribution_body`) is a licence
+  condition, keep it when the screen changes.
+- **A peak is drawn only on the ridge.** `LandmarkVisibility.select` keeps a summit only when its apparent
+  altitude (Earth curvature and refraction as in `HorizonProfileCalculator`, same effective radius) reaches
+  the profile at its azimuth within a tolerance that is a *height*, and that ridge has a top within half a
+  degree. A peak behind a nearer hill, or a slope or saddle that happens to lie on the line, is not
+  labelled: a label on a mountain the user cannot see is worse than none. Do not loosen it to get more
+  names; thin the result instead.
+- **Landmark failure never fails a profile.** The skyline is stored and shown first; `ProfileNamer` adds
+  names afterwards and rewrites the profile atomically. No network, no consent, a 404, a server error, a
+  corrupt tile or a full disk all end as "not resolved yet" (`HorizonProfile.landmarksResolved`), never as
+  an exception, and a stored profile without names gets them later from the peak tiles alone, without the
+  DEM. The retry is not only at the first resolve: a repeated `ensureProfile` for the same spot (screen
+  entry, a consent change) names a shown unresolved profile again (`HorizonRepository.retryNames`,
+  `ProfileNamer.needsNames`: not while a naming job runs, at most every 30 s, because a failed attempt
+  costs a connection timeout). The names live with the profile (`filesDir/horizons/`, codec v3, v2 still
+  read); the peak tiles in `cacheDir/landmarks/` are cache, like the elevation tiles. An offline region
+  prefetches its peak tiles into that cache and names no profile, so names for a region are best effort:
+  Android may reclaim the tiles, and the profile is then named from the network when the user is there.
+- **Peak labels are one atlas sprite each and cost nothing per frame.** `LandmarkMarks` bakes "Name · 1603 m"
+  and its tick into a `SpriteAtlas` sprite only when the list, the language, the colour (night vision tints
+  it in Night Sky), the density or the font scale change, and a frame only lists them. They yield to what
+  has priority (`MarkClearance`): Sun AR reserves its badges and the bubbles it drew first. Night Sky
+  reserves nothing: its peak names sit on the ridge and can overprint a planet, DSO or constellation
+  label that lands there, a known limitation. Night Sky passes font scale 1f on purpose, as every other
+  name on that screen is a fixed pixel size; Sun AR scales all of its marks with the real one. A name
+  longer than 260 dp (or 60 % of the atlas) is ellipsized, never dropped by a full page. The per-screen
+  switches (`peakNamesInSunAr`, `peakNamesInNightSky`) work only while the terrain is on.
 - **Deleting the `INTERNET` line from the manifest must keep working.** It is a documented way to
   build from source without a network. `NetworkAvailability.hasInternetPermission()` is how the UI
   finds out at runtime; never gate that on a build flag, which would drift from the manifest.

@@ -435,6 +435,8 @@ internal object SettingsMapping {
     private val HORIZON_SHADE_OCCLUDED = booleanPreferencesKey("horizon_shade_occluded")
     private val HORIZON_WIFI_ONLY = booleanPreferencesKey("horizon_wifi_only")
     private val HORIZON_NIGHT_SKY_REAL = booleanPreferencesKey("horizon_night_sky_real")
+    private val HORIZON_PEAK_NAMES_SUN_AR = booleanPreferencesKey("horizon_peak_names_sun_ar")
+    private val HORIZON_PEAK_NAMES_NIGHT_SKY = booleanPreferencesKey("horizon_peak_names_night_sky")
 
     fun writeConfig(prefs: MutablePreferences, config: SessionConfig) {
         prefs[MODE] = when (config.mode) {
@@ -910,6 +912,8 @@ internal object SettingsMapping {
         shadeOccludedTrajectory = prefs[HORIZON_SHADE_OCCLUDED] ?: true,
         wifiOnly = prefs[HORIZON_WIFI_ONLY] ?: false,
         realHorizonInNightSky = prefs[HORIZON_NIGHT_SKY_REAL] ?: false,
+        peakNamesInSunAr = prefs[HORIZON_PEAK_NAMES_SUN_AR] ?: true,
+        peakNamesInNightSky = prefs[HORIZON_PEAK_NAMES_NIGHT_SKY] ?: true,
     )
 
     fun writeHorizon(prefs: MutablePreferences, settings: HorizonSettings) {
@@ -921,6 +925,8 @@ internal object SettingsMapping {
         prefs[HORIZON_SHADE_OCCLUDED] = settings.shadeOccludedTrajectory
         prefs[HORIZON_WIFI_ONLY] = settings.wifiOnly
         prefs[HORIZON_NIGHT_SKY_REAL] = settings.realHorizonInNightSky
+        prefs[HORIZON_PEAK_NAMES_SUN_AR] = settings.peakNamesInSunAr
+        prefs[HORIZON_PEAK_NAMES_NIGHT_SKY] = settings.peakNamesInNightSky
     }
 
     private val NOTIFICATION_PERMISSION_PROMPTED = booleanPreferencesKey("notification_permission_prompted")

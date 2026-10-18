@@ -11,6 +11,9 @@ import android.graphics.Typeface
 import android.view.Surface
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import com.dazix.caelis.ar.scene.LandmarkMarks
+import com.dazix.caelis.ar.scene.NormalTerrain
 import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.data.nightsky.Constellation
@@ -1112,8 +1115,9 @@ class NightSkyRenderer {
     private var dsoSprites = IntArray(0)
     private var meteorSprites = IntArray(0)
     private var markAtlasScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
-    private val markStyle = IntArray(11)
-    private val builtMarkStyle = IntArray(11)
+    private val markStyle = IntArray(12)
+    private val builtMarkStyle = IntArray(12)
+    private val peakMarks = LandmarkMarks()
 
     // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
     private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
@@ -1203,6 +1207,7 @@ class NightSkyRenderer {
         markStyle[7] = gridMarkers.gridTextPaint.textSize.toRawBits()
         markStyle[8] = gridMarkers.contentKey
         styleOf(asterismLabelPaint, markStyle, 9)
+        markStyle[11] = peakMarks.revision
         if (markAtlasScene === scene && markStyle.contentEquals(builtMarkStyle)) return
         markStyle.copyInto(builtMarkStyle)
         markAtlasScene = scene
@@ -1219,8 +1224,10 @@ class NightSkyRenderer {
         dsoSprites = IntArray(dsoLabels.size) { atlas.addText(dsoLabels[it], dsoLabelPaint) }
         meteorSprites = IntArray(meteorLabels.size) { atlas.addText(meteorLabels[it], radiantLabelPaint) }
         gridMarkers.addSprites(atlas)
+        peakMarks.addSprites(atlas)
         atlas.end()
-        if (atlas.spriteCount < constellationSprites.size + dsoSprites.size + meteorSprites.size + com.dazix.caelis.ar.scene.SkyGridMarkers.SPRITE_COUNT) {
+        val peakSprites = peakMarks.spriteCount
+        if (atlas.spriteCount < constellationSprites.size + dsoSprites.size + meteorSprites.size + com.dazix.caelis.ar.scene.SkyGridMarkers.SPRITE_COUNT + peakSprites) {
             android.util.Log.e(TAG, "mark atlas full: ${atlas.spriteCount} sprites fit, some names are not drawn")
         }
     }
@@ -1284,6 +1291,22 @@ class NightSkyRenderer {
         val reticleRa = selectedBody?.raDegrees
         val reticleDec = selectedBody?.decDegrees
         val showReticle = pointSelected && reticleRa != null && reticleDec != null
+        // Peak names stand on the real terrain skyline: with the stylised landscape or none there is
+        // no ridge for them to stand on. The ridge's colour is the night vision primary when it is on.
+        val peakNames = if (frame.showPeakNames && frame.useRealHorizon) {
+            currentHorizonProfile?.landmarks.orEmpty()
+        } else {
+            emptyList()
+        }
+        val peakColor = if (frame.nightVisionActive) {
+            paletteForTheme(frame.nightVisionTheme).primary.toArgb()
+        } else {
+            NormalTerrain.toArgb()
+        }
+        // Font scale 1f on purpose: every other name on this screen (constellations, DSOs, radiants,
+        // grid) is drawn at a fixed pixel size that ignores the system font scale, and a peak name that
+        // alone followed it would be the odd one out. Sun AR scales all of its marks, so it passes the real one.
+        peakMarks.update(peakNames, frame.languageTag, peakColor, frame.density, 1f)
         ensureMarkAtlas(scene)
         ensureHighlightAtlas(scene, frame, if (showReticle) selectedBody?.name else null)
 
@@ -1385,6 +1408,14 @@ class NightSkyRenderer {
         if (frame.showGrid) gridMarkers.emit(scene.gridLabels, scene.gridGlyphs)
         scene.gridGlyphs.end()
         scene.gridLabels.end()
+
+        // Only the peak names clear each other here: the planet, DSO, constellation, meteor and grid
+        // labels are drawn above, unreserved, and a peak name may land on one. The names sit on the
+        // ridge and those marks mostly do not, so a shared clearance has not been worth the cost.
+        scene.landmarkLabels.begin()
+        peakMarks.beginClearance()
+        peakMarks.emit(scene.landmarkLabels, scene.projector)
+        scene.landmarkLabels.end()
     }
 
     /** The radiant paint's colour as drawn: in night vision its SRC_IN filter replaced it. */

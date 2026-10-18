@@ -267,12 +267,14 @@
     <string name="horizon_shade_occluded">Dim the hidden part of the path</string>
     <string name="horizon_shade_occluded_desc">The stretch of the trajectory behind the terrain is drawn faint, so you can see how much of the golden hour the hills take.</string>
     <string name="horizon_wifi_only">Download over Wi‑Fi only</string>
-    <string name="horizon_wifi_only_desc">An elevation tile is 5 to 19 MB.</string>
+    <string name="horizon_wifi_only_desc">An elevation tile is 5 to 19 MB, and the peak names for it a few kB more. Elevation comes from AWS, peak names from a public GitHub repository; allowing downloads covers both.</string>
     <string name="horizon_night_sky_real">Use the real horizon in Night Sky</string>
     <string name="horizon_night_sky_real_desc">Replaces the stylised tree line with the terrain around you, and hides the stars behind it.</string>
+    <string name="horizon_peak_names">Peak names</string>
+    <string name="horizon_peak_names_desc">Labels the peaks that stand on the skyline with their name and height. Needs the real horizon.</string>
 
     <string name="horizon_consent_title">Download terrain elevation?</string>
-    <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. Once allowed, data for your current location will be downloaded automatically in the background as needed and cached for offline use. All that leaves the device is the name of that one-degree tile — no coordinates, no identifiers, nothing about you.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
+    <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. Once allowed, data for your current location will be downloaded automatically in the background as needed and cached for offline use. Peak names (a few kB per tile) are fetched the same way from a public GitHub repository. Each request carries only the name of that one-degree tile — no coordinates, no identifiers, nothing about you — but the host, like any server you connect to, sees your IP address.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
     <string name="horizon_consent_allow">Allow</string>
     <string name="horizon_consent_never">Not now</string>
 
@@ -328,8 +330,8 @@
     <string name="horizon_notif_ready_detail">Skyline reaches %1$d° above the horizon</string>
     <string name="horizon_notif_failed">Terrain horizon unavailable</string>
 
-    <string name="horizon_attribution_title">Elevation data sources</string>
-    <string name="horizon_attribution_body">Terrain elevation comes from the Tilezen Terrain Tiles on the AWS Open Data programme, which combine:\n\n• 3DEP, SRTM and GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nThe model describes bare ground: it knows the hills, not the trees or the buildings on them.</string>
+    <string name="horizon_attribution_title">Terrain and peak data sources</string>
+    <string name="horizon_attribution_body">Terrain elevation comes from the Tilezen Terrain Tiles on the AWS Open Data programme, which combine:\n\n• 3DEP, SRTM and GMTED2010 data courtesy of the U.S. Geological Survey\n• DOC/NOAA/NESDIS/NCEI — National Centers for Environmental Information\n• © Kartverket (CC BY 4.0)\n• Produced using Copernicus data and information funded by the European Union — EU-DEM layers\n• © Commonwealth of Australia (Geoscience Australia) 2017 (CC BY 4.0)\n• Copyright 2011 Crown copyright (c) Land Information New Zealand and the New Zealand Government\n• Contains information licensed under the Open Government Licence – Canada\n• © Environment Agency copyright and/or database right 2015\n• © offene Daten Österreichs – Digitales Geländemodell (DGM) Österreich\n• Source: INEGI, Continental relief, 2016\n\nThe model describes bare ground: it knows the hills, not the trees or the buildings on them.\n\nPeak names and heights: © OpenStreetMap contributors, available under the Open Database Licence (ODbL, openstreetmap.org/copyright), distributed as map extracts by mapsforge.</string>
     <string name="sun_ar_max_elevation">Peak elevation</string>
     <string name="sun_ar_current_elevation">Elevation</string>
     <string name="sun_ar_current_azimuth">Azimuth</string>

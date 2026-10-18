@@ -24,6 +24,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -102,6 +103,7 @@ internal fun NightSkyGpuSky(
     isGridVisible: Boolean,
     horizonProfile: HorizonProfile?,
     useRealHorizon: Boolean,
+    showPeakNames: Boolean,
     isPlanetsVisible: Boolean,
     isDsosVisible: Boolean,
     isMeteorShowersVisible: Boolean,
@@ -118,6 +120,7 @@ internal fun NightSkyGpuSky(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
+    val languageTag = LocalConfiguration.current.locales[0].toLanguageTag()
     val zenithLabel = stringResource(R.string.sun_ar_zenith)
     val nadirLabel = stringResource(R.string.sun_ar_nadir)
     val cardinalLabels = arrayOf(
@@ -198,6 +201,8 @@ internal fun NightSkyGpuSky(
         frame.showAtmosphere = isAtmosphereVisible
         frame.showLandscape = isLandscapeVisible
         frame.useRealHorizon = useRealHorizon
+        frame.showPeakNames = showPeakNames
+        frame.languageTag = languageTag
         frame.showGrid = isGridVisible
         frame.showPlanets = isPlanetsVisible
         frame.showDsos = isDsosVisible

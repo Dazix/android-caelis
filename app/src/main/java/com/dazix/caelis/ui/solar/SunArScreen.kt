@@ -71,6 +71,7 @@ import com.dazix.caelis.ui.AppToastHost
 import com.dazix.caelis.ui.AppToastHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -366,6 +367,7 @@ fun SunArScreen(
                 horizonProfile = uiState.horizonProfile.takeIf { uiState.horizonSettings.enabled },
                 shadeOccludedTrajectory = uiState.horizonSettings.shadeOccludedTrajectory,
                 terrainTimes = uiState.terrainTimes,
+                showPeakNames = uiState.horizonSettings.peakNamesInSunAr,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -456,6 +458,8 @@ fun SunArScreen(
                     terrainTimes = uiState.terrainTimes,
                     horizonEnabled = uiState.horizonSettings.enabled,
                     onToggleHorizon = viewModel::requestToggleHorizon,
+                    peakNamesOn = uiState.horizonSettings.peakNamesInSunAr,
+                    onTogglePeakNames = viewModel::togglePeakNames,
                     alignAzimuthOffsetDeg = alignAzimuthOffset,
                     alignElevationOffsetDeg = alignElevationOffset,
                     compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
@@ -794,6 +798,8 @@ internal fun SunMoonTimesInfoCard(
     terrainTimes: TerrainTimes = TerrainTimes(),
     horizonEnabled: Boolean = false,
     onToggleHorizon: () -> Unit = {},
+    peakNamesOn: Boolean = true,
+    onTogglePeakNames: () -> Unit = {},
     alignAzimuthOffsetDeg: Float = 0f,
     alignElevationOffsetDeg: Float = 0f,
     compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_HIGH,
@@ -959,6 +965,38 @@ internal fun SunMoonTimesInfoCard(
                 Switch(
                     checked = horizonEnabled,
                     onCheckedChange = { onToggleHorizon() },
+                )
+            }
+
+            // Peak names stand on the terrain skyline, so the switch is there only while that is drawn.
+            val peakNamesAvailable = horizonEnabled
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = peakNamesAvailable) { onTogglePeakNames() }
+                    .alpha(if (peakNamesAvailable) 1f else 0.5f)
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.horizon_peak_names),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = titleColor,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = stringResource(R.string.horizon_peak_names_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subColor,
+                    )
+                }
+                Switch(
+                    checked = peakNamesOn && peakNamesAvailable,
+                    onCheckedChange = { onTogglePeakNames() },
+                    enabled = peakNamesAvailable,
                 )
             }
 

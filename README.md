@@ -11,10 +11,13 @@ sideloaded from source** for one reason: that kind of app needs the **accessibil
 is the most powerful permission Android hands out, and this way the source of the app holding it is on
 your own disk.
 
-**Network.** The app declares `INTERNET` for exactly one thing: fetching terrain elevation tiles for
-the real-horizon layer in the AR views, and only after you say yes. Nothing else in the app opens a
-connection, there is no analytics of any kind, and all that is ever sent is the name of a 1°×1° map
-square — no coordinates, no identifiers, no request body. (The one optional exception is Google's
+**Network.** The app declares `INTERNET` for exactly one thing: fetching terrain elevation tiles, and
+the names of the peaks on them, for the real-horizon layer in the AR views, and only after you say yes.
+Nothing else in the app opens a connection, there is no analytics of any kind, and all that is ever sent
+is the name of a 1°×1° map square — no coordinates, no identifiers, no request body. Elevation comes from
+the Tilezen tiles on AWS; peak names come from the public
+[`Dazix/caelis-landmarks`](https://github.com/Dazix/caelis-landmarks) repository, pinned to the tag `v1`
+so an installed app only ever downloads a format it can read. (The one optional exception is Google's
 ARCore, which is off by default and is not this app's traffic; see the paragraph on it below.)
 
 `INTERNET` is a `normal` permission: Android grants it at install time and gives you no switch to
@@ -107,6 +110,12 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   ridge at 18:42", 25 minutes before the almanac's 19:07 - and dims the stretch of the trajectory that is
   hidden, so it is obvious how much of the golden hour the hills take. Off by default; the elevation data is
   either downloaded once with your consent or imported by hand, and the computed profile then works offline.
+- **Peak Names**: The peaks that really stand on that skyline are labelled "Sněžka · 1603 m" (in Czech, the
+  Czech name; otherwise the English one, then the local one) in both Sun AR and Night Sky, with a switch per
+  screen that works only while the terrain is on. A peak is drawn only when it *is* the ridge at its
+  azimuth, so a summit hidden behind a nearer hill gets no label; the names come from OpenStreetMap
+  (© OpenStreetMap contributors, ODbL) as 1° tiles that are downloaded with the elevation, stored with the
+  profile, and drawn with no signal. If the names cannot be fetched the skyline is drawn without them.
 - **Red Vision Mode**: Astrophotography dark red theme (`#FFFF1744`) preserving night adaptation.
 - **Two-Row Floating HUD**: Row 1 with GPS fix status & location, Row 2 with Compass Azimuth and Lens FOV.
 
@@ -292,8 +301,8 @@ camera, and the broadcast entry points that start a session from a shell.
 ```bash
 # 1. Scoped domain unit tests (fast JVM execution):
 scripts/run_tests.sh caelis # CAELIS core, service, overlay, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (438 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (265 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, terrain horizon, skyline matching (591 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, star/DSO renderer (292 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -309,7 +318,7 @@ scripts/e2e_pixel_camera.sh
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
 `skipped`), **not** from the console: Gradle exits 0 when every test skipped itself, which is exactly
-what a dead accessibility service produces. Current baseline: **969 JVM tests (309 intervalometer/caelis, 508 solar, horizon & pose, 286 night sky, with the last two
+what a dead accessibility service produces. Current baseline: **1052 JVM tests (309 intervalometer/caelis, 591 solar, horizon & pose, 292 night sky, with the last two
 overlapping on the shared AR frame maths, plus 16 documentation screenshots), 47 instrumented tests, no
 failures, no skips, lint clean.**
 
@@ -320,7 +329,8 @@ failures, no skips, lint clean.**
 ```
 com.dazix.caelis
 ├── domain/          pure Kotlin, no Android imports — schedule, ramp maths, stop conditions, session state
-│   ├── horizon/     pure Kotlin terrain horizon — .hgt decoder, ray-marched skyline with curvature & refraction
+│   ├── horizon/     pure Kotlin terrain horizon — .hgt decoder, ray-marched skyline with curvature & refraction,
+│   │                which named peaks stand on it (`LandmarkVisibility`) and the `.peaks` tile codec
 │   ├── solar/       pure Kotlin solar & lunar ephemeris, day times, trajectory planner, PSA/Meeus algorithms
 │   └── nightsky/    pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, frustum culling,
 │                    star optics, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule, search index)
@@ -330,7 +340,7 @@ com.dazix.caelis
 │   │                place ARCore is started), the hand-over between them and who owns the camera
 │   └── scene/       the Filament sky renderer both AR screens draw with, including the camera picture
 ├── data/            DataStore settings (incl. the ARCore consent), calibrations, and the process-wide session snapshot
-│   ├── horizon/     elevation tile download (the only network code), import, mmap cache, profile codec
+│   ├── horizon/     elevation and peak tile download (the only network code), import, mmap cache, profile codec
 │   └── nightsky/    FlatBuffers zero-copy binary catalog schemas and generated accessors (Star, Constellation, Dso, MeteorShower)
 ├── service/         ShutterAccessibilityService (owns the session), SessionEngine, ShutterDispatcher,
 │                    CameraProfile(s), RunStateStore (durable run), SessionAlarmReceiver
@@ -422,6 +432,13 @@ retrying while the camera is still writing them.
   The compensation is that it is off by default, consent-gated on every start, started from exactly one
   file, and that a build without a Geospatial key simply never offers Geospatial. The promise that
   "nothing leaves the device" now holds for this app's own code only.
+- **Peak names are OpenStreetMap data and can be wrong or missing.** A peak with no `ele` or no name is
+  not in the tiles; a name or height is as good as its contributors made it. The labels are drawn only on
+  the skyline the elevation model produced, so a summit the model rounds a few metres low can still be
+  missing, which is the safe way round. Attribution is in Settings next to the elevation sources.
+  Names for an offline region are best effort: its peak tiles go to the cache Android may reclaim, and the
+  region's own profile is named later, when you are there and online. Allowing terrain downloads covers the
+  peak-name host (`raw.githubusercontent.com`) as well as the elevation host.
 - **The elevation model is bare earth.** It knows the hills; it does not know the trees or the
   buildings on them. The silhouette is where the ground is, which on a wooded ridge is a few degrees
   below where the sky actually starts.

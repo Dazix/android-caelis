@@ -109,6 +109,8 @@ class SettingsMappingTest {
             shadeOccludedTrajectory = false,
             wifiOnly = true,
             realHorizonInNightSky = true,
+            peakNamesInSunAr = false,
+            peakNamesInNightSky = false,
         )
 
         val prefs = mutablePreferencesOf()
@@ -148,6 +150,7 @@ class SettingsMappingTest {
         assertEquals(HorizonSettings(), defaults)
         assertFalse(defaults.enabled)
         assertFalse(defaults.networkDownloadAllowed)
+        assertTrue("peak names follow the terrain layer, which is what gates them", defaults.peakNamesInSunAr && defaults.peakNamesInNightSky)
         assertEquals(60, defaults.maxRangeKm)
         assertEquals(60_000.0, defaults.maxRangeMeters, 1e-9)
         assertEquals(1.6, defaults.eyeHeightMeters, 1e-9)
