@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (591 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (292 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (601 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (302 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1052 JVM tests (309 intervalometer, 591 solar, horizon & pose, 292 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1062 JVM tests (309 intervalometer, 601 solar, horizon & pose, 302 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -172,6 +172,19 @@ Each of these was found by review or on the device and is now covered by a test.
   walks it onto the ridge, and letting go snaps nothing back. The freezing pan stays for Night Sky's
   manual mode. The calibration is clamped to ±20° in both axes — a compass is wrong by degrees, and
   anything larger is a mis-drag that would be indistinguishable from a broken magnetometer next time.
+- **A compass the sensor itself does not trust may be corrected past ±20°, for the session only.**
+  On a Pixel 10 Pro's first start the overlay stood ~180° out: the built-in magnets put a ~450 µT
+  offset on the magnetometer (ten times the Earth's field) and until the fusion has estimated it the
+  rotation vector's north is anywhere. Its `event.accuracy` said nothing; its own heading estimate in
+  `values[4]` did (still ±30° after settling). `HeadingLock.compassState` counts an uncertainty beyond
+  the calibration's reach as UNRELIABLE, which shows the compass chip. While the compass is not OK
+  *and* the gyro holds the heading (`CoarseHeading.isAllowed`), a hand alignment puts what the ±20°
+  calibration cannot hold into `OrientationTracker.coarseHeadingOffsetDeg`: in the world-Z term and
+  in `getReferenceMatrix` (the automatic alignment searches around it), but not in ARCore's north
+  (`getCompassReferenceMatrix`; `SensorPoseSource` hands it over with the calibration, applied on top
+  — inside the reference `HeadingFusion` would reject the jump as an outlier for 30 samples), never stored,
+  cleared by a new session and by a reset. Without the lock it is refused: the compass would turn the
+  overlay again once its offset converged. The automatic alignment's window stays ±20° around it.
 - **One compass correction per phone.** `ar_azimuth_offset` / `ar_elevation_offset` are shared by
   both AR screens; the old `sun_ar_*` and `night_sky_*` keys are read only to migrate from and never
   written again. Aligning against a ridge by day is what makes the stars line up at night.
@@ -380,9 +393,9 @@ Each of these was found by review or on the device and is now covered by a test.
 - **The standing calibration is applied on top of both pose sources, identically, and is never in the
   ARCore north reference.** ARCore's world is turned to ENU by one yaw (`ArYawEstimator`: Geospatial's
   orientation when consented, keyed and accurate, else the sensor path's heading incl. declination and
-  heading lock, averaged by `HeadingFusion`), measured against `OrientationTracker.getReferenceMatrix`,
-  which excludes the calibration. `ArCorePoseSource.renderMatrix` then applies `applyCalibration` with
-  the tracker's current calibration on every call, so a drag or nudge moves the overlay at once and is
+  heading lock, averaged by `HeadingFusion`), measured against `OrientationTracker.getCompassReferenceMatrix`,
+  which excludes the calibration and the coarse heading correction. `ArCorePoseSource.renderMatrix` then applies `applyCalibration` with
+  the tracker's current coarse correction plus calibration on every call, so a drag or nudge moves the overlay at once and is
   never counted twice. `getReferenceMatrix` also refuses a timestamp the history does not cover: the
   ring buffer clamps, and a clamped pose passed off as the right instant is a yaw error.
 - **In ARCore mode one field of view feeds everything.** It comes from ARCore's projection matrix

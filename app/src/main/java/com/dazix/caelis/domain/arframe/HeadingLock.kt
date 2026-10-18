@@ -2,7 +2,10 @@ package com.dazix.caelis.domain.arframe
 
 /** What the heading of the sensor path currently rests on, for the UI. */
 enum class HeadingState {
-    /** The magnetometer reports itself unreliable or uncalibrated. */
+    /**
+     * The magnetometer reports itself unreliable or uncalibrated, or the fusion's own heading
+     * uncertainty is more than a calibration can correct.
+     */
     UNRELIABLE,
 
     /** The magnetometer reports low accuracy. */
@@ -73,17 +76,48 @@ class HeadingLock {
         lockedPsi = 0f
     }
 
-    fun state(compassAccuracy: Int): HeadingState = when {
-        isLocked -> HeadingState.LOCKED
-        compassAccuracy >= SENSOR_STATUS_ACCURACY_MEDIUM -> HeadingState.OK
-        compassAccuracy == SENSOR_STATUS_ACCURACY_LOW -> HeadingState.LOW
-        else -> HeadingState.UNRELIABLE
-    }
+    fun state(
+        compassAccuracy: Int,
+        headingUncertaintyDegrees: Float = Float.NaN,
+        correctableDegrees: Float = Float.POSITIVE_INFINITY,
+    ): HeadingState =
+        if (isLocked) HeadingState.LOCKED else compassState(compassAccuracy, headingUncertaintyDegrees, correctableDegrees)
 
     companion object {
         /** `SensorManager.SENSOR_STATUS_ACCURACY_*`, repeated to keep this file Android-free. */
         const val SENSOR_STATUS_ACCURACY_MEDIUM = 2
         const val SENSOR_STATUS_ACCURACY_LOW = 1
+
+        /**
+         * What the compass alone says, lock or no lock.
+         *
+         * The accuracy is not enough: on a Pixel 10 Pro the overlay stood about 180° out on the first
+         * start and no warning showed, while the rotation vector's own heading estimate
+         * ([headingUncertaintyDegrees]) still said ±30° after the offset had settled. An uncertainty
+         * beyond [correctableDegrees] — what a calibration can reach — is unreliable whatever the
+         * accuracy says; NaN (not reported) leaves the accuracy to decide.
+         */
+        fun compassState(
+            compassAccuracy: Int,
+            headingUncertaintyDegrees: Float,
+            correctableDegrees: Float,
+        ): HeadingState = when {
+            headingUncertaintyDegrees > correctableDegrees -> HeadingState.UNRELIABLE
+            compassAccuracy >= SENSOR_STATUS_ACCURACY_MEDIUM -> HeadingState.OK
+            compassAccuracy == SENSOR_STATUS_ACCURACY_LOW -> HeadingState.LOW
+            else -> HeadingState.UNRELIABLE
+        }
+
+        /**
+         * The rotation vector's estimated heading accuracy, `values[4]`, in degrees; NaN when the
+         * event does not carry it or reports it unavailable (-1).
+         */
+        fun headingUncertaintyDegrees(values: FloatArray): Float {
+            if (values.size < 5) return Float.NaN
+            val radians = values[4]
+            if (radians.isNaN() || radians < 0f) return Float.NaN
+            return Math.toDegrees(radians.toDouble()).toFloat()
+        }
 
         private fun wrap(deg: Float): Float {
             var a = deg % 360f

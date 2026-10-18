@@ -84,4 +84,47 @@ class HeadingLockTest {
         assertEquals(HeadingState.OK, lock.state(2))
         assertEquals(HeadingState.OK, lock.state(3))
     }
+
+    // Pixel 10 Pro: the rotation vector reported HIGH accuracy while its own heading estimate in
+    // values[4] said ±30°, and on the first start the overlay stood about 180° out with no warning.
+    @Test
+    fun `a heading uncertainty beyond what a calibration can reach is unreliable whatever the accuracy says`() {
+        val lock = HeadingLock()
+        assertEquals(HeadingState.UNRELIABLE, lock.state(3, headingUncertaintyDegrees = 30f, correctableDegrees = 20f))
+        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = 20f, correctableDegrees = 20f))
+        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = 5f, correctableDegrees = 20f))
+    }
+
+    @Test
+    fun `an unreported uncertainty leaves the accuracy to decide`() {
+        val lock = HeadingLock()
+        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = Float.NaN, correctableDegrees = 20f))
+        assertEquals(HeadingState.LOW, lock.state(1, headingUncertaintyDegrees = Float.NaN, correctableDegrees = 20f))
+    }
+
+    @Test
+    fun `a lock outranks the uncertainty in the state, not in the compass's own state`() {
+        val lock = HeadingLock()
+        lock.addCompass(0f)
+        lock.lock()
+        assertEquals(HeadingState.LOCKED, lock.state(3, headingUncertaintyDegrees = 90f, correctableDegrees = 20f))
+        assertEquals(
+            HeadingState.UNRELIABLE,
+            HeadingLock.compassState(3, headingUncertaintyDegrees = 90f, correctableDegrees = 20f),
+        )
+    }
+
+    @Test
+    fun `the uncertainty is read from values 4 in radians`() {
+        assertEquals(29.79f, HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, 0.52f)), 0.01f)
+        assertEquals(0f, HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, 0f)), 0f)
+    }
+
+    @Test
+    fun `an absent or unavailable uncertainty is NaN`() {
+        assertTrue(HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f)).isNaN())
+        assertTrue(HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f)).isNaN())
+        assertTrue(HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, -1f)).isNaN())
+        assertTrue(HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, Float.NaN)).isNaN())
+    }
 }
