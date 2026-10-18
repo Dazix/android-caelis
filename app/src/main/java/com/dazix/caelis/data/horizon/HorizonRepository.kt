@@ -40,7 +40,19 @@ sealed interface HorizonState {
     /** Tiles are needed and the app cannot fetch them itself — the user has to import them. */
     data class NeedsTiles(val keys: List<DemTileKey>) : HorizonState
 
-    data class Downloading(val key: DemTileKey, val index: Int, val total: Int, val progress: Float) : HorizonState
+    /**
+     * Tile [index] of [total] is on its way; [progress] and the byte counts are of that tile alone.
+     * The bytes are compressed, as they cross the network; [totalBytes] is
+     * [DemTileDownloader.UNKNOWN_LENGTH] until, or unless, the server announces a length.
+     */
+    data class Downloading(
+        val key: DemTileKey,
+        val index: Int,
+        val total: Int,
+        val progress: Float,
+        val receivedBytes: Long = 0L,
+        val totalBytes: Long = DemTileDownloader.UNKNOWN_LENGTH,
+    ) : HorizonState
 
     data class Computing(val progress: Float) : HorizonState
 
@@ -371,8 +383,15 @@ class HorizonRepository private constructor(
             _state.value = HorizonState.Downloading(key, index + 1, missing.size, 0f)
             try {
                 cache.store(key) { out ->
-                    downloader.download(key, out) { progress ->
-                        _state.value = HorizonState.Downloading(key, index + 1, missing.size, progress)
+                    downloader.download(key, out) { received, totalBytes ->
+                        _state.value = HorizonState.Downloading(
+                            key = key,
+                            index = index + 1,
+                            total = missing.size,
+                            progress = DemTileDownloader.fraction(received, totalBytes),
+                            receivedBytes = received,
+                            totalBytes = totalBytes,
+                        )
                     }
                 }
             } catch (e: DemTileDownloader.NotPermittedException) {

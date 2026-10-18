@@ -3,7 +3,9 @@ package com.dazix.caelis.notify
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.text.format.Formatter
 import androidx.test.core.app.ApplicationProvider
+import com.dazix.caelis.R
 import com.dazix.caelis.data.horizon.HorizonState
 import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.horizon.HorizonProfile
@@ -101,6 +103,34 @@ class TerrainNotificationsTest {
         assertTrue("text must contain tile name", text.contains("N50E014"))
         assertTrue("text must contain percentage", text.contains("45 %"))
         assertEquals(45, extras.getInt(Notification.EXTRA_PROGRESS))
+    }
+
+    @Test
+    fun `downloading text says how much of the tile has arrived`() {
+        val key = DemTileKey(50, 14)
+        notifications.update(HorizonState.Downloading(key, 1, 3, 0.34f, receivedBytes = 4_100_000, totalBytes = 12_000_000))
+
+        val text = manager.activeNotifications.single { it.id == TerrainNotifications.NOTIFICATION_ID }
+            .notification.extras.getString(Notification.EXTRA_TEXT) ?: ""
+        val expected = context.getString(
+            R.string.horizon_download_size_of,
+            Formatter.formatShortFileSize(context, 4_100_000),
+            Formatter.formatShortFileSize(context, 12_000_000),
+        )
+        assertTrue("text must contain \"$expected\", was \"$text\"", text.contains(expected))
+    }
+
+    @Test
+    fun `downloading text without a known length shows only what arrived`() {
+        val key = DemTileKey(50, 14)
+        notifications.update(HorizonState.Downloading(key, 1, 3, 0f, receivedBytes = 4_100_000))
+
+        val text = manager.activeNotifications.single { it.id == TerrainNotifications.NOTIFICATION_ID }
+            .notification.extras.getString(Notification.EXTRA_TEXT) ?: ""
+        val received = Formatter.formatShortFileSize(context, 4_100_000)
+        val sizeOf = context.getString(R.string.horizon_download_size_of, received, "")
+        assertTrue("text must contain \"$received\", was \"$text\"", text.contains(received))
+        assertFalse("no total may be invented, was \"$text\"", text.contains(sizeOf))
     }
 
     @Test

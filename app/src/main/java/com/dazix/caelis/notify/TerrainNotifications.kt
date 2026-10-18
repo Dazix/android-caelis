@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.SystemClock
 import com.dazix.caelis.R
 import com.dazix.caelis.data.horizon.HorizonState
+import com.dazix.caelis.data.horizon.sizeText
 
 /**
  * Progress in the shade while terrain elevation is fetched and the skyline computed.
@@ -65,7 +66,7 @@ class TerrainNotifications(context: Context) {
                 post(
                     channelId = CHANNEL_ID_ACTIVE,
                     title = appContext.getString(R.string.horizon_notif_downloading, state.index, state.total),
-                    text = "${state.key.name} · $pct %",
+                    text = "${state.key.name} · ${state.sizeText(appContext)} · $pct %",
                     progress = pct,
                     indeterminate = false,
                     throttled = !isPhaseChange,

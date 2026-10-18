@@ -19,6 +19,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -52,10 +54,12 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +86,7 @@ import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.horizon.DemTileDownloader
 import com.dazix.caelis.data.horizon.HorizonState
 import com.dazix.caelis.data.horizon.StorageMetrics
+import com.dazix.caelis.data.horizon.sizeText
 import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import java.time.LocalTime
@@ -118,6 +123,7 @@ fun SettingsScreen(
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
     onClearDemCache: () -> Unit = onClearTerrainCache,
+    onClearProfiles: () -> Unit = {},
     arCoreSettings: ArCoreSettings = ArCoreSettings(),
     /** False in a build made without a Geospatial API key: the switch is then not shown at all. */
     geospatialAvailable: Boolean = false,
@@ -132,6 +138,9 @@ fun SettingsScreen(
     onEndTimeChange: (LocalTime) -> Unit,
     onDebugPreferencesChange: (DebugPreferences) -> Unit = {},
     onNavigateToOfflineTerrain: () -> Unit = {},
+    /** Arrived from an AR screen's "data missing" chip: scroll to the download, then report it done. */
+    focusTerrainDownload: Boolean = false,
+    onTerrainDownloadFocused: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -140,11 +149,22 @@ fun SettingsScreen(
     var showAttribution by remember { mutableStateOf(false) }
     var showConsentDialog by remember { mutableStateOf(false) }
     var showClearCacheConfirmation by remember { mutableStateOf(false) }
+    var showClearProfilesConfirmation by remember { mutableStateOf(false) }
     var showArCoreConsentDialog by remember { mutableStateOf(false) }
     var showGeospatialConsentDialog by remember { mutableStateOf(false) }
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
+    val terrainDownloadRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(focusTerrainDownload) {
+        if (!focusTerrainDownload) return@LaunchedEffect
+        // Without a network the import is the only way to get the data, so open it as well.
+        if (!canDownloadTerrain) manualImportExpanded = true
+        // The block has to be laid out before it can be brought into view.
+        withFrameNanos { }
+        terrainDownloadRequester.bringIntoView()
+        onTerrainDownloadFocused()
+    }
     var debugAccordionExpanded by remember { mutableStateOf(false) }
     val debugChevronRotation by animateFloatAsState(
         targetValue = if (debugAccordionExpanded) 180f else 0f,
@@ -201,8 +221,11 @@ fun SettingsScreen(
         }
     }
 
+    // "Download now" asks again after a "no": the button is an explicit request for exactly what was
+    // refused, and without the question it only ended, silently, in "tiles missing". The question
+    // still never comes back on its own.
     val handleDownloadClick: () -> Unit = {
-        if (!horizonSettings.networkConsentAnswered && canDownloadTerrain) {
+        if (!horizonSettings.networkDownloadAllowed && canDownloadTerrain) {
             pendingActionAfterConsent = {
                 requestLocationIfMissing {
                     onDownloadTerrain()
@@ -372,49 +395,55 @@ fun SettingsScreen(
                 onCheckedChange = onHorizonRealInNightSkyChange,
             )
 
-            if (canDownloadTerrain) {
-                SwitchRow(
-                    title = stringResource(R.string.horizon_wifi_only),
-                    description = stringResource(R.string.horizon_wifi_only_desc),
-                    checked = horizonSettings.wifiOnly,
-                    onCheckedChange = onHorizonWifiOnlyChange,
-                )
-
-                Button(
-                    onClick = handleDownloadClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                ) {
-                    Text(stringResource(R.string.horizon_download_now))
-                }
-            }
-
-            AccordionRow(
-                title = stringResource(R.string.horizon_import_title),
-                expanded = manualImportExpanded,
-                onExpandedChange = { manualImportExpanded = it },
+            // One block, so "scroll to the download" lands on the button and the import together.
+            Column(
+                modifier = Modifier.bringIntoViewRequester(terrainDownloadRequester),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                OutlinedButton(
-                    onClick = onImportTerrain,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                ) {
-                    Text(stringResource(R.string.horizon_import_action))
+                if (canDownloadTerrain) {
+                    SwitchRow(
+                        title = stringResource(R.string.horizon_wifi_only),
+                        description = stringResource(R.string.horizon_wifi_only_desc),
+                        checked = horizonSettings.wifiOnly,
+                        onCheckedChange = onHorizonWifiOnlyChange,
+                    )
+
+                    Button(
+                        onClick = handleDownloadClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.horizon_download_now))
+                    }
                 }
 
-                if (missingTerrainTiles.isNotEmpty()) {
-                    Text(
-                        text = stringResource(
-                            R.string.horizon_import_body,
-                            missingTerrainTiles.joinToString("\n") { "${it.fileName}.gz" },
-                            "${DemTileDownloader.DEFAULT_BASE_URL}/skadi/",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
+                AccordionRow(
+                    title = stringResource(R.string.horizon_import_title),
+                    expanded = manualImportExpanded,
+                    onExpandedChange = { manualImportExpanded = it },
+                ) {
+                    OutlinedButton(
+                        onClick = onImportTerrain,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                    ) {
+                        Text(stringResource(R.string.horizon_import_action))
+                    }
+
+                    if (missingTerrainTiles.isNotEmpty()) {
+                        Text(
+                            text = stringResource(
+                                R.string.horizon_import_body,
+                                missingTerrainTiles.joinToString("\n") { "${it.fileName}.gz" },
+                                "${DemTileDownloader.DEFAULT_BASE_URL}/skadi/",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
                 }
             }
 
@@ -547,6 +576,23 @@ fun SettingsScreen(
                 )
             }
 
+            // Action: Clear terrain cache, under the row it empties.
+            OutlinedButton(
+                onClick = { showClearCacheConfirmation = true },
+                enabled = storageMetrics.demCacheSizeBytes > 0,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp, bottom = 6.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Delete,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_storage_clear_cache_button))
+            }
+
             // Row 2: Computed Horizons - Value right-aligned on new line
             Column(
                 modifier = Modifier
@@ -575,13 +621,15 @@ fun SettingsScreen(
                 )
             }
 
-            // Action: Clear terrain cache
+            // Action: Clear computed horizons. Separate from the cache on purpose: the profiles are
+            // what works with no signal, and a place without cached tiles cannot get one back
+            // without a new download.
             OutlinedButton(
-                onClick = { showClearCacheConfirmation = true },
-                enabled = storageMetrics.demCacheSizeBytes > 0,
+                onClick = { showClearProfilesConfirmation = true },
+                enabled = storageMetrics.profileCount > 0,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 4.dp),
+                    .padding(bottom = 4.dp),
             ) {
                 Icon(
                     imageVector = AppIcons.Delete,
@@ -589,7 +637,7 @@ fun SettingsScreen(
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.settings_storage_clear_cache_button))
+                Text(stringResource(R.string.settings_storage_clear_profiles_button))
             }
         }
 
@@ -887,6 +935,32 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (showClearProfilesConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearProfilesConfirmation = false },
+            title = { Text(stringResource(R.string.settings_storage_clear_profiles_dialog_title)) },
+            text = { Text(stringResource(R.string.settings_storage_clear_profiles_dialog_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearProfilesConfirmation = false
+                        onClearProfiles()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_storage_clear_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearProfilesConfirmation = false }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -1057,7 +1131,12 @@ private fun HorizonStatusRow(state: HorizonState) {
         is HorizonState.Idle -> null
         is HorizonState.Locating -> stringResource(R.string.horizon_status_locating)
         is HorizonState.NeedsTiles -> stringResource(R.string.horizon_status_needs_tiles)
-        is HorizonState.Downloading -> stringResource(R.string.horizon_status_downloading, state.index, state.total)
+        is HorizonState.Downloading -> stringResource(
+            R.string.horizon_status_downloading,
+            state.index,
+            state.total,
+            state.sizeText(LocalContext.current),
+        )
         is HorizonState.Computing -> stringResource(R.string.horizon_status_computing)
         is HorizonState.Ready -> stringResource(R.string.horizon_status_ready)
         is HorizonState.Failed -> when (state.reason) {

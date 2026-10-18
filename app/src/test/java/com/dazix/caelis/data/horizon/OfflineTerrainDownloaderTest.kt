@@ -57,12 +57,16 @@ class OfflineTerrainDownloaderTest {
         tileCache = DemTileCache(context)
 
         fakeDownloader = object : DemTileDownloader(consent = { true }) {
-            override suspend fun download(key: DemTileKey, out: OutputStream, onProgress: ((Float) -> Unit)?) {
+            override suspend fun download(
+                key: DemTileKey,
+                out: OutputStream,
+                onProgress: ((receivedBytes: Long, totalBytes: Long) -> Unit)?,
+            ) {
                 downloadedKeys.add(key)
                 // Write valid 1201x1201 short grid bytes
                 val validTileBytes = ByteArray(1201 * 1201 * 2)
                 out.write(validTileBytes)
-                onProgress?.invoke(1f)
+                onProgress?.invoke(validTileBytes.size.toLong(), validTileBytes.size.toLong())
             }
 
             override suspend fun downloadLandmarks(key: DemTileKey, out: OutputStream): Boolean {

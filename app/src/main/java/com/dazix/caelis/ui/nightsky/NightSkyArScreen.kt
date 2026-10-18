@@ -135,6 +135,7 @@ import android.graphics.BitmapFactory
 @Composable
 fun NightSkyArScreen(
     onBack: () -> Unit,
+    onOpenTerrainSettings: () -> Unit = {},
     viewModel: NightSkyArViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -146,6 +147,7 @@ fun NightSkyArScreen(
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
     val horizonProfile by viewModel.horizonProfile.collectAsStateWithLifecycle()
     val useRealHorizon by viewModel.useRealHorizon.collectAsStateWithLifecycle()
+    val showStylisedLandscape by viewModel.showStylisedLandscape.collectAsStateWithLifecycle()
     val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
 
     val sheetState = rememberBottomSheetState(
@@ -541,7 +543,7 @@ fun NightSkyArScreen(
                     isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
                     isMilkyWayVisible = uiState.isMilkyWayVisible,
                     isAtmosphereVisible = uiState.isAtmosphereVisible,
-                    isLandscapeVisible = uiState.isLandscapeVisible,
+                    isLandscapeVisible = showStylisedLandscape,
                     isGridVisible = uiState.isGridVisible,
                     horizonProfile = horizonProfile,
                     useRealHorizon = useRealHorizon,
@@ -649,6 +651,12 @@ fun NightSkyArScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     val chipColor = if (uiState.redVisionMode) activePalette.primary else null
+                    com.dazix.caelis.ui.TerrainStatusChip(
+                        state = uiState.horizonState,
+                        layerOn = horizonSettings.enabled && horizonSettings.realHorizonInNightSky,
+                        onOpenSettings = onOpenTerrainSettings,
+                        nightVisionColor = chipColor,
+                    )
                     com.dazix.caelis.ui.HeadingStatusChip(state = headingState, nightVisionColor = chipColor)
                     com.dazix.caelis.ui.PoseSourceChip(
                         indicator = poseIndicator,
@@ -947,21 +955,8 @@ internal fun NightSkyTopBar(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )
-                } else if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
-                    horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
-                ) {
-                    val pct = when (horizonState) {
-                        is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
-                        is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
-                    }
-                    Text(
-                        text = "• ⛰ $pct %",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
                 }
+                // Download and compute progress is TerrainStatusChip's, under the bar.
             }
 
             // Row 2: Azimuth, Elevation, FOV Data

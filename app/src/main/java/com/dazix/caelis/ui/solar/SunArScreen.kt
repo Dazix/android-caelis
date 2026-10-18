@@ -136,6 +136,7 @@ private val MoonSetColor = Color(0xFF26A69A)
 @Composable
 fun SunArScreen(
     onBack: () -> Unit,
+    onOpenTerrainSettings: () -> Unit = {},
     viewModel: SunArViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -410,6 +411,11 @@ fun SunArScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            com.dazix.caelis.ui.TerrainStatusChip(
+                state = uiState.horizonState,
+                layerOn = uiState.horizonSettings.enabled,
+                onOpenSettings = onOpenTerrainSettings,
+            )
             if (isSearchingForSkyline) SkylineSearchChip()
             com.dazix.caelis.ui.HeadingStatusChip(state = headingState)
             com.dazix.caelis.ui.PoseSourceChip(indicator = poseIndicator, arCoreConsented = arCoreConsented)
@@ -622,21 +628,8 @@ internal fun SunArTopBar(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                     )
-                } else if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Downloading ||
-                    horizonState is com.dazix.caelis.data.horizon.HorizonState.Computing
-                ) {
-                    val pct = when (horizonState) {
-                        is com.dazix.caelis.data.horizon.HorizonState.Downloading -> (horizonState.progress * 100).toInt()
-                        is com.dazix.caelis.data.horizon.HorizonState.Computing -> (horizonState.progress * 100).toInt()
-                    }
-                    Text(
-                        text = "• ⛰ $pct %",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
                 }
+                // Download and compute progress is TerrainStatusChip's, under the bar.
             }
 
             Row(

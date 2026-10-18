@@ -18,4 +18,21 @@ object RealHorizonPolicy {
         hasProfile: Boolean,
         profileUnavailable: Boolean,
     ): Boolean = featureEnabled && realHorizonInNightSky && (hasProfile || !profileUnavailable)
+
+    /**
+     * Whether the stylised landscape is drawn: when its own switch is on, and as the stand-in for a
+     * real skyline that is not coming. The two switches are exclusive in the layer sheet, so the
+     * landscape's own switch is off whenever the real one is on — read alone, it left a user who
+     * declined the download, or whose tiles are missing, with no ground at all.
+     */
+    fun showsStylisedLandscape(
+        landscapeSwitch: Boolean,
+        featureEnabled: Boolean,
+        realHorizonInNightSky: Boolean,
+        hasProfile: Boolean,
+        profileUnavailable: Boolean,
+    ): Boolean = landscapeSwitch || (
+        featureEnabled && realHorizonInNightSky &&
+            !isWanted(featureEnabled, realHorizonInNightSky, hasProfile, profileUnavailable)
+        )
 }

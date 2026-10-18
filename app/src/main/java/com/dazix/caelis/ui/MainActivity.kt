@@ -255,6 +255,7 @@ private fun CaelisScreen(
     val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
     val arCoreSettings by viewModel.arCoreSettings.collectAsStateWithLifecycle()
     val horizonState by viewModel.horizonState.collectAsStateWithLifecycle()
+    val focusTerrainDownload by viewModel.focusTerrainDownload.collectAsStateWithLifecycle()
     val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
     val effectiveHorizonRangeKm by viewModel.effectiveHorizonRangeKm.collectAsStateWithLifecycle()
     val storageMetrics by viewModel.storageMetrics.collectAsStateWithLifecycle()
@@ -362,10 +363,12 @@ private fun CaelisScreen(
 
         Screen.SUN_AR -> com.dazix.caelis.ui.solar.SunArScreen(
             onBack = viewModel::back,
+            onOpenTerrainSettings = viewModel::openTerrainDownloadSettings,
         )
 
         Screen.NIGHT_SKY_AR -> com.dazix.caelis.ui.nightsky.NightSkyArScreen(
             onBack = viewModel::back,
+            onOpenTerrainSettings = viewModel::openTerrainDownloadSettings,
         )
 
         Screen.SETTINGS -> SettingsScreen(
@@ -397,6 +400,7 @@ private fun CaelisScreen(
             onImportTerrain = { terrainImportLauncher.launch(arrayOf("*/*")) },
             onClearTerrainCache = viewModel::clearTerrainCache,
             onClearDemCache = viewModel::clearDemCache,
+            onClearProfiles = viewModel::clearProfiles,
             onStartLocationUpdates = viewModel::startHorizonLocationUpdates,
             onStopLocationUpdates = viewModel::stopHorizonLocationUpdates,
             onRefreshLocation = viewModel::refreshHorizonLocation,
@@ -406,6 +410,8 @@ private fun CaelisScreen(
             onEndTimeChange = viewModel::setCustomEndTime,
             onDebugPreferencesChange = viewModel::setDebugPreferences,
             onNavigateToOfflineTerrain = { viewModel.navigate(Screen.OFFLINE_TERRAIN) },
+            focusTerrainDownload = focusTerrainDownload,
+            onTerrainDownloadFocused = viewModel::terrainDownloadFocused,
             onBack = viewModel::back,
         )
 
