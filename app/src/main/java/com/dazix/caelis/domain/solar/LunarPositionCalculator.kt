@@ -151,7 +151,7 @@ object LunarPositionCalculator {
         azDeg = (azDeg % 360.0 + 360.0) % 360.0
 
         // Atmospheric refraction
-        val apparentElevDeg = elevDeg + computeAtmosphericRefraction(elevDeg)
+        val apparentElevDeg = elevDeg + AtmosphericRefraction.degrees(elevDeg)
 
         // Moon phase and illumination fraction
         val phaseAngle = normalizeDeg(180.0 - d)
@@ -183,13 +183,6 @@ object LunarPositionCalculator {
             norm < 292.5 -> Pair("Poslední čtvrť", "🌗")
             else -> Pair("Ubývající srpek", "🌘")
         }
-    }
-
-    private fun computeAtmosphericRefraction(geometricElevationDegrees: Double): Double {
-        if (geometricElevationDegrees < -0.8333) return 0.0
-        val h = geometricElevationDegrees.coerceAtLeast(-0.5)
-        val rArcMinutes = 1.02 / tan((h + 10.3 / (h + 5.11)) * RAD)
-        return (rArcMinutes / 60.0).coerceIn(0.0, 0.6)
     }
 
     private fun normalizeDeg(deg: Double): Double {

@@ -6,7 +6,6 @@ import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.math.tan
 
 /**
  * Pure Kotlin astronomical solar position calculator.
@@ -86,16 +85,8 @@ object SolarPositionCalculator {
         val xAz = cos(latRad) * sin(deltaRad) - sin(latRad) * cos(deltaRad) * cos(haRad)
         val azimuthDeg = normalizeDegrees(atan2(yAz, xAz) * DEG)
 
-        // Atmospheric refraction correction
-        // Saemundsson (1986) approximation; valid for true elevation >= -0.8333°.
-        // For elevation >= 85°, refraction is negligible (< 0.001°) and omitted to prevent
-        // numerical instability near zenith (tan(90°)).
-        val apparentElevationDeg = if (elevationDeg in -0.8333..85.0) {
-            val rArcmin = 1.02 / tan((elevationDeg + 10.3 / (elevationDeg + 5.11)) * RAD)
-            elevationDeg + maxOf(0.0, rArcmin / 60.0)
-        } else {
-            elevationDeg
-        }
+        // Atmospheric refraction correction, continuous through the horizon (see AtmosphericRefraction).
+        val apparentElevationDeg = elevationDeg + AtmosphericRefraction.degrees(elevationDeg)
 
         return SolarCoordinates(
             azimuthDegrees = azimuthDeg,

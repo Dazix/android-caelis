@@ -250,6 +250,14 @@ Each of these was found by review or on the device and is now covered by a test.
   put the first heading of the gyro-held tracker ~90° out.
 - **Dropping a pan is not forgetting the calibration.** `resumeSensorTracking` and `startSensors`
   clear `pan*` and keep `calibration*`; only an explicit reset clears both.
+- **Refraction is never taken away below the horizon.** `AtmosphericRefraction` is the one correction for
+  Sun and Moon. Saemundsson stops at −0.8333°, and returning 0 there made the apparent elevation jump 0.6°
+  (a step in the day arc); fading it out afterwards (over 1°, then 5°) left a bend, because above the
+  horizon the arc lies 0.1–0.6° over its geometric position and underground it has to be brought back.
+  Measured by `ArcBendTest`: 1.5–2.5° of turn per two-minute step at the horizon against 0.3–0.5°
+  elsewhere. Now the correction keeps growing at the formula's slope and settles on a constant, so the
+  arc underground runs parallel to the geometric one, about a degree above it. Only the part of the
+  arc that is underground is affected, and nothing there is compared with a real object.
 - **Zero allocations on the AR render loop.** A frame of either AR screen is matrix and uniform writes
   plus uploads only when data changed; geometry is rebuilt on data changes (`SunArScene`,
   `NightSkyScene`), the mark batches (`LabelBatch`, `GlyphBatch`) upload only a listing that differs
@@ -358,7 +366,10 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Peak labels are one atlas sprite each and cost nothing per frame.** `LandmarkMarks` bakes "Name · 1603 m"
   and its tick into a `SpriteAtlas` sprite only when the list, the language, the colour (night vision tints
   it in Night Sky), the density or the font scale change, and a frame only lists them. They yield to what
-  has priority (`MarkClearance`): Sun AR reserves its badges and the bubbles it drew first. Night Sky
+  has priority (`MarkClearance`): Sun AR reserves its badges and the bubbles it drew first. A badge's pill
+  lies on its own arc, on the stretch below the horizon (before the dot at a rise, after it at a set,
+  `BadgeOnArc`): that stretch is the faint one and nothing else needs it, and a pill searching for a free
+  spot beside the arc drifted off it whenever the phone turned. Night Sky
   reserves nothing: its peak names sit on the ridge and can overprint a planet, DSO or constellation
   label that lands there, a known limitation. Night Sky passes font scale 1f on purpose, as every other
   name on that screen is a fixed pixel size; Sun AR scales all of its marks with the real one. A name

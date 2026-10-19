@@ -45,6 +45,7 @@ import com.dazix.caelis.ar.scene.LandmarkMarks
 import com.dazix.caelis.ar.scene.NormalGoldSolar
 import com.dazix.caelis.ar.scene.SpriteAtlas
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
+import com.dazix.caelis.domain.arframe.BadgeOnArc
 import androidx.compose.ui.graphics.toArgb
 import kotlin.math.ceil
 import com.dazix.caelis.ar.scene.NormalSunrise
@@ -296,16 +297,22 @@ internal class SunArMarks {
     private var moonBubbleSprites = IntArray(0)
     private val markerSprites = IntArray(4) { -1 }
 
-    // Each badge's slot: its sky direction and its pill's half width, and this frame's projection
-    // of it, so a time bubble under a badge can be left out (MarkClearance).
+    // Each badge's slot: its sky direction, its pill's half width and a point of its own arc below the
+    // horizon (before the dot at a rise, after it at a set), and this frame's projection of the pill's
+    // centre, so a time bubble under a badge can be left out (MarkClearance).
     private val markerAzimuth = DoubleArray(4)
     private val markerElevation = DoubleArray(4)
     private val markerHalfWidth = FloatArray(4)
     private val markerScreenX = FloatArray(4)
     private val markerScreenY = FloatArray(4)
     private val markerOnScreen = BooleanArray(4)
+    private val belowKnown = BooleanArray(4)
+    private val belowAzimuth = DoubleArray(4)
+    private val belowElevation = DoubleArray(4)
+    private val pillOffsetX = FloatArray(4)
+    private val pillOffsetY = FloatArray(4)
+    private val pillOffset = FloatArray(2)
     private var badgeHalfHeight = 0f
-    private var badgeCentreLift = 0f
     private var bubbleHalfWidth = 0f
     private var bubbleHalfHeight = 0f
 
@@ -341,9 +348,26 @@ internal class SunArMarks {
         for (slot in 0 until 4) {
             markerOnScreen[slot] = markerSprites[slot] >= 0 &&
                 projector.projectAltAz(markerAzimuth[slot], markerElevation[slot], projected)
-            markerScreenX[slot] = projected[0]
-            markerScreenY[slot] = projected[1] - badgeCentreLift
-            if (markerOnScreen[slot]) peaks.reserve(markerScreenX[slot], markerScreenY[slot], markerHalfWidth[slot], badgeHalfHeight)
+            if (!markerOnScreen[slot]) continue
+            val dotX = projected[0]
+            val dotY = projected[1]
+            // The pill lies on the arc, on its stretch below the horizon: towards the arc's point there,
+            // or straight down when the arc is not known or that point is behind the camera.
+            var towardX = 0f
+            var towardY = 1f
+            if (belowKnown[slot] && projector.projectAltAz(belowAzimuth[slot], belowElevation[slot], projected)) {
+                towardX = projected[0] - dotX
+                towardY = projected[1] - dotY
+            }
+            BadgeOnArc.offset(
+                towardX, towardY, markerHalfWidth[slot], badgeHalfHeight,
+                BADGE_GAP_DP * density, BADGE_MIN_GAP_DP * density, pillOffset,
+            )
+            pillOffsetX[slot] = pillOffset[0]
+            pillOffsetY[slot] = pillOffset[1]
+            markerScreenX[slot] = dotX + pillOffset[0]
+            markerScreenY[slot] = dotY + pillOffset[1]
+            peaks.reserve(markerScreenX[slot], markerScreenY[slot], markerHalfWidth[slot], badgeHalfHeight)
         }
 
         // Only points above -15° are labelled, as only those stretches of the arcs are drawn.
@@ -409,12 +433,23 @@ internal class SunArMarks {
                     x, y, bubbleHalfWidth, bubbleHalfHeight,
                 )
             ) return false
+            // Nor one standing on the stretch of arc between the dot and the pill: it would sit between
+            // the badge and the point the badge names.
+            if (BadgeOnArc.segmentHitsRect(
+                    markerScreenX[slot] - pillOffsetX[slot], markerScreenY[slot] - pillOffsetY[slot],
+                    markerScreenX[slot], markerScreenY[slot],
+                    x, y, bubbleHalfWidth, bubbleHalfHeight,
+                )
+            ) return false
         }
         peaks.reserve(x, y, bubbleHalfWidth, bubbleHalfHeight)
         return true
     }
 
-    /** A rise or set badge: a dot on the horizon (or on the skyline) with the time and azimuth above it. */
+    /**
+     * A rise or set badge: a dot on the horizon (or on the skyline) and, on the arc below it, the pill with
+     * the time and azimuth: before the dot at a rise, after it at a set.
+     */
     private fun addMarkerAt(
         labels: LabelBatch,
         glyphs: GlyphBatch,
@@ -425,7 +460,13 @@ internal class SunArMarks {
         val d = direction
         AltAzGridBuilder.direction(markerAzimuth[slot], markerElevation[slot], d)
         glyphs.add(GlyphBatch.Shape.DISC, d[0], d[1], d[2], BADGE_DOT_DP * density, 0f, accent.toArgb())
-        labels.add(markerSprites[slot], d[0], d[1], d[2])
+        // The sprite is anchored on the dot with its pill BADGE_LIFT_DP above; the offset moves the pill
+        // from there to its place on the arc. Off screen the GPU hides it with the dot.
+        if (markerOnScreen[slot]) {
+            labels.add(markerSprites[slot], d[0], d[1], d[2], pillOffsetX[slot], pillOffsetY[slot] + BADGE_LIFT_DP * density)
+        } else {
+            labels.add(markerSprites[slot], d[0], d[1], d[2])
+        }
     }
 
     /**
@@ -476,19 +517,30 @@ internal class SunArMarks {
         }
         bubbleHalfWidth = BUBBLE_WIDTH_DP * density * 0.5f
         bubbleHalfHeight = BUBBLE_HEIGHT_DP * density * 0.5f
-        // The box a badge keeps clear runs from the top of its pill down to the bottom of its dot.
-        val pillTop = (BADGE_LIFT_DP + BADGE_HEIGHT_DP * 0.5f) * density
-        val dotBottom = BADGE_DOT_DP * density
-        badgeHalfHeight = (pillTop + dotBottom) * 0.5f
-        badgeCentreLift = (pillTop - dotBottom) * 0.5f
-        setBadge(atlas, 0, badges.sunrise, "🌅", NormalSunrise, density)
-        setBadge(atlas, 1, badges.sunset, "🌇", NormalSunset, density)
-        setBadge(atlas, 2, badges.moonrise, "🌙", MoonRise, density)
-        setBadge(atlas, 3, badges.moonset, "🌘", MoonSet, density)
+        // The box a badge keeps clear is its pill; the dot stands beside it, outside.
+        badgeHalfHeight = BADGE_HEIGHT_DP * density * 0.5f
+        val solarPath = solar.pathPoints
+        val lunarPath = lunar.pathPoints
+        setBadge(atlas, 0, badges.sunrise, "🌅", NormalSunrise, density, beforeDot = true, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 1, badges.sunset, "🌇", NormalSunset, density, beforeDot = false, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 2, badges.moonrise, "🌙", MoonRise, density, beforeDot = true, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 3, badges.moonset, "🌘", MoonSet, density, beforeDot = false, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
         atlas.end()
     }
 
-    private fun setBadge(atlas: SpriteAtlas, slot: Int, badge: RiseSetBadge?, emoji: String, accent: Color, density: Float) {
+    private fun setBadge(
+        atlas: SpriteAtlas,
+        slot: Int,
+        badge: RiseSetBadge?,
+        emoji: String,
+        accent: Color,
+        density: Float,
+        beforeDot: Boolean,
+        pathSize: Int,
+        pathAzimuth: (Int) -> Double,
+        pathElevation: (Int) -> Double,
+    ) {
+        belowKnown[slot] = false
         if (badge == null) {
             markerSprites[slot] = -1
             return
@@ -498,6 +550,53 @@ internal class SunArMarks {
         markerAzimuth[slot] = badge.azimuthDegrees
         markerElevation[slot] = badge.apparentElevationDegrees
         markerHalfWidth[slot] = (markerText.measureText(label) + 16f * density) * 0.5f
+        findBelowPoint(slot, badge, beforeDot, pathSize, pathAzimuth, pathElevation)
+    }
+
+    /**
+     * A point of the day's arc [ARC_REACH_DEGREES] of sky from the badge's crossing, on the stretch that runs
+     * below the horizon: earlier in the day than the crossing at a rise, later at a set (or the end of the
+     * sampled path, if that comes first). It is a sky direction; each frame projects it, and the line from
+     * the dot to it is the way the arc leaves the dot on the screen. Found when the atlas is built: a badge
+     * changes with its trajectory.
+     */
+    private fun findBelowPoint(
+        slot: Int,
+        badge: RiseSetBadge,
+        beforeDot: Boolean,
+        pathSize: Int,
+        pathAzimuth: (Int) -> Double,
+        pathElevation: (Int) -> Double,
+    ) {
+        if (pathSize < 3) return
+        var nearest = 0
+        var nearestDistance = Double.MAX_VALUE
+        for (i in 0 until pathSize) {
+            val distance = skyDistanceSquared(badge.azimuthDegrees, badge.apparentElevationDegrees, pathAzimuth(i), pathElevation(i))
+            if (distance < nearestDistance) {
+                nearestDistance = distance
+                nearest = i
+            }
+        }
+        val reachSquared = ARC_REACH_DEGREES * ARC_REACH_DEGREES
+        var end = nearest
+        val step = if (beforeDot) -1 else 1
+        while (end + step in 0 until pathSize &&
+            skyDistanceSquared(pathAzimuth(end), pathElevation(end), badge.azimuthDegrees, badge.apparentElevationDegrees) < reachSquared
+        ) end += step
+        if (end == nearest) return
+        belowAzimuth[slot] = pathAzimuth(end)
+        belowElevation[slot] = pathElevation(end)
+        belowKnown[slot] = true
+    }
+
+    /** Squared angular distance in degrees, azimuth wrapped and shortened by the elevation; for ordering and a reach, not for navigation. */
+    private fun skyDistanceSquared(az0: Double, el0: Double, az1: Double, el1: Double): Double {
+        var dAz = abs(az0 - az1) % 360.0
+        if (dAz > 180.0) dAz = 360.0 - dAz
+        val dAzScaled = dAz * cos(Math.toRadians((el0 + el1) * 0.5))
+        val dEl = el0 - el1
+        return dAzScaled * dAzScaled + dEl * dEl
     }
 
     /** A time pill, 46 x 21 dp, centred on its point of the arc. */
@@ -564,6 +663,15 @@ internal class SunArMarks {
         const val BADGE_HEIGHT_DP = 26f
         const val BADGE_LIFT_DP = 16f
         const val BADGE_DOT_DP = 4f
+
+        /** What the rectangle placement left between the dot and the pill's bounding box; [BadgeOnArc.offset] keeps 0.75 of what that meant to the outline. */
+        const val BADGE_GAP_DP = 6f
+
+        /** The least from the dot to the pill's outline: the dot's radius ([BADGE_DOT_DP]) and 1 dp of air. */
+        const val BADGE_MIN_GAP_DP = 5f
+
+        /** How far along the arc, in degrees of sky, the point is that says which way the arc leaves the dot. */
+        const val ARC_REACH_DEGREES = 6.0
         val SUN_BORDER_ARGB = android.graphics.Color.argb(255, 255, 179, 0)
         val MOON_BORDER_ARGB = android.graphics.Color.argb(180, 128, 222, 234)
     }
