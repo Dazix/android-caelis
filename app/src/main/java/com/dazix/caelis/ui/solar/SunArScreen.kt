@@ -110,7 +110,10 @@ import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
 import com.dazix.caelis.ui.formatOffsetDegrees
+import com.dazix.caelis.ui.rememberBottomGestureSlopPx
 import com.dazix.caelis.ui.rememberSkyPoseRig
+import com.dazix.caelis.domain.arframe.SystemGestureZone
+import androidx.compose.runtime.rememberUpdatedState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -282,6 +285,7 @@ fun SunArScreen(
         )
     }
     val isSearchingForSkyline by viewModel.isSearchingForSkyline.collectAsStateWithLifecycle()
+    val bottomGestureSlop = rememberUpdatedState(rememberBottomGestureSlopPx())
 
     Box(
         modifier = Modifier
@@ -299,7 +303,14 @@ fun SunArScreen(
                     val down = awaitFirstDown(requireUnconsumed = true)
                     val downX = down.position.x
                     val downY = down.position.y
-                    val isEdgeStart = downX < edgeSlop || downX > size.width - edgeSlop
+                    // A swipe home or back is the system's, never a calibration (SystemGestureZone).
+                    if (SystemGestureZone.contains(
+                            downX, downY, size.width.toFloat(), size.height.toFloat(),
+                            sideSlopPx = edgeSlop, bottomSlopPx = bottomGestureSlop.value,
+                        )
+                    ) {
+                        return@awaitEachGesture
+                    }
                     var isPanning = false
 
                     while (true) {
@@ -328,10 +339,7 @@ fun SunArScreen(
                                     fovDeg = uiState.cameraFovHorizontal,
                                 )
                             }
-                            val isEdgeBackSwipe = isEdgeStart && kotlin.math.abs(deltaX) >= kotlin.math.abs(deltaY)
-                            if (!isEdgeBackSwipe && change.positionChanged()) {
-                                change.consume()
-                            }
+                            if (change.positionChanged()) change.consume()
                         }
                     }
                 }
