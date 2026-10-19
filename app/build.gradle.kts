@@ -1,3 +1,5 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Properties
 
 plugins {
@@ -61,6 +63,9 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
+            // Build time in the version name, so a phone shows which APK is actually installed.
+            // Debug only: a release's version comes from CI and must stay reproducible.
+            versionNameSuffix = "-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/M/d-HH:mm"))
         }
         release {
             isMinifyEnabled = false
