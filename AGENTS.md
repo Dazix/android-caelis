@@ -71,9 +71,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (309 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (601 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (302 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (311 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (614 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1062 JVM tests (309 intervalometer, 601 solar, horizon & pose, 302 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1080 JVM tests (311 intervalometer, 614 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -236,6 +236,14 @@ Each of these was found by review or on the device and is now covered by a test.
   session unlocks it. Indoors the compass needed +14° by a window and −7° on the roof, and the
   rotation vector alone pulled an aligned overlay off again as soon as the phone turned towards
   different steel. Do not draw the game vector itself: on a Pixel 7 Pro it visibly trailed a tilt.
+- **No heading is locked before the game vector has settled.** After a start the game vector's tilt
+  stood 10.8° off the rotation vector's and converged over ~15 s, its yaw with it; an auto-align
+  10 s in locked ψ mid-convergence and the lock then "cancelled" 5.8° of convergence in 12 s, which
+  turned the overlay off the ridge it had just matched (it looked like the horizon sinking).
+  `GameVectorSettle` calls it settled once the two tilts agree within 0.1° for 2 s (or after 20 s);
+  the automatic alignment waits for it, and a lock requested earlier (`HeadingLock.isLocked`) only
+  takes hold (`isHolding`) at the first settled sample, staying on the compass the fit was made
+  against until then.
 - **Sensor matrices are row-major.** `SensorManager` writes them row-major; convert a slerped
   quaternion with `QuaternionSlerp.quaternionToRowMajorMatrix`, never the column-major
   `quaternionToRotationMatrix`. Mixing the two transposed the auto-align's synchronized matrix and
@@ -464,9 +472,11 @@ Each of these was found by review or on the device and is now covered by a test.
   results and crop regions lag behind `setZoomRatio` by tens of milliseconds. Decoupling the AR geometry
   scaling via `zoomFactor` computed directly from the requested zoom ensures instant 60/120 Hz response
   without overlay tearing or lag.
-- **Edge back gestures in AR must not be consumed by pointerInput.** The 28dp horizontal edge margins in
-  Sun AR and Night Sky AR allow system predictive back and edge swipes to pass through to the OS without
-  triggering accidental pan, calibration, or false tap selections.
+- **A gesture that starts in a system zone belongs to the system.** `SystemGestureZone`: 28 dp on
+  either side (back) and the bottom system-gesture inset, at least 28 dp (home, recents). Such a drag
+  neither pans nor calibrates and is not consumed; a tap there is still a tap. The sides were once only
+  left unconsumed, and swiping Sun AR away to the home screen still moved the stored calibration twice
+  (−2.4/−11.1° to −5.6/−6.7° to 3.0/−6.5°).
 - **Contextual back handler in AR screens prioritizes dismissing active overlays.** Pressing back must
   dismiss open bottom sheets (layer settings, object details), search bar, or disambiguation dialogs
   before navigating out of the AR screen.

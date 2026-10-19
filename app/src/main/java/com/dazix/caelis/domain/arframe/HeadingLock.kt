@@ -36,22 +36,39 @@ enum class HeadingState {
  *
  * A restored calibration does not lock: it was measured somewhere else, maybe somewhere the field
  * was bent the other way. Angles are degrees. Allocation-free.
+ *
+ * A lock taken before the game vector has settled ([GameVectorSettle]) is held back: ψ still moves
+ * while it converges, and cancelling that turned the overlay 5.8° away from the ridge it had just
+ * been aligned to. Until then the heading stays on the compass, exactly what the alignment was
+ * measured against, and ψ is captured at the first settled sample. [isLocked] is true from the
+ * request on: the user has aligned, whether or not the gyro holds it yet.
  */
 class HeadingLock {
 
     var hasHeading: Boolean = false
         private set
 
+    /** The user aligned this session; the hold itself may still wait for the game vector. */
     var isLocked: Boolean = false
+        private set
+
+    /** ψ is frozen and the compass is no longer consulted. */
+    var isHolding: Boolean = false
         private set
 
     private var latestPsi = 0f
     private var lockedPsi = 0f
+    private var gameSettled = false
 
-    /** The latest ψ between the rotation vector and the game rotation vector, degrees. */
-    fun addCompass(psiDegrees: Float) {
+    /**
+     * The latest ψ between the rotation vector and the game rotation vector, degrees, and whether the
+     * game vector has settled. A pending lock takes hold at the first settled sample.
+     */
+    fun addCompass(psiDegrees: Float, gameVectorSettled: Boolean = true) {
         latestPsi = psiDegrees
         hasHeading = true
+        gameSettled = gameVectorSettled
+        if (isLocked && !isHolding && gameSettled) hold()
     }
 
     /**
@@ -61,19 +78,26 @@ class HeadingLock {
      */
     fun lock() {
         if (!hasHeading || isLocked) return
-        lockedPsi = latestPsi
         isLocked = true
+        if (gameSettled) hold()
     }
 
-    /** Degrees to add to the rotation vector's heading; zero while unlocked. */
-    fun correctionDegrees(): Float = if (isLocked) wrap(lockedPsi - latestPsi) else 0f
+    private fun hold() {
+        lockedPsi = latestPsi
+        isHolding = true
+    }
+
+    /** Degrees to add to the rotation vector's heading; zero until the lock holds. */
+    fun correctionDegrees(): Float = if (isHolding) wrap(lockedPsi - latestPsi) else 0f
 
     /** Back to the compass: an explicit calibration reset, or a new session. */
     fun reset() {
         isLocked = false
+        isHolding = false
         hasHeading = false
         latestPsi = 0f
         lockedPsi = 0f
+        gameSettled = false
     }
 
     fun state(

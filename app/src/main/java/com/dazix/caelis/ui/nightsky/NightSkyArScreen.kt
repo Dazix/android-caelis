@@ -125,7 +125,9 @@ import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
+import com.dazix.caelis.ui.rememberBottomGestureSlopPx
 import com.dazix.caelis.ui.rememberSkyPoseRig
+import com.dazix.caelis.domain.arframe.SystemGestureZone
 import java.time.ZoneId
 import com.dazix.caelis.ui.solar.HorizonConsentDialog
 
@@ -353,6 +355,7 @@ fun NightSkyArScreen(
     val currentConstellationsVisible by rememberUpdatedState(uiState.isConstellationsVisible)
     val currentMeteorShowersVisible by rememberUpdatedState(uiState.isMeteorShowersVisible)
 
+    val bottomGestureSlop = rememberUpdatedState(rememberBottomGestureSlopPx())
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
         sheetPeekHeight = sheetPeekHeight,
@@ -394,6 +397,7 @@ fun NightSkyArScreen(
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectArSkyGestures(
+                        bottomGestureSlopPx = { bottomGestureSlop.value },
                         onTap = { offset ->
                             if (currentDebugPreferences.showTapRadiusIndicator) {
                                 renderer.triggerTapIndicator(
@@ -1554,6 +1558,7 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
     onDoubleTap: () -> Unit,
     onPan: (deltaX: Float, deltaY: Float) -> Unit,
     onZoom: (zoomRatio: Float) -> Unit,
+    bottomGestureSlopPx: () -> Float = { 0f },
 ) {
     val touchSlop = viewConfiguration.touchSlop
     val touchSlopSq = touchSlop * touchSlop
@@ -1568,7 +1573,11 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
         val down = awaitFirstDown(requireUnconsumed = true)
         val downX = down.position.x
         val downY = down.position.y
-        val isEdgeStart = downX < edgeSlop || downX > size.width - edgeSlop
+        // A one-finger drag from the system's zones is back or home, never a pan (SystemGestureZone).
+        val isSystemGestureStart = SystemGestureZone.contains(
+            downX, downY, size.width.toFloat(), size.height.toFloat(),
+            sideSlopPx = edgeSlop, bottomSlopPx = bottomGestureSlopPx(),
+        )
         var isPanning = false
         var isTransforming = false
         var pastTouchSlop = false
@@ -1646,7 +1655,9 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
 
                 if (!pastTouchSlop && totalDistSq > touchSlopSq) {
                     pastTouchSlop = true
-                    isPanning = true
+                    // Past the slop it is no longer a tap; from a system zone it is no pan either,
+                    // and the movement is left unconsumed for the system.
+                    isPanning = !isSystemGestureStart
                 }
 
                 if (isPanning) {
@@ -1655,12 +1666,7 @@ internal suspend fun PointerInputScope.detectArSkyGestures(
                     if (deltaX != 0f || deltaY != 0f) {
                         onPan(deltaX, deltaY)
                     }
-                    // For gestures starting at the screen edge, allow horizontal back navigation
-                    // by not consuming horizontal movement towards the interior.
-                    val isEdgeBackSwipe = isEdgeStart && kotlin.math.abs(deltaX) >= kotlin.math.abs(deltaY)
-                    if (!isEdgeBackSwipe && change.positionChanged()) {
-                        change.consume()
-                    }
+                    if (change.positionChanged()) change.consume()
                 }
             }
         }

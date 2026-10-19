@@ -542,7 +542,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 orientationTracker.getRenderMatrix(0L, stillnessMatrix)
                 // The back camera's optical axis in the world: minus the device Z column.
                 val still = stillness.add(now, -stillnessMatrix[2].toDouble(), -stillnessMatrix[6].toDouble(), -stillnessMatrix[10].toDouble())
-                val ready = sensorsOwnPose &&
+                // Not before the game vector has settled: the heading it then locks would keep
+                // turning for seconds afterwards (GameVectorSettle).
+                val ready = sensorsOwnPose && orientationTracker.isGameVectorSettled &&
                     horizonProfile.value != null && horizonSettings.value.enabled &&
                     frameGrabber != null &&
                     autoViewportWidth > 1f && autoViewportHeight > 1f &&

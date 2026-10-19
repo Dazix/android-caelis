@@ -115,6 +115,47 @@ class HeadingLockTest {
     }
 
     @Test
+    fun `a lock before the game vector settles does not cancel its convergence`() {
+        // The device log: locked 10 s after start while the game vector was still converging, then
+        // ψ moved by 5.6 degrees and the lock turned the overlay with it.
+        val lock = HeadingLock()
+        lock.addCompass(0f, gameVectorSettled = false)
+        lock.lock()
+        assertTrue(lock.isLocked)
+        assertFalse(lock.isHolding)
+        lock.addCompass(-3f, gameVectorSettled = false)
+        assertEquals("still on the compass the alignment was measured against", 0f, lock.correctionDegrees(), 0f)
+        lock.addCompass(-5.6f, gameVectorSettled = true)
+        assertTrue(lock.isHolding)
+        assertEquals("the hold starts where ψ settled: no jump", 0f, lock.correctionDegrees(), 0f)
+        lock.addCompass(-25.6f, gameVectorSettled = true)
+        assertEquals(20f, lock.correctionDegrees(), 1e-4f)
+        assertEquals(HeadingState.LOCKED, lock.state(0))
+    }
+
+    @Test
+    fun `a lock after the game vector settled holds at once`() {
+        val lock = HeadingLock()
+        lock.addCompass(7f, gameVectorSettled = true)
+        lock.lock()
+        assertTrue(lock.isHolding)
+        lock.addCompass(2f, gameVectorSettled = true)
+        assertEquals(5f, lock.correctionDegrees(), 1e-4f)
+    }
+
+    @Test
+    fun `a reset drops a pending lock`() {
+        val lock = HeadingLock()
+        lock.addCompass(0f, gameVectorSettled = false)
+        lock.lock()
+        lock.reset()
+        lock.addCompass(4f, gameVectorSettled = true)
+        assertFalse(lock.isLocked)
+        assertFalse(lock.isHolding)
+        assertEquals(0f, lock.correctionDegrees(), 0f)
+    }
+
+    @Test
     fun `the uncertainty is read from values 4 in radians`() {
         assertEquals(29.79f, HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, 0.52f)), 0.01f)
         assertEquals(0f, HeadingLock.headingUncertaintyDegrees(floatArrayOf(0f, 0f, 0f, 1f, 0f)), 0f)
