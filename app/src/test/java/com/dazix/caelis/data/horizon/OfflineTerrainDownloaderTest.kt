@@ -71,7 +71,11 @@ class OfflineTerrainDownloaderTest {
 
             override suspend fun downloadLandmarks(key: DemTileKey, out: OutputStream): Boolean {
                 landmarkKeys.add(key)
-                if (landmarkServerDown) throw java.io.IOException("peak server down")
+                // An HTTP error, not a lost connection: LandmarkSource stops trying the other tiles after
+                // an IOException, so whether the third tile was asked would depend on whether it had
+                // already started when the first one failed (it had not, once, on CI). A status error is
+                // each tile's own answer, so every tile is asked on every run.
+                if (landmarkServerDown) throw DemTileDownloader.ServerException(503)
                 LandmarkTileCodec.write(out, listOf(LandmarkPeak(key.latSouth + 0.5, key.lonWest + 0.5, 1000, "Hill", "", "")))
                 return true
             }
