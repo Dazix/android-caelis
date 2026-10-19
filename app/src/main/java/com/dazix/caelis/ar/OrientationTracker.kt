@@ -8,6 +8,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.Surface
 import com.dazix.caelis.domain.arframe.CoarseHeading
+import com.dazix.caelis.domain.arframe.GameVectorSettle
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
 import com.dazix.caelis.domain.arframe.YawOffset
@@ -83,6 +84,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         rotationSensor.type != Sensor.TYPE_GAME_ROTATION_VECTOR
 
     private val headingLock = HeadingLock()
+    private val gameSettle = GameVectorSettle()
+    /**
+     * The game vector agrees with the rotation vector's tilt since this start (always true without a
+     * game vector). Before that ψ is still converging: an alignment would be undone by it.
+     */
+    val isGameVectorSettled: Boolean get() = !dualMode || gameSettle.isSettled
 
     /** [HeadingLock.correctionDegrees], folded into the world-Z term next to the declination. */
     @Volatile
@@ -533,6 +540,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         isFirstSample = true
         // A new session: the game vector's north restarts and the user has not aligned anything yet.
         headingLock.reset()
+        gameSettle.reset()
         headingOffsetDeg = 0f
         coarseHeadingOffsetDeg = 0f
         headingUncertaintyDeg = Float.NaN
@@ -671,7 +679,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             lastPairedTimestampNs = latestCompassTimestampNs
             SensorManager.getRotationMatrixFromVector(compassMatrix, latestCompassQuat)
             SensorManager.getRotationMatrixFromVector(gameMatrix, latestGameQuat)
-            headingLock.addCompass(YawOffset.extractDegrees(compassMatrix, gameMatrix))
+            // A lock taken while the game vector converges waits for it (GameVectorSettle).
+            val settled = gameSettle.add(latestCompassTimestampNs, compassMatrix, gameMatrix)
+            headingLock.addCompass(YawOffset.extractDegrees(compassMatrix, gameMatrix), settled)
             headingOffsetDeg = headingLock.correctionDegrees()
         }
         publishHeadingState()
