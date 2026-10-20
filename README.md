@@ -1,3 +1,5 @@
+<div style="text-align:center;width: 100%" align="center"><img src="./design/logo/png/caelis-icon.png" width="150" height="150" alt="application logo"/></div>
+
 # CAELIS
 
 [![CI](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml/badge.svg)](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml)
@@ -6,7 +8,7 @@ An Android intervalometer that presses the shutter **inside the camera app you a
 drift-free schedule, so every frame of a time-lapse keeps that app's full image pipeline — HDR+, Night
 Sight, the lot. It can also just tap a point on the screen at a fixed rate in any app at all.
 
-It is a clone of the idea behind *Intervalometer for TimeLapse* (MobilePhoton), built to be **built and
+It is an alternative to existing *intervalometer* applications, built to be **built and
 sideloaded from source** for one reason: that kind of app needs the **accessibility permission**, which
 is the most powerful permission Android hands out, and this way the source of the app holding it is on
 your own disk.
