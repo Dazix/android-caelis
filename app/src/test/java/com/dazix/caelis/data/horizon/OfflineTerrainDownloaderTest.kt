@@ -157,6 +157,25 @@ class OfflineTerrainDownloaderTest {
     }
 
     @Test
+    fun `a crash leftover part file is swept, a live one and the region's tiles are not`() = runBlocking {
+        // filesDir is never reclaimed by Android, so nothing but this sweep would ever remove one.
+        val stale = File(offlineDir, "N10E010-crash.part").apply {
+            writeBytes(ByteArray(5))
+            setLastModified(System.currentTimeMillis() - 60 * 60 * 1000L)
+        }
+        val live = File(offlineDir, "N11E011-inflight.part").apply { writeBytes(ByteArray(5)) }
+        val key = OfflineRegion.tilesFor(69.3, 17.5, 20).first()
+
+        assertTrue(offlineDownloader.downloadRegion("Senja", 69.3, 17.5, 20).isSuccess)
+
+        assertFalse(stale.exists())
+        assertTrue("another download may still be writing it", live.exists())
+        val parts = offlineDir.list()!!.filter { it.endsWith(".part") }
+        assertEquals("only the live one is left", listOf(live.name), parts)
+        assertEquals(1201 * 1201 * 2L, File(offlineDir, key.fileName).length())
+    }
+
+    @Test
     fun `downloadRegion also fetches the peak tiles of the region`() = runBlocking {
         val keys = OfflineRegion.tilesFor(69.3, 17.5, 20)
 

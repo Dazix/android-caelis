@@ -114,6 +114,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.dazix.caelis
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: internal
           releaseName: ${{ steps.vars.outputs.release_name }}
           status: completed
@@ -162,6 +163,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.dazix.caelis
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: beta
           releaseName: ${{ steps.vars.outputs.release_name }}
           status: completed

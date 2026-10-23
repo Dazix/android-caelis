@@ -71,8 +71,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components (319 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (639 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (324 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (640 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
@@ -89,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1113 JVM tests (319 intervalometer, 639 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1119 JVM tests (324 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -463,13 +463,30 @@ Each of these was found by review or on the device and is now covered by a test.
   import of one tile truncate each other) and renames only after the length is checked against
   `HgtTile.isPlausibleGridLength`. A truncated transfer is still a mappable blob that would invent a
   skyline out of whatever the missing rows decoded to. `trim` and `clear` leave a `.part` written to in
-  the last 10 minutes alone; older ones are crash leftovers and are swept.
+  the last 10 minutes alone; older ones are crash leftovers and are swept. `OfflineTerrainDownloader`
+  follows the same rules in `dem_offline/`, which Android never reclaims, and promotes a cached tile by
+  rename or by a copy through a temporary file, never by writing into the final name.
 - **A tile is never written past `HgtTile.MAX_GRID_BYTES`.** Download and hand import inflate gzip
   straight to disk through `BoundedOutputStream`, which throws at 3601² × 2 bytes. A gzip stream inflates
   without bound, and a length check after the write cannot stop a few kilobytes from filling the storage.
 - **A release is signed with the release key or not built.** Without the four `SIGNING_*` variables
   `checkReleaseSigning` fails `packageRelease` and `packageReleaseBundle`; the build once fell back to
   the debug key silently. Release unit tests and lint do not depend on it.
+- **The release is shrunk by R8, and the mapping goes to Play with every upload.** `app/proguard-rules.pro`
+  adds no keeps because nothing in `app/src/main` uses reflection; a new `Class.forName`, reflective
+  member lookup or JNI callback into app code needs a keep there, with the reason. Resources found by
+  name (`Resources.getIdentifier`: the `art_`, `dso_` and `planet_` drawables) are invisible to the
+  resource shrinker and are kept by `res/raw/keep.xml`; a new family found that way goes on that list.
+  `ReleaseBuildTest` pins both. A JVM test cannot run R8: a change in this area is checked by installing
+  a minified build on the device, beside the debug one under an `applicationIdSuffix`, and going
+  through every screen, the Filament and FlatBuffers ones above all.
+- **A release log does not say where the user is.** A tile name is a 1° square around them, a profile
+  file is named after the spot, and an exception's message carries either. `data/horizon/TileLog.kt`
+  (`logName()`, `regionLogName()`, `inDebug()`, `logClass`) names them in debug builds only.
+  `LogPrivacyTest` fails on a log line that names a key, a coordinate or a raw terrain throwable.
+- **The Gradle wrapper pins its distribution's SHA-256.** `./gradlew wrapper --gradle-version X` drops
+  `distributionSha256Sum` unless `--gradle-distribution-sha256-sum` is passed; `WorkflowHardeningTest`
+  catches it.
 - **No exported receiver or service is open to every app.** The accessibility service is bound by the
   system alone; the debug `DebugSessionReceiver` requires `DUMP`, which only the shell holds.
   `ExportedComponentsTest` pins both. Anything that can start a session lets its caller tap through

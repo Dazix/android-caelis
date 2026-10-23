@@ -82,6 +82,26 @@ class WorkflowHardeningTest {
         }
     }
 
+    /**
+     * The wrapper downloads Gradle and runs it, here and in every CI job that holds the Play key. With a
+     * checksum a substituted distribution fails the download instead of building the release.
+     * `./gradlew wrapper --gradle-version X` drops the line unless `--gradle-distribution-sha256-sum`
+     * is passed too.
+     */
+    @Test
+    fun `the Gradle wrapper pins the checksum of its distribution`() {
+        val properties = listOf(File("gradle/wrapper"), File("../gradle/wrapper"))
+            .map { File(it, "gradle-wrapper.properties") }
+            .firstOrNull { it.isFile }
+            ?: error("no gradle-wrapper.properties from ${File(".").absolutePath}")
+        val text = properties.readText()
+        assertTrue("distributionUrl is not https", Regex("""(?m)^distributionUrl=https\\?://""").containsMatchIn(text))
+        assertTrue(
+            "distributionSha256Sum is missing",
+            Regex("""(?m)^distributionSha256Sum=[0-9a-f]{64}$""").containsMatchIn(text),
+        )
+    }
+
     /** Lines belonging to a `run:` value, with their 1-based numbers: the inline one and a block's body. */
     private fun runScripts(lines: List<String>): List<Pair<Int, String>> {
         val run = Regex("""^(\s*)-?\s*run:\s*(.*)$""")

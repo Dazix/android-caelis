@@ -70,12 +70,12 @@ class DemTileCache(
                 HgtTile(key, buffer)
             }
         } catch (e: IOException) {
-            Log.w(TAG, "cannot map tile ${key.name}", e)
+            Log.w(TAG, "cannot map tile ${key.logName()}: ${e.logClass}", e.inDebug())
             null
         } catch (e: IllegalArgumentException) {
             // Not a square grid: a truncated download or somebody's unrelated file. Drop it so the
             // next attempt refetches rather than failing the same way forever.
-            Log.w(TAG, "discarding unusable tile ${key.name}", e)
+            Log.w(TAG, "discarding unusable tile ${key.logName()}: ${e.logClass}", e.inDebug())
             file.delete()
             null
         }
