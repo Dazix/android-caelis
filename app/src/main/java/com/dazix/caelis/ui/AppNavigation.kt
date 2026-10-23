@@ -1,6 +1,7 @@
 package com.dazix.caelis.ui
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -74,6 +75,28 @@ internal val RailBreakpoint: Dp = 600.dp
 
 internal fun wantsNavigationRail(width: Dp): Boolean = width >= RailBreakpoint
 
+/** Space between rail items: the rail's own items sit flush and read as one cramped column. */
+private val RailItemGap: Dp = 12.dp
+
+@Composable
+private fun RailItem(
+    destination: NavigationDestination,
+    current: Screen,
+    onNavigate: (Screen) -> Unit,
+) {
+    val label = stringResource(destination.labelRes)
+    val showLabel = destination != NavigationDestination.SETTINGS
+    WideNavigationRailItem(
+        selected = destination.screen == current,
+        onClick = { onNavigate(destination.screen) },
+        icon = { Icon(imageVector = destination.icon, contentDescription = label) },
+        label = if (showLabel) {
+            { Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        } else null,
+        railExpanded = false,
+    )
+}
+
 /**
  * Wraps the current screen in the app's navigation, in whichever of its two forms the window can take.
  *
@@ -124,32 +147,20 @@ fun AppNavigationShell(
             val windowHeight = maxHeight
             Row(modifier = Modifier.fillMaxSize()) {
                 WideNavigationRail(modifier = Modifier.fillMaxHeight()) {
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = windowHeight)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        NavigationDestination.entries.forEach { destination ->
-                            val label = stringResource(destination.labelRes)
-                            val showLabel = destination != NavigationDestination.SETTINGS
-                            WideNavigationRailItem(
-                                selected = destination.screen == current,
-                                onClick = { onNavigate(destination.screen) },
-                                icon = {
-                                    Icon(imageVector = destination.icon, contentDescription = label)
-                                },
-                                label = if (showLabel) {
-                                    {
-                                        Text(
-                                            text = label,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                } else null,
-                                railExpanded = false,
-                            )
+                    // Settings is pinned to the bottom of the rail; the places above it scroll
+                    // when the window is too short for them, so Settings can never scroll away.
+                    Column(modifier = Modifier.heightIn(max = windowHeight).fillMaxHeight()) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(RailItemGap),
+                        ) {
+                            NavigationDestination.entries
+                                .filter { it != NavigationDestination.SETTINGS }
+                                .forEach { RailItem(it, current, onNavigate) }
                         }
+                        RailItem(NavigationDestination.SETTINGS, current, onNavigate)
                     }
                 }
                 Box(modifier = Modifier.weight(1f)) {
