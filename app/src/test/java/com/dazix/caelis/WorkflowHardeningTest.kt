@@ -49,22 +49,51 @@ class WorkflowHardeningTest {
         assertEquals("pin these to a 40-character commit SHA", emptyList<String>(), offenders)
     }
 
-    /** Same reasoning for Python packages: an unpinned `pip install` runs whatever was published last. */
+    /**
+     * Same reasoning for Python packages, transitive ones included: an unpinned `pip install` runs
+     * whatever was published last. Every install reads a lock file with `--require-hashes`, and every
+     * package in that file has an exact version and at least one hash.
+     */
     @Test
-    fun `every pip install pins an exact version`() {
+    fun `every pip install is hash-locked, dependencies included`() {
         val install = Regex("""\bpip3?\s+install\s+(.*)$""")
         val all = workflowFiles().flatMap { file ->
             runScripts(file.readLines()).mapNotNull { (number, line) ->
                 install.find(line)?.groupValues?.get(1)?.let { "${file.invariantPath()}:$number" to it }
             }
         }
+        assertTrue("no pip install found, the scan is looking in the wrong place", all.isNotEmpty())
+
         val offenders = all.flatMap { (where, arguments) ->
-            arguments.trim().split(Regex("""\s+"""))
-                .filterNot { it.startsWith("-") }
-                .filterNot { Regex("""^[A-Za-z0-9._\-\[\]]+==[0-9][^=\s]*$""").matches(it) }
-                .map { "$where: $it" }
+            val words = arguments.trim().split(Regex("""\s+"""))
+            val lockFiles = words.zipWithNext().filter { (flag, _) -> flag == "-r" }.map { it.second }
+            val loose = words.filterNot { it.startsWith("-") || it in lockFiles }
+            buildList {
+                if ("--require-hashes" !in words) add("$where: no --require-hashes")
+                if (lockFiles.isEmpty()) add("$where: no -r lock file")
+                loose.forEach { add("$where: $it installed outside the lock file") }
+                lockFiles.forEach { addAll(lockFileProblems(where, it)) }
+            }
         }
-        assertEquals("pin these with ==", emptyList<String>(), offenders)
+        assertEquals("install from a hash-locked file", emptyList<String>(), offenders)
+    }
+
+    /** Each requirement of [path] with its `\`-continued `--hash` lines: exact version, at least one hash. */
+    private fun lockFileProblems(where: String, path: String): List<String> {
+        val file = listOf(File(path), File("..", path)).firstOrNull { it.isFile }
+            ?: return listOf("$where: lock file $path not found")
+        val requirements = file.readText().replace(Regex("""\\\r?\n"""), " ").lines()
+            .map { it.substringBefore(" #").trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+        if (requirements.isEmpty()) return listOf("$path: no requirements")
+        return requirements.mapNotNull { requirement ->
+            val name = requirement.substringBefore(' ')
+            when {
+                !Regex("""^[A-Za-z0-9._\-\[\]]+==[0-9][^=\s;]*$""").matches(name) -> "$path: $name has no exact version"
+                "--hash=sha256:" !in requirement -> "$path: $name has no hash"
+                else -> null
+            }
+        }
     }
 
     /**
@@ -100,6 +129,26 @@ class WorkflowHardeningTest {
             "distributionSha256Sum is missing",
             Regex("""(?m)^distributionSha256Sum=[0-9a-f]{64}$""").containsMatchIn(text),
         )
+    }
+
+    /**
+     * Gradle checks every downloaded library and plugin against `gradle/verification-metadata.xml`
+     * before it is used, so a substituted artifact on a repository fails the build that holds the Play
+     * key instead of being signed into the release. Only IDE sources and javadoc are trusted unchecked.
+     */
+    @Test
+    fun `Gradle verifies every dependency against a checksum`() {
+        val metadata = listOf(File("gradle"), File("../gradle"))
+            .map { File(it, "verification-metadata.xml") }
+            .firstOrNull { it.isFile }
+            ?: error("gradle/verification-metadata.xml is missing, so nothing is verified")
+        val text = metadata.readText()
+        assertTrue("<verify-metadata>true</verify-metadata>" in text)
+        assertTrue("too few components, the file was not generated from a full build", Regex("<component ").findAll(text).count() > 300)
+
+        val trusted = Regex("""<trust file="([^"]+)"""").findAll(text).map { it.groupValues[1] }.toList()
+        assertEquals(listOf(".*-javadoc[.]jar", ".*-sources[.]jar"), trusted)
+        assertTrue("an artifact without a sha256", Regex("""<artifact name="[^"]+">\s*</artifact>""").find(text) == null)
     }
 
     /** Lines belonging to a `run:` value, with their 1-based numbers: the inline one and a block's body. */

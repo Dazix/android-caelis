@@ -71,7 +71,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (324 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (325 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (640 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1119 JVM tests (324 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1120 JVM tests (325 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -487,6 +487,18 @@ Each of these was found by review or on the device and is now covered by a test.
 - **The Gradle wrapper pins its distribution's SHA-256.** `./gradlew wrapper --gradle-version X` drops
   `distributionSha256Sum` unless `--gradle-distribution-sha256-sum` is passed; `WorkflowHardeningTest`
   catches it.
+- **Every Gradle dependency is checked against `gradle/verification-metadata.xml`.** A library, plugin or
+  tool jar whose SHA-256 is not listed fails the build; only IDE sources and javadoc are trusted
+  unchecked. After a version change in `libs.versions.toml`, or a new AGP / Kotlin / Gradle, regenerate it
+  from every task CI and the deploy run, the release included (it needs the `SIGNING_*` variables, a
+  throwaway keystore will do):
+  `./gradlew --write-verification-metadata sha256 :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:lintDebug :app:bundleRelease`,
+  then read the diff: a new hash for a version that did not change is the attack this exists for. Entries
+  are added, never removed, so prune old versions now and then by regenerating from an empty file.
+- **The deploy's Python is hash-locked, dependencies included.** `scripts/requirements-promote.in` lists
+  what `promote_release.py` imports; `scripts/requirements-promote.txt` is its closure from
+  `uv pip compile --generate-hashes --exclude-newer <a week back>` (the command is in the `.in`), and the
+  job installs it with `--require-hashes`. `WorkflowHardeningTest` refuses any other `pip install`.
 - **No exported receiver or service is open to every app.** The accessibility service is bound by the
   system alone; the debug `DebugSessionReceiver` requires `DUMP`, which only the shell holds.
   `ExportedComponentsTest` pins both. Anything that can start a session lets its caller tap through

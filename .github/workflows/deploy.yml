@@ -180,12 +180,12 @@ jobs:
       - name: Set up Python 3
         uses: actions/setup-python@v7
         with:
-          python-version: '3.x'
+          python-version: '3.14'
 
       - name: Install dependencies
-        # Exact versions: this job holds the Play key, and an unpinned install runs whatever was
-        # published last. Transitive dependencies are still resolved freely.
-        run: pip install google-api-python-client==2.201.0 google-auth==2.62.0
+        # Every package of the closure at a locked version and hash: this job holds the Play key, and an
+        # unpinned install runs whatever was published last. See scripts/requirements-promote.in.
+        run: pip install --require-hashes --no-deps -r scripts/requirements-promote.txt
 
       - name: Set production release variables
         id: vars
