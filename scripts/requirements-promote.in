@@ -1,0 +1,10 @@
+# What scripts/promote_release.py imports. The deploy job installs scripts/requirements-promote.txt,
+# the hash-locked closure of this file, never these lines directly. After changing a version here:
+#
+#   uv pip compile scripts/requirements-promote.in --generate-hashes --universal \
+#     --python-version 3.14 --exclude-newer <a date a week back> -o scripts/requirements-promote.txt
+#
+# --exclude-newer keeps releases younger than a week out of the lock: a compromised package is
+# usually pulled within days, and this job holds the Play key.
+google-api-python-client==2.201.0
+google-auth==2.62.0
