@@ -227,7 +227,9 @@ adb shell am start --user "$ANDROID_USER_ID" \
 ### Session broadcasts
 
 `com.dazix.caelis.debug.DebugSessionReceiver` starts and stops a session without any UI
-scripting. This is what `e2e_pixel_camera.sh` drives.
+scripting. This is what `e2e_pixel_camera.sh` drives. It requires `android.permission.DUMP`, which
+the shell holds and no installed app can, so these commands work from `adb shell` and nothing else on
+the phone can start a session through it.
 
 ```
 # start

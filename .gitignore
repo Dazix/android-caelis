@@ -10,6 +10,14 @@
 # Local machine configuration — SDK path, never shared
 local.properties
 
+# Signing material. The upload keystore, its base64 form for the CI secret and the Play service
+# account key: whoever holds them can publish an update to every installed copy. keys/ is where
+# scripts/build_release_bundle.sh looks first; the rest catch a key left anywhere else.
+/keys/
+*.jks
+*.keystore
+keystore_base64.txt
+
 # The adb path, the JDK and the Android user id the harness is allowed to touch. Those describe one
 # machine and one phone, not the project — scripts/env.example.sh is the template that is shared.
 scripts/env.local.sh
