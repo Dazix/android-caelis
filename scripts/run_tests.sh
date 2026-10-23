@@ -39,6 +39,8 @@ case "$TARGET" in
             --tests "com.dazix.caelis.NetworkIsolationTest" \
             --tests "com.dazix.caelis.WorkflowHardeningTest" \
             --tests "com.dazix.caelis.ExportedComponentsTest" \
+            --tests "com.dazix.caelis.LogPrivacyTest" \
+            --tests "com.dazix.caelis.ReleaseBuildTest" \
             --tests "com.dazix.caelis.ui.CalibrationResolutionTest" \
             --tests "com.dazix.caelis.ui.LaunchModeOptionsTest" \
             --tests "com.dazix.caelis.ui.MainViewModelNavigationTest" \

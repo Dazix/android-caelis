@@ -65,11 +65,15 @@ android {
             // a value computed in this block is frozen by the configuration cache.
         }
         release {
-            isMinifyEnabled = false
+            // R8: unused code removed and the rest renamed, so the shipped APK no longer reads like the
+            // source. proguard-rules.pro says why it needs no keeps; res/raw/keep.xml keeps the
+            // artwork that is looked up by name. The mapping file goes to Play with each upload.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Never the debug key as a fallback: checkReleaseSigning below fails the packaging instead.
             signingConfig = signingConfigs.findByName("release")
-        }
-    }
+        }    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

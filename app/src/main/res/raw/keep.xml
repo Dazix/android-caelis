@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Kept against resource shrinking in release. The constellation, DSO and planet pictures are found
+  by name (Resources.getIdentifier with "art_" plus a catalogue abbreviation, for example), not through
+  R.drawable, so the shrinker cannot see that they are used and would drop all of them.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/art_*,@drawable/dso_*,@drawable/planet_*" />
