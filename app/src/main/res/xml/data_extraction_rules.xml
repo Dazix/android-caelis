@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What Android's own backup may take off the phone. Everything not excluded here is backed up.
+
+  horizons/ is a location history: each profile is named after where the user stood, to about 110 m,
+  and holds the exact coordinates. It must not reach the Google account's cloud backup, whatever the
+  encryption: the app says what it sends, and this is not on that list. A profile is recomputed from
+  the terrain on the next visit, so nothing is lost by leaving it out. A transfer to the user's own
+  new phone, over cable or local Wi-Fi, keeps it.
+
+  dem_offline/ holds whole elevation tiles (26 MB each). Auto Backup gives an app 25 MB and backs up
+  nothing at all once that is exceeded, settings included; the tiles can be downloaded again.
+  debug/ is the alignment dump of debug builds: camera frames and the position they were taken at.
+  session_runtime is the live run (RunStateStore): elapsed-realtime anchors of one boot of one phone,
+  which mean nothing anywhere else.
+
+  The settings DataStore stays in: it holds the intervalometer configuration, the calibrations and the
+  consents, and no position.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="horizons/" />
+        <exclude domain="file" path="dem_offline/" />
+        <exclude domain="file" path="debug/" />
+        <exclude domain="sharedpref" path="session_runtime.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="dem_offline/" />
+        <exclude domain="file" path="debug/" />
+        <exclude domain="sharedpref" path="session_runtime.xml" />
+    </device-transfer>
+</data-extraction-rules>

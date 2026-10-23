@@ -71,7 +71,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation (311 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening (316 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching (614 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
@@ -89,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1080 JVM tests (311 intervalometer, 614 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1102 JVM tests (316 intervalometer, 614 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest`, `WorkflowHardeningTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -337,6 +337,18 @@ Each of these was found by review or on the device and is now covered by a test.
   file, the one file that may start ARCore, consent in front of it, and the exact permission set (the
   ARCore library adds none). Do not word a README line, a string or a comment as "nothing leaves the
   device" without the ARCore qualifier.
+- **The app sees only the packages it can target.** `<queries>` in the manifest (launcher, the two
+  camera intents, `com.google.ar.core`) replaces `QUERY_ALL_PACKAGES`, which was declared behind a
+  `tools:ignore`. `NetworkIsolationTest` pins both. A new package lookup by name needs its own
+  `<package>` entry, or it silently finds nothing.
+- **The cloud backup takes no location history.** `filesDir/horizons/` is named after where the user
+  stood; `data_extraction_rules.xml` keeps it, `dem_offline/` (over Auto Backup's 25 MB, which would
+  stop the whole backup), `debug/` and the live run out of it. A new file holding a position goes on
+  that list.
+- **The deploy workflow never interpolates `${{ }}` into a `run:` script, third-party actions are
+  pinned to a commit and `pip install` to exact versions.** The jobs hold the Play key; a release body
+  pasted into bash would run as a command next to it, and a moved tag or a fresh package release would
+  run someone else's code there. `WorkflowHardeningTest` pins all three.
 - **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
   `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles/N50/N50E015.peaks` — the public
   data repository (built by `data_pipeline/generate_peaks.py` from mapsforge POI extracts of OpenStreetMap),

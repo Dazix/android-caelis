@@ -88,9 +88,15 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: ./scripts/decode_keystore.sh "$RUNNER_TEMP/keystore.jks"
 
+      # Every value reaches a `run:` script through `env:`, never as `${{ }}` inside the script: an
+      # expression is pasted into the script text before bash parses it, so a release body or tag
+      # name containing `"; …` would run as a command in a job that holds the Play key.
       - name: Set build version variables
         id: vars
-        run: ./scripts/set_build_version_vars.sh --track internal --sha "${{ github.sha }}" --run-number "${{ github.run_number }}"
+        env:
+          SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: ./scripts/set_build_version_vars.sh --track internal --sha "$SHA" --run-number "$RUN_NUMBER"
 
       - name: Build Release App Bundle
         env:
@@ -103,7 +109,7 @@ jobs:
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Upload to Google Play (Internal Testing)
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.dazix.caelis
@@ -135,7 +141,10 @@ jobs:
 
       - name: Set release candidate version variables
         id: vars
-        run: ./scripts/set_build_version_vars.sh --track beta --sha "${{ github.sha }}" --tag "${{ github.event.release.tag_name }}"
+        env:
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: ./scripts/set_build_version_vars.sh --track beta --sha "$SHA" --tag "$TAG"
 
       - name: Build Release Candidate Bundle
         env:
@@ -148,7 +157,7 @@ jobs:
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Upload to Google Play (Beta Track)
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: com.dazix.caelis
@@ -172,19 +181,26 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install --upgrade google-api-python-client google-auth
+        # Exact versions: this job holds the Play key, and an unpinned install runs whatever was
+        # published last. Transitive dependencies are still resolved freely.
+        run: pip install google-api-python-client==2.201.0 google-auth==2.62.0
 
       - name: Set production release variables
         id: vars
-        run: ./scripts/set_build_version_vars.sh --track production --sha "${{ github.sha }}" --tag "${{ github.event.release.tag_name }}"
+        env:
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: ./scripts/set_build_version_vars.sh --track production --sha "$SHA" --tag "$TAG"
 
       - name: Promote Release (beta -> production)
         env:
           PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          RELEASE_NAME: ${{ steps.vars.outputs.release_name }}
+          RELEASE_NOTES: ${{ github.event.release.body }}
         run: |
           python scripts/promote_release.py \
             --package-name com.dazix.caelis \
             --from-track beta \
             --to-track production \
-            --release-name "${{ steps.vars.outputs.release_name }}" \
-            --release-notes "${{ github.event.release.body }}"
+            --release-name "$RELEASE_NAME" \
+            --release-notes "$RELEASE_NOTES"

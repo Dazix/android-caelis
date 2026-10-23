@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs scoped unit tests based on functional area:
-#   scripts/run_tests.sh intervalometer  - Intervalometer core, service, overlay, session planner, calibration, settings mapping (incl. ARCore consent), network isolation
+#   scripts/run_tests.sh intervalometer  - Intervalometer core, service, overlay, session planner, calibration, settings mapping (incl. ARCore consent), network isolation, workflow hardening
 #   scripts/run_tests.sh solar           - Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, pose (ar.pose: ARCore consent, hand-over, camera ownership), domain.arframe
 #   scripts/run_tests.sh nightsky        - Night sky AR, Meeus celestial math, FlatBuffers catalog, star renderer
 #   scripts/run_tests.sh all             - All test suites and lint check
@@ -37,6 +37,7 @@ case "$TARGET" in
             --tests "com.dazix.caelis.data.SettingsMappingTest" \
             --tests "com.dazix.caelis.res.*" \
             --tests "com.dazix.caelis.NetworkIsolationTest" \
+            --tests "com.dazix.caelis.WorkflowHardeningTest" \
             --tests "com.dazix.caelis.ui.CalibrationResolutionTest" \
             --tests "com.dazix.caelis.ui.LaunchModeOptionsTest" \
             --tests "com.dazix.caelis.ui.MainViewModelNavigationTest" \

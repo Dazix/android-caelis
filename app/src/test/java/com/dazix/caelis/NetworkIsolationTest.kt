@@ -272,10 +272,57 @@ class NetworkIsolationTest {
                 "android.permission.ACCESS_COARSE_LOCATION",
                 "android.permission.INTERNET",
                 "android.permission.ACCESS_NETWORK_STATE",
-                "android.permission.QUERY_ALL_PACKAGES",
             ),
             declared,
         )
+    }
+
+    /**
+     * QUERY_ALL_PACKAGES would hand the app the list of everything installed. What it needs to see is
+     * declared instead: the launchable apps a session can target, the cameras among them, and ARCore.
+     */
+    @Test
+    fun `the app sees only the packages it can target, not every installed one`() {
+        val manifest = manifestFile().readText()
+        val queries = Regex("""<queries>(.*?)</queries>""", RegexOption.DOT_MATCHES_ALL)
+            .find(manifest)?.groupValues?.get(1)
+            ?: error("the manifest declares no <queries>, so the target picker would list nothing")
+
+        listOf(
+            "android.intent.category.LAUNCHER",
+            "android.media.action.STILL_IMAGE_CAMERA",
+            "android.media.action.IMAGE_CAPTURE",
+        ).forEach { assertTrue("<queries> lacks $it", queries.contains("android:name=\"$it\"")) }
+        assertTrue(
+            "ArCorePresence looks ARCore up by name",
+            queries.contains("""<package android:name="com.google.ar.core" />"""),
+        )
+        assertFalse("QueryAllPackagesPermission must not be silenced", manifest.contains("QueryAllPackages"))
+    }
+
+    /**
+     * A stored horizon profile is named after where the user stood and holds the exact coordinates, so
+     * the folder is a location history. Android's Auto Backup takes everything not excluded to the
+     * Google account; this pins that the profiles are among what it does not take.
+     */
+    @Test
+    fun `the cloud backup takes no location history`() {
+        val manifest = manifestFile().readText()
+        assertTrue(
+            "allowBackup without rules backs up every file",
+            manifest.contains("""android:dataExtractionRules="@xml/data_extraction_rules""""),
+        )
+
+        val rules = manifestFile().resolveSibling("res/xml/data_extraction_rules.xml").readText()
+        val cloud = Regex("""<cloud-backup>(.*?)</cloud-backup>""", RegexOption.DOT_MATCHES_ALL)
+            .find(rules)?.groupValues?.get(1)
+            ?: error("data_extraction_rules.xml has no <cloud-backup> section")
+        listOf("horizons/", "dem_offline/", "debug/").forEach { path ->
+            assertTrue(
+                "the cloud backup still takes filesDir/$path",
+                cloud.contains("""<exclude domain="file" path="$path" />"""),
+            )
+        }
     }
 
     /** A key in the repository is a key in everyone's clone and in every APK anyone built from it. */
