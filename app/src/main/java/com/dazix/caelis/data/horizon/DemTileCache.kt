@@ -24,12 +24,16 @@ import kotlinx.coroutines.withContext
  * tiles for one observer, would be an obvious way to be killed for memory on a mid-range phone.
  */
 class DemTileCache(
-    context: Context,
+    private val directory: File,
+    private val offlineDirectory: File,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
 ) {
 
-    private val directory = File(context.cacheDir, "dem")
-    private val offlineDirectory = File(context.filesDir, OfflineRegionRepository.OFFLINE_DIR_NAME)
+    constructor(context: Context, maxBytes: Long = DEFAULT_MAX_BYTES) : this(
+        File(context.cacheDir, "dem"),
+        File(context.filesDir, OfflineRegionRepository.OFFLINE_DIR_NAME),
+        maxBytes,
+    )
 
     fun fileFor(key: DemTileKey): File {
         val offlineFile = File(offlineDirectory, key.fileName)
@@ -84,8 +88,12 @@ class DemTileCache(
     @Throws(IOException::class)
     suspend fun store(key: DemTileKey, body: suspend (OutputStream) -> Unit) = withContext(Dispatchers.IO) {
         directory.mkdirs()
+        sweepStaleParts()
         val destination = cacheFileFor(key)
-        val temporary = File(directory, "${key.name}.part")
+        // A name of its own per call, as in LandmarkTileCache: a download and a hand import of the
+        // same tile can overlap, and a shared `<tile>.part` let one truncate or delete the other's
+        // half-written file from under it.
+        val temporary = File.createTempFile("${key.name}-", PART_SUFFIX, directory)
 
         try {
             temporary.outputStream().use { body(it) }
@@ -126,6 +134,8 @@ class DemTileCache(
         val protectedNames = protect.mapTo(HashSet()) { it.fileName }
         files.asSequence()
             .filterNot { it.name in protectedNames }
+            // A transfer in flight is not a tile to reclaim; deleting it only fails that download.
+            .filterNot { it.isLivePart() }
             .sortedBy { it.lastModified() }
             .forEach { file ->
                 if (total <= maxBytes) return
@@ -134,15 +144,32 @@ class DemTileCache(
             }
     }
 
-    /** Safely deletes all volatile cached `.hgt` tiles and `.part` temporary download files in `cacheDir/dem/`. */
+    /**
+     * Deletes all volatile cached `.hgt` tiles in `cacheDir/dem/`. A recent `.part` file is somebody's
+     * transfer in flight and is left alone; old ones are crash leftovers and go too.
+     */
     fun clear() {
         directory.listFiles()?.forEach { file ->
-            if (file.isFile) file.delete()
+            if (file.isFile && !file.isLivePart()) file.delete()
         }
     }
 
+    /** A crash or a killed process leaves its `.part` file behind; with a name per call, nothing reuses it. */
+    private fun sweepStaleParts() {
+        directory.listFiles()?.forEach { if (it.isFile && it.name.endsWith(PART_SUFFIX) && !it.isLivePart()) it.delete() }
+    }
+
+    /** The file's time moves with every write, so this is "written to recently", not "started recently". */
+    private fun File.isLivePart() =
+        name.endsWith(PART_SUFFIX) && System.currentTimeMillis() - lastModified() < STALE_PART_MS
+
     companion object {
         private const val TAG = "DemTileCache"
+
+        const val PART_SUFFIX = ".part"
+
+        /** Far longer than the downloader's 30 s read timeout lets a transfer sit without a write. */
+        const val STALE_PART_MS = 10 * 60 * 1000L
 
         /**
          * Twenty 1 arcsecond tiles.

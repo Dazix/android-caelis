@@ -1,6 +1,7 @@
 package com.dazix.caelis.data.horizon
 
 import com.dazix.caelis.domain.horizon.DemTileKey
+import com.dazix.caelis.domain.horizon.HgtTile
 import java.io.IOException
 import java.io.OutputStream
 import java.net.HttpURLConnection
@@ -78,7 +79,9 @@ open class DemTileDownloader(
                         return n
                     }
                 }
-                GZIPInputStream(counting, GZIP_BUFFER).use { it.copyTo(out, COPY_BUFFER) }
+                GZIPInputStream(counting, GZIP_BUFFER).use {
+                    it.copyTo(BoundedOutputStream(out, HgtTile.MAX_GRID_BYTES), COPY_BUFFER)
+                }
             }
             out.flush()
             // Done is done even when the length was never announced.
