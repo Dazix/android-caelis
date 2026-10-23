@@ -75,12 +75,15 @@ class CameraBackground(surface: SkySurface) : CameraBackgroundSink {
 
     init {
         texture.setExternalStream(engine, stream)
-        layer.materialInstance.setParameter(
-            "cameraFeed",
-            texture,
-            // External textures are never mip-mapped and take no wrap other than clamp.
-            TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE),
-        )
+        // External textures are never mip-mapped and take no wrap other than clamp.
+        val sampler = TextureSampler(TextureSampler.MinFilter.LINEAR, TextureSampler.MagFilter.LINEAR, TextureSampler.WrapMode.CLAMP_TO_EDGE)
+        layer.materialInstance.setParameter("cameraFeed", texture, sampler)
+        // The material's default instance too, though nothing draws with it. The Java Material creates
+        // it on load, Filament commits every instance in the engine each frame, and a sampler left
+        // unset is patched with a dummy texture only for 2D, array and cubemap types. An external one
+        // stays unset and logged "Sampler descriptor 1 of MaterialInstance is not set. Please report
+        // this issue." once per screen.
+        material.defaultInstance.setParameter("cameraFeed", texture, sampler)
         layer.setVisible(false)
     }
 
