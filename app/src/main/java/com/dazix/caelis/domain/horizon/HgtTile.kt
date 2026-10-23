@@ -74,6 +74,16 @@ class HgtTile(
         /** The value SRTM writes where it has no measurement. Never a real elevation. */
         const val VOID_SAMPLE: Int = -32768
 
+        /** The densest grid the `.hgt` layout ships: 1 arcsecond. */
+        const val MAX_GRID_SIDE: Long = 3601L
+
+        /**
+         * The largest decompressed tile, 25.9 MB. Anything that grows past it while it is being
+         * written is not a tile. A gzip stream inflates without bound, and a few kilobytes of one
+         * can otherwise fill the phone's storage before the length is ever checked.
+         */
+        const val MAX_GRID_BYTES: Long = MAX_GRID_SIDE * MAX_GRID_SIDE * 2L
+
         /**
          * Wraps raw `.hgt` bytes, transparently decompressing a gzip stream first.
          *
@@ -96,14 +106,14 @@ class HgtTile(
 
         /**
          * True when [byteLength] could be a whole `.hgt` grid: an even number of bytes holding a
-         * perfect square of posts.
+         * perfect square of posts, no denser than [MAX_GRID_SIDE].
          *
          * Used to reject a truncated transfer the moment it lands rather than three screens later.
          * A half-downloaded tile is still a blob that maps fine and would quietly invent a skyline
          * out of whatever the missing rows decoded to.
          */
         fun isPlausibleGridLength(byteLength: Long): Boolean {
-            if (byteLength <= 0L || byteLength % 2L != 0L) return false
+            if (byteLength <= 0L || byteLength % 2L != 0L || byteLength > MAX_GRID_BYTES) return false
             val posts = byteLength / 2L
             // Rounded, not truncated: sqrt of a perfect square can land a hair under the integer.
             val side = Math.round(sqrt(posts.toDouble()))

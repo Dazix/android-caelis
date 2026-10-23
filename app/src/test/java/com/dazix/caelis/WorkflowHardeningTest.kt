@@ -67,6 +67,21 @@ class WorkflowHardeningTest {
         assertEquals("pin these with ==", emptyList<String>(), offenders)
     }
 
+    /**
+     * The upload keystore, its base64 form and the Play service-account key are what these jobs protect.
+     * `scripts/build_release_bundle.sh` looks for the keystore in `keys/`; a checkout without these
+     * lines commits it with the first `git add .`.
+     */
+    @Test
+    fun `signing material stays untracked`() {
+        val gitignore = listOf(File(".gitignore"), File("../.gitignore")).firstOrNull { it.isFile }
+            ?: error("no .gitignore from ${File(".").absolutePath}")
+        val lines = gitignore.readLines().map { it.trim() }
+        listOf("/keys/", "*.jks", "*.keystore", "keystore_base64.txt").forEach {
+            assertTrue(".gitignore lacks $it", it in lines)
+        }
+    }
+
     /** Lines belonging to a `run:` value, with their 1-based numbers: the inline one and a block's body. */
     private fun runScripts(lines: List<String>): List<Pair<Int, String>> {
         val run = Regex("""^(\s*)-?\s*run:\s*(.*)$""")

@@ -66,7 +66,8 @@ android {
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Never the debug key as a fallback: checkReleaseSigning below fails the packaging instead.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -106,6 +107,13 @@ val compileFilamentMaterials = tasks.register<CompileFilamentMaterialsTask>("com
     materialSources.from(layout.projectDirectory.dir("src/main/materials").asFileTree.matching { include("*.mat") })
     backends.set("opengl")
     toolsCacheDir.set(File(gradle.gradleUserHomeDir, "caches/caelis-filament-tools"))
+}
+
+val checkReleaseSigning = tasks.register<CheckReleaseSigningTask>("checkReleaseSigning") {
+    configured.set(android.signingConfigs.findByName("release") != null)
+}
+tasks.matching { it.name == "packageRelease" || it.name == "packageReleaseBundle" }.configureEach {
+    dependsOn(checkReleaseSigning)
 }
 
 // Build time in the debug version name, so a phone shows which APK is actually installed. Debug only:

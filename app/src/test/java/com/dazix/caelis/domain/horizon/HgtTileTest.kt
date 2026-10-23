@@ -1,6 +1,7 @@
 package com.dazix.caelis.domain.horizon
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -134,6 +135,16 @@ class HgtTileTest {
 
         assertNotNull("a 50-post payload must not be accepted as a tile", error)
         assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
+    fun `a grid denser than 1 arcsecond is not a plausible tile`() {
+        assertTrue(HgtTile.isPlausibleGridLength(3601L * 3601L * 2L))
+        assertTrue(HgtTile.isPlausibleGridLength(1201L * 1201L * 2L))
+        assertFalse(
+            "a perfect square past 3601 posts is a payload grown past any tile",
+            HgtTile.isPlausibleGridLength(3603L * 3603L * 2L),
+        )
     }
 
     @Test

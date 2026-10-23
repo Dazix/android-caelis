@@ -41,9 +41,12 @@ class DemTileImporter(private val context: Context) {
             ?: return Result.NotATile(displayName)
 
         return try {
-            cache.store(key) { out ->
+            cache.store(key) { destination ->
                 val stream = context.contentResolver.openInputStream(uri)
                     ?: throw IOException("cannot open $uri")
+                // A picked file is no more trusted than a downloaded one: a renamed archive or a gzip
+                // that inflates to gigabytes must stop at the size of a tile, not at a full disk.
+                val out = BoundedOutputStream(destination, HgtTile.MAX_GRID_BYTES)
                 stream.use { input ->
                     val buffered = input.buffered()
                     // The server serves .hgt.gz and that is what a hand-download ends up as; asking
