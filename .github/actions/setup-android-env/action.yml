@@ -19,9 +19,9 @@ runs:
     # Puts sdkmanager on PATH and accepts the SDK licences, so AGP may download the platform and
     # build-tools it wants. compileSdkMinor = 1 means it needs android-37.1 specifically.
     - name: Set up Android SDK
-      uses: android-actions/setup-android@v4
+      uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       with:
         packages: 'platform-tools'
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
