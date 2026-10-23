@@ -41,7 +41,7 @@ class OfflineRegionRepository(context: Context) {
             val content = regionsFile.readText()
             _offlineRegions.value = OfflineRegionCodec.decode(content)
         } catch (e: Exception) {
-            Log.w(TAG, "failed to read offline regions file", e)
+            Log.w(TAG, "failed to read offline regions file: ${e.logClass}", e.inDebug())
             _offlineRegions.value = emptyList()
         }
     }
@@ -57,7 +57,7 @@ class OfflineRegionRepository(context: Context) {
             }
             _offlineRegions.value = regions
         } catch (e: Exception) {
-            Log.e(TAG, "failed to persist offline regions", e)
+            Log.e(TAG, "failed to persist offline regions: ${e.logClass}", e.inDebug())
             tempFile.delete()
             throw e
         }
@@ -89,7 +89,7 @@ class OfflineRegionRepository(context: Context) {
             val name = orphan.name
             if (orphan.delete()) {
                 deletedNames.add(name)
-                Log.i(TAG, "pruned orphaned offline tile: $name")
+                Log.i(TAG, "pruned orphaned offline tile: ${DemTileKey.parse(name)?.logName() ?: "(file)"}")
             }
         }
         deletedNames

@@ -108,6 +108,7 @@ class OfflineTerrainDownloader(
         radiusKm: Int,
     ): Result<OfflineRegion> = withContext(Dispatchers.IO) {
         offlineDirectory.mkdirs()
+        sweepStaleParts()
         val requiredTiles = OfflineRegion.tilesFor(latitude, longitude, radiusKm)
         val totalCount = requiredTiles.size
 
@@ -133,8 +134,8 @@ class OfflineTerrainDownloader(
                 // 2. Check if in volatile cache — promote to save bandwidth
                 val cachedFile = File(cacheDirectory, key.fileName)
                 if (cachedFile.isFile && cachedFile.length() > 0 && HgtTile.isPlausibleGridLength(cachedFile.length())) {
-                    Log.i(TAG, "promoting cached tile ${key.name} to offline storage")
-                    if (cachedFile.renameTo(offlineDestination) || copyFile(cachedFile, offlineDestination)) {
+                    Log.i(TAG, "promoting cached tile ${key.logName()} to offline storage")
+                    if (cachedFile.renameTo(offlineDestination) || copyAtomically(cachedFile, offlineDestination)) {
                         val progress = tileIndex.toFloat() / totalCount
                         _state.value = OfflineDownloadState.Downloading(
                             regionName = name,
@@ -149,7 +150,10 @@ class OfflineTerrainDownloader(
                 }
 
                 // 3. Otherwise download via DemTileDownloader directly to offline directory
-                val tempPart = File(offlineDirectory, "${key.name}.part")
+                // A name of its own per call, as in DemTileCache: two downloads of overlapping regions
+                // must not write into one `<tile>.part`. This folder is never evicted, so a crash
+                // leftover stays until sweepStaleParts removes it.
+                val tempPart = File.createTempFile("${key.name}-", DemTileCache.PART_SUFFIX, offlineDirectory)
                 try {
                     _state.value = OfflineDownloadState.Downloading(
                         regionName = name,
@@ -193,7 +197,7 @@ class OfflineTerrainDownloader(
             // Best effort only: the tiles go to the reclaimable cacheDir (the region's elevation tiles
             // are in filesDir), so Android may drop them, and a failed prefetch is only logged. The
             // region is downloaded either way, and a profile without names is filled in when online.
-            if (!landmarks.prefetch(requiredTiles)) Log.i(TAG, "peak tiles for $name were not all fetched")
+            if (!landmarks.prefetch(requiredTiles)) Log.i(TAG, "peak tiles for ${regionLogName(name)} were not all fetched")
 
             // Calculate actual physical size of all required tiles on disk
             val actualTotalBytes = requiredTiles.sumOf { regionRepository.fileFor(it).length() }
@@ -215,7 +219,7 @@ class OfflineTerrainDownloader(
             _state.value = OfflineDownloadState.Idle
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "offline region download failed", e)
+            Log.e(TAG, "offline region download failed: ${e.logClass}", e.inDebug())
             _state.value = OfflineDownloadState.Failed(e.message ?: "Download failed", e)
             Result.failure(e)
         }
@@ -225,17 +229,38 @@ class OfflineTerrainDownloader(
         _state.value = OfflineDownloadState.Idle
     }
 
-    private fun copyFile(src: File, dst: File): Boolean {
+    /**
+     * Copies [src] to [dst] through a temporary file and a rename. A copy straight into [dst] that was
+     * killed halfway left a truncated tile under its final name, and step 1 then took it as present.
+     */
+    private fun copyAtomically(src: File, dst: File): Boolean {
+        val temporary = try {
+            File.createTempFile("${dst.nameWithoutExtension}-", DemTileCache.PART_SUFFIX, offlineDirectory)
+        } catch (e: IOException) {
+            return false
+        }
         return try {
             src.inputStream().use { input ->
-                dst.outputStream().use { output ->
+                temporary.outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
-            true
-        } catch (e: Exception) {
-            dst.delete()
+            if (dst.exists()) dst.delete()
+            temporary.renameTo(dst)
+        } catch (e: IOException) {
             false
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    /** A crash or a killed process leaves its `.part` file behind, and filesDir is never reclaimed. */
+    private fun sweepStaleParts() {
+        val now = System.currentTimeMillis()
+        offlineDirectory.listFiles()?.forEach {
+            if (it.isFile && it.name.endsWith(DemTileCache.PART_SUFFIX) && now - it.lastModified() >= DemTileCache.STALE_PART_MS) {
+                it.delete()
+            }
         }
     }
 

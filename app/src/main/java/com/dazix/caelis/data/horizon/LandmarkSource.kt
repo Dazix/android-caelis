@@ -71,7 +71,7 @@ class LandmarkSource(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "selecting landmarks failed", e)
+            Log.w(TAG, "selecting landmarks failed: ${e.logClass}", e.inDebug())
             return Resolution(emptyList(), resolved = false)
         }
         return Resolution(landmarks, resolved)
@@ -115,21 +115,21 @@ class LandmarkSource(
             return null
         } catch (e: LandmarkTileCache.CorruptTileException) {
             // One bad file says nothing about the connection: skip this tile, keep fetching the rest.
-            Log.w(TAG, "peak tile ${key.name} is corrupt", e)
+            Log.w(TAG, "peak tile ${key.logName()} is corrupt: ${e.logClass}", e.inDebug())
             return null
         } catch (e: DemTileDownloader.ServerException) {
             // An HTTP status error is this tile's answer, not a lost connection.
-            Log.w(TAG, "peak tile ${key.name} refused with HTTP ${e.status}", e)
+            Log.w(TAG, "peak tile ${key.logName()} refused with HTTP ${e.status}: ${e.logClass}", e.inDebug())
             return null
         } catch (e: java.io.IOException) {
             // Unknown host, refused connection, timeout, a dropped transfer: the remaining tiles would
             // each wait out the same failure.
             attempt.networkFailed = true
-            Log.w(TAG, "peak tile ${key.name} unavailable", e)
+            Log.w(TAG, "peak tile ${key.logName()} unavailable: ${e.logClass}", e.inDebug())
             return null
         } catch (e: Exception) {
             // A security or runtime failure from the platform concerns this tile only.
-            Log.w(TAG, "peak tile ${key.name} failed", e)
+            Log.w(TAG, "peak tile ${key.logName()} failed: ${e.logClass}", e.inDebug())
             return null
         }
     }

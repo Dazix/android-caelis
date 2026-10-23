@@ -254,7 +254,7 @@ class HorizonRepository private constructor(
         withContext(Dispatchers.IO) { cache.trim(protect = keys.toSet()) }
 
         if (tiles.none { it.key == observerKey }) {
-            Log.w(TAG, "no tile for the observer's own square $observerKey; refusing to invent a horizon")
+            Log.w(TAG, "no tile for the observer's own square ${observerKey.logName()}; refusing to invent a horizon")
             _state.value = HorizonState.NeedsTiles(listOf(observerKey))
             return
         }
@@ -341,7 +341,7 @@ class HorizonRepository private constructor(
         // what it was computed with — and so the same spot does not recompute over a 300 m drift.
         val km = HorizonSettings.RANGE_CHOICES_KM.firstOrNull { it * 1000.0 >= suggested }
             ?: HorizonSettings.RANGE_CHOICES_KM.last()
-        Log.i(TAG, "automatic range for ${observerKey.name}: ${(suggested / 1000).toInt()} km -> $km km")
+        Log.i(TAG, "automatic range for ${observerKey.logName()}: ${(suggested / 1000).toInt()} km -> $km km")
         estimatedRangeKm[positionKey] = km
         withContext(Dispatchers.IO) { writeStoredRange(positionKey, km) }
         return requested.copy(maxRangeKm = km)
@@ -364,7 +364,7 @@ class HorizonRepository private constructor(
             rangeFile(position).writeText(km.toString())
         } catch (e: IOException) {
             // Losing it costs one estimate next time, nothing more.
-            Log.w(TAG, "cannot store automatic range", e)
+            Log.w(TAG, "cannot store automatic range: ${e.logClass}", e.inDebug())
         }
     }
 
@@ -398,7 +398,7 @@ class HorizonRepository private constructor(
                 _state.value = HorizonState.NeedsTiles(missing)
                 return false
             } catch (e: IOException) {
-                Log.w(TAG, "tile ${key.name} failed", e)
+                Log.w(TAG, "tile ${key.logName()} failed: ${e.logClass}", e.inDebug())
                 _state.value = HorizonState.Failed(HorizonState.Failed.Reason.NETWORK, e)
                 return false
             }
@@ -536,7 +536,7 @@ class HorizonRepository private constructor(
         } catch (e: IOException) {
             // A profile that cannot be cached is still a profile that can be drawn. Losing the cache
             // costs a recomputation next time; failing the screen over it would cost the feature.
-            Log.w(TAG, "cannot cache horizon profile", e)
+            Log.w(TAG, "cannot cache horizon profile: ${e.logClass}", e.inDebug())
         }
     }
 
