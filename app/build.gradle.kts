@@ -1,5 +1,3 @@
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Properties
 
 plugins {
@@ -63,9 +61,8 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            // Build time in the version name, so a phone shows which APK is actually installed.
-            // Debug only: a release's version comes from CI and must stay reproducible.
-            versionNameSuffix = "-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy/M/d-HH:mm"))
+            // The build time is appended to the version name below (androidComponents), not here:
+            // a value computed in this block is frozen by the configuration cache.
         }
         release {
             isMinifyEnabled = false
@@ -111,12 +108,24 @@ val compileFilamentMaterials = tasks.register<CompileFilamentMaterialsTask>("com
     toolsCacheDir.set(File(gradle.gradleUserHomeDir, "caches/caelis-filament-tools"))
 }
 
+// Build time in the debug version name, so a phone shows which APK is actually installed. Debug only:
+// a release's version comes from CI and must stay reproducible. See BuildTimeValueSource for why this
+// is a value source and not a string.
+val debugVersionName = providers.of(BuildTimeValueSource::class.java) {
+    parameters.versionName.set(android.defaultConfig.versionName.orEmpty())
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addGeneratedSourceDirectory(
             compileFilamentMaterials,
             CompileFilamentMaterialsTask::outputDir,
         )
+        if (variant.buildType == "debug") {
+            variant.outputs.forEach { output ->
+                output.versionName.set(debugVersionName)
+            }
+        }
     }
 }
 
