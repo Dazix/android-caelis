@@ -44,7 +44,16 @@ vertex {
             : 0.0;
         float3 right = getWorldFromViewMatrix()[0].xyz;
         float3 up = getWorldFromViewMatrix()[1].xyz;
-        material.worldPosition.xyz = wp + (right * c.x - up * c.y) * worldPerPx;
+        // Snap the anchor to a whole screen pixel: the sprite is 1:1 with its texels, and at a
+        // fractional position linear filtering smears every glyph across two pixels, which is what
+        // made names on the horizon look blurred while the phone moved.
+        float2 snap = float2(0.0);
+        if (visible) {
+            float4 aClip = mulMat4x4Float3(getClipFromViewMatrix(), viewPos.xyz);
+            float2 aPx = (aClip.xy / aClip.w * 0.5 + 0.5) * getResolution().xy;
+            snap = floor(aPx + 0.5) - aPx;
+        }
+        material.worldPosition.xyz = wp + (right * (c.x + snap.x) - up * (c.y - snap.y)) * worldPerPx;
         material.labelAlpha = float4(visible ? c.z : 0.0, 0.0, 0.0, 0.0);
     }
 }
