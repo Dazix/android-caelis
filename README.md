@@ -423,8 +423,13 @@ retrying while the camera is still writing them.
 - **Capture verification costs time.** The window is the profile's capture latency plus grace, so a shot
   is confirmed seconds after the tap and a `maxShots` session ends that much later. That delay is what
   leaves room for the one honest re-tap.
-- **`QUERY_ALL_PACKAGES`** is declared so the picker can list every launchable app. The list never
-  leaves the device.
+- **The picker sees launchable apps, not every installed one.** The manifest's `<queries>` asks for
+  the apps with a launcher icon, the cameras among them, and ARCore; `QUERY_ALL_PACKAGES` is not
+  declared. A service or a widget without a launcher icon cannot be picked as a target.
+- **Android's backup leaves your positions out.** Stored horizon profiles are named after where you
+  stood, so `data_extraction_rules.xml` keeps them, the offline terrain and the debug dumps out of the
+  Google account backup. Settings and calibrations are still backed up. A transfer to your own new
+  phone keeps the profiles.
 - **The terrain horizon cost the app its "no network permission" guarantee.** That was a real
   argument in an app holding the accessibility permission, and it is now a code-level promise instead
   of a system-enforced one. The compensation is the isolation above, the one-line manifest edit that
