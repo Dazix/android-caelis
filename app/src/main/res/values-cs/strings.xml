@@ -232,6 +232,13 @@
     <string name="onboarding_battery_title">Ignorovat optimalizaci baterie</string>
     <string name="onboarding_battery_desc">Bez této výjimky může Android aplikaci během dlouhé série uspat a snímky pak chybí.</string>
     <string name="onboarding_battery_action">Požádat o výjimku</string>
+    <string name="onboarding_exact_alarm_title">Přesné budíky</string>
+    <string name="onboarding_exact_alarm_desc">Intervaly od jedné minuty výš čekají, zatímco telefon spí, na budík. Bez tohoto povolení ho Android může doručit i o minuty později. Zapněte pro CAELIS Budíky a připomenutí.</string>
+    <string name="onboarding_exact_alarm_action">Otevřít nastavení budíků</string>
+    <string name="a11y_disclosure_title">Povolit CAELIS službu zpřístupnění?</string>
+    <string name="a11y_disclosure_body">CAELIS není nástroj pro zpřístupnění. Službu zpřístupnění Androidu používá jen k tomu, aby za vás v intervalu klepala na obrazovku: na spoušť ve zvolené aplikaci fotoaparátu, nebo v režimu Periodické klikání na zkalibrované místo, ať je na obrazovce cokoli.\n\nKdyž je služba zapnutá, vidí, která aplikace je v popředí, a rozložení její obrazovky, aby našla spoušť a před každým klepnutím ověřila, že je otevřená správná aplikace a obrazovka odemčená. Klepe jen během série, kterou jste spustili.\n\nNic z toho, co služba vidí, se neukládá, nezaznamenává ani nikam neodesílá.\n\nPo souhlasu se otevře nastavení zpřístupnění Androidu: najděte CAELIS – spoušť a zapněte ji. Kdykoli ji tam můžete zase vypnout.</string>
+    <string name="a11y_disclosure_agree">Souhlasím</string>
+    <string name="a11y_disclosure_decline">Teď ne</string>
     <string name="onboarding_media_title">Přístup k fotkám pro kontrolu snímků</string>
     <string name="onboarding_media_desc">Vyžádá se jen tehdy, když v nastavení série zapnete kontrolu uložených snímků.</string>
     <string name="onboarding_all_set">Vše, co aplikace potřebuje, je povolené.</string>

@@ -226,6 +226,13 @@
     <string name="onboarding_battery_title">Ignore battery optimisation</string>
     <string name="onboarding_battery_desc">Without this exemption Android can freeze the app during long sessions and frames go missing.</string>
     <string name="onboarding_battery_action">Request exemption</string>
+    <string name="onboarding_exact_alarm_title">Exact alarms</string>
+    <string name="onboarding_exact_alarm_desc">Intervals of a minute or longer wait on an alarm while the phone sleeps. Without this permission Android may deliver it minutes late. Switch on Alarms &amp; reminders for CAELIS.</string>
+    <string name="onboarding_exact_alarm_action">Open alarm settings</string>
+    <string name="a11y_disclosure_title">Allow CAELIS to use an accessibility service?</string>
+    <string name="a11y_disclosure_body">CAELIS is not an accessibility tool. It uses Android\'s accessibility service only to tap the screen for you on a timer: the shutter button in the camera app you choose or, in Periodic tap mode, the spot you calibrated, whatever is on screen.\n\nWhile the service is on, it sees which app is in the foreground and the layout of that app\'s screen, so it can find the shutter button and check before every tap that the right app is open and the screen is unlocked. It taps only during a session you started.\n\nNothing the service sees is stored, logged or sent anywhere.\n\nAfter you agree, Android\'s accessibility settings open: find CAELIS shutter and switch it on. You can switch it off there at any time.</string>
+    <string name="a11y_disclosure_agree">Agree</string>
+    <string name="a11y_disclosure_decline">Not now</string>
     <string name="onboarding_media_title">Photo access for capture verification</string>
     <string name="onboarding_media_desc">Only requested when you switch on Verify captures in session setup.</string>
     <string name="onboarding_all_set">Everything the app needs is allowed.</string>

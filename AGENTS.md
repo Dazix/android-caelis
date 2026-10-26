@@ -71,7 +71,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (325 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (328 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (640 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1120 JVM tests (325 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1123 JVM tests (328 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -325,6 +325,14 @@ Each of these was found by review or on the device and is now covered by a test.
   one.
 - **No `startForeground` on the accessibility service.** It has no foreground service type and the
   manifest declares no `FOREGROUND_SERVICE`; the notification goes through `NotificationManager`.
+- **`SCHEDULE_EXACT_ALARM`, never `USE_EXACT_ALARM`.** Google Play reserves `USE_EXACT_ALARM` for alarm
+  clocks and calendars and refused a release that declared it. The user grants the other one on the
+  Permissions screen; without it `SessionEngine.scheduleAlarm` falls back to an inexact alarm and warns.
+  `NetworkIsolationTest` pins the permission set.
+- **The accessibility settings open only after the prominent disclosure's "Agree".** Play requires it for
+  an app that is not an accessibility tool. Every button that opens them goes through
+  `rememberAccessibilityDisclosure`, which asks each time; `AccessibilityDisclosureTest` pins that
+  pressing, dismissing and declining open nothing. Keep its text true to what the service reads and does.
 - **`data/horizon/DemTileDownloader.kt` is the only file in `app/src/main` allowed to touch the
   network.** `NetworkIsolationTest` walks the sources and fails the build on a second one. The app
   used to prove "nothing leaves the device" through the *absence* of `INTERNET`; that permission is

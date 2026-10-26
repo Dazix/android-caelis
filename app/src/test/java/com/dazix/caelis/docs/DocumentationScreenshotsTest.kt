@@ -785,6 +785,7 @@ class DocumentationScreenshotsTest {
                         canDrawOverlays = true,
                         notificationsGranted = true,
                         ignoringBatteryOptimizations = true,
+                        exactAlarmsAllowed = true,
                         readMediaImagesGranted = true,
                         readMediaPartialGranted = false,
                     ),
@@ -793,6 +794,7 @@ class DocumentationScreenshotsTest {
                     onOpenOverlaySettings = {},
                     onRequestNotifications = {},
                     onRequestBatteryExemption = {},
+                    onOpenExactAlarmSettings = {},
                     onRefresh = {},
                     onBack = {},
                 )

@@ -224,10 +224,13 @@ The Permissions screen lists every step with live state and a button for each. I
 1. **Allow restricted settings** — Android blocks the accessibility switch for sideloaded apps until you
    use App info → ⋮ → *Allow restricted settings*. The app cannot detect this directly; the row reports
    itself as done once the accessibility service actually turns on.
-2. **The accessibility service** — the only way an app can press a button in another app.
+2. **The accessibility service** — the only way an app can press a button in another app. The button
+   first shows what the service reads and does, and opens the accessibility settings only after *Agree*.
 3. **Draw over other apps** — needed for the calibration overlay and for the floating panel.
 4. **Notifications** — the ongoing session notification.
 5. **Battery optimisation exemption** — for long unattended sessions.
+6. **Exact alarms** (*Alarms & reminders*, off by default on Android 14+) — without it, intervals of a
+   minute or more run on an inexact alarm that may fire late, and the session says so.
 
 Then pick the camera app, tap **Calibrate**, and tap the shutter once in the overlay that appears over
 the real camera app (or drag a rectangle to tap a random pixel inside it). The calibration is stored as
