@@ -287,6 +287,15 @@ Each of these was found by review or on the device and is now covered by a test.
   frames with no picture to match (planetarium sky, no image yet, a stalled or non-realtime-clock
   camera — `PoseTimestampPolicy`). The newest pose over an older picture ran the overlay ahead of
   the ridge on every turn.
+- **Night Sky runs the camera only while its picture can be seen.** The Milky Way panorama has no
+  alpha and covers the whole sphere, and the planetarium clears to an opaque sky; under either the
+  camera is unbound (`NightSkyCameraPolicy`) and the sky is drawn with the live pose every vsync. With
+  the camera running under the default Milky Way, the previous invariant posed the sky at the images'
+  instants and the stars moved 15-30 times a second on a 120 Hz Pixel 7 Pro, invisibly to the user
+  and far less smoothly than a planetarium app. Without the camera the field of view is predicted from
+  its characteristics (`stillBackCameraFov`, no device opened) and a FOV measured earlier stays. The
+  orientation flow is never read in the Night Sky composition: it changes every 15 ms, and reading
+  it there recomposed the sky 61 times a second; the HUD reads it through `WholeDegreesPolicy`.
 - **The camera picture is cropped by `CameraBackgroundUv`, from the same FILL_CENTER fit as the FOV.**
   `CameraFovCalculator` assumes the stream is turned upright and scaled until it covers the
   viewport; the UVs do exactly that, so the picture and the overlay cannot disagree about what is

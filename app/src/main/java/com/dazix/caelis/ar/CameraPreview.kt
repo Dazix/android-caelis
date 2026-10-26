@@ -236,14 +236,7 @@ fun CameraPreview(
                 val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
                 val activeArraySize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
                 val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                val primaryFocalLength = focalLengths?.let { list ->
-                    if (list.size == 1) {
-                        list[0]
-                    } else {
-                        // On multi-camera setups (e.g. [1.95, 6.81, 19.0]), select primary standard wide lens (3.5mm - 8.0mm)
-                        list.firstOrNull { it in 3.5f..8.0f } ?: list.firstOrNull()
-                    }
-                }
+                val primaryFocalLength = CameraFovCalculator.primaryFocalLength(focalLengths)
 
                 // If physical size in mm is missing, fallback to active array pixel dimensions for aspect ratio
                 val effectiveSensorW = sensorSize?.width

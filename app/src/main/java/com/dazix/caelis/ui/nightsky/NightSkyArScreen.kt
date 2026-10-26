@@ -62,6 +62,8 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SnapshotMutationPolicy
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -112,6 +114,8 @@ import com.dazix.caelis.ar.CameraFrameSource
 import com.dazix.caelis.ar.CameraPreview
 import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.PreviewFrameClock
+import com.dazix.caelis.ar.stillBackCameraFov
+import com.dazix.caelis.domain.nightsky.NightSkyCameraPolicy
 import com.dazix.caelis.ar.scene.RedPrimary
 import com.dazix.caelis.ar.scene.RedSecondary
 import com.dazix.caelis.ar.scene.paletteForTheme
@@ -145,7 +149,13 @@ fun NightSkyArScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val alignAzimuthOffset by viewModel.panAzimuthOffset.collectAsStateWithLifecycle()
     val alignElevationOffset by viewModel.panPitchOffset.collectAsStateWithLifecycle()
-    val orientation by viewModel.orientation.collectAsStateWithLifecycle()
+    // Read where it is used, never here: a new orientation arrives every 15 ms, and reading it in this
+    // scope recomposed the whole sky and HUD at that rate. The frame loop reads it per vsync and the
+    // HUD only when its whole degrees change (hudOrientation below).
+    val orientationState = viewModel.orientation.collectAsStateWithLifecycle()
+    val hudOrientation by remember {
+        derivedStateOf(WholeDegreesPolicy) { orientationState.value }
+    }
     val catalog by viewModel.catalog.collectAsStateWithLifecycle()
     val horizonProfile by viewModel.horizonProfile.collectAsStateWithLifecycle()
     val useRealHorizon by viewModel.useRealHorizon.collectAsStateWithLifecycle()
@@ -307,6 +317,20 @@ fun NightSkyArScreen(
     val displayRotation = DisplayGeometry.currentRotation(context)
     val isPortrait = displayRotation == android.view.Surface.ROTATION_0 ||
         displayRotation == android.view.Surface.ROTATION_180
+
+    val cameraPictureVisible = NightSkyCameraPolicy.isPictureVisible(
+        opaqueBackground = uiState.isSkyBackgroundOpaque,
+        milkyWayVisible = uiState.isMilkyWayVisible,
+    )
+    // With the camera off the sky is still drawn at the scale the camera would show it.
+    LaunchedEffect(cameraPictureVisible, isPortrait) {
+        if (cameraPictureVisible) return@LaunchedEffect
+        val bounds = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+        val fov = withContext(Dispatchers.Default) {
+            stillBackCameraFov(context, bounds.width().toFloat(), bounds.height().toFloat(), isPortrait)
+        }
+        fov?.let(viewModel::setPredictedCameraFov)
+    }
 
     val activePalette = paletteForTheme(uiState.nightVisionState.theme)
     val bgColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xFF0A0E14)
@@ -514,7 +538,11 @@ fun NightSkyArScreen(
                 }
         ) {
             if (hasCameraPermission) {
-                // Camera stream and FOV; the picture itself is drawn by NightSkyGpuSky below.
+                // Camera stream and FOV; the picture itself is drawn by NightSkyGpuSky below. Only
+                // while it can be seen: the Milky Way panorama is opaque over the whole sphere and
+                // the planetarium clears to an opaque sky, and under either the camera would be
+                // running for nothing — and, worse, the sky would be posed at its images' instants,
+                // which moved the stars 15-30 times a second instead of every vsync.
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     lifecycleOwner = lifecycleOwner,
@@ -525,14 +553,15 @@ fun NightSkyArScreen(
                     frameClock = previewFrameClock,
                     frameSource = cameraFrameSource,
                     displayRotation = displayRotation,
-                    cameraEnabled = cameraXEnabled,
+                    cameraEnabled = cameraXEnabled && cameraPictureVisible,
                     onCameraReleased = poseRig::onCameraXReleased,
                 )
 
                 NightSkyGpuSky(
                     handle = gpuSky,
                     renderer = renderer,
-                    orientation = orientation,
+                    orientation = { orientationState.value },
+                    isCameraPictureVisible = cameraPictureVisible,
                     onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
                     isLivePoseActive = { viewModel.isLivePoseActive },
                     rig = poseRig,
@@ -624,7 +653,7 @@ fun NightSkyArScreen(
                 NightSkyTopBar(
                     hasGpsFix = uiState.hasGpsFix,
                     locationText = uiState.location.formatShort(),
-                    orientation = orientation,
+                    orientation = hudOrientation,
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
                     isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
                     zoomRatio = uiState.zoomRatio,
@@ -873,6 +902,18 @@ fun NightSkyArScreen(
             redVisionMode = uiState.redVisionMode,
             nightVisionTheme = uiState.nightVisionState.theme,
         )
+    }
+}
+
+/**
+ * Two orientations are the same to the HUD when they show the same whole degrees of azimuth and
+ * elevation, which is all [NightSkyTopBar] prints of them.
+ */
+internal object WholeDegreesPolicy : SnapshotMutationPolicy<DeviceOrientation?> {
+    override fun equivalent(a: DeviceOrientation?, b: DeviceOrientation?): Boolean {
+        if (a == null || b == null) return a == null && b == null
+        return a.cameraAzimuthDegrees.toInt() == b.cameraAzimuthDegrees.toInt() &&
+            a.cameraElevationDegrees.toInt() == b.cameraElevationDegrees.toInt()
     }
 }
 

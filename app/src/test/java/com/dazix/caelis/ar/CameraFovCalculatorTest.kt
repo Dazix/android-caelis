@@ -438,4 +438,13 @@ class CameraFovCalculatorTest {
         val focalLength2500x = (w * 0.5f) / kotlin.math.tan(Math.toRadians(fov2500x.toDouble() / 2.0)).toFloat()
         assertEquals(baseFocalLengthPx * 2500.0f, focalLength2500x, 5.0f)
     }
+
+    /** CameraPreview and the camera-less prediction (stillBackCameraFov) must pick the same lens. */
+    @Test
+    fun `the primary lens is the only one, or the standard wide one of a multi-camera`() {
+        assertEquals(4.38f, CameraFovCalculator.primaryFocalLength(floatArrayOf(4.38f))!!, 0f)
+        assertEquals(6.81f, CameraFovCalculator.primaryFocalLength(floatArrayOf(1.95f, 6.81f, 19.0f))!!, 0f)
+        assertEquals(2.2f, CameraFovCalculator.primaryFocalLength(floatArrayOf(2.2f, 15f))!!, 0f)
+        assertEquals(null, CameraFovCalculator.primaryFocalLength(null))
+    }
 }
