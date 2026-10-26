@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -76,6 +77,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -254,18 +258,26 @@ fun NightSkyArScreen(
     ) {
         viewModel.refreshLocation()
     }
+    // Once per screen: a declined location is not asked for again on every layer toggle.
+    var locationAsked by remember { mutableStateOf(false) }
+    val askLocationOnce = {
+        if (!locationAsked) {
+            locationAsked = true
+            val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
+                Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (!hasLocation) {
+                locationPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                )
+            }
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
-        val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
-            Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-        if (!hasLocation) {
-            locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            )
-        }
+        askLocationOnce()
     }
 
     BackHandler {
@@ -297,20 +309,6 @@ fun NightSkyArScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!hasCameraPermission) {
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        } else {
-            val hasLocation = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
-                Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-            if (!hasLocation) {
-                locationPermissionLauncher.launch(
-                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                )
-            }
-        }
-    }
-
     val coroutineScope = rememberCoroutineScope()
     val toastHostState = remember(coroutineScope) { AppToastHostState(coroutineScope) }
 
@@ -322,6 +320,16 @@ fun NightSkyArScreen(
         opaqueBackground = uiState.isSkyBackgroundOpaque,
         milkyWayVisible = uiState.isMilkyWayVisible,
     )
+    // The camera permission is asked for when its picture is wanted, not on entry: under the default
+    // Milky Way and in the planetarium the camera never runs. The camera's answer then asks for the
+    // location, so the two dialogs never race.
+    LaunchedEffect(cameraPictureVisible) {
+        if (cameraPictureVisible && !hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        } else {
+            askLocationOnce()
+        }
+    }
     // With the camera off the sky is still drawn at the scale the camera would show it.
     LaunchedEffect(cameraPictureVisible, isPortrait) {
         if (cameraPictureVisible) return@LaunchedEffect
@@ -556,55 +564,48 @@ fun NightSkyArScreen(
                     cameraEnabled = cameraXEnabled && cameraPictureVisible,
                     onCameraReleased = poseRig::onCameraXReleased,
                 )
-
-                NightSkyGpuSky(
-                    handle = gpuSky,
-                    renderer = renderer,
-                    orientation = { orientationState.value },
-                    isCameraPictureVisible = cameraPictureVisible,
-                    onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
-                    isLivePoseActive = { viewModel.isLivePoseActive },
-                    rig = poseRig,
-                    displayRotation = displayRotation,
-                    fovHorizontalDegrees = uiState.cameraFovHorizontal,
-                    zoomRatio = uiState.zoomRatio,
-                    catalog = catalog,
-                    latitudeDegrees = uiState.location.latitude,
-                    timeState = uiState.timeState,
-                    longitudeDegrees = uiState.location.longitude,
-                    nightVisionState = uiState.nightVisionState,
-                    isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
-                    isMilkyWayVisible = uiState.isMilkyWayVisible,
-                    isAtmosphereVisible = uiState.isAtmosphereVisible,
-                    isLandscapeVisible = showStylisedLandscape,
-                    isGridVisible = uiState.isGridVisible,
-                    horizonProfile = horizonProfile,
-                    useRealHorizon = useRealHorizon,
-                    showPeakNames = horizonSettings.peakNamesInNightSky,
-                    isPlanetsVisible = uiState.isPlanetsVisible,
-                    isDsosVisible = uiState.isDsosVisible,
-                    isMeteorShowersVisible = uiState.isMeteorShowersVisible,
-                    isConstellationsVisible = uiState.isConstellationsVisible,
-                    isConstellationArtVisible = uiState.isConstellationArtVisible,
-                    selectedBody = uiState.selectedBody,
-                    selectedPlanetId = uiState.selectedPlanetId,
-                    planets = uiState.planetStates,
-                    isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
-                    debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
-                    debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
-                    showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                // Camera Permission Request Surface
-                NightSkyPermissionPrompt(
-                    onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                    onBack = onBack,
-                    redVisionMode = uiState.redVisionMode,
-                    nightVisionTheme = uiState.nightVisionState.theme,
-                    modifier = Modifier.fillMaxSize(),
-                )
             }
+
+            // The sky needs no camera: without the permission it is drawn all the same, and a chip
+            // under the top bar offers the permission while the picture is wanted.
+            NightSkyGpuSky(
+                handle = gpuSky,
+                renderer = renderer,
+                orientation = { orientationState.value },
+                isCameraPictureVisible = cameraPictureVisible,
+                onGetRenderMatrix = viewModel::getCurrentRenderMatrix,
+                isLivePoseActive = { viewModel.isLivePoseActive },
+                rig = poseRig,
+                displayRotation = displayRotation,
+                fovHorizontalDegrees = uiState.cameraFovHorizontal,
+                zoomRatio = uiState.zoomRatio,
+                catalog = catalog,
+                latitudeDegrees = uiState.location.latitude,
+                timeState = uiState.timeState,
+                longitudeDegrees = uiState.location.longitude,
+                nightVisionState = uiState.nightVisionState,
+                isSkyBackgroundOpaque = uiState.isSkyBackgroundOpaque,
+                isMilkyWayVisible = uiState.isMilkyWayVisible,
+                isAtmosphereVisible = uiState.isAtmosphereVisible,
+                isLandscapeVisible = showStylisedLandscape,
+                isGridVisible = uiState.isGridVisible,
+                horizonProfile = horizonProfile,
+                useRealHorizon = useRealHorizon,
+                showPeakNames = horizonSettings.peakNamesInNightSky,
+                isPlanetsVisible = uiState.isPlanetsVisible,
+                isDsosVisible = uiState.isDsosVisible,
+                isMeteorShowersVisible = uiState.isMeteorShowersVisible,
+                isConstellationsVisible = uiState.isConstellationsVisible,
+                isConstellationArtVisible = uiState.isConstellationArtVisible,
+                selectedBody = uiState.selectedBody,
+                selectedPlanetId = uiState.selectedPlanetId,
+                planets = uiState.planetStates,
+                isDebugFocusRegionVisible = uiState.debugPreferences.enableNightSkyFocusRegion && uiState.isDebugFocusRegionVisible,
+                debugFocusRadiusMultiplier = uiState.debugFocusRadiusMultiplier,
+                debugFocusDisplayThreshold = uiState.debugFocusDisplayThreshold,
+                showTapRadiusIndicator = uiState.debugPreferences.showTapRadiusIndicator,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             // In-App Focus Area Debugger Overlay
             androidx.compose.animation.AnimatedVisibility(
@@ -690,6 +691,12 @@ fun NightSkyArScreen(
                         onOpenSettings = onOpenTerrainSettings,
                         nightVisionColor = chipColor,
                     )
+                    if (cameraPictureVisible && !hasCameraPermission) {
+                        CameraPermissionChip(
+                            onRequestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                            nightVisionColor = chipColor,
+                        )
+                    }
                     com.dazix.caelis.ui.HeadingStatusChip(state = headingState, nightVisionColor = chipColor)
                     com.dazix.caelis.ui.PoseSourceChip(
                         indicator = poseIndicator,
@@ -1196,62 +1203,44 @@ internal fun NightSkyBottomHud(
     }
 }
 
+/**
+ * Offers the camera permission while the camera picture is wanted (Milky Way and planetarium both
+ * off) and was not granted. A chip, not a screen: the sky works without the camera, and a full-screen
+ * prompt would also hide the layer switches that take the wish back.
+ */
 @Composable
-private fun NightSkyPermissionPrompt(
+private fun CameraPermissionChip(
     onRequestPermission: () -> Unit,
-    onBack: () -> Unit,
-    redVisionMode: Boolean,
-    nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
-    modifier: Modifier = Modifier,
+    nightVisionColor: Color?,
 ) {
-    val palette = paletteForTheme(nightVisionTheme)
-    val textColor = if (redVisionMode) palette.primary else Color.White
-    val containerColor = if (redVisionMode) Color(0xFF000000) else Color(0xFF10141C)
-    val btnColor = if (redVisionMode) palette.primary else Color(0xFF00ACC1)
-
-    Box(
-        modifier = modifier
-            .background(containerColor)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.night_sky_title),
-                color = textColor,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.sun_ar_camera_permission_desc),
-                color = textColor.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
+    val text = stringResource(R.string.night_sky_camera_permission_chip)
+    Row(
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clip(CircleShape)
+            .clickable(
+                onClickLabel = stringResource(R.string.sun_ar_camera_grant),
+                role = Role.Button,
                 onClick = onRequestPermission,
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = btnColor,
-                    contentColor = if (redVisionMode) Color.Black else Color.White,
-                ),
-            ) {
-                Text(stringResource(R.string.sun_ar_camera_grant))
-            }
-            Button(
-                onClick = onBack,
-                shape = CircleShape,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = textColor,
-                ),
-            ) {
-                Text(stringResource(R.string.action_back))
-            }
-        }
+            )
+            .background(Color(0xDD1A1A1A), CircleShape)
+            .border(1.dp, (nightVisionColor ?: Color.White).copy(alpha = 0.2f), CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { contentDescription = text },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            imageVector = AppIcons.Permissions,
+            contentDescription = null,
+            tint = nightVisionColor ?: MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = nightVisionColor ?: Color.White,
+        )
     }
 }
 

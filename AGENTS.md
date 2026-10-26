@@ -294,6 +294,8 @@ Each of these was found by review or on the device and is now covered by a test.
   instants and the stars moved 15-30 times a second on a 120 Hz Pixel 7 Pro, invisibly to the user
   and far less smoothly than a planetarium app. Without the camera the field of view is predicted from
   its characteristics (`stillBackCameraFov`, no device opened) and a FOV measured earlier stays. The
+  camera permission is asked for only when the picture becomes wanted, never on entry, and a refusal
+  leaves the sky drawn with a chip that offers it again, not a screen that blocks it. The
   orientation flow is never read in the Night Sky composition: it changes every 15 ms, and reading
   it there recomposed the sky 61 times a second; the HUD reads it through `WholeDegreesPolicy`.
 - **The camera picture is cropped by `CameraBackgroundUv`, from the same FILL_CENTER fit as the FOV.**
