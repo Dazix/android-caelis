@@ -10,7 +10,13 @@
       notify.SessionNotifications posts the session notification through NotificationManager. See the
       class KDoc there for why a specialUse foreground service was rejected.
     -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!--
+      SCHEDULE_EXACT_ALARM, not USE_EXACT_ALARM: Google Play allows USE_EXACT_ALARM only to apps whose
+      core function is an alarm clock or a calendar, and rejected a release that declared it. This one
+      is a switch the user grants (Alarms & reminders, off by default on Android 14+); without it
+      SessionEngine.scheduleAlarm falls back to an inexact alarm and says so.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Requested at runtime only when capture verification is enabled. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />

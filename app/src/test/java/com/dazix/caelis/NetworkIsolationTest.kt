@@ -264,7 +264,8 @@ class NetworkIsolationTest {
                 "android.permission.POST_NOTIFICATIONS",
                 "android.permission.SYSTEM_ALERT_WINDOW",
                 "android.permission.WAKE_LOCK",
-                "android.permission.USE_EXACT_ALARM",
+                // Never USE_EXACT_ALARM: Play reserves it for alarm clocks and calendars.
+                "android.permission.SCHEDULE_EXACT_ALARM",
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
                 "android.permission.READ_MEDIA_IMAGES",
                 "android.permission.CAMERA",

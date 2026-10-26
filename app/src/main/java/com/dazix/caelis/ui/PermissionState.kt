@@ -2,6 +2,7 @@ package com.dazix.caelis.ui
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -22,6 +23,11 @@ data class PermissionState(
     val canDrawOverlays: Boolean = false,
     val notificationsGranted: Boolean = false,
     val ignoringBatteryOptimizations: Boolean = false,
+    /**
+     * Alarms & reminders. Off by default on Android 14+; without it a long-interval session still runs,
+     * but on an inexact alarm that Doze may deliver minutes late (see SessionEngine.scheduleAlarm).
+     */
+    val exactAlarmsAllowed: Boolean = false,
     val readMediaImagesGranted: Boolean = false,
     /**
      * The user answered the photos dialog with "Select photos": only the pictures they picked are
@@ -35,7 +41,7 @@ data class PermissionState(
     val readyToTap: Boolean get() = accessibilityEnabled && canDrawOverlays
 
     val allGranted: Boolean
-        get() = readyToTap && notificationsGranted && ignoringBatteryOptimizations
+        get() = readyToTap && notificationsGranted && ignoringBatteryOptimizations && exactAlarmsAllowed
 }
 
 object Permissions {
@@ -53,6 +59,7 @@ object Permissions {
         canDrawOverlays = Settings.canDrawOverlays(context),
         notificationsGranted = granted(context, Manifest.permission.POST_NOTIFICATIONS),
         ignoringBatteryOptimizations = ignoringBatteryOptimizations(context),
+        exactAlarmsAllowed = exactAlarmsAllowed(context),
         readMediaImagesGranted = granted(context, Manifest.permission.READ_MEDIA_IMAGES),
         readMediaPartialGranted = partialPhotoAccess(context),
         installedFromOutsideStore = installedFromOutsideStore(context),
@@ -94,6 +101,9 @@ object Permissions {
         context.getSystemService(PowerManager::class.java)
             ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 
+    private fun exactAlarmsAllowed(context: Context): Boolean =
+        context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: false
+
     private fun installedFromOutsideStore(context: Context): Boolean = runCatching {
         val installer = context.packageManager
             .getInstallSourceInfo(context.packageName)
@@ -115,6 +125,13 @@ object Permissions {
             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
             Uri.fromParts("package", context.packageName, null),
         )
+
+    /** The app's own Alarms & reminders switch. */
+    fun exactAlarmSettings(context: Context): Intent =
+        Intent(
+            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+            Uri.fromParts("package", context.packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /** Where the "Allow restricted settings" menu item lives, for sideloaded builds. */
     fun appInfo(context: Context): Intent =

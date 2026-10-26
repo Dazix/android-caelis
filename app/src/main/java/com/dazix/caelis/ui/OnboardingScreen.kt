@@ -27,6 +27,7 @@ fun OnboardingScreen(
     onOpenOverlaySettings: () -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestBatteryExemption: () -> Unit,
+    onOpenExactAlarmSettings: () -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -91,6 +92,14 @@ fun OnboardingScreen(
             granted = permissions.ignoringBatteryOptimizations,
             actionLabel = stringResource(R.string.onboarding_battery_action),
             onAction = onRequestBatteryExemption,
+        )
+
+        PermissionRow(
+            title = stringResource(R.string.onboarding_exact_alarm_title),
+            description = stringResource(R.string.onboarding_exact_alarm_desc),
+            granted = permissions.exactAlarmsAllowed,
+            actionLabel = stringResource(R.string.onboarding_exact_alarm_action),
+            onAction = onOpenExactAlarmSettings,
         )
 
         SectionCard(title = stringResource(R.string.onboarding_media_title)) {

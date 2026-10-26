@@ -286,6 +286,10 @@ private fun CaelisScreen(
         }
     }
 
+    val openAccessibilitySettings = rememberAccessibilityDisclosure {
+        context.launchSafely(Permissions.accessibilitySettings())
+    }
+
     when (screen) {
         Screen.HOME -> HomeScreen(
             snapshot = snapshot,
@@ -300,9 +304,7 @@ private fun CaelisScreen(
             onResume = viewModel::resume,
             onNavigate = viewModel::navigate,
             onCalibrate = startCalibration,
-            onOpenAccessibilitySettings = {
-                context.launchSafely(Permissions.accessibilitySettings())
-            },
+            onOpenAccessibilitySettings = openAccessibilitySettings,
             onOpenOverlaySettings = { context.launchSafely(Permissions.overlaySettings(context)) },
             onDismissServiceMessage = viewModel::dismissServiceMessage,
         )
@@ -338,13 +340,14 @@ private fun CaelisScreen(
         Screen.ONBOARDING -> OnboardingScreen(
             permissions = permissions,
             onOpenAppInfo = { context.launchSafely(Permissions.appInfo(context)) },
-            onOpenAccessibilitySettings = {
-                context.launchSafely(Permissions.accessibilitySettings())
-            },
+            onOpenAccessibilitySettings = openAccessibilitySettings,
             onOpenOverlaySettings = { context.launchSafely(Permissions.overlaySettings(context)) },
             onRequestNotifications = onRequestNotifications,
             onRequestBatteryExemption = {
                 context.launchSafely(Permissions.batteryOptimizationExemption(context))
+            },
+            onOpenExactAlarmSettings = {
+                context.launchSafely(Permissions.exactAlarmSettings(context))
             },
             onRefresh = viewModel::refreshSystemState,
             onBack = viewModel::back,
