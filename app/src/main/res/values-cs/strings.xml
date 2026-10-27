@@ -423,7 +423,7 @@
     <string name="night_sky_landscape">Krajina</string>
     <string name="night_sky_landscape_desc">Zobrazit/skrýt fotorealistickou krajinu na zemi</string>
     <string name="night_sky_opaque_bg">Režim planetária</string>
-    <string name="night_sky_opaque_bg_desc">Přepnout mezi AR kamerou a plným neprůhledným planetáriem</string>
+    <string name="night_sky_opaque_bg_desc">Zobrazit oblohu nad živým obrazem z fotoaparátu</string>
     <string name="night_sky_camera_permission_chip">Obraz kamery potřebuje přístup k fotoaparátu. Klepnutím ho povolíte.</string>
     <string name="night_sky_grid">Souřadnicová mřížka</string>
     <string name="night_sky_grid_desc">Zobrazit/skrýt 3D nebeskou mřížku a obzor</string>

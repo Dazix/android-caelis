@@ -317,12 +317,12 @@ fun NightSkyArScreen(
         displayRotation == android.view.Surface.ROTATION_180
 
     val cameraPictureVisible = NightSkyCameraPolicy.isPictureVisible(
-        opaqueBackground = uiState.isSkyBackgroundOpaque,
+        planetariumMode = uiState.isSkyBackgroundOpaque,
         milkyWayVisible = uiState.isMilkyWayVisible,
     )
-    // The camera permission is asked for when its picture is wanted, not on entry: under the default
-    // Milky Way and in the planetarium the camera never runs. The camera's answer then asks for the
-    // location, so the two dialogs never race.
+    // The camera permission is asked for when its picture is wanted, not on entry: outside planetarium
+    // mode the camera never runs. The camera's answer then asks for the location, so the two dialogs
+    // never race.
     LaunchedEffect(cameraPictureVisible) {
         if (cameraPictureVisible && !hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -546,11 +546,10 @@ fun NightSkyArScreen(
                 }
         ) {
             if (hasCameraPermission) {
-                // Camera stream and FOV; the picture itself is drawn by NightSkyGpuSky below. Only
-                // while it can be seen: the Milky Way panorama is opaque over the whole sphere and
-                // the planetarium clears to an opaque sky, and under either the camera would be
-                // running for nothing — and, worse, the sky would be posed at its images' instants,
-                // which moved the stars 15-30 times a second instead of every vsync.
+                // Camera stream and FOV; the picture itself is drawn by NightSkyGpuSky below. Only in
+                // planetarium mode with the Milky Way off (NightSkyCameraPolicy): anywhere else the
+                // camera would be running unseen — and, worse, the sky would be posed at its images'
+                // instants, which moved the stars 15-30 times a second instead of every vsync.
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     lifecycleOwner = lifecycleOwner,
@@ -1204,8 +1203,8 @@ internal fun NightSkyBottomHud(
 }
 
 /**
- * Offers the camera permission while the camera picture is wanted (Milky Way and planetarium both
- * off) and was not granted. A chip, not a screen: the sky works without the camera, and a full-screen
+ * Offers the camera permission while the camera picture is wanted (planetarium mode, Milky Way off)
+ * and was not granted. A chip, not a screen: the sky works without the camera, and a full-screen
  * prompt would also hide the layer switches that take the wish back.
  */
 @Composable

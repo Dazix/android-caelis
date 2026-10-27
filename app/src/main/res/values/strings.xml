@@ -417,7 +417,7 @@
     <string name="night_sky_landscape">Landscape</string>
     <string name="night_sky_landscape_desc">Toggle photorealistic ground landscape</string>
     <string name="night_sky_opaque_bg">Planetarium mode</string>
-    <string name="night_sky_opaque_bg_desc">Toggle between live camera AR and opaque planetarium sky</string>
+    <string name="night_sky_opaque_bg_desc">Show the sky over the live camera picture</string>
     <string name="night_sky_camera_permission_chip">The camera picture needs camera access. Tap to allow.</string>
     <string name="night_sky_grid">Coordinate grid</string>
     <string name="night_sky_grid_desc">Toggle 3D celestial coordinate grid and horizon</string>

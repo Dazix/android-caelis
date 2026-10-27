@@ -8,17 +8,21 @@ class NightSkyCameraPolicyTest {
 
     @Test
     fun `the default sky with the Milky Way on needs no camera`() {
-        assertFalse(NightSkyCameraPolicy.isPictureVisible(opaqueBackground = false, milkyWayVisible = true))
+        assertFalse(NightSkyCameraPolicy.isPictureVisible(planetariumMode = false, milkyWayVisible = true))
     }
 
     @Test
-    fun `the planetarium needs no camera with or without the Milky Way`() {
-        assertFalse(NightSkyCameraPolicy.isPictureVisible(opaqueBackground = true, milkyWayVisible = true))
-        assertFalse(NightSkyCameraPolicy.isPictureVisible(opaqueBackground = true, milkyWayVisible = false))
+    fun `turning the Milky Way off leaves a dark dome, not the camera`() {
+        assertFalse(NightSkyCameraPolicy.isPictureVisible(planetariumMode = false, milkyWayVisible = false))
     }
 
     @Test
-    fun `the camera runs only when nothing opaque covers its picture`() {
-        assertTrue(NightSkyCameraPolicy.isPictureVisible(opaqueBackground = false, milkyWayVisible = false))
+    fun `planetarium mode shows the camera`() {
+        assertTrue(NightSkyCameraPolicy.isPictureVisible(planetariumMode = true, milkyWayVisible = false))
+    }
+
+    @Test
+    fun `the Milky Way turned back on in planetarium mode covers the picture, so the camera stays off`() {
+        assertFalse(NightSkyCameraPolicy.isPictureVisible(planetariumMode = true, milkyWayVisible = true))
     }
 }

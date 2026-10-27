@@ -72,7 +72,7 @@ class NightSkyGpuHandle {
  * The camera picture is drawn by that same Filament frame ([CameraBackground], fed by
  * [CameraFrameSource]), and the pose is taken at the instant of the image being drawn, so a star
  * cannot run ahead of the photographed sky during a turn. Where no picture can be seen
- * ([isCameraPictureVisible] false: the planetarium's opaque sky or the opaque Milky Way) the camera is
+ * ([isCameraPictureVisible] false: outside planetarium mode, or under the opaque Milky Way) the camera is
  * not running at all and the live pose is used, so the sky moves every vsync.
  *
  * [orientation] is read in the frame loop, never in composition: it changes every 15 ms.
@@ -249,7 +249,7 @@ internal fun NightSkyGpuSky(
                 frame.dtSeconds = if (lastFrameNanos == 0L) 0.016f else ((nanos - lastFrameNanos) / 1e9f)
                 lastFrameNanos = nanos
                 // Over the camera, the newest image goes to the GPU and the pose is the one it was
-                // taken with; where no picture can be seen (the planetarium's opaque sky, the opaque
+                // taken with; where no picture is shown (outside planetarium mode, under the opaque
                 // Milky Way) there is nothing to match and the live pose moves the sky every vsync.
                 //
                 // The rig also decides who owns the camera (CameraX or ARCore) and whose pose draws.
