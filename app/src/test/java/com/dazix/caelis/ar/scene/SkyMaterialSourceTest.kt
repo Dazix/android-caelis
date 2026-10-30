@@ -28,6 +28,8 @@ class SkyMaterialSourceTest {
         assertContains(src, "atan(cel.z, cel.x)", "right ascension")
         assertContains(src, "asin(clamp(cel.y, -1.0, 1.0))", "declination")
         assertContains(src, "luminance * 0.3 * nv.rgb", "night vision dims the Milky Way as the Canvas did")
+        assertContains(src, "name : opacity", "the layer is drawn dimmed, not at full strength")
+        assertContains(src, "color * materialParams.opacity", "premultiplied: colour and alpha scale together")
     }
 
     @Test

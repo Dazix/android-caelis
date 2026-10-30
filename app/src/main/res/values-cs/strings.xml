@@ -433,6 +433,9 @@
     <string name="night_sky_constellations_desc">Zobrazit/skrýt spojnice souhvězdí</string>
     <string name="night_sky_constellation_art">Ilustrace souhvězdí</string>
     <string name="night_sky_constellation_art_desc">Zobrazit/skrýt ilustrace souhvězdí</string>
+    <string name="night_sky_constellation_art_opacity">Intenzita ilustrací</string>
+    <string name="night_sky_constellation_art_opacity_value">%1$d\u00A0%%</string>
+    <string name="night_sky_asterism_names">Názvy asterismů</string>
     <string name="night_sky_planets">Planety a Měsíc</string>
     <string name="night_sky_planets_desc">Zobrazit/skrýt planety sluneční soustavy a Měsíc</string>
     <string name="night_sky_layers_title">Vrstvy a zobrazení</string>

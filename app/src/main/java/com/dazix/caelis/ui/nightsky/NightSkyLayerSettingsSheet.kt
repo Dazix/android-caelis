@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazix.caelis.R
 import com.dazix.caelis.ar.scene.paletteForTheme
+import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.ui.AppIcons
@@ -101,6 +102,8 @@ fun NightSkyLayerSettingsSheet(
     isMeteorShowersVisible: Boolean = false,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
+    constellationArtOpacity: Float = ConstellationArtOpacity.DEFAULT,
+    isAsterismNamesVisible: Boolean = true,
     isGridVisible: Boolean,
     isSkyBackgroundOpaque: Boolean,
     redVisionMode: Boolean,
@@ -123,6 +126,9 @@ fun NightSkyLayerSettingsSheet(
     onToggleMeteorShowersVisible: () -> Unit = {},
     onToggleConstellationsVisible: () -> Unit,
     onToggleConstellationArtVisible: () -> Unit,
+    onConstellationArtOpacityChange: (Float) -> Unit = {},
+    onConstellationArtOpacityChangeFinished: () -> Unit = {},
+    onToggleAsterismNamesVisible: () -> Unit = {},
     onToggleGridVisible: () -> Unit,
     onToggleSkyBackgroundOpaque: () -> Unit,
     onToggleRedVisionMode: () -> Unit,
@@ -284,6 +290,18 @@ fun NightSkyLayerSettingsSheet(
                 onCheckedChange = { onToggleConstellationsVisible() },
             )
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // Asterism names are printed only with the figures, so the switch works only while they are on.
+            LayerToggleRow(
+                label = stringResource(R.string.night_sky_asterism_names),
+                icon = AppIcons.AutoAwesome,
+                isChecked = isAsterismNamesVisible && isConstellationsVisible,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+                switchColors = switchColors,
+                enabled = isConstellationsVisible,
+                onCheckedChange = { onToggleAsterismNamesVisible() },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
             LayerToggleRow(
                 label = stringResource(R.string.night_sky_constellation_art),
                 icon = AppIcons.Brush,
@@ -292,6 +310,21 @@ fun NightSkyLayerSettingsSheet(
                 iconColor = iconColor,
                 switchColors = switchColors,
                 onCheckedChange = { onToggleConstellationArtVisible() },
+            )
+            // A selected figure's artwork is drawn even with the switch off, so the slider stays usable.
+            LayerSliderRow(
+                label = stringResource(R.string.night_sky_constellation_art_opacity),
+                valueText = stringResource(
+                    R.string.night_sky_constellation_art_opacity_value,
+                    (constellationArtOpacity * 100f).roundToInt(),
+                ),
+                value = constellationArtOpacity,
+                valueRange = ConstellationArtOpacity.MIN..ConstellationArtOpacity.MAX,
+                headlineColor = headlineColor,
+                accentColor = iconColor,
+                sliderColors = sliderColors,
+                onValueChange = onConstellationArtOpacityChange,
+                onValueChangeFinished = onConstellationArtOpacityChangeFinished,
             )
             HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
             LayerToggleRow(
@@ -680,6 +713,54 @@ private fun LayerToggleRow(
             color = if (enabled) headlineColor else headlineColor.copy(alpha = 0.5f),
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** A labelled slider with its value read out, indented to line up with the toggle rows' text. */
+@Composable
+private fun LayerSliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    headlineColor: Color,
+    accentColor: Color,
+    sliderColors: SliderColors,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 60.dp, end = 20.dp, bottom = 6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                color = headlineColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = valueText,
+                color = accentColor,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = valueRange,
+            colors = sliderColors,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .semantics { contentDescription = label },
         )
     }
 }

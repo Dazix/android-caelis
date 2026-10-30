@@ -14,6 +14,7 @@ import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.domain.arframe.SkyProjector
 import com.dazix.caelis.domain.arframe.SkyQuadMath
 import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.ConstellationFocusState
 import com.dazix.caelis.domain.nightsky.DsoArtGeometry
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
@@ -170,6 +171,7 @@ class NightSkyScene(
         val texture = createBitmapTexture(surface.engine, bitmap)
         milkyWayTexture = texture
         milkyWay.materialInstance.setParameter("milkyWay", texture, skySampler(repeatU = true))
+        milkyWay.materialInstance.setParameter("opacity", MILKY_WAY_OPACITY)
     }
 
     fun setLandscapeBitmap(bitmap: Bitmap) {
@@ -558,7 +560,7 @@ class NightSkyScene(
             }
             q.setTexture(texture)
             q.setTransform(celestialToEnu)
-            q.setOpacity((90f * p).coerceIn(0f, 255f) / 255f)
+            q.setOpacity(ConstellationArtOpacity.quadOpacity(frame.constellationArtOpacity, p))
             q.setVisible(true)
         }
     }
@@ -611,6 +613,12 @@ class NightSkyScene(
         private const val MAX_SELECTED_SEGMENTS = 256
         private const val MIN_DISPLAY_PROGRESS = 0.001f
 
+        /**
+         * The panorama at full strength competed with the stars and the constellation artwork in
+         * front of it; 0.8 keeps the band visible but behind them.
+         */
+        const val MILKY_WAY_OPACITY = 0.8f
+
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
         const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.MAX_LANDMARKS
         const val HIGHLIGHT_SPRITES = 4
@@ -646,6 +654,12 @@ class NightSkyFrame {
 
     var showConstellations = true
     var showConstellationArt = true
+
+    /** The artwork's opacity at a fully grown figure ([ConstellationArtOpacity]). */
+    var constellationArtOpacity = ConstellationArtOpacity.DEFAULT
+
+    /** Print asterism names; their lines and a selected asterism's name are not affected. */
+    var showAsterismNames = true
     var showMilkyWay = true
     var showAtmosphere = true
     var showLandscape = true

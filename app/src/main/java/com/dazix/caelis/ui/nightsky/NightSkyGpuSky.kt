@@ -113,6 +113,8 @@ internal fun NightSkyGpuSky(
     isMeteorShowersVisible: Boolean,
     isConstellationsVisible: Boolean,
     isConstellationArtVisible: Boolean,
+    constellationArtOpacity: Float,
+    isAsterismNamesVisible: Boolean,
     selectedBody: CelestialBodyDetails?,
     selectedPlanetId: String?,
     planets: List<PlanetState>,
@@ -201,6 +203,8 @@ internal fun NightSkyGpuSky(
         frame.displayRotationDegrees = displayRotation * 90
         frame.showConstellations = isConstellationsVisible
         frame.showConstellationArt = isConstellationArtVisible
+        frame.constellationArtOpacity = constellationArtOpacity
+        frame.showAsterismNames = isAsterismNamesVisible
         frame.showMilkyWay = isMilkyWayVisible
         frame.showAtmosphere = isAtmosphereVisible
         frame.showLandscape = isLandscapeVisible

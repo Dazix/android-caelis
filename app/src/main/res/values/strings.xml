@@ -427,6 +427,9 @@
     <string name="night_sky_constellations_desc">Toggle constellation stick figure lines</string>
     <string name="night_sky_constellation_art">Constellation artwork</string>
     <string name="night_sky_constellation_art_desc">Toggle constellation illustrations</string>
+    <string name="night_sky_constellation_art_opacity">Artwork intensity</string>
+    <string name="night_sky_constellation_art_opacity_value">%1$d%%</string>
+    <string name="night_sky_asterism_names">Asterism names</string>
     <string name="night_sky_planets">Planets &amp; Moon</string>
     <string name="night_sky_planets_desc">Toggle solar system planets and the Moon</string>
     <string name="night_sky_layers_title">Layers &amp; Display</string>

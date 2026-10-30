@@ -264,6 +264,27 @@ class NightSkyRendererTest {
     }
 
     @Test
+    fun `hiding asterism names hides only asterism names, and never a selected one`() {
+        fun shown(asterism: Boolean, selected: Boolean, constellations: Boolean, asterismNames: Boolean) =
+            NightSkyRenderer.isConstellationNameShown(asterism, selected, constellations, asterismNames)
+        // Everything on: both kinds named.
+        assertTrue(shown(asterism = false, selected = false, constellations = true, asterismNames = true))
+        assertTrue(shown(asterism = true, selected = false, constellations = true, asterismNames = true))
+        // Asterism names off: constellations keep theirs, asterisms lose theirs unless selected.
+        assertTrue(shown(asterism = false, selected = false, constellations = true, asterismNames = false))
+        assertFalse(shown(asterism = true, selected = false, constellations = true, asterismNames = false))
+        assertTrue(
+            "a selected asterism says what was tapped",
+            shown(asterism = true, selected = true, constellations = true, asterismNames = false),
+        )
+        // Figures off: only the selected one is named, whatever the asterism switch says.
+        assertFalse(shown(asterism = false, selected = false, constellations = false, asterismNames = true))
+        assertFalse(shown(asterism = true, selected = false, constellations = false, asterismNames = true))
+        assertTrue(shown(asterism = false, selected = true, constellations = false, asterismNames = false))
+        assertTrue(shown(asterism = true, selected = true, constellations = false, asterismNames = false))
+    }
+
+    @Test
     fun `a constellation just above the drawn ground is tappable and one just below it is not`() {
         // On the equator at LST 0 the pole sits on the north horizon, so a centroid at dec 85 is
         // 5 degrees above it at RA 0 (upper culmination) and 5 degrees below it at RA 180.
