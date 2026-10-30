@@ -211,10 +211,11 @@ Build a signed release bundle locally with interactive password prompt and keyst
 The output `.aab` will be generated at `app/build/outputs/bundle/release/app-release.aab`.
 
 **Automated CI/CD Deployment:**
-The repository includes a GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) implementing a *Build Once, Promote Everywhere* release pipeline:
-1. **Push to `main`**: Builds a signed release `.aab` bundle with an incremental `versionCode` (`${{ github.run_number }}`) and uploads it to Google Play **Internal Testing** (`track: internal`).
-2. **GitHub Pre-Release (`published` / `prereleased`)**: Promotes the active release from `internal` to `beta` (Open Testing) via `scripts/promote_release.py` without re-compilation.
-3. **GitHub Full Release (`published` / non-prerelease)**: Promotes the active release from `beta` to `production` via `scripts/promote_release.py` without re-compilation.
+The repository includes a GitHub Actions workflow [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) with one stage per Google Play track. Every build is a signed release `.aab` with an incremental `versionCode` (`${{ github.run_number }}`) and its R8 mapping:
+1. **Push to the `internal` branch**: builds and uploads to **Internal testing** (`track: internal`).
+2. **Push to `main`**: builds and uploads to **Closed testing** (`track: alpha`). This is the track Google counts for the 12-testers-for-14-days rule of new personal developer accounts.
+3. **GitHub pre-release** (`prereleased`): builds the tag and uploads it to **Open testing** (`track: beta`). Open testing stays unavailable until the account has production access.
+4. **GitHub release** (`released`, including a pre-release turned into a release): promotes the active `beta` release to `production` via `scripts/promote_release.py` without re-compilation.
 
 
 ## First run

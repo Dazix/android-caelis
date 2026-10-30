@@ -3,7 +3,7 @@
 # Computes release versioning variables and writes them to $GITHUB_OUTPUT.
 #
 # Usage:
-#   scripts/set_build_version_vars.sh --track <internal|beta|production> --sha <sha> [--run-number <num>] [--tag <tag>]
+#   scripts/set_build_version_vars.sh --track <internal|alpha|beta|production> --sha <sha> [--run-number <num>] [--tag <tag>]
 
 set -eu
 
@@ -38,7 +38,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$TRACK" ] || [ -z "$SHA" ]; then
-    echo "Usage: $0 --track <internal|beta|production> --sha <sha> [--run-number <num>] [--tag <tag>]" >&2
+    echo "Usage: $0 --track <internal|alpha|beta|production> --sha <sha> [--run-number <num>] [--tag <tag>]" >&2
     exit 1
 fi
 
@@ -54,15 +54,19 @@ emit_var() {
 }
 
 emit_var "short_sha" "$SHORT_SHA"
+emit_var "track" "$TRACK"
 
 case "$TRACK" in
-    internal)
+    internal|alpha)
         if [ -z "$RUN_NUMBER" ]; then
-            echo "Error: --run-number is required for internal track" >&2
+            echo "Error: --run-number is required for $TRACK track" >&2
             exit 1
         fi
-        emit_var "version_name" "internal [${SHORT_SHA}]"
-        emit_var "release_name" "Build #${RUN_NUMBER} internal [${SHORT_SHA}]"
+        # Play calls `alpha` closed testing; the name testers see says so.
+        LABEL="$TRACK"
+        [ "$TRACK" = "alpha" ] && LABEL="closed"
+        emit_var "version_name" "${LABEL} [${SHORT_SHA}]"
+        emit_var "release_name" "Build #${RUN_NUMBER} ${LABEL} [${SHORT_SHA}]"
         ;;
     beta)
         if [ -z "$TAG" ]; then
@@ -81,7 +85,7 @@ case "$TRACK" in
         emit_var "release_name" "${TAG} [${SHORT_SHA}]"
         ;;
     *)
-        echo "Error: Unknown track '$TRACK'. Must be internal, beta, or production." >&2
+        echo "Error: Unknown track '$TRACK'. Must be internal, alpha, beta, or production." >&2
         exit 1
         ;;
 esac

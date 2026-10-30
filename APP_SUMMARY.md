@@ -627,10 +627,11 @@ The project maintains comprehensive automated test coverage:
 - **End-to-End Validation (`scripts/e2e_pixel_camera.sh`):**
   - Launches native Google Camera on dedicated development profile, executes time-lapse session, verifies MediaStore image creation, and cleans up captured photos.
 - **CI/CD & Google Play Deployment:**
-  - GitHub Actions workflow (`.github/workflows/deploy.yml`) implementing *Build Once, Promote Everywhere*:
-    1. Push to `main` builds signed `.aab` bundle with incremented `versionCode` (`github.run_number`) and uploads to Google Play **Internal Testing** (`internal`).
-    2. Publishing GitHub Pre-Release (`beta`) promotes existing release from `internal` to `beta` via `scripts/promote_release.py` without recompilation.
-    3. Publishing full GitHub Release promotes existing release from `beta` to `production` via `scripts/promote_release.py` without recompilation.
+  - GitHub Actions workflow (`.github/workflows/deploy.yml`), one stage per Google Play track; each build is a signed `.aab` with incremented `versionCode` (`github.run_number`):
+    1. Push to the `internal` branch uploads to **Internal testing** (`internal`).
+    2. Push to `main` uploads to **Closed testing** (`alpha`), the track counted for the 12-testers rule.
+    3. Publishing a GitHub pre-release builds the tag and uploads it to **Open testing** (`beta`).
+    4. Publishing a full GitHub release (or turning a pre-release into one) promotes the `beta` release to `production` via `scripts/promote_release.py` without recompilation.
   - `scripts/promote_release.py` manages Google Play Developer API track promotions.
   - `scripts/build_release_bundle.sh` enables secure local signing without plaintext credentials.
   - Gradle Configuration Cache enabled for fast builds.
