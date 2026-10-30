@@ -309,6 +309,7 @@
     <string name="arcore_consent_cancel">Nyní ne</string>
 
     <string name="horizon_status_locating">Čekám na signál GPS…</string>
+    <string name="horizon_status_locating_network">Zjišťuji polohu z Wi-Fi a mobilní sítě…</string>
     <string name="horizon_status_downloading">Stahuji terén %1$d z %2$d · %3$s</string>
     <string name="horizon_status_computing">Počítám linii obzoru…</string>
     <string name="horizon_status_ready">Horizont terénu je připraven</string>
@@ -316,7 +317,7 @@
     <string name="horizon_status_failed_network">Výšková data se nepodařilo stáhnout</string>
     <string name="horizon_status_failed_metered">Čekám na Wi‑Fi kvůli stažení výškových dat</string>
     <string name="horizon_status_failed_no_data">Pro toto místo nejsou výšková data</string>
-    <string name="horizon_status_failed_location">Nepodařilo se určit polohu GPS</string>
+    <string name="horizon_status_failed_location">Nepodařilo se určit polohu</string>
 
     <string name="horizon_import_title">Import výškových dat</string>
     <string name="horizon_import_body">Stáhněte si tyto dlaždice v prohlížeči a vyberte je zde:\n\n%1$s\n\nOdkud: %2$s</string>
@@ -337,6 +338,7 @@
     <string name="horizon_notif_channel_complete_name">Stahování terénu dokončeno</string>
     <string name="horizon_notif_channel_complete_desc">Oznámení po dokončení stažení a výpočtu výškových dat.</string>
     <string name="horizon_notif_locating">Zjišťuji polohu GPS</string>
+    <string name="horizon_notif_locating_network">Zjišťuji polohu</string>
     <string name="horizon_notif_downloading">Stahuji terén %1$d z %2$d</string>
     <string name="horizon_notif_computing">Počítám linii obzoru</string>
     <string name="horizon_notif_ready">Horizont terénu je připraven</string>

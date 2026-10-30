@@ -67,7 +67,7 @@ class TerrainNotificationsTest {
 
     @Test
     fun `locating state is ongoing, indeterminate, on active channel`() {
-        notifications.update(HorizonState.Locating)
+        notifications.update(HorizonState.Locating())
 
         val sbn = manager.activeNotifications.singleOrNull { it.id == TerrainNotifications.NOTIFICATION_ID }
         assertNotNull("notification must be posted", sbn)
@@ -81,6 +81,15 @@ class TerrainNotificationsTest {
 
         val extras = notif.extras
         assertTrue("extras must indicate indeterminate progress", extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE))
+    }
+
+    @Test
+    fun `locating without satellites does not claim to wait for gps`() {
+        notifications.update(HorizonState.Locating(satellites = false))
+
+        val extras = manager.activeNotifications.single { it.id == TerrainNotifications.NOTIFICATION_ID }.notification.extras
+        assertEquals(context.getString(R.string.horizon_notif_locating_network), extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(context.getString(R.string.horizon_status_locating_network), extras.getCharSequence(Notification.EXTRA_TEXT).toString())
     }
 
     @Test
@@ -197,7 +206,7 @@ class TerrainNotificationsTest {
 
     @Test
     fun `failed state due to location timeout is on complete channel`() {
-        notifications.update(HorizonState.Locating)
+        notifications.update(HorizonState.Locating())
         notifications.update(HorizonState.Failed(HorizonState.Failed.Reason.LOCATION))
 
         val sbn = manager.activeNotifications.singleOrNull { it.id == TerrainNotifications.NOTIFICATION_ID }

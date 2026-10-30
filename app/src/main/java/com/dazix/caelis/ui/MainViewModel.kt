@@ -622,7 +622,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (horizonLocationProvider.hasGpsFix.value) {
                 horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
             } else {
-                horizonRepository.setLocating()
+                horizonRepository.setLocating(horizonLocationProvider.satellitesAvailable())
                 val hasFix = horizonLocationProvider.awaitGpsFix()
                 if (hasFix) {
                     horizonRepository.ensureProfile(

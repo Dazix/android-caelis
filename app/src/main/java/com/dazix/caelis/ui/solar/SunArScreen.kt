@@ -145,6 +145,7 @@ fun SunArScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isApproximateLocation by viewModel.isApproximateLocation.collectAsStateWithLifecycle()
     val orientation by viewModel.orientation.collectAsStateWithLifecycle()
     val alignAzimuthOffset by viewModel.panAzimuthOffset.collectAsStateWithLifecycle()
     val alignElevationOffset by viewModel.panPitchOffset.collectAsStateWithLifecycle()
@@ -391,7 +392,7 @@ fun SunArScreen(
         // Top App Bar Controls with HUD
         SunArTopBar(
             hasGpsFix = uiState.hasGpsFix,
-            locationText = uiState.location.formatShort(),
+            locationText = uiState.location.formatShort(approximate = isApproximateLocation),
             orientation = orientation,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
             isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
@@ -630,7 +631,7 @@ internal fun SunArTopBar(
                 )
                 if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
                     Text(
-                        text = "• 🛰 GPS…",
+                        text = if (horizonState.satellites) "• 🛰 GPS…" else "• 📍…",
                         style = MaterialTheme.typography.labelMedium,
                         color = accentColor,
                         fontWeight = FontWeight.Bold,
