@@ -253,4 +253,27 @@ class SolarLocationProviderTest {
         assertTrue(result)
         assertTrue(provider.hasGpsFix.value)
     }
+
+    /** No public fused provider on Android 11: GPS alone has to carry the fix there. */
+    @Test
+    @Config(sdk = [30])
+    fun `android 11 takes a gps fix without the fused provider`() {
+        val provider = SolarLocationProvider(context)
+        shadowOf(locationManager).setLastKnownLocation(
+            LocationManager.GPS_PROVIDER,
+            Location(LocationManager.GPS_PROVIDER).apply {
+                latitude = 50.087
+                longitude = 14.421
+                time = System.currentTimeMillis() - 5_000L
+                accuracy = 8f
+            },
+        )
+
+        provider.refreshLocation()
+        provider.startUpdates()
+
+        assertEquals(50.087, provider.location.value.latitude, 1e-4)
+        assertTrue(provider.hasGpsFix.value)
+        provider.stopUpdates()
+    }
 }

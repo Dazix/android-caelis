@@ -268,6 +268,8 @@ class NetworkIsolationTest {
                 "android.permission.SCHEDULE_EXACT_ALARM",
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
                 "android.permission.READ_MEDIA_IMAGES",
+                // READ_MEDIA_IMAGES below Android 13 (minSdk 30); capped, see the test below.
+                "android.permission.READ_EXTERNAL_STORAGE",
                 "android.permission.CAMERA",
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.ACCESS_COARSE_LOCATION",
@@ -275,6 +277,22 @@ class NetworkIsolationTest {
                 "android.permission.ACCESS_NETWORK_STATE",
             ),
             declared,
+        )
+    }
+
+    /**
+     * READ_EXTERNAL_STORAGE is only the Android 11 and 12 spelling of the photos permission. Uncapped,
+     * Play lists it as a broad storage permission on every newer phone, where it grants nothing anyway.
+     */
+    @Test
+    fun `the old storage permission stops at Android 12`() {
+        val entry = Regex("""<uses-permission\s[^>]*android:name="android\.permission\.READ_EXTERNAL_STORAGE"[^>]*>""")
+            .find(manifestFile().readText())
+            ?.value
+        assertTrue("READ_EXTERNAL_STORAGE is not declared", entry != null)
+        assertTrue(
+            "READ_EXTERNAL_STORAGE must carry android:maxSdkVersion=\"32\", found: $entry",
+            entry!!.contains("""android:maxSdkVersion="32""""),
         )
     }
 

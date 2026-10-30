@@ -1,5 +1,6 @@
 package com.dazix.caelis.ui
 
+import android.os.Build
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -30,7 +31,8 @@ import androidx.compose.ui.text.TextStyle
  * the theme's motion scheme, the emphasized type styles and the expressive components out of its public
  * API. See the `material3` pin in gradle/libs.versions.toml.
  *
- * Colour comes from the wallpaper: Material You dynamic colour, light and dark.
+ * Colour comes from the wallpaper: Material You dynamic colour, light and dark, on Android 12 and
+ * newer; Android 11 has none and gets a fixed amber palette.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -39,12 +41,15 @@ fun CaelisTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    // Wallpaper colour, unconditionally: `minSdk` is 33 and dynamic colour exists from 31, so a
-    // hand-picked fallback here would be a scheme no supported device could ever render — which is
-    // exactly what it used to be. The panel drawn over the camera app is the one place that still needs
-    // a literal palette, because it is plain Views with no Compose theme to read: see [OverlayPalette].
+    // Wallpaper colour from Android 12, where dynamic colour exists. `minSdk` is 30, and Android 11
+    // gets the hand-picked amber schemes the floating panel uses there too (FallbackColorSchemes.kt):
+    // the panel is plain Views with no Compose theme to read, see [OverlayPalette].
     val scheme = remember(darkTheme, context) {
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            if (darkTheme) expressiveDark else expressiveLight
+        }
     }
     MaterialExpressiveTheme(
         colorScheme = scheme,

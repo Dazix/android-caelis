@@ -5,6 +5,7 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.ui.Permissions
@@ -37,8 +38,8 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
         if ((!hasFine && !hasCoarse) || lm == null) return
 
         try {
-            val providers = listOf(
-                LocationManager.FUSED_PROVIDER,
+            val providers = listOfNotNull(
+                FUSED,
                 LocationManager.GPS_PROVIDER,
                 LocationManager.NETWORK_PROVIDER,
                 LocationManager.PASSIVE_PROVIDER,
@@ -64,7 +65,7 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
     private fun qualifiesAsFix(loc: Location): Boolean {
         val isFresh = (System.currentTimeMillis() - loc.time) < FRESH_FIX_MAX_AGE_MS
         val isAccurate = loc.hasAccuracy() && loc.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
-        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == LocationManager.FUSED_PROVIDER
+        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == FUSED
         return isFresh && isAccurate && isSatelliteOrFused
     }
 
@@ -76,8 +77,8 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
         if (!hasFine && !hasCoarse || lm == null || isUpdating) return
 
         try {
-            val providersToRequest = listOf(
-                LocationManager.FUSED_PROVIDER,
+            val providersToRequest = listOfNotNull(
+                FUSED,
                 LocationManager.GPS_PROVIDER,
                 LocationManager.NETWORK_PROVIDER,
             )
@@ -114,7 +115,7 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
     override fun onLocationChanged(loc: Location) {
         locationState.value = GeoLocation(loc.latitude, loc.longitude, loc.altitude)
         val isAccurate = loc.hasAccuracy() && loc.accuracy <= FRESH_FIX_MAX_ACCURACY_METERS
-        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == LocationManager.FUSED_PROVIDER
+        val isSatelliteOrFused = loc.provider == LocationManager.GPS_PROVIDER || loc.provider == FUSED
         if (isAccurate && isSatelliteOrFused) {
             hasGpsFixState.value = true
         }
@@ -159,5 +160,12 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
         const val GPS_FIX_POLL_INTERVAL_MS = 5_000L // 5 seconds
         private const val FRESH_FIX_MAX_AGE_MS = 60_000L // 1 minute
         private const val FRESH_FIX_MAX_ACCURACY_METERS = 100f
+
+        /**
+         * The platform's fused provider is public from Android 12. On Android 11 it is not part of the
+         * API, so the app asks GPS and network there, which is what fused would have combined anyway.
+         */
+        private val FUSED: String? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) LocationManager.FUSED_PROVIDER else null
     }
 }

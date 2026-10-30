@@ -182,7 +182,9 @@ chip between shots.
 
 ## Requirements
 
-- Android 13 (API 33) or newer. Developed and tested on a Pixel 7 Pro on Android 17 (API 37).
+- Android 11 (API 30) or newer. Developed and tested on a Pixel 7 Pro on Android 17 (API 37); CI opens
+  the app on an Android 11 emulator, and no physical Android 11 or 12 phone has been tested. Night Sky
+  and Sun AR may run below the display refresh rate on the GPUs of those years.
 - A camera app. Google Camera has a profile; anything else uses the generic one.
 - To build: JDK 21 and an Android SDK with platform **android-37.1** and build-tools 37.
 

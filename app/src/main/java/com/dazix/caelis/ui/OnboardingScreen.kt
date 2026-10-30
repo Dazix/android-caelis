@@ -94,13 +94,16 @@ fun OnboardingScreen(
             onAction = onRequestBatteryExemption,
         )
 
-        PermissionRow(
-            title = stringResource(R.string.onboarding_exact_alarm_title),
-            description = stringResource(R.string.onboarding_exact_alarm_desc),
-            granted = permissions.exactAlarmsAllowed,
-            actionLabel = stringResource(R.string.onboarding_exact_alarm_action),
-            onAction = onOpenExactAlarmSettings,
-        )
+        // Android 11 has no Alarms & reminders switch to send the user to: exact alarms need no grant.
+        if (Permissions.exactAlarmsNeedGrant()) {
+            PermissionRow(
+                title = stringResource(R.string.onboarding_exact_alarm_title),
+                description = stringResource(R.string.onboarding_exact_alarm_desc),
+                granted = permissions.exactAlarmsAllowed,
+                actionLabel = stringResource(R.string.onboarding_exact_alarm_action),
+                onAction = onOpenExactAlarmSettings,
+            )
+        }
 
         SectionCard(title = stringResource(R.string.onboarding_media_title)) {
             Text(

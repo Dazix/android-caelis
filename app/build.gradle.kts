@@ -27,7 +27,7 @@ android {
 
     defaultConfig {
         applicationId = "com.dazix.caelis"
-        minSdk = 33
+        minSdk = 30
         targetSdk = 37
         versionCode = System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 2
         versionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
@@ -100,6 +100,13 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+
+    lint {
+        // NewApi is an error already. InlinedApi is the same mistake with a constant: a permission or
+        // flag from a newer Android compiles into the APK and silently answers "denied" or "no" on
+        // Android 11 and 12, which no emulator run of a newer image would ever show.
+        error += "InlinedApi"
     }
 }
 

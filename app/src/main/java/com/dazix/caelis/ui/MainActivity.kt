@@ -200,10 +200,14 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
                             homeScrollState = homeScrollState,
                             startCalibration = startCalibration,
                             onRequestNotifications = {
-                                notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    context.launchSafely(Permissions.notificationSettings(context))
+                                }
                             },
                             onRequestMediaPermission = {
-                                mediaLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                                mediaLauncher.launch(Permissions.photos())
                             },
                         )
                     }

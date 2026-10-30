@@ -1,12 +1,12 @@
 package com.dazix.caelis.verify
 
-import android.Manifest
 import android.content.ContentResolver
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
+import com.dazix.caelis.ui.Permissions
 
 /**
  * Answers one question: did the *camera app* save a new frame since the baseline taken just before the
@@ -21,7 +21,8 @@ import android.util.Log
  * [newestToken] before the tap, [hasNewImageSince] after it — did not have to change.
  *
  * ### Degrading
- * Every path degrades silently. Without `READ_MEDIA_IMAGES` (or on any provider error) [available] is
+ * Every path degrades silently. Without the photos permission (`READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`
+ * below Android 13, see [Permissions.photos]) or on any provider error [available] is
  * false and [newestToken] returns `null`; the engine then skips verification entirely rather than
  * warning about a photo it simply cannot see. Verification never aborts a session — at worst the engine
  * re-taps once and carries on with a warning. What it must never do is invent a success, so anything
@@ -50,7 +51,7 @@ class CaptureVerifier(context: Context, expectedPackage: String? = null) {
 
     /** True when MediaStore images can actually be read right now. */
     fun available(): Boolean =
-        context.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) ==
+        context.checkSelfPermission(Permissions.photos()) ==
             PackageManager.PERMISSION_GRANTED
 
     /**

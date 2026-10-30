@@ -46,7 +46,7 @@ The `scripts/*.sh` harness sources `scripts/env.sh` itself, so it needs none of 
 and it aborts rather than guessing when a value is missing.
 
 AGP 9.3.1 · Gradle 9.5.0 · Kotlin 2.3.20 · compileSdk 37 (`compileSdkMinor = 1`, platform
-`android-37.1`) · minSdk 33 · targetSdk 37 · JVM target 17.
+`android-37.1`) · minSdk 30 · targetSdk 37 · JVM target 17.
 
 Filament 1.77.1 (raw, no SceneView) draws both AR skies and the camera picture. `com.google.ar:core`
 1.56.0 is a dependency, but nothing in the app starts it unless the user has turned ARCore on in
@@ -71,8 +71,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build (328 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (640 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level (335 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (641 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1123 JVM tests (328 intervalometer, 640 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1131 JVM tests (335 intervalometer, 641 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -540,6 +540,14 @@ Each of these was found by review or on the device and is now covered by a test.
   `POST_NOTIFICATIONS` is prompted once on first launch and remembered in DataStore
   (`notification_permission_prompted`). The app never nags the user again on subsequent opens
   regardless of whether they accepted or declined.
+- **Below Android 13 the newer permission names do not exist, and checking one answers "denied"
+  forever.** `minSdk` is 30. Photos are `Permissions.photos()` (`READ_EXTERNAL_STORAGE`, capped at
+  `maxSdkVersion="32"`, below 13), notifications below 13 are `areNotificationsEnabled()` and their
+  button opens the app's notification settings, exact alarms need no grant on Android 11 (the row is
+  hidden there), partial photo access exists from 14, the fused location provider from 12 and dynamic
+  colour from 12 (Android 11 gets `FallbackColorSchemes`). Lint has `InlinedApi` as an error so a
+  newer constant cannot slip in, `PermissionsPlatformLevelTest` pins both sides of each level, and the
+  CI job `api30-launch` opens the app on an API 30 emulator (`scripts/ci_launch_smoke.sh`).
 - **AR projections scale immediately on zoom without waiting for camera metadata.** CameraX capture
   results and crop regions lag behind `setZoomRatio` by tens of milliseconds. Decoupling the AR geometry
   scaling via `zoomFactor` computed directly from the requested zoom ensures instant 60/120 Hz response

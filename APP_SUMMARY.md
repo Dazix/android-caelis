@@ -122,7 +122,7 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | **Language & Runtime** | **Kotlin** | `2.3.20` | Modern type-safe language, Coroutines, StateFlow |
 | | **Java / JVM Target** | `17` | Standard Java 17 bytecode target |
-| | **Android SDK** | `compileSdk 37` (Platform 37.1) | `minSdk 33` (Android 13+), `targetSdk 37` (Android 17) |
+| | **Android SDK** | `compileSdk 37` (Platform 37.1) | `minSdk 30` (Android 11+), `targetSdk 37` (Android 17) |
 | **Build System** | **Android Gradle Plugin (AGP)** | `9.3.1` | Built-in Kotlin support in AGP 9 |
 | | **Gradle** | `9.5.0` | Build system with Version Catalogs (`libs.versions.toml`) |
 | **User Interface** | **Jetpack Compose BOM** | `2026.08.00` | Declarative UI toolkit |
