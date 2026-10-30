@@ -46,6 +46,7 @@ case "$TARGET" in
             --tests "com.dazix.caelis.ui.LaunchModeOptionsTest" \
             --tests "com.dazix.caelis.ui.MainViewModelNavigationTest" \
             --tests "com.dazix.caelis.ui.NavigationDestinationTest" \
+            --tests "com.dazix.caelis.ui.PermissionsPlatformLevelTest" \
             --tests "com.dazix.caelis.ui.SetupUiStateTest" \
             --tests "com.dazix.caelis.ui.WaitProgressTest" \
             --rerun-tasks)

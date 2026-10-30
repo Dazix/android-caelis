@@ -17,7 +17,7 @@ import android.os.Build
  * ruins the user's dark adaptation, which is exactly the situation a time-lapse app is used in.
  *
  * The dynamic roles used here (`system_surface_container_high_dark` and friends) exist from API 34.
- * On anything older — the app's `minSdk` is 33 — [FIXED] is used, which is the same hand-picked
+ * On anything older — the app's `minSdk` is 30 — [FIXED] is used, which is the same hand-picked
  * expressive palette the Compose theme falls back to when the device has no dynamic palette.
  */
 internal data class OverlayPalette(

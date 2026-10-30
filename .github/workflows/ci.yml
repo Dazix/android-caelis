@@ -49,6 +49,36 @@ jobs:
             app/build/reports/
           if-no-files-found: warn
 
+  # minSdk is 30 and no one here owns an Android 11 phone. Lint proves no newer API is called; this
+  # proves the app actually opens there (theme, libraries, manifest), on the oldest image it supports.
+  api30-launch:
+    name: launch on Android 11
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Android build environment
+        uses: ./.github/actions/setup-android-env
+
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      # Hardware acceleration for the emulator; without it an API 30 boot takes most of the job.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on an API 30 emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./scripts/ci_launch_smoke.sh app/build/outputs/apk/debug/app-debug.apk
+
   portability:
     name: portability
     runs-on: ubuntu-latest

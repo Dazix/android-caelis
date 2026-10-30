@@ -7,9 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.dazix.caelis.service.ShutterAccessibilityService
 
@@ -57,21 +59,49 @@ object Permissions {
     fun read(context: Context): PermissionState = PermissionState(
         accessibilityEnabled = accessibilityServiceEnabled(context),
         canDrawOverlays = Settings.canDrawOverlays(context),
-        notificationsGranted = granted(context, Manifest.permission.POST_NOTIFICATIONS),
+        notificationsGranted = notificationsGranted(context),
         ignoringBatteryOptimizations = ignoringBatteryOptimizations(context),
         exactAlarmsAllowed = exactAlarmsAllowed(context),
-        readMediaImagesGranted = granted(context, Manifest.permission.READ_MEDIA_IMAGES),
+        readMediaImagesGranted = granted(context, photos()),
         readMediaPartialGranted = partialPhotoAccess(context),
         installedFromOutsideStore = installedFromOutsideStore(context),
     )
 
     /**
+     * The permission that reads the camera's MediaStore rows. Below Android 13 READ_MEDIA_IMAGES does
+     * not exist, and checking it there answers "denied" forever, which would hide capture verification
+     * from every Android 11 and 12 user however often they granted the dialog.
+     */
+    fun photos(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+
+    /** Whether the notification permission is a runtime dialog at all (Android 13+). */
+    fun notificationsNeedRuntimeGrant(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+    /**
+     * Below Android 13 notifications are on until the user turns them off in the app's settings, and
+     * POST_NOTIFICATIONS is unknown to the platform: checking it there answered "denied" for an app
+     * whose notifications were showing.
+     */
+    private fun notificationsGranted(context: Context): Boolean =
+        if (notificationsNeedRuntimeGrant()) {
+            granted(context, Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
+        }
+
+    /**
      * True while the app has *only* the selected-photos grant. Full access implies it, so the full
-     * grant wins; a platform that does not know the permission answers "denied" and the UI falls
-     * back to the plain "not granted yet" wording.
+     * grant wins. Partial access exists from Android 14; below it there is nothing to ask.
      */
     private fun partialPhotoAccess(context: Context): Boolean =
-        !granted(context, Manifest.permission.READ_MEDIA_IMAGES) &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            !granted(context, Manifest.permission.READ_MEDIA_IMAGES) &&
             granted(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
 
     fun granted(context: Context, permission: String): Boolean =
@@ -101,8 +131,15 @@ object Permissions {
         context.getSystemService(PowerManager::class.java)
             ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
 
+    /** Exact alarms became a grant in Android 12; on Android 11 every app may set them. */
+    fun exactAlarmsNeedGrant(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     private fun exactAlarmsAllowed(context: Context): Boolean =
-        context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: false
+        } else {
+            true
+        }
 
     private fun installedFromOutsideStore(context: Context): Boolean = runCatching {
         val installer = context.packageManager
@@ -126,12 +163,20 @@ object Permissions {
             Uri.fromParts("package", context.packageName, null),
         )
 
-    /** The app's own Alarms & reminders switch. */
+    /**
+     * The app's own Alarms & reminders switch. Android 11 has no such screen (exact alarms need no
+     * grant there, see [exactAlarmsNeedGrant]), so the row that opens it is never offered and this
+     * falls back to the app's info page rather than an intent nothing can resolve.
+     */
     fun exactAlarmSettings(context: Context): Intent =
-        Intent(
-            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-            Uri.fromParts("package", context.packageName, null),
-        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Intent(
+                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.fromParts("package", context.packageName, null),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        } else {
+            appInfo(context)
+        }
 
     /** Where the "Allow restricted settings" menu item lives, for sideloaded builds. */
     fun appInfo(context: Context): Intent =
@@ -139,4 +184,13 @@ object Permissions {
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", context.packageName, null),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * The app's notification switch, for Android 11 and 12, where notifications have no runtime
+     * dialog: the only way to turn them back on is the settings page.
+     */
+    fun notificationSettings(context: Context): Intent =
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }

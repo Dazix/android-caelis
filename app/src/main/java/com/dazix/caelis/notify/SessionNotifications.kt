@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.dazix.caelis.R
 import com.dazix.caelis.data.SessionRepository
 import com.dazix.caelis.domain.SessionSnapshot
@@ -234,7 +235,9 @@ class SessionNotifications(context: Context) {
             addAction(internalAction(ACTION_SUFFIX_STOP))
         }
         runCatching {
-            appContext.registerReceiver(created, filter, Context.RECEIVER_NOT_EXPORTED)
+            ContextCompat.registerReceiver(
+                appContext, created, filter, ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
         }.onSuccess { receiver = created }
     }
 
