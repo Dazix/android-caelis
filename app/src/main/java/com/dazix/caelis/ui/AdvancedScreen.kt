@@ -117,6 +117,15 @@ fun AdvancedScreen(
                 disabledReason = reason(),
                 onCheckedChange = { onChange(settings.copy(dismissPostCaptureUi = it)) },
             )
+
+            // Needs nothing but the gyroscope, so unlike the rows above it is never disabled: a
+            // phone without one simply never warns.
+            SwitchRow(
+                title = stringResource(R.string.advanced_handheld_warning),
+                description = stringResource(R.string.advanced_handheld_warning_desc),
+                checked = settings.handheldWarning,
+                onCheckedChange = { onChange(settings.copy(handheldWarning = it)) },
+            )
         }
 
         // Both of these are carried out by the floating session panel, so they are only available

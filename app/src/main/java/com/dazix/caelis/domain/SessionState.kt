@@ -21,4 +21,11 @@ data class SessionSnapshot(
     val nextShotAtElapsed: Long? = null,
     val lastIntervalMs: Long = 0L,
     val warning: String? = null,
+    /**
+     * The gyroscope says the phone is held in the hand (see
+     * [com.dazix.caelis.domain.stability.HandheldDetector]). A field of its own and not a [warning]:
+     * that slot is overwritten by per-shot warnings and cleared by a resume, while this one lasts
+     * exactly as long as the hand does.
+     */
+    val handheld: Boolean = false,
 )

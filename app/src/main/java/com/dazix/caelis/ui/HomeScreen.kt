@@ -38,6 +38,9 @@ import com.dazix.caelis.R
 import com.dazix.caelis.domain.SessionSnapshot
 import com.dazix.caelis.domain.SessionState
 import com.dazix.caelis.domain.StopReason
+import com.dazix.caelis.domain.stability.HandheldPolicy
+import com.dazix.caelis.domain.stability.HandheldState
+import com.dazix.caelis.overlay.OverlayPolicy
 import kotlinx.coroutines.delay
 
 @Composable
@@ -47,6 +50,7 @@ fun HomeScreen(
     calibrated: Boolean,
     blockers: List<StartBlocker>,
     serviceUnavailable: Boolean,
+    handheldWarning: Boolean,
     scrollState: ScrollState = rememberScrollState(),
     onStart: () -> Unit,
     onStop: () -> Unit,
@@ -62,6 +66,19 @@ fun HomeScreen(
         snapshot.state is SessionState.WaitingToStart ||
         snapshot.state is SessionState.Paused
     val paused = snapshot.state is SessionState.Paused
+
+    // The "phone in hand" check before Start: a live line under the session card, and a question
+    // when Start is pressed from the hand. Once the session runs, the engine watches instead.
+    val timelapse = setup.mode == ModeChoice.TIMELAPSE
+    val handheldBeforeStart by rememberHandheldState(
+        HandheldPolicy.watchBeforeStart(active, timelapse, handheldWarning),
+    )
+    val startGuarded = rememberHandheldStartGuard(
+        state = handheldBeforeStart,
+        timelapse = timelapse,
+        enabled = handheldWarning,
+        onStart = onStart,
+    )
 
     var savedScrollOffset by rememberSaveable { mutableIntStateOf(0) }
 
@@ -99,7 +116,7 @@ fun HomeScreen(
                             if (active) R.string.home_stop else R.string.home_start
                         ),
                         icon = if (active) AppIcons.Stop else AppIcons.Play,
-                        onClick = if (active) onStop else onStart,
+                        onClick = if (active) onStop else startGuarded,
                         enabled = active || blockers.isEmpty(),
                         destructive = active,
                     )
@@ -131,7 +148,12 @@ fun HomeScreen(
             }
         },
     ) {
-        SessionStatusCard(snapshot = snapshot, setup = setup, active = active)
+        SessionStatusCard(
+            snapshot = snapshot,
+            setup = setup,
+            active = active,
+            handheldBeforeStart = handheldBeforeStart,
+        )
 
         if (serviceUnavailable) {
             SectionCard(tone = CardTone.WARNING) {
@@ -265,7 +287,12 @@ fun HomeScreen(
  * biggest thing on the screen and everything else is arranged around it.
  */
 @Composable
-private fun SessionStatusCard(snapshot: SessionSnapshot, setup: SetupUiState, active: Boolean) {
+private fun SessionStatusCard(
+    snapshot: SessionSnapshot,
+    setup: SetupUiState,
+    active: Boolean,
+    handheldBeforeStart: HandheldState,
+) {
     val now by rememberElapsedRealtime(active)
     val state = snapshot.state
     SectionCard(tone = if (active) CardTone.ACCENT else CardTone.NEUTRAL) {
@@ -330,7 +357,7 @@ private fun SessionStatusCard(snapshot: SessionSnapshot, setup: SetupUiState, ac
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        val warning = snapshot.warning
+        val warning = OverlayPolicy.warningText(snapshot, stringResource(R.string.session_warning_handheld))
         if (warning != null) {
             Text(
                 text = warning,
@@ -338,6 +365,8 @@ private fun SessionStatusCard(snapshot: SessionSnapshot, setup: SetupUiState, ac
                 color = MaterialTheme.colorScheme.error,
             )
         }
+        // Before Start only; once a session runs, the line above carries the same news.
+        if (!active) HandheldStatusRow(handheldBeforeStart)
     }
 }
 

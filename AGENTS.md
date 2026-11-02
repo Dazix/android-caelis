@@ -71,9 +71,9 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level (336 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection (355 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (653 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (333 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (337 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1151 JVM tests (336 intervalometer, 653 solar, horizon & pose, 333 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1174 JVM tests (355 intervalometer, 653 solar, horizon & pose, 337 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `domain.stability.*` is in `caelis`; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -105,6 +105,7 @@ a session from the shell.
 | Package | Rule |
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
+| `domain/stability/` | Pure Kotlin "phone in hand, not on a tripod" check: `HandheldDetector` (gyroscope over a 3 s window) and `HandheldPolicy` (when it runs and when Start asks first). |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, the peak model and `.peaks` tile codec (`HorizonLandmark`, `LandmarkTileCodec`) and which peaks stand on the skyline (`LandmarkVisibility`), ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/arframe/` | Pure Kotlin geometry and decisions behind the Filament sky and the pose hand-over, no Android imports and no ARCore types: frames and projection (`SkyFrameMath`, `SkyProjector`, `SkyQuadMath`, `AltAzGridBuilder`, `HorizonMeshBuilder`, `HorizonMorph`), the camera picture's crop (`CameraBackgroundUv`), the instant the overlay is drawn at (`PoseTimestampPolicy`), heading (`HeadingLock`, `YawOffset`), and ARCore's side: `ArWorldAlignment`, `ArYawEstimator` + `HeadingFusion`, `RealignTrigger`, `ArCoreFov`, `LumaRotation`, `PoseArbiter` (which tracker draws) and `CameraOwnerPolicy` (which client owns the camera). Tested by both the `solar` and the `nightsky` suite. |
@@ -119,7 +120,7 @@ a session from the shell.
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
-| `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`). |
+| `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`), and the gyroscope behind the "phone in hand" warning (`MotionMonitor`, behind the `MotionSource` seam). |
 | `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`); Settings holds the ARCore and Geospatial switches and their disclosure dialogs. `rememberSkyPoseRig` (`SkyPoseRigState.kt`) wires a `SkyPoseRig` to an AR screen's lifecycle and to the consent flow, and `PoseSourceChip` says which tracker is drawing (shown only once the user has consented to ARCore). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/horizon/` | Offline terrain management screen (`OfflineTerrainScreen`) and the terrain metrics debug HUD (`TerrainDebugOverlay`). The standalone Terrain AR screen is gone: the terrain skyline is drawn by Sun AR and Night Sky. |
@@ -336,6 +337,17 @@ Each of these was found by review or on the device and is now covered by a test.
   is waiting or paused still stops on battery, storage or duration.
 - **`FLAG_KEEP_SCREEN_ON` belongs to a session that is actually shooting**, never to a paused or waiting
   one.
+- **"Phone in hand" only ever warns, and only for a time-lapse.** `HandheldDetector` decides from the
+  *fraction* of gyroscope samples above 0.3 °/s over 3 s (hand ≥ 60 %, tripod ≤ 30 %, hysteresis between),
+  never from the RMS or the peak: the shutter tap on a tripod is one short spike, and a peak detector
+  would warn on every shot. An incomplete window, a gap over 500 ms or no gyroscope is `UNKNOWN`, which
+  shows nothing and never asks. The engine writes `SessionSnapshot.handheld`, a field of its own and not
+  `warning` (that slot is overwritten per shot and cleared by a resume); `OverlayPolicy.warningText`
+  lets the session's own warning outrank it. It watches while counting down and shooting, not while
+  paused; the home screen watches before Start and asks "start anyway?" on a positive answer only. It
+  never pauses or delays a shot: a hyperlapse from the hand is a real use, and the switch in Advanced
+  (`handheldWarning`, default on) is for it. The thresholds come from synthetic traces; `CaelisMotion`
+  in debug builds logs the fraction and median rate they are tuned against on the device.
 - **No `startForeground` on the accessibility service.** It has no foreground service type and the
   manifest declares no `FOREGROUND_SERVICE`; the notification goes through `NotificationManager`.
 - **`SCHEDULE_EXACT_ALARM`, never `USE_EXACT_ALARM`.** Google Play reserves `USE_EXACT_ALARM` for alarm

@@ -23,7 +23,11 @@ import com.dazix.caelis.domain.SessionState
 import com.dazix.caelis.domain.StopReason
 import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.domain.TriggerMode
+import com.dazix.caelis.domain.stability.HandheldPolicy
+import com.dazix.caelis.domain.stability.HandheldState
 import com.dazix.caelis.monitor.BatteryMonitor
+import com.dazix.caelis.monitor.MotionMonitor
+import com.dazix.caelis.monitor.MotionSource
 import com.dazix.caelis.monitor.StorageMonitor
 import com.dazix.caelis.verify.CaptureVerifier
 import kotlinx.coroutines.CoroutineScope
@@ -89,6 +93,7 @@ class SessionEngine(
     private val verifier: CaptureVerifier = CaptureVerifier(service),
     private val settings: SettingsStore = SettingsStore(service),
     private val runState: RunStateStore = RunStateStore(service),
+    private val motion: MotionSource = MotionMonitor(service),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
 
@@ -165,6 +170,9 @@ class SessionEngine(
     private var verifyDeadlineElapsed = 0L
     private var transientWarning = false
     private var awaitingShutterResult = false
+
+    /** Whether [motion] is listening; see [syncMotionWatch]. */
+    private var motionWatching = false
 
     /**
      * The shot currently between [onShotDue] and [finishShot], or null when none is in flight.
@@ -280,6 +288,7 @@ class SessionEngine(
         // what we want: the load latency cannot move shot 0's absolute target.
         if (calibratedTarget == null) scope.launch { loadStoredTarget(effective) }
 
+        syncMotionWatch()
         scheduleGuardTick()
         scheduleShot(0)
     }
@@ -394,6 +403,7 @@ class SessionEngine(
         val wantedPackage = SessionTiming.foregroundPackageFor(effective.mode)
         if (!paused && wantedPackage != null) launchTargetApp(wantedPackage)
 
+        syncMotionWatch()
         scheduleGuardTick()
         if (!paused) scheduleShot(nextShotIndex)
         return true
@@ -440,6 +450,7 @@ class SessionEngine(
                 nextShotAtElapsed = null,
             )
         }
+        syncMotionWatch()
     }
 
     fun pause() {
@@ -453,6 +464,7 @@ class SessionEngine(
         releaseWakeLock()
         runState.recordProgress(currentProgress())
         SessionRepository.update { it.copy(state = SessionState.Paused, nextShotAtElapsed = null) }
+        syncMotionWatch()
     }
 
     /**
@@ -466,6 +478,7 @@ class SessionEngine(
         autoPauseReason = null
         runState.recordProgress(currentProgress())
         SessionRepository.update { it.copy(state = SessionState.Running, warning = null) }
+        syncMotionWatch()
         scheduleGuardTick()
         scheduleShot(attemptedShots)
     }
@@ -513,6 +526,8 @@ class SessionEngine(
         cancelTimers()
         handler.removeCallbacksAndMessages(guardToken)
         releaseWakeLock()
+        motionWatching = false
+        motion.stop()
         scope.cancel()
     }
 
@@ -1098,7 +1113,36 @@ class SessionEngine(
                 warning = message,
             )
         }
+        syncMotionWatch()
         scheduleGuardTick()
+    }
+
+    /**
+     * Starts or stops the "phone in hand" watch so it runs exactly while [HandheldPolicy] wants it,
+     * and drops a raised flag the moment it stops — a paused or finished session must not keep
+     * telling the user to put the phone down. Called after every state change above; the
+     * WaitingToStart -> Running step needs no call because both states want the watch.
+     *
+     * It only ever writes [SessionSnapshot.handheld]: the warning never pauses, stops or delays a shot.
+     */
+    private fun syncMotionWatch() {
+        val want = running && motion.isAvailable && HandheldPolicy.watchDuringSession(
+            SessionRepository.snapshot.value.state,
+            config?.mode,
+            advanced.handheldWarning,
+        )
+        if (want == motionWatching) return
+        motionWatching = want
+        if (want) {
+            motion.start { state ->
+                if (!motionWatching) return@start
+                val handheld = state == HandheldState.HANDHELD
+                SessionRepository.update { if (it.handheld == handheld) it else it.copy(handheld = handheld) }
+            }
+        } else {
+            motion.stop()
+            SessionRepository.update { if (it.handheld) it.copy(handheld = false) else it }
+        }
     }
 
     // ---- advanced pre-shot setup ---------------------------------------------------------------

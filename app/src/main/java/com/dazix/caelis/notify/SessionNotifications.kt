@@ -19,6 +19,7 @@ import com.dazix.caelis.R
 import com.dazix.caelis.data.SessionRepository
 import com.dazix.caelis.domain.SessionSnapshot
 import com.dazix.caelis.domain.SessionState
+import com.dazix.caelis.overlay.OverlayPolicy
 import java.util.Locale
 
 /**
@@ -310,7 +311,10 @@ class SessionNotifications(context: Context) {
 
         contentIntent()?.let { builder.setContentIntent(it) }
 
-        val warning = snapshot.warning
+        val warning = OverlayPolicy.warningText(
+            snapshot,
+            appContext.getString(R.string.session_warning_handheld),
+        )
         if (!warning.isNullOrBlank()) {
             builder.setSubText(warning)
             builder.setStyle(

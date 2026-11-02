@@ -373,7 +373,10 @@ class OverlayController(context: Context) {
 
         countdown.text = countdownTextFor(snapshot)
 
-        val warningText = snapshot.warning
+        val warningText = OverlayPolicy.warningText(
+            snapshot,
+            appContext.getString(R.string.session_warning_handheld),
+        )
         if (warningText.isNullOrBlank()) {
             warning.visibility = View.GONE
         } else {

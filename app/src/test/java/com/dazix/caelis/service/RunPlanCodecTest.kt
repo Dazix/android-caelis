@@ -54,6 +54,8 @@ class RunPlanCodecTest {
                 dismissPostCaptureUi = true,
                 keepScreenOn = true,
                 dimOverlay = true,
+                // Off, because on is the default and would survive a field that was never encoded.
+                handheldWarning = false,
             ),
             sessionOriginElapsed = 918_273_645L,
             calibratedTarget = TapTarget(0.5f, 0.91f),
@@ -156,6 +158,25 @@ class RunPlanCodecTest {
             "no interval",
             RunPlanCodec.decode(fields.toMutableList().also { it[3] = "0" }.joinToString(SEP.toString())),
         )
+    }
+
+    /**
+     * A run started by the version before `handheldWarning` existed is still live after the update
+     * installs: its record has one field less and must resume, with the warning at its default, rather
+     * than being written off as unreadable.
+     */
+    @Test
+    fun `a record from before the handheld flag still resumes`() {
+        val plan = RunPlan(
+            config = SessionConfig(TriggerMode.Timelapse("com.example.cam"), 5_000L),
+            advanced = AdvancedSettings(dimOverlay = true, handheldWarning = false),
+            sessionOriginElapsed = 9L,
+        )
+        val older = RunPlanCodec.encode(plan).split(SEP).dropLast(1).joinToString(SEP.toString())
+
+        val restored = RunPlanCodec.decode(older)
+
+        assertEquals(plan.copy(advanced = plan.advanced.copy(handheldWarning = true)), restored)
     }
 
     /**

@@ -3,6 +3,7 @@
 <resources>
     <string name="session_warning_wrong_app">Paused: %1$s is not the app in front. Open it again to carry on.</string>
     <string name="session_warning_screen_off">Paused: the screen is off or locked, so nothing can be tapped. Unlock the phone and the session carries on.</string>
+    <string name="session_warning_handheld">The phone is moving like it is held in the hand. For a time-lapse, put it on a tripod or a steady surface.</string>
     <string name="session_warning_no_shutter_found">No shutter button found and no tap point calibrated.</string>
     <string name="session_warning_tap_failed">The shutter tap did not go through.</string>
     <string name="session_warning_capture_unverified">No new photo appeared after the last shot.</string>

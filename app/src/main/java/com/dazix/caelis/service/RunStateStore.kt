@@ -285,7 +285,10 @@ internal object RunPlanCodec {
 
     private const val VERSION = "v1"
     private const val SEP = ''
-    private const val FIELDS = 34
+    private const val FIELDS = 35
+
+    /** A record written before `handheldWarning` existed; it resumes with the default. */
+    private const val FIELDS_BEFORE_HANDHELD = 34
 
     private const val MODE_TIMELAPSE = "T"
     private const val MODE_PERIODIC_TAP = "P"
@@ -335,12 +338,14 @@ internal object RunPlanCodec {
             encFloat(calibrated?.heightFraction),
             encBool(calibrated?.jitter ?: false),
             plan.calibratedRotation.toString(),
+            encBool(advanced.handheldWarning),
         ).joinToString(SEP.toString())
     }
 
     fun decode(encoded: String?): RunPlan? = runCatching {
         val f = (encoded ?: return@runCatching null).split(SEP)
-        if (f.size != FIELDS || f[0] != VERSION) return@runCatching null
+        if (f.size != FIELDS && f.size != FIELDS_BEFORE_HANDHELD) return@runCatching null
+        if (f[0] != VERSION) return@runCatching null
 
         val targetPackage = decString(f[2])
         val mode = when (f[1]) {
@@ -373,6 +378,7 @@ internal object RunPlanCodec {
                 dismissPostCaptureUi = decBool(f[24]),
                 keepScreenOn = decBool(f[25]),
                 dimOverlay = decBool(f[26]),
+                handheldWarning = f.getOrNull(34)?.let(::decBool) ?: AdvancedSettings().handheldWarning,
             ),
             sessionOriginElapsed = f[27].toLongOrNull() ?: return@runCatching null,
             calibratedTarget = decTarget(f[28], f[29], f[30], f[31], f[32]),

@@ -50,6 +50,12 @@
     <!-- Home -->
     <string name="home_title">Intervalometer</string>
     <string name="home_start">Start</string>
+    <string name="home_handheld_steady">The phone is steady</string>
+    <string name="home_handheld_detected">The phone seems to be held in the hand</string>
+    <string name="home_handheld_dialog_title">Phone in the hand?</string>
+    <string name="home_handheld_dialog_body">For the last few seconds the phone has moved the way a hand moves. A time-lapse shot from the hand jumps from frame to frame; put the phone on a tripod or a steady surface first.</string>
+    <string name="home_handheld_dialog_start_anyway">Start anyway</string>
+    <string name="home_handheld_dialog_cancel">Cancel</string>
     <string name="home_stop">Stop</string>
     <string name="home_pause">Pause</string>
     <string name="home_resume">Resume</string>
@@ -195,6 +201,8 @@
     <string name="advanced_self_timer_desc">Checks the camera app\'s timer setting before starting, because a self-timer would offset every frame.</string>
     <string name="advanced_dismiss_post_capture">Dismiss post-capture screens</string>
     <string name="advanced_dismiss_post_capture_desc">Closes review or share screens that some camera apps show after a shot and that would swallow the next tap.</string>
+    <string name="advanced_handheld_warning">Warn when the phone is in the hand</string>
+    <string name="advanced_handheld_warning_desc">Watches the gyroscope before and during a time-lapse and warns when the phone moves like it is held instead of standing on a tripod. It only warns; shooting carries on. Turn it off for a hyperlapse shot from the hand.</string>
     <string name="advanced_session_screen">Screen during a session</string>
     <string name="advanced_keep_screen_on">Keep the screen on while shooting</string>
     <string name="advanced_keep_screen_on_desc">Holds the display awake for as long as the session is actually shooting, because most camera apps stop previewing — and stop taking photos — once the screen goes off. It costs battery and leaves the screen lit for the whole run.</string>

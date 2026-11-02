@@ -301,6 +301,7 @@ private fun CaelisScreen(
             calibrated = calibration != null,
             blockers = blockers,
             serviceUnavailable = serviceUnavailable,
+            handheldWarning = advanced.handheldWarning,
             scrollState = homeScrollState,
             onStart = viewModel::start,
             onStop = viewModel::stop,
