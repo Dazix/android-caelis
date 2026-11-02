@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0E1433; }
+  #stage { position: relative; width: 1024px; height: 500px; overflow: hidden; font-family: 'Manrope', 'Ubuntu', sans-serif; }
+  svg#scene { position: absolute; inset: 0; }
+  #copy { position: absolute; left: 64px; top: 0; height: 500px; width: 470px; display: flex; flex-direction: column; justify-content: center; }
+  #copy img { height: 62px; width: auto; display: block; align-self: flex-start; margin-left: -5px; }
+  #headline { margin-top: 30px; color: #F2EFE6; font-weight: 500; font-size: 31px; line-height: 1.2; letter-spacing: -0.4px; }
+  #headline em { font-style: normal; color: #FFB547; }
+  #sub { margin-top: 16px; color: #B9BFE0; font-weight: 400; font-size: 15.5px; letter-spacing: 1.6px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="scene" width="1024" height="500" viewBox="0 0 1024 500" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="sky" cx="78%" cy="62%" r="85%">
+        <stop offset="0" stop-color="#2A2F66"/>
+        <stop offset="0.35" stop-color="#18205A"/>
+        <stop offset="0.7" stop-color="#0E1433"/>
+        <stop offset="1" stop-color="#090D24"/>
+      </radialGradient>
+      <radialGradient id="dusk" cx="80%" cy="78%" r="38%">
+        <stop offset="0" stop-color="#FFB547" stop-opacity="0.32"/>
+        <stop offset="0.45" stop-color="#E8920A" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#E8920A" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="sunGlow" r="50%">
+        <stop offset="0" stop-color="#FFE2A8" stop-opacity="0.9"/>
+        <stop offset="0.25" stop-color="#FFB547" stop-opacity="0.45"/>
+        <stop offset="1" stop-color="#FFB547" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="leftFade" x1="0" x2="1">
+        <stop offset="0" stop-color="#0B1030" stop-opacity="0.92"/>
+        <stop offset="0.38" stop-color="#0B1030" stop-opacity="0.55"/>
+        <stop offset="0.6" stop-color="#0B1030" stop-opacity="0"/>
+      </linearGradient>
+      <filter id="blur18" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+      <filter id="blur2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4"/></filter>
+    </defs>
+    <rect width="1024" height="500" fill="url(#sky)"/>
+    <rect width="1024" height="500" fill="url(#dusk)"/>
+    <g id="milky" filter="url(#blur18)" opacity="0.5"></g>
+    <g id="stars"></g>
+    <g id="grid"></g>
+    <g id="constellation"></g>
+    <g id="arc"></g>
+    <g id="ridges"></g>
+    <g id="marks"></g>
+    <rect width="1024" height="500" fill="url(#leftFade)"/>
+    <g id="viewfinder" fill="none" stroke="#F2EFE6" stroke-opacity="0.55" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></g>
+  </svg>
+  <div id="copy">
+    <img src="../logo/caelis-lockup-horizontal-dark.svg" alt="">
+    <div id="headline"></div>
+    <div id="sub"></div>
+  </div>
+</div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const lang = new URLSearchParams(location.search).get('lang') || 'cs';
+const T = {
+  cs: { head: 'Časosběr ve vašem fotoaparátu.<br><em>Obloha</em> nad skutečnou krajinou.', sub: 'Slunce · Měsíc · hvězdy · horizont', set: 'západ 18:42', peak: 'Sněžka · 1603 m', con: 'Velký vůz' },
+  en: { head: 'Time-lapse in your own camera.<br><em>The sky</em> over the real landscape.', sub: 'Sun · Moon · stars · horizon', set: 'sets 18:42', peak: 'Sněžka · 1603 m', con: 'Big Dipper' }
+}[lang];
+document.getElementById('headline').innerHTML = T.head;
+document.getElementById('sub').textContent = T.sub;
+
+function el(parent, name, attrs, text) {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text) e.textContent = text;
+  document.getElementById(parent).appendChild(e);
+  return e;
+}
+let seed = 20261023;
+function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+
+// Ridges: far one lighter, near one darker; the near one carries the labelled peak.
+function farRidge(x) { return 392 - 26 * Math.sin(x / 95 + 0.6) - 14 * Math.sin(x / 41 + 2.1) - 6 * Math.sin(x / 17); }
+const PEAK_X = 850;
+function nearRidge(x) {
+  const peak = 118 * Math.exp(-Math.pow((x - PEAK_X) / 70, 2));
+  const shoulder = 46 * Math.exp(-Math.pow((x - 650) / 90, 2));
+  return 462 - peak - shoulder - 9 * Math.sin(x / 33 + 1.3) - 5 * Math.sin(x / 13 + 0.4) - 3 * Math.sin(x / 6.1);
+}
+function ridgePath(f) {
+  let d = 'M0 500L0 ' + f(0).toFixed(1);
+  for (let x = 0; x <= 1024; x += 4) d += 'L' + x + ' ' + f(x).toFixed(1);
+  return d + 'L1024 500Z';
+}
+el('ridges', 'path', { d: ridgePath(farRidge), fill: '#1C2358' });
+el('ridges', 'path', { d: ridgePath(farRidge), fill: 'none', stroke: '#FFB547', 'stroke-opacity': 0.18, 'stroke-width': 1.2 });
+el('ridges', 'path', { d: ridgePath(nearRidge), fill: '#080B1F' });
+// The computed skyline as the app draws it: a thin bright polyline on the terrain.
+let sky = '';
+for (let x = 0; x <= 1024; x += 4) sky += (x ? 'L' : 'M') + x + ' ' + nearRidge(x).toFixed(1);
+el('ridges', 'path', { d: sky, fill: 'none', stroke: '#F2EFE6', 'stroke-opacity': 0.75, 'stroke-width': 1.6, 'stroke-linejoin': 'round' });
+
+// Milky Way: a soft diagonal band of overlapping blobs.
+for (let i = 0; i < 26; i++) {
+  const t = i / 25, x = 420 + t * 620, y = 40 + t * 300 + (rnd() - 0.5) * 40;
+  el('milky', 'ellipse', { cx: x, cy: y, rx: 60 + rnd() * 50, ry: 24 + rnd() * 20, fill: i % 3 ? '#8E96D6' : '#C9B8E8', opacity: 0.10 + rnd() * 0.08, transform: `rotate(28 ${x} ${y})` });
+}
+
+// Stars: denser along the band and towards the right; none under the ridges.
+for (let i = 0; i < 420; i++) {
+  let x = rnd() * 1024, y = rnd() * 500;
+  if (rnd() < 0.45) { const t = rnd(); x = 420 + t * 620 + (rnd() - 0.5) * 120; y = 40 + t * 300 + (rnd() - 0.5) * 90; }
+  if (y > Math.min(farRidge(x), nearRidge(x)) - 4) continue;
+  if (x < 470 && rnd() < 0.6) continue;
+  const m = Math.pow(rnd(), 3.2);
+  const r = 0.35 + m * 1.6;
+  const warm = rnd() < 0.12, cool = rnd() < 0.18;
+  el('stars', 'circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: r.toFixed(2), fill: warm ? '#FFD9A0' : cool ? '#CFE0FF' : '#F2EFE6', opacity: (0.35 + m * 0.65).toFixed(2) });
+  if (m > 0.72) el('stars', 'circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: (r * 3.2).toFixed(2), fill: '#F2EFE6', opacity: 0.12, filter: 'url(#blur2)' });
+}
+
+// Faint alt-az grid: two altitude parallels and a few azimuth meridians, as in the AR view.
+for (const cy of [250, 150]) {
+  let d = '';
+  for (let x = 520; x <= 1024; x += 8) d += (x === 520 ? 'M' : 'L') + x + ' ' + (cy + 0.00018 * Math.pow(x - 780, 2)).toFixed(1);
+  el('grid', 'path', { d, fill: 'none', stroke: '#B9BFE0', 'stroke-opacity': 0.13, 'stroke-width': 1, 'stroke-dasharray': '2 6' });
+}
+el('grid', 'text', { x: 1000, y: 246 + 0.00018 * Math.pow(220, 2), fill: '#B9BFE0', 'fill-opacity': 0.45, 'font-size': 11, 'text-anchor': 'end', 'font-family': 'Manrope, Ubuntu, sans-serif' }, '15°');
+el('grid', 'text', { x: 1000, y: 146 + 0.00018 * Math.pow(220, 2), fill: '#B9BFE0', 'fill-opacity': 0.45, 'font-size': 11, 'text-anchor': 'end', 'font-family': 'Manrope, Ubuntu, sans-serif' }, '30°');
+
+// Big Dipper stick figure, upper middle-right.
+const dip = [[560, 70], [612, 62], [655, 80], [690, 104], [745, 98], [760, 140], [702, 146]];
+let dd = '';
+dip.forEach((p, i) => dd += (i ? 'L' : 'M') + p[0] + ' ' + p[1]);
+dd += 'L690 104';
+el('constellation', 'path', { d: dd, fill: 'none', stroke: '#B9BFE0', 'stroke-opacity': 0.5, 'stroke-width': 1.1 });
+dip.forEach(p => {
+  el('constellation', 'circle', { cx: p[0], cy: p[1], r: 2.3, fill: '#F2EFE6' });
+  el('constellation', 'circle', { cx: p[0], cy: p[1], r: 6, fill: '#F2EFE6', opacity: 0.15, filter: 'url(#blur2)' });
+});
+el('constellation', 'text', { x: 770, y: 150, fill: '#B9BFE0', 'fill-opacity': 0.8, 'font-size': 12.5, 'letter-spacing': 0.6, 'font-family': 'Manrope, Ubuntu, sans-serif' }, T.con);
+
+// Sun path: descends from upper left to lower right; solid above the skyline, faint below it.
+function arcPt(t) { return [560 + 260 * t, 105 + 330 * t * t]; }
+let sunT = 0.55;
+let setT = 0;
+for (let t = 0; t <= 1; t += 0.001) { const [x, y] = arcPt(t); if (y >= nearRidge(x)) { setT = t; break; } }
+let above = '', below = '';
+for (let t = 0; t <= 1.0001; t += 0.004) {
+  const [x, y] = arcPt(t);
+  if (t <= setT) above += (above ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+  else below += (below ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+}
+el('arc', 'path', { d: above, fill: 'none', stroke: '#FFB547', 'stroke-width': 2.6, 'stroke-linecap': 'round' });
+el('marks', 'path', { d: 'M' + arcPt(setT).map(v => v.toFixed(1)).join(' ') + below.replace(/^M/, 'L'), fill: 'none', stroke: '#FFB547', 'stroke-opacity': 0.4, 'stroke-width': 2, 'stroke-dasharray': '3 6', 'stroke-linecap': 'round' });
+// Hour dots with labels.
+[[0.12, '16:00'], [0.35, '17:00'], [0.74, '18:00']].forEach(([t, s]) => {
+  const [x, y] = arcPt(t);
+  if (t > setT) return;
+  el('arc', 'circle', { cx: x, cy: y, r: 4.2, fill: '#0E1433', stroke: '#FFB547', 'stroke-width': 2 });
+  el('arc', 'text', { x: x - 12, y: y + 4, fill: '#FFD9A0', 'font-size': 12, 'text-anchor': 'end', 'font-family': 'Manrope, Ubuntu, sans-serif', 'font-weight': 500 }, s);
+});
+// Sun disc on the arc.
+const [sx, sy] = arcPt(sunT);
+el('arc', 'circle', { cx: sx, cy: sy, r: 44, fill: 'url(#sunGlow)' });
+el('arc', 'circle', { cx: sx, cy: sy, r: 11, fill: '#FFE2A8' });
+el('arc', 'circle', { cx: sx, cy: sy, r: 11, fill: 'none', stroke: '#FFB547', 'stroke-width': 2 });
+
+// Set point on the skyline with its time pill.
+const [px, py] = arcPt(setT);
+el('marks', 'circle', { cx: px, cy: py, r: 5, fill: '#FFB547' });
+el('marks', 'circle', { cx: px, cy: py, r: 10, fill: 'none', stroke: '#FFB547', 'stroke-opacity': 0.5, 'stroke-width': 1.5 });
+const pill = el('marks', 'g', {});
+const pw = lang === 'cs' ? 96 : 86;
+pill.setAttribute('transform', `translate(${px - pw - 16} ${py + 14})`);
+const r1 = document.createElementNS(NS, 'rect');
+Object.entries({ width: pw, height: 24, rx: 12, fill: '#FFB547' }).forEach(([k, v]) => r1.setAttribute(k, v));
+pill.appendChild(r1);
+const t1 = document.createElementNS(NS, 'text');
+Object.entries({ x: pw / 2, y: 16.5, fill: '#0E1433', 'font-size': 12.5, 'font-weight': 600, 'text-anchor': 'middle', 'font-family': 'Manrope, Ubuntu, sans-serif' }).forEach(([k, v]) => t1.setAttribute(k, v));
+t1.textContent = T.set;
+pill.appendChild(t1);
+
+// Peak label with its tick, as the app labels a summit on the skyline.
+const peakY = nearRidge(PEAK_X);
+el('marks', 'line', { x1: PEAK_X, y1: peakY - 6, x2: PEAK_X, y2: peakY - 26, stroke: '#F2EFE6', 'stroke-opacity': 0.8, 'stroke-width': 1.3 });
+el('marks', 'text', { x: PEAK_X, y: peakY - 33, fill: '#F2EFE6', 'font-size': 13, 'font-weight': 500, 'text-anchor': 'middle', 'letter-spacing': 0.2, 'font-family': 'Manrope, Ubuntu, sans-serif' }, T.peak);
+
+// Viewfinder brackets around the scene, echoing the logo.
+const vx0 = 528, vy0 = 36, vx1 = 990, vy1 = 464, L = 26;
+[`M${vx0 + L} ${vy0}H${vx0}V${vy0 + L}`, `M${vx1 - L} ${vy0}H${vx1}V${vy0 + L}`, `M${vx0 + L} ${vy1}H${vx0}V${vy1 - L}`, `M${vx1 - L} ${vy1}H${vx1}V${vy1 - L}`]
+  .forEach(d => el('viewfinder', 'path', { d }));
+</script>
+</body>
+</html>

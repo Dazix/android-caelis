@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0E1433; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; font-family: 'Manrope', 'Ubuntu', sans-serif; }
+  svg#bg { position: absolute; inset: 0; }
+  #caption { position: absolute; left: 90px; right: 90px; top: 92px; height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+  #head { color: #F2EFE6; font-weight: 600; font-size: 60px; line-height: 1.14; letter-spacing: -0.8px; }
+  #head em { font-style: normal; color: #FFB547; }
+  #sub { margin-top: 20px; color: #B9BFE0; font-weight: 500; font-size: 30px; line-height: 1.3; }
+  #shot { position: absolute; left: 130px; top: 380px; width: 820px; height: 1480px; border-radius: 48px; overflow: hidden;
+          box-shadow: 0 0 0 2px rgba(242, 239, 230, 0.16), 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 120px rgba(255, 181, 71, 0.08); background: #000; }
+  #shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* A screen cut mid-scroll fades out instead of ending on half a control. */
+  #shot.cut::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 220px; background: linear-gradient(rgba(19, 19, 22, 0), rgba(19, 19, 22, 1) 85%); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="bg" width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="sky" cx="50%" cy="78%" r="80%">
+        <stop offset="0" stop-color="#262C63"/>
+        <stop offset="0.45" stop-color="#151C4E"/>
+        <stop offset="1" stop-color="#090D24"/>
+      </radialGradient>
+      <radialGradient id="dusk" cx="50%" cy="100%" r="55%">
+        <stop offset="0" stop-color="#FFB547" stop-opacity="0.22"/>
+        <stop offset="0.5" stop-color="#E8920A" stop-opacity="0.06"/>
+        <stop offset="1" stop-color="#E8920A" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="1080" height="1920" fill="url(#sky)"/>
+    <rect width="1080" height="1920" fill="url(#dusk)"/>
+    <g id="stars"></g>
+  </svg>
+  <div id="caption"><div id="head"></div><div id="sub"></div></div>
+  <div id="shot"><img id="img" alt=""></div>
+</div>
+<script>
+// Each shot: source screenshot (1080 x ~2340) and which edge of it the 820 x 1480 window keeps.
+// AR screens keep the bottom: their top bar shows the user's coordinates and transient banners.
+const SHOTS = [
+  { src: 'raw/night-sky-cygnus.png', pos: 'bottom',
+    cs: ['Hvězdy přesně tam,<br>kde <em>svítí</em>', '88 souhvězdí, planety a Messierovy objekty v rozšířené realitě'],
+    en: ['Stars right where<br>they <em>shine</em>', '88 constellations, planets and Messier objects in AR'] },
+  { src: 'raw/night-sky-pegasus.png', pos: 'bottom',
+    cs: ['<em>Skutečný</em> horizont<br>s názvy vrcholů', 'Terén z výškového modelu, funguje i bez signálu'],
+    en: ['The <em>real</em> horizon,<br>with peak names', 'Terrain from an elevation model, works with no signal'] },
+  { src: '../../docs/screenshots/09_sun_ar_trajectory.png', pos: 'bottom',
+    cs: ['Kudy půjde <em>Slunce</em><br>a kdy zapadne', 'Dráha Slunce a Měsíce přímo v obraze kamery'],
+    en: ['Where the <em>Sun</em> goes<br>and when it sets', 'Sun and Moon paths over the live camera view'] },
+  { src: '../../docs/screenshots/03_main_active_dark.png', pos: 'bottom',
+    cs: ['Časosběr ve vašem<br><em>fotoaparátu</em>', 'Každý snímek s HDR+, nočním i astro režimem'],
+    en: ['Time-lapse in your<br>own <em>camera app</em>', 'Every frame keeps HDR+, Night Sight and astro modes'] },
+  { src: '../../docs/screenshots/05_ramp_screen.png', pos: 'top',
+    cs: ['Plynulý <em>ramping</em><br>intervalu', 'Lineárně i exponenciálně – ideální na západ slunce'],
+    en: ['Smooth interval<br><em>ramping</em>', 'Linear or exponential – made for sunsets'] },
+  { src: '../../docs/screenshots/04_setup_screen.png', pos: 'top',
+    cs: ['Časosběr i <em>klepání</em><br>v jakékoli aplikaci', 'Přesný rozvrh bez driftu, automatické zastavení'],
+    en: ['Time-lapse or <em>taps</em><br>in any app', 'Drift-free schedule and automatic stop'] },
+];
+const q = new URLSearchParams(location.search);
+const shot = SHOTS[+(q.get('i') || 0)];
+const lang = q.get('lang') || 'cs';
+document.getElementById('head').innerHTML = shot[lang][0];
+document.getElementById('sub').textContent = shot[lang][1];
+const img = document.getElementById('img');
+img.src = shot.src;
+img.style.objectPosition = '50% ' + (shot.pos === 'top' ? '0%' : '100%');
+if (shot.pos === 'top') document.getElementById('shot').classList.add('cut');
+
+let seed = 1792791702;
+function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+const g = document.getElementById('stars');
+for (let i = 0; i < 260; i++) {
+  const m = Math.pow(rnd(), 3.2);
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('cx', (rnd() * 1080).toFixed(1));
+  c.setAttribute('cy', (rnd() * 1920).toFixed(1));
+  c.setAttribute('r', (0.5 + m * 2.2).toFixed(2));
+  c.setAttribute('fill', rnd() < 0.12 ? '#FFD9A0' : '#F2EFE6');
+  c.setAttribute('opacity', (0.25 + m * 0.6).toFixed(2));
+  g.appendChild(c);
+}
+</script>
+</body>
+</html>
