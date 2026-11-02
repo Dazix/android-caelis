@@ -112,6 +112,13 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   ridge at 18:42", 25 minutes before the almanac's 19:07 - and dims the stretch of the trajectory that is
   hidden, so it is obvious how much of the golden hour the hills take. Off by default; the elevation data is
   either downloaded once with your consent or imported by hand, and the computed profile then works offline.
+- **Virtual Places**: Plan a sunrise somewhere you are not. Save a place by name and coordinates (decimal,
+  DMS, or a pasted map link) with its time zone, pick it from the map button in Sun AR or Night Sky, and the
+  app fetches that place's terrain and shows where and when the Sun and Moon rise and set behind its own
+  skyline, in its local time. Turning the phone looks around the place; the camera and automatic alignment
+  are off while it is shown, and a neutral backdrop with the place's terrain stands in for the picture. The
+  two screens choose their place independently unless you switch on syncing. Places stay on the phone and
+  out of the Google account backup.
 - **Peak Names**: The peaks that really stand on that skyline are labelled "Sněžka · 1603 m" (in Czech, the
   Czech name; otherwise the English one, then the local one) in both Sun AR and Night Sky, with a switch per
   screen that works only while the terrain is on. A peak is drawn only when it *is* the ridge at its
@@ -433,7 +440,7 @@ retrying while the camera is still writing them.
   the apps with a launcher icon, the cameras among them, and ARCore; `QUERY_ALL_PACKAGES` is not
   declared. A service or a widget without a launcher icon cannot be picked as a target.
 - **Android's backup leaves your positions out.** Stored horizon profiles are named after where you
-  stood, so `data_extraction_rules.xml` keeps them, the offline terrain and the debug dumps out of the
+  stood, so `data_extraction_rules.xml` keeps them, your saved virtual places, the offline terrain and the debug dumps out of the
   Google account backup. Settings and calibrations are still backed up. A transfer to your own new
   phone keeps the profiles.
 - **The terrain horizon cost the app its "no network permission" guarantee.** That was a real

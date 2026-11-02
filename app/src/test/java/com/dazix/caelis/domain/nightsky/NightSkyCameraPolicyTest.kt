@@ -25,4 +25,11 @@ class NightSkyCameraPolicyTest {
     fun `the Milky Way turned back on in planetarium mode covers the picture, so the camera stays off`() {
         assertFalse(NightSkyCameraPolicy.isPictureVisible(planetariumMode = true, milkyWayVisible = true))
     }
+
+    @Test
+    fun `a virtual place keeps the camera off even in planetarium mode`() {
+        assertFalse(
+            NightSkyCameraPolicy.isPictureVisible(planetariumMode = true, milkyWayVisible = false, virtualPlace = true),
+        )
+    }
 }

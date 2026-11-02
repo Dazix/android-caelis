@@ -69,6 +69,11 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import com.dazix.caelis.data.location.SavedPlaceRepository
+import com.dazix.caelis.domain.location.Observer
+import com.dazix.caelis.domain.location.ObserverPolicy
+import com.dazix.caelis.domain.location.PlaceScreen
+import com.dazix.caelis.domain.location.SavedPlace
 
 data class NightSkyArUiState(
     val timeState: TimeState = TimeState(),
@@ -121,6 +126,10 @@ data class NightSkyArUiState(
     val isDebugOptionsEnabled: Boolean = false,
     val horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
     val multipleHitsTarget: NightSkyRenderer.HitTarget.MultipleHits? = null,
+    /** Where the sky is computed from: the phone's GPS position, or a saved virtual place. */
+    val observer: Observer = ObserverPolicy.observe(GeoLocation.DEFAULT, false, null, ZoneId.systemDefault()),
+    val places: List<SavedPlace> = emptyList(),
+    val placeSyncEnabled: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -371,8 +380,44 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         HorizonSettings(),
     )
 
+    private val placeRepository = SavedPlaceRepository.getInstance(application)
+
+    /**
+     * Where the sky is computed from: the GPS position, or a saved virtual place. Magnetic
+     * declination and night vision stay on the GPS position: they belong to the phone and its user.
+     */
+    val observer: StateFlow<Observer> = combine(
+        locationProvider.location,
+        locationProvider.hasGpsFix,
+        placeRepository.placeFor(PlaceScreen.NIGHT_SKY),
+    ) { gps, fix, place ->
+        ObserverPolicy.observe(gps, fix, place, ZoneId.systemDefault())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ObserverPolicy.observe(
+            locationProvider.location.value,
+            locationProvider.hasGpsFix.value,
+            placeRepository.placeFor(PlaceScreen.NIGHT_SKY).value,
+            ZoneId.systemDefault(),
+        ),
+    )
+    private val observerLocation: StateFlow<GeoLocation> = observer.map { it.location }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, observer.value.location)
+
+    val places: StateFlow<List<SavedPlace>> = placeRepository.places
+    val placeSyncEnabled: StateFlow<Boolean> = placeRepository.selection.map { it.sync }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, placeRepository.selection.value.sync)
+
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
-    val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
+
+    /**
+     * The shared profile, only while it belongs to this screen's observer: the repository holds one
+     * profile for the whole app, and Sun AR may have asked for another place a moment ago.
+     */
+    val horizonProfile: StateFlow<HorizonProfile?> = combine(horizonRepository.profile, observerLocation) { profile, loc ->
+        profile?.takeIf { ObserverPolicy.profileBelongsTo(it, loc) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * Replace the stylised tree line with the terrain around you: flat until the profile arrives,
@@ -421,17 +466,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             settingsStore.saveHorizon(updated)
             settingsStore.saveNightSkyLandscapeVisible(false)
             if (granted) {
-                if (locationProvider.hasGpsFix.value) {
-                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                } else {
-                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
-                    val hasFix = locationProvider.awaitGpsFix()
-                    if (hasFix) {
-                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                    } else {
-                        horizonRepository.setLocationFailed()
-                    }
-                }
+                requestProfileHere(updated)
             }
         }
     }
@@ -455,18 +490,29 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 settingsStore.saveNightSkyLandscapeVisible(false)
             }
             if (enabled && updated.networkDownloadAllowed) {
-                if (locationProvider.hasGpsFix.value) {
-                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                } else {
-                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
-                    val hasFix = locationProvider.awaitGpsFix()
-                    if (hasFix) {
-                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                    } else {
-                        horizonRepository.setLocationFailed()
-                    }
-                }
+                requestProfileHere(updated)
             }
+        }
+    }
+
+    /**
+     * Asks for the profile of where this screen looks from. A virtual place is exact and asks at once;
+     * GPS waits for a fix (the default fallback must never become a skyline).
+     */
+    private suspend fun requestProfileHere(settings: HorizonSettings) {
+        val obs = observer.value
+        if (obs.isVirtual || locationProvider.hasGpsFix.value) {
+            horizonRepository.ensureProfile(obs.location, settings)
+            return
+        }
+        horizonRepository.setLocating(locationProvider.satellitesAvailable())
+        val hasFix = locationProvider.awaitGpsFix()
+        // The user may have picked a place while the GPS was being waited for.
+        val now = observer.value
+        if (hasFix || now.isVirtual) {
+            horizonRepository.ensureProfile(now.location, settings)
+        } else {
+            horizonRepository.setLocationFailed()
         }
     }
 
@@ -575,7 +621,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val uiState: StateFlow<NightSkyArUiState> = combine(
         listOf(
-            locationProvider.location,
+            observerLocation,
             locationProvider.hasGpsFix,
             keepScreenOn,
             nightVisionState,
@@ -623,6 +669,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             _localScheduleDate,
             constellationArtOpacity,
             isAsterismNamesVisible,
+            observer,
+            places,
+            placeSyncEnabled,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -676,6 +725,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val localDate = args[45] as LocalDate?
         val artOpacity = args[46] as Float
         val asterismNames = args[47] as Boolean
+        val obs = args[48] as Observer
+        @Suppress("UNCHECKED_CAST")
+        val placeList = args[49] as List<SavedPlace>
+        val sync = args[50] as Boolean
 
         NightSkyArUiState(
             timeState = tState,
@@ -728,6 +781,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isDebugOptionsEnabled = dbgOptions,
             horizonState = horizState,
             multipleHitsTarget = multipleHits,
+            observer = obs,
+            places = placeList,
+            placeSyncEnabled = sync,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NightSkyArUiState())
 
@@ -791,9 +847,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+        // A new place moves the whole sky at once, also while the virtual clock is frozen (the ticker
+        // below only runs on live time).
+        viewModelScope.launch {
+            observer.map { it.place?.id }.distinctUntilChanged().drop(1).collect {
+                recomputeAstronomicalState(_timeState.value.activeInstant())
+            }
+        }
+
         // Recompute visibility on debounced location changes
         viewModelScope.launch {
-            locationProvider.location
+            observerLocation
                 .debounce(2_000L)
                 .collect {
                     selectedBodyState.value?.let { body ->
@@ -825,21 +889,20 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         // The first usable fix goes through at once: debouncing it only delayed the stored profile,
         // and the repository already ignores repeats of the same rounded position.
         viewModelScope.launch {
+            // A virtual place is exact, so it counts as a fix: no waiting, no GPS.
             var firstFixSeen = false
-            combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
-                Triple(loc, hasFix, cfg)
-            }
-                .debounce { (_, hasFix, _) ->
-                    if (!firstFixSeen && hasFix) {
+            combine(observer, horizonSettings) { obs, cfg -> obs to cfg }
+                .debounce { (obs, _) ->
+                    if (!firstFixSeen && obs.canRequestProfile) {
                         firstFixSeen = true
                         0L
                     } else {
                         1_000L
                     }
                 }
-                .collect { (loc, hasFix, cfg) ->
-                    if (hasFix && cfg.realHorizonInNightSky) {
-                        horizonRepository.ensureProfile(loc, cfg)
+                .collect { (obs, cfg) ->
+                    if (obs.canRequestProfile && cfg.realHorizonInNightSky) {
+                        horizonRepository.ensureProfile(obs.location, cfg)
                     }
                 }
         }
@@ -851,7 +914,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 if (!_timeState.value.isVirtual) {
                     val loc = locationProvider.location.value
                     val now = Instant.now()
-                    val lstDeg = SiderealTime.computeLstDegrees(now, loc.longitude)
+                    val lstDeg = SiderealTime.computeLstDegrees(now, observer.value.location.longitude)
                     val lstHours = lstDeg / 15.0
                     lstDegreesState.value = lstDeg
                     lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
@@ -907,10 +970,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun recomputeAstronomicalState(instant: Instant) {
         val loc = locationProvider.location.value
-        val lstDeg = SiderealTime.computeLstDegrees(instant, loc.longitude)
+        val lstDeg = SiderealTime.computeLstDegrees(instant, observer.value.location.longitude)
         val lstHours = lstDeg / 15.0
         lstDegreesState.value = lstDeg
         lstFormattedState.value = SiderealTime.formatLstHours(lstHours)
+        // Night vision protects the eyes of whoever holds the phone: its night is the GPS one.
         isNightState.value = SolarPositionCalculator.isNight(instant, loc)
         currentTimeState.value = instant.atZone(ZoneId.systemDefault()).toLocalTime()
 
@@ -946,12 +1010,13 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             _visibilityState.value = VisibilityState.Loading
         }
         val targetDate = _localScheduleDate.value
+        val obs = observer.value
         val instant = if (targetDate != null) {
-            targetDate.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant()
+            targetDate.atTime(12, 0).atZone(obs.zone).toInstant()
         } else {
             _timeState.value.activeInstant()
         }
-        val loc = locationProvider.location.value
+        val loc = obs.location
         val profile = if (horizonSettings.value.realHorizonInNightSky && horizonSettings.value.enabled) {
             horizonProfile.value
         } else null
@@ -999,7 +1064,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      */
     fun stepLocalScheduleDate(days: Long) {
         val activeTime = _timeState.value.activeInstant()
-        val baseDate = _localScheduleDate.value ?: activeTime.atZone(ZoneId.systemDefault()).toLocalDate()
+        val baseDate = _localScheduleDate.value ?: activeTime.atZone(observer.value.zone).toLocalDate()
         setLocalScheduleDate(baseDate.plusDays(days))
     }
 
@@ -1395,7 +1460,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         } else {
             System.currentTimeMillis()
         }
-        return SiderealTime.computeLstDegrees(currentMs, locationProvider.location.value.longitude)
+        return SiderealTime.computeLstDegrees(currentMs, observer.value.location.longitude)
     }
 
     /**
@@ -1404,7 +1469,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      */
     fun routeCameraToCoordinates(raDegrees: Double, decDegrees: Double, displayRotation: Int = Surface.ROTATION_0) {
         val lst = currentLstDegrees()
-        val lat = locationProvider.location.value.latitude
+        val lat = observer.value.location.latitude
         val (targetAz, targetEl) = EquatorialCoordinates.equatorialToHorizontal(raDegrees, decDegrees, lst, lat)
 
         val currentAz: Double
@@ -1597,6 +1662,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * It is an alignment, so it also locks the heading ([OrientationTracker.lockHeading]).
      */
     fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        // The stars of a virtual place are not the ones above the phone: an alignment against them
+        // would store a compass correction measured against nothing.
+        if (observer.value.isVirtual) return
         orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
@@ -1605,6 +1673,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Keeps the pan the user just dragged as the standing calibration and resumes tracking. */
     fun commitCalibration() {
+        if (observer.value.isVirtual) {
+            // Under a virtual place a drag only looks around; nothing is kept as a calibration.
+            startSensors()
+            return
+        }
         orientationTracker.commitPanAsCalibration()
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
@@ -1632,6 +1705,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun resumeSensorTracking() {
         routingAnimationJob?.cancel()
         routingAnimationJob = null
+        if (observer.value.isVirtual) {
+            // Under a virtual place the bottom button only ends a pan: the stored compass correction
+            // belongs to the real sky, and resetting it here would lose it for no reason.
+            orientationTracker.resumeSensorTracking()
+            panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+            panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
+            return
+        }
         orientationTracker.clearCalibration()
         orientationTracker.resumeSensorTracking()
         panAzimuthOffset.value = 0f
@@ -1941,6 +2022,34 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             orientationTracker.start()
         }
         locationProvider.startUpdates()
+        // The terrain profile is one slot for the whole app and Sun AR may have filled it with another
+        // place: the screen in front asks for its own again (stored, so instant on return).
+        val obs = observer.value
+        if (obs.canRequestProfile) {
+            viewModelScope.launch {
+                val cfg = settingsStore.currentHorizon()
+                if (cfg.enabled && cfg.realHorizonInNightSky) horizonRepository.ensureProfile(obs.location, cfg)
+            }
+        }
+    }
+
+    // ==== Virtual places ====
+
+    /** Shows [id] on this screen (and on Sun AR while the selection is synced); null is GPS. */
+    fun selectPlace(id: String?) {
+        viewModelScope.launch { placeRepository.select(PlaceScreen.NIGHT_SKY, id) }
+    }
+
+    fun savePlace(place: SavedPlace) {
+        viewModelScope.launch { placeRepository.save(place) }
+    }
+
+    fun deletePlace(id: String) {
+        viewModelScope.launch { placeRepository.delete(id) }
+    }
+
+    fun setPlaceSync(sync: Boolean) {
+        viewModelScope.launch { placeRepository.setSync(sync, PlaceScreen.NIGHT_SKY) }
     }
 
     fun stopSensors() {

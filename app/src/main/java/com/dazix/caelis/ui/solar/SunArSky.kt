@@ -102,6 +102,11 @@ internal fun SunArGpuSky(
     terrainTimes: TerrainTimes,
     showPeakNames: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * A virtual place is shown: no camera picture (it shows where the phone is), a neutral backdrop
+     * and the place's terrain filled below its ridge instead, and the live pose every vsync.
+     */
+    virtualPlace: Boolean = false,
 ) {
     val density = LocalDensity.current.density
     val languageTag = LocalConfiguration.current.locales[0].toLanguageTag()
@@ -140,6 +145,7 @@ internal fun SunArGpuSky(
         onDispose { built?.destroy() }
     }
     SideEffect {
+        scene?.setVirtualBackdrop(virtualPlace)
         scene?.setProfile(horizonProfile)
         scene?.setTrajectories(
             solarTrajectory,
@@ -155,6 +161,7 @@ internal fun SunArGpuSky(
     val currentRotation by rememberUpdatedState(displayRotation)
     val currentFov by rememberUpdatedState(fovHorizontalDegrees)
     val currentRig by rememberUpdatedState(rig)
+    val currentPictureWanted by rememberUpdatedState(!virtualPlace)
     val currentSolar by rememberUpdatedState(solarTrajectory)
     val currentLunar by rememberUpdatedState(lunarTrajectory)
     val currentBadges by rememberUpdatedState(badges)
@@ -198,13 +205,19 @@ internal fun SunArGpuSky(
                     // The rig also decides who owns the camera (CameraX or ARCore) and whose pose
                     // draws: ARCore's own matrix for the frame it just handed over, or the sensors'
                     // at the image's instant. Sun AR has no zoom, so the zoom is always 1x.
+                    //
+                    // Under a virtual place the picture is not wanted: the rig parks the camera (as
+                    // Night Sky does outside planetarium mode) and the pose is the live one.
+                    val bg = background
+                    val pictureWanted = currentPictureWanted
+                    bg?.enabled = pictureWanted
                     currentRig.advance(
-                        background = background,
+                        background = bg,
                         viewportWidth = viewportWidth,
                         viewportHeight = viewportHeight,
                         displayRotation = currentRotation,
                         zoomRatio = 1f,
-                        pictureEnabled = true,
+                        pictureEnabled = pictureWanted,
                         livePoseAllowed = true,
                         out = poseFrame,
                     )
@@ -213,7 +226,7 @@ internal fun SunArGpuSky(
                     } else {
                         currentGetMatrix(poseFrame.poseTimestampNs, renderMatrix)
                     }
-                    sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov)
+                    sc.update(renderMatrix, currentRotation * 90, viewportWidth, viewportHeight, currentFov, nanos)
                     // Bubbles, badges, discs and grid labels are part of this GPU frame.
                     marks.update(
                         sc, currentSolar, currentLunar, currentBadges, currentSun, currentMoon,

@@ -139,8 +139,12 @@ fun NightSkyLayerSettingsSheet(
     alignElevationOffsetDeg: Float = 0f,
     onNudgeAlignment: (Float, Float) -> Unit = { _, _ -> },
     onResetAlignment: () -> Unit = {},
+    /** False under a virtual place: no real sky to align against, so every alignment control is disabled. */
+    alignmentEnabled: Boolean = true,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
+    /** The zone the virtual clock is set and shown in: the observer's (a virtual place has its own). */
+    zone: ZoneId = ZoneId.systemDefault(),
 ) {
     val palette = paletteForTheme(nightVisionTheme)
     val titleColor = if (redVisionMode) palette.primary else Color.White
@@ -239,6 +243,7 @@ fun NightSkyLayerSettingsSheet(
                 onResetToLive = onResetToLive,
                 redVisionMode = redVisionMode,
                 palette = palette,
+                zone = zone,
             )
         }
 
@@ -464,12 +469,13 @@ fun NightSkyLayerSettingsSheet(
                 {
                     TextButton(
                         onClick = onResetAlignment,
+                        enabled = alignmentEnabled,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         modifier = Modifier.height(28.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.sun_ar_calib_reset),
-                            color = iconColor,
+                            color = if (alignmentEnabled) iconColor else iconColor.copy(alpha = 0.38f),
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
@@ -482,6 +488,7 @@ fun NightSkyLayerSettingsSheet(
                 headlineColor = headlineColor,
                 accentColor = iconColor,
                 onNudge = onNudgeAlignment,
+                enabled = alignmentEnabled,
             )
         }
 
@@ -564,6 +571,7 @@ private fun AlignmentSectionContent(
     headlineColor: Color,
     accentColor: Color,
     onNudge: (Float, Float) -> Unit,
+    enabled: Boolean = true,
 ) {
     val signedAzimuth = if (azimuthOffsetDeg > 180f) azimuthOffsetDeg - 360f else azimuthOffsetDeg
     val coarse = NightSkyArViewModel.COARSE_NUDGE_DEGREES
@@ -575,6 +583,15 @@ private fun AlignmentSectionContent(
             .padding(horizontal = 8.dp, vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        if (!enabled) {
+            // Disabled, not hidden: the stored correction stays visible, and the reason is said.
+            Text(
+                text = stringResource(R.string.ar_align_disabled_virtual),
+                style = MaterialTheme.typography.bodySmall,
+                color = headlineColor,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
         NudgeRow(
             label = stringResource(R.string.ar_align_azimuth),
             valueText = formatOffsetDegrees(signedAzimuth),
@@ -582,6 +599,7 @@ private fun AlignmentSectionContent(
             increaseDescription = stringResource(R.string.ar_align_azimuth_right),
             accentColor = accentColor,
             headlineColor = headlineColor,
+            enabled = enabled,
             onCoarseDecrease = { onNudge(-coarse, 0f) },
             onFineDecrease = { onNudge(-fine, 0f) },
             onFineIncrease = { onNudge(fine, 0f) },
@@ -595,6 +613,7 @@ private fun AlignmentSectionContent(
             increaseDescription = stringResource(R.string.ar_align_elevation_up),
             accentColor = accentColor,
             headlineColor = headlineColor,
+            enabled = enabled,
             onCoarseDecrease = { onNudge(0f, -coarse) },
             onFineDecrease = { onNudge(0f, -fine) },
             onFineIncrease = { onNudge(0f, fine) },
@@ -615,14 +634,16 @@ private fun NudgeRow(
     onFineDecrease: () -> Unit,
     onFineIncrease: () -> Unit,
     onCoarseIncrease: () -> Unit,
+    enabled: Boolean = true,
 ) {
     @Composable
     fun NudgeButton(glyph: String, description: String, onClick: () -> Unit) {
         IconButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = Modifier.size(44.dp).semantics { contentDescription = description },
         ) {
-            Text(text = glyph, style = MaterialTheme.typography.labelLarge, color = accentColor)
+            Text(text = glyph, style = MaterialTheme.typography.labelLarge, color = if (enabled) accentColor else accentColor.copy(alpha = 0.38f))
         }
     }
 
@@ -777,10 +798,10 @@ private fun TimeTravelSectionContent(
     onResetToLive: () -> Unit,
     redVisionMode: Boolean,
     palette: com.dazix.caelis.ar.scene.NightVisionPalette,
+    zone: ZoneId,
 ) {
     val activeInstant = timeState.activeInstant()
-    val zone = remember { ZoneId.systemDefault() }
-    val zonedDateTime = remember(activeInstant) { activeInstant.atZone(zone) }
+    val zonedDateTime = remember(activeInstant, zone) { activeInstant.atZone(zone) }
 
     val dateChipFormatter = remember {
         DateTimeFormatter.ofPattern("EEE, d. MMM yyyy", Locale.getDefault())
