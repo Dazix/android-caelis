@@ -201,9 +201,11 @@ class NightSkyRenderer {
         /**
          * How far below its final place a constellation name starts its slide, in dp. The drawn
          * offset and the tap hit test both read this: they once disagreed (40 px drawn, 40 dp
-         * tested), so on a dense screen a tap on a half-grown name missed it.
+         * tested), so on a dense screen a tap on a half-grown name missed it. It was 40 dp, which
+         * read as the name appearing and then jumping into place; a quarter of that is still a hint
+         * of motion while the figure grows.
          */
-        const val CONSTELLATION_LABEL_SLIDE_DP = 40f
+        const val CONSTELLATION_LABEL_SLIDE_DP = 10f
 
         data class IndicatorTransform(
             val arrowX: Float,

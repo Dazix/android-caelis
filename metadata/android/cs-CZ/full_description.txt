@@ -1,0 +1,39 @@
+Západ Slunce, který opravdu uvidíte. Hvězdy přesně tam, kde svítí. A časosběr, který fotí váš vlastní fotoaparát se vším, co umí.
+
+CAELIS je intervalometr a astronomický plánovač v jednom. Nepoužívá vlastní ořezanou kameru – mačká spoušť přímo v aplikaci fotoaparátu, kterou už máte. Každý snímek časosběru tak projde HDR+, nočním i astro režimem vašeho telefonu.
+
+ČASOSBĚR BEZ KOMPROMISŮ
+• Spoušť ve vaší aplikaci fotoaparátu (Google Camera i jakákoli jiná)
+• Přesný rozvrh bez driftu – opožděný snímek neposune celou sérii
+• Plynulá změna intervalu (ramping), lineárně i exponenciálně – ideální na západ slunce
+• Automatické zastavení podle počtu snímků, času, baterie nebo volného místa
+• Plovoucí panel s odpočtem, pauzou a stopem, který nikdy nezakryje spoušť
+• Volitelná kontrola, že fotka opravdu vznikla – jinak to zkusí znovu
+• Režim pravidelného klepání na zvolený bod v libovolné aplikaci
+
+SLUNCE A MĚSÍC V ROZŠÍŘENÉ REALITĚ
+• Dráha Slunce a Měsíce přímo v obraze kamery, s časovými značkami, zlatou hodinou a soumraky
+• Skutečný horizont z výškového modelu terénu: uvidíte, že Slunce zmizí za hřebenem v 18:42, ne v tabulkových 19:07
+• Názvy vrcholů na obzoru – jen těch, které opravdu vidíte
+• Automatické srovnání s horizontem podle obrazu z kamery
+• Terén si stáhnete předem a pak vše funguje bez signálu
+
+NOČNÍ OBLOHA V ROZŠÍŘENÉ REALITĚ
+• Hvězdy, planety, Měsíc a Mléčná dráha nad skutečnou krajinou
+• 88 souhvězdí s ilustracemi, 110 Messierových objektů s fotografiemi, meteorické roje
+• Východ, kulminace a západ počítané vůči skutečným kopcům – kdy se Jupiter vyhoupne nad hřeben?
+• Časový posuvník ±12 h a libovolné datum pro plánování dopředu
+• Vyhledávání česky i latinsky, režim planetária a červený noční režim, který šetří adaptaci zraku
+
+SOUKROMÍ NA PRVNÍM MÍSTĚ
+• Žádné reklamy, žádná analytika, žádný účet
+• Internet jen pro stažení terénu a názvů vrcholů, a jen s vaším souhlasem – odesílá se pouze název mapového čtverce 1° × 1°, žádné souřadnice
+• Volitelné Google ARCore pro stabilnější AR je ve výchozím stavu vypnuté; než ho zapnete, aplikace vám řekne, co Google posílá
+• Otevřený zdrojový kód pod licencí GPL-3.0
+
+PROČ SLUŽBA PŘÍSTUPNOSTI
+CAELIS používá službu přístupnosti (Accessibility Service) jen k tomu, aby otevřela zvolenou aplikaci fotoaparátu, stiskla v ní spoušť nebo klepla na bod, který jste sami nastavili. Nic z toho, co služba vidí, neukládá ani neodesílá. Bez tohoto oprávnění časosběr nefunguje; AR moduly ho nepotřebují.
+
+Vyžaduje Android 13 nebo novější. Česky i anglicky.
+
+Názvy vrcholů © přispěvatelé OpenStreetMap (ODbL).

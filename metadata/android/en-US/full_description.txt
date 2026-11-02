@@ -1,0 +1,39 @@
+The sunset you will actually see. Stars exactly where they shine. And a time-lapse shot by your own camera app, with everything it can do.
+
+CAELIS is an intervalometer and a sky planner in one. It does not use a stripped-down camera of its own – it presses the shutter inside the camera app you already use, so every frame keeps your phone's HDR+, Night Sight and astro modes.
+
+TIME-LAPSE WITHOUT COMPROMISE
+• Shutter inside your camera app (Google Camera or any other)
+• Drift-free schedule – a late frame never pushes the whole series
+• Interval ramping, linear or exponential – made for sunsets
+• Auto-stop on shot count, duration, battery or free storage
+• Floating panel with countdown, pause and stop that never covers the shutter
+• Optional check that a photo was really taken – and a retry if not
+• Periodic tap mode for any app
+
+SUN & MOON IN AUGMENTED REALITY
+• Sun and Moon paths over the live camera view, with time marks, golden hour and twilight
+• The real horizon from a terrain elevation model: see the Sun drop behind the ridge at 18:42, not at the almanac's 19:07
+• Peak names on the skyline – only the ones you can actually see
+• Automatic alignment to the horizon from the camera image
+• Download the terrain once, then it all works with no signal
+
+NIGHT SKY IN AUGMENTED REALITY
+• Stars, planets, the Moon and the Milky Way over the real landscape
+• 88 illustrated constellations, 110 Messier objects with photos, meteor showers
+• Rise, transit and set times against the real hills – when does Jupiter clear the ridge?
+• ±12 h time scrubber and any date for planning ahead
+• Search, planetarium mode and a red night mode that keeps your dark adaptation
+
+PRIVACY FIRST
+• No ads, no analytics, no account
+• Internet only to download terrain and peak names, and only with your consent – all that is sent is the name of a 1° × 1° map square, never coordinates
+• Optional Google ARCore for steadier AR is off by default; before you turn it on, the app tells you what Google receives
+• Open source under GPL-3.0
+
+WHY THE ACCESSIBILITY SERVICE
+CAELIS uses the Accessibility Service only to open the camera app you chose, press its shutter, or tap the point you set yourself. Nothing the service sees is stored or sent anywhere. Time-lapse does not work without it; the AR modules do not need it.
+
+Requires Android 13 or newer. English and Czech.
+
+Peak names © OpenStreetMap contributors (ODbL).

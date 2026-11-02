@@ -411,7 +411,6 @@
 
     <!-- Night Sky AR -->
     <string name="nav_short_night_sky">Noční obloha</string>
-    <string name="night_sky_title">Noční obloha</string>
     <string name="night_sky_desc">Rozšířená realita hvězdné mapy a nebeské sféry</string>
     <string name="night_sky_stars_label">Hvězdy:</string>
     <string name="night_sky_lst_label">LST</string>
@@ -424,7 +423,8 @@
     <string name="night_sky_landscape">Krajina</string>
     <string name="night_sky_landscape_desc">Zobrazit/skrýt fotorealistickou krajinu na zemi</string>
     <string name="night_sky_opaque_bg">Režim planetária</string>
-    <string name="night_sky_opaque_bg_desc">Přepnout mezi AR kamerou a plným neprůhledným planetáriem</string>
+    <string name="night_sky_opaque_bg_desc">Zobrazit oblohu nad živým obrazem z fotoaparátu</string>
+    <string name="night_sky_camera_permission_chip">Obraz kamery potřebuje přístup k fotoaparátu. Klepnutím ho povolíte.</string>
     <string name="night_sky_grid">Souřadnicová mřížka</string>
     <string name="night_sky_grid_desc">Zobrazit/skrýt 3D nebeskou mřížku a obzor</string>
     <string name="night_sky_constellations">Souhvězdí</string>

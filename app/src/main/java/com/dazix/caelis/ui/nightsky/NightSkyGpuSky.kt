@@ -71,8 +71,11 @@ class NightSkyGpuHandle {
  *
  * The camera picture is drawn by that same Filament frame ([CameraBackground], fed by
  * [CameraFrameSource]), and the pose is taken at the instant of the image being drawn, so a star
- * cannot run ahead of the photographed sky during a turn. Over the opaque planetarium sky the picture
- * is switched off and the live pose is used.
+ * cannot run ahead of the photographed sky during a turn. Where no picture can be seen
+ * ([isCameraPictureVisible] false: outside planetarium mode, or under the opaque Milky Way) the camera is
+ * not running at all and the live pose is used, so the sky moves every vsync.
+ *
+ * [orientation] is read in the frame loop, never in composition: it changes every 15 ms.
  *
  * The sky renders into a TextureView, not a SurfaceView. A SurfaceView's buffers are presented by
  * SurfaceFlinger on their own schedule, and with the labels in the window they slid visibly against
@@ -84,7 +87,8 @@ class NightSkyGpuHandle {
 internal fun NightSkyGpuSky(
     handle: NightSkyGpuHandle,
     renderer: NightSkyRenderer,
-    orientation: DeviceOrientation?,
+    orientation: () -> DeviceOrientation?,
+    isCameraPictureVisible: Boolean,
     onGetRenderMatrix: (timestampNs: Long, out: FloatArray) -> Boolean,
     isLivePoseActive: () -> Boolean,
     rig: SkyPoseRig,
@@ -222,7 +226,7 @@ internal fun NightSkyGpuSky(
     val currentLongitude by rememberUpdatedState(longitudeDegrees)
     val currentOrientation by rememberUpdatedState(orientation)
     val currentGetMatrix by rememberUpdatedState(onGetRenderMatrix)
-    val currentOpaque by rememberUpdatedState(isSkyBackgroundOpaque)
+    val currentPictureVisible by rememberUpdatedState(isCameraPictureVisible)
     val currentRig by rememberUpdatedState(rig)
     val currentRotation by rememberUpdatedState(displayRotation)
     val currentZoom by rememberUpdatedState(zoomRatio)
@@ -245,22 +249,22 @@ internal fun NightSkyGpuSky(
                 frame.dtSeconds = if (lastFrameNanos == 0L) 0.016f else ((nanos - lastFrameNanos) / 1e9f)
                 lastFrameNanos = nanos
                 // Over the camera, the newest image goes to the GPU and the pose is the one it was
-                // taken with; over the opaque planetarium sky there is no picture to match and the
-                // live pose is the more responsive one.
+                // taken with; where no picture is shown (outside planetarium mode, under the opaque
+                // Milky Way) there is nothing to match and the live pose moves the sky every vsync.
                 //
                 // The rig also decides who owns the camera (CameraX or ARCore) and whose pose draws.
                 // ARCore's pose is used only while the pose is the phone's (not a manual pan) and at
                 // 1x; a pinch hands the camera back to CameraX, which is the one that can zoom.
                 val rigInstance = currentRig
                 val bg = background
-                bg?.enabled = !currentOpaque
+                bg?.enabled = currentPictureVisible
                 rigInstance.advance(
                     background = bg,
                     viewportWidth = frame.viewportWidth,
                     viewportHeight = frame.viewportHeight,
                     displayRotation = currentRotation,
                     zoomRatio = currentZoom,
-                    pictureEnabled = !currentOpaque,
+                    pictureEnabled = currentPictureVisible,
                     livePoseAllowed = currentIsLive(),
                     out = poseFrame,
                 )
@@ -268,9 +272,9 @@ internal fun NightSkyGpuSky(
                     poseFrame.matrix.copyInto(frame.deviceToEnu, 0, 0, 16)
                     true
                 } else {
-                    sampleMatrix(frame.deviceToEnu, poseFrame.poseTimestampNs, currentGetMatrix, currentOrientation)
+                    sampleMatrix(frame.deviceToEnu, poseFrame.poseTimestampNs, currentGetMatrix, currentOrientation())
                 }
-                if (sc == null && sf != null && bg != null && rigInstance.hasPicture && !currentOpaque) {
+                if (sc == null && sf != null && bg != null && rigInstance.hasPicture && currentPictureVisible) {
                     // The catalogue is still being turned into geometry. The camera used to be on
                     // screen from the first frame (it was a separate view), so it is shown meanwhile
                     // rather than a black screen; the sky then appears in its first frame.
