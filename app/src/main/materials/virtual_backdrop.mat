@@ -1,0 +1,48 @@
+// The neutral backdrop behind a virtual place, in the Earth-fixed ENU frame, ray-cast per pixel.
+//
+// Under a virtual place the camera is off: its picture shows where the phone is, and the skyline,
+// Sun and Moon drawn over it are those of somewhere else. This stands in for it: a muted slate sky
+// that darkens towards the zenith, and a dark neutral ground below the geometric horizon (the filled
+// terrain ring covers it wherever the place has terrain). Opaque; no texture, no per-frame upload.
+// Night vision mutes it like the other sky layers.
+material {
+    name : VirtualBackdrop,
+    shadingModel : unlit,
+    blending : opaque,
+    vertexDomain : device,
+    depthWrite : false,
+    depthCulling : false,
+    culling : none,
+    variables : [ eyeDirection ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        float3 p = getPosition().xyz;
+        float3 view = mulMat4x4Float3(getViewFromClipMatrix(), p).xyz;
+        material.eyeDirection.xyz = mulMat3x3Float3(getWorldFromViewMatrix(), view).xyz;
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        float3 worldDir = normalize(variable_eyeDirection.xyz);
+        float sinElevation = worldDir.z;
+        float3 color;
+        if (sinElevation >= 0.0) {
+            // Horizon haze to zenith, eased so most of the sky sits near the darker tone.
+            float t = pow(clamp(sinElevation, 0.0, 1.0), 0.6);
+            color = mix(float3(0.40, 0.45, 0.52), float3(0.12, 0.16, 0.23), t);
+        } else {
+            float t = clamp(-sinElevation / 0.5, 0.0, 1.0);
+            color = mix(float3(0.20, 0.19, 0.17), float3(0.10, 0.10, 0.09), t);
+        }
+        float4 nv = getMaterialGlobal0();
+        if (nv.w > 0.5) {
+            float luminance = dot(color, float3(0.299, 0.587, 0.114));
+            color = luminance * 0.15 * nv.rgb;
+        }
+        material.baseColor = float4(color, 1.0);
+    }
+}

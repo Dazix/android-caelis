@@ -657,4 +657,30 @@
     <string name="settings_section_version">Verze</string>
     <string name="settings_version_name_label">Version Name</string>
     <string name="settings_version_code_label">Version Code</string>
+
+    <!-- Virtuální místa -->
+    <string name="places_title">Místa</string>
+    <string name="places_subtitle">Podívejte se, kdy a kde Slunce a Měsíc vyjdou a zapadnou za horizont místa, kde zrovna nejste. Kamera a automatické vyrovnání jsou u virtuálního místa vypnuté.</string>
+    <string name="places_gps">Moje poloha (GPS)</string>
+    <string name="places_empty">Zatím žádná uložená místa.</string>
+    <string name="places_add">Přidat místo</string>
+    <string name="places_edit">Upravit místo</string>
+    <string name="places_edit_named">Upravit %1$s</string>
+    <string name="places_delete">Smazat</string>
+    <string name="places_delete_named">Smazat %1$s</string>
+    <string name="places_delete_title">Smazat %1$s?</string>
+    <string name="places_delete_body">Místo zmizí z obou obrazovek. Jeho terén zůstane v mezipaměti, dokud ji nevymažete.</string>
+    <string name="places_cancel">Zrušit</string>
+    <string name="places_save">Uložit</string>
+    <string name="places_name_label">Název</string>
+    <string name="places_name_hint">např. Sněžka</string>
+    <string name="places_zone_label">Časová zóna</string>
+    <string name="places_zone_hint">Časy východu a západu se zobrazí v této zóně.</string>
+    <string name="places_zone_search">Hledat časovou zónu</string>
+    <string name="places_sync_title">Stejné místo na obou obrazovkách</string>
+    <string name="places_sync_body">Sledování slunce a noční obloha ukazují stejný výběr.</string>
+    <string name="places_button_gps">Místa, zobrazena poloha z GPS</string>
+    <string name="places_button_virtual">Místa, zobrazeno virtuální místo %1$s</string>
+    <string name="places_virtual_marker">Virtuální místo</string>
+    <string name="ar_align_disabled_virtual">Vyrovnání je u virtuálního místa vypnuté: není podle čeho vyrovnávat, skutečný horizont ani obloha tu nejsou.</string>
 </resources>

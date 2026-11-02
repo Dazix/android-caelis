@@ -62,6 +62,8 @@ case "$TARGET" in
             --tests "com.dazix.caelis.data.horizon.*" \
             --tests "com.dazix.caelis.ar.*" \
             --tests "com.dazix.caelis.domain.arframe.*" \
+            --tests "com.dazix.caelis.domain.location.*" \
+            --tests "com.dazix.caelis.data.location.*" \
             --rerun-tasks)
         # "ar.*" is a prefix wildcard: it also picks up ar.pose.* (ARCore session controller with a fake
         # platform, pose hand-over, camera ownership) and ar.scene.*. Only docs.* is in no suite.
@@ -76,6 +78,8 @@ case "$TARGET" in
             --tests "com.dazix.caelis.ui.nightsky.*" \
             --tests "com.dazix.caelis.domain.arframe.*" \
             --tests "com.dazix.caelis.ar.scene.*" \
+            --tests "com.dazix.caelis.domain.location.*" \
+            --tests "com.dazix.caelis.data.location.*" \
             --rerun-tasks)
         check_xml_results
         info "Night Sky test suite PASSED."

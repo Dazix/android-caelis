@@ -44,6 +44,15 @@ class SunArScene(private val surface: SkySurface) {
     val markGlyphs = GlyphBatch(surface, glyphMaterial, MAX_MARK_GLYPHS, Priority.MARKS, 1)
     val markLabels = LabelBatch(surface, labelMaterial, markAtlas, MAX_MARK_SPRITES, Priority.MARKS, 2)
 
+    // Under a virtual place the camera is off: a neutral backdrop stands in for the picture and the
+    // place's terrain is filled solid below its ridge (terrain.mat), so the skyline reads as land.
+    private val backdropMaterial = surface.loadMaterial("virtual_backdrop")
+    private val terrainMaterial = surface.loadMaterial("terrain")
+    private val backdrop = FullScreenLayer(surface, backdropMaterial, Priority.BACKDROP)
+    private val terrainFill = TerrainRing(surface, terrainMaterial, Priority.TERRAIN_FILL)
+    private var virtualBackdrop = false
+    private var lastFrameNanos = 0L
+
     private val cameraModel = FloatArray(16)
     private val a = FloatArray(3)
 
@@ -64,10 +73,27 @@ class SunArScene(private val surface: SkySurface) {
         setProfile(null)
         arcCasing.begin(); arcCasing.end()
         arcs.begin(); arcs.end()
+        backdrop.setVisible(false)
+        terrainFill.setColor(TerrainFill.red, TerrainFill.green, TerrainFill.blue, 1f)
+        terrainFill.setOffsets(0f, 0f)
+        terrainFill.setVisible(false)
+    }
+
+    /**
+     * The neutral backdrop and the filled terrain of a virtual place, in place of the camera picture.
+     * The fill is drawn without the compass calibration: there is no real skyline to have aligned
+     * it against, and the arcs are not calibrated either.
+     */
+    fun setVirtualBackdrop(enabled: Boolean) {
+        if (enabled == virtualBackdrop) return
+        virtualBackdrop = enabled
+        backdrop.setVisible(enabled)
+        terrainFill.setVisible(enabled)
     }
 
     /** The terrain skyline, or null for none. */
     fun setProfile(profile: HorizonProfile?) {
+        terrainFill.setProfile(profile)
         if (profileBuilt && profile === builtProfile) return
         profileBuilt = true
         builtProfile = profile
@@ -171,7 +197,18 @@ class SunArScene(private val surface: SkySurface) {
     }
 
     /** Called from the frame loop: the camera, and the projector the overlay draws through. */
-    fun update(deviceToEnu: FloatArray, displayRotationDegrees: Int, width: Float, height: Float, fovHorizontalDegrees: Float) {
+    fun update(
+        deviceToEnu: FloatArray,
+        displayRotationDegrees: Int,
+        width: Float,
+        height: Float,
+        fovHorizontalDegrees: Float,
+        frameTimeNanos: Long = 0L,
+    ) {
+        // The filled ridge rises into place when a profile lands, as in Night Sky (HorizonMorph).
+        val dt = if (lastFrameNanos == 0L || frameTimeNanos == 0L) 0.016f else (frameTimeNanos - lastFrameNanos) / 1e9f
+        lastFrameNanos = frameTimeNanos
+        terrainFill.advance(dt)
         SkyFrameMath.cameraModelMatrix(deviceToEnu, displayRotationDegrees, cameraModel)
         surface.camera.setModelMatrix(cameraModel)
         surface.setFovHorizontal(fovHorizontalDegrees.toDouble())
@@ -193,9 +230,15 @@ class SunArScene(private val surface: SkySurface) {
         silhouetteCasing.destroy()
         grid.destroy()
         surface.engine.destroyMaterial(lineMaterial)
+        terrainFill.destroy()
+        backdrop.destroy()
+        surface.engine.destroyMaterial(terrainMaterial)
+        surface.engine.destroyMaterial(backdropMaterial)
     }
 
     private object Priority {
+        const val BACKDROP = 0
+        const val TERRAIN_FILL = 1
         const val GRID = 2
         const val SILHOUETTE_CASING = 3
         const val SILHOUETTE = 4
@@ -219,5 +262,8 @@ class SunArScene(private val surface: SkySurface) {
         /** The moon's arc and pointer colour (the screen's `MoonSilverCyan`). */
         val MoonArc = Color(0xFF80DEEA)
         private val ArcCasing = Color(0x99000000)
+
+        /** The land of a virtual place: darker than the backdrop's horizon haze, lighter than its ground. */
+        private val TerrainFill = Color(0xFF3A3833)
     }
 }

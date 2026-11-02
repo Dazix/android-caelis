@@ -173,6 +173,7 @@ fun NightSkyArScreen(
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
     var isLayerSheetOpen by remember { mutableStateOf(false) }
+    var isPlacesSheetOpen by remember { mutableStateOf(false) }
     var showDsoLegendInAr by remember { mutableStateOf(false) }
     val previewFrameClock = remember { PreviewFrameClock() }
     // The camera picture is drawn by the sky's own Filament frame; see CameraFrameSource.
@@ -286,6 +287,7 @@ fun NightSkyArScreen(
             uiState.isSearchActive -> viewModel.setSearchActive(false)
             uiState.selectedBody != null -> viewModel.clearSelectedBody()
             uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
+            isPlacesSheetOpen -> isPlacesSheetOpen = false
             isLayerSheetOpen -> isLayerSheetOpen = false
             uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible -> viewModel.setDebugFocusRegionVisible(false)
             else -> onBack()
@@ -319,6 +321,7 @@ fun NightSkyArScreen(
     val cameraPictureVisible = NightSkyCameraPolicy.isPictureVisible(
         planetariumMode = uiState.isSkyBackgroundOpaque,
         milkyWayVisible = uiState.isMilkyWayVisible,
+        virtualPlace = uiState.observer.isVirtual,
     )
     // The camera permission is asked for when its picture is wanted, not on entry: outside planetarium
     // mode the camera never runs. The camera's answer then asks for the location, so the two dialogs
@@ -400,7 +403,8 @@ fun NightSkyArScreen(
                 selectedBody = uiState.selectedBody,
                 visibilityState = uiState.visibilityState,
                 localScheduleDate = uiState.localScheduleDate,
-                activeGlobalDate = uiState.timeState.activeInstant().atZone(ZoneId.systemDefault()).toLocalDate(),
+                activeGlobalDate = uiState.timeState.activeInstant().atZone(uiState.observer.zone).toLocalDate(),
+                zone = uiState.observer.zone,
                 onSetLocalDate = viewModel::setLocalScheduleDate,
                 onStepLocalDate = viewModel::stepLocalScheduleDate,
                 redVisionMode = uiState.redVisionMode,
@@ -653,6 +657,7 @@ fun NightSkyArScreen(
                 NightSkyTopBar(
                     hasGpsFix = uiState.hasGpsFix,
                     locationText = uiState.location.formatShort(),
+                    virtualPlaceLabel = uiState.observer.place?.let { com.dazix.caelis.ui.location.placeChipLabel(it) },
                     orientation = hudOrientation,
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
                     isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
@@ -719,38 +724,57 @@ fun NightSkyArScreen(
                     timeState = uiState.timeState,
                     redVisionMode = uiState.redVisionMode,
                     nightVisionTheme = uiState.nightVisionState.theme,
-                    modifier = Modifier.align(Alignment.Center),
+                    zone = uiState.observer.zone,
+                    // Bottom-aligned: the button column beside it is taller than the HUD, and a
+                    // centred HUD would rise with it.
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
 
-                // Contextual Reset View / Calibration Button (Decoupled on the end side, 0 layout shifting)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = uiState.isCalibrated,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut(),
-                    modifier = Modifier.align(Alignment.CenterEnd),
+                // End-side buttons in a column: places on top, the contextual reset below. Anchored to
+                // the bottom so the places button keeps its spot while the reset fades in and out.
+                Column(
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A),
-                        border = BorderStroke(1.dp, if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF)),
-                        modifier = Modifier.size(44.dp),
+                    com.dazix.caelis.ui.location.PlacesButton(
+                        place = uiState.observer.place,
+                        onClick = { isPlacesSheetOpen = true },
+                        accent = if (uiState.redVisionMode) activePalette.primary else Color(0xFF4DD0E1),
+                        idleTint = if (uiState.redVisionMode) activePalette.primary else Color.White,
+                        containerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A),
+                        borderColor = if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF),
+                    )
+
+                    // Contextual Reset View / Calibration Button (Decoupled on the end side, 0 layout shifting)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = uiState.isCalibrated,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut(),
                     ) {
-                        IconButton(
-                            onClick = {
-                                toastHostState.showToast(
-                                    resId = R.string.calib_reset_toast,
-                                    icon = AppIcons.Compass,
-                                )
-                                viewModel.resumeSensorTracking()
-                            },
-                            modifier = Modifier.fillMaxSize(),
+                        Surface(
+                            shape = CircleShape,
+                            color = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A),
+                            border = BorderStroke(1.dp, if (uiState.redVisionMode) activePalette.primary.copy(alpha = 0.3f) else Color(0x33FFFFFF)),
+                            modifier = Modifier.size(44.dp),
                         ) {
-                            Icon(
-                                imageVector = AppIcons.Compass,
-                                contentDescription = stringResource(R.string.sun_ar_calib_reset),
-                                tint = if (uiState.redVisionMode) activePalette.primary else Color.White,
-                                modifier = Modifier.size(26.dp),
-                            )
+                            IconButton(
+                                onClick = {
+                                    toastHostState.showToast(
+                                        resId = R.string.calib_reset_toast,
+                                        icon = AppIcons.Compass,
+                                    )
+                                    viewModel.resumeSensorTracking()
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                Icon(
+                                    imageVector = AppIcons.Compass,
+                                    contentDescription = stringResource(R.string.sun_ar_calib_reset),
+                                    tint = if (uiState.redVisionMode) activePalette.primary else Color.White,
+                                    modifier = Modifier.size(26.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -767,7 +791,8 @@ fun NightSkyArScreen(
                 borderColor = toastBorderColor,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = animatedBottomPadding + 64.dp),
+                    // Above the end-side button column (places + reset, 96dp), which it would cover.
+                    .padding(bottom = animatedBottomPadding + 108.dp),
             )
 
             // Disambiguation Floating Menu for Multiple Hits
@@ -824,6 +849,28 @@ fun NightSkyArScreen(
                 )
             }
         }
+    }
+
+    if (isPlacesSheetOpen) {
+        // The phone's own position (uiState.location is the observer's, a place's while one is shown).
+        val gpsLocation by viewModel.location.collectAsStateWithLifecycle()
+        com.dazix.caelis.ui.location.PlacesSheet(
+            places = uiState.places,
+            selectedId = uiState.observer.place?.id,
+            syncEnabled = uiState.placeSyncEnabled,
+            gpsLocation = gpsLocation.takeIf { uiState.hasGpsFix },
+            colors = com.dazix.caelis.ui.location.PlacesSheetColors(
+                container = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0151820),
+                content = if (uiState.redVisionMode) activePalette.primary else Color.White,
+                accent = if (uiState.redVisionMode) activePalette.primary else Color(0xFF4DD0E1),
+                scrim = if (uiState.redVisionMode) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f),
+            ),
+            onSelect = viewModel::selectPlace,
+            onSave = viewModel::savePlace,
+            onDelete = viewModel::deletePlace,
+            onSyncChange = viewModel::setPlaceSync,
+            onDismiss = { isPlacesSheetOpen = false },
+        )
     }
 
     // Modal Bottom Sheet for Layer Controls
@@ -884,7 +931,9 @@ fun NightSkyArScreen(
                 alignElevationOffsetDeg = alignElevationOffset,
                 onNudgeAlignment = viewModel::nudgeCalibration,
                 onResetAlignment = viewModel::resumeSensorTracking,
+                alignmentEnabled = !uiState.observer.isVirtual,
                 nightVisionTheme = uiState.nightVisionState.theme,
+                zone = uiState.observer.zone,
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
@@ -941,6 +990,8 @@ internal fun NightSkyTopBar(
     modifier: Modifier = Modifier,
     isVirtualTime: Boolean = false,
     horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
+    /** The virtual place shown instead of GPS ([com.dazix.caelis.ui.location.placeChipLabel]), or null. */
+    virtualPlaceLabel: String? = null,
 ) {
     val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
@@ -979,25 +1030,42 @@ internal fun NightSkyTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(
-                            if (redVisionMode) {
-                                palette.primary
-                            } else {
-                                if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
-                            },
-                            CircleShape,
-                        )
-                )
-                Text(
-                    text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = textColor,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
+                if (virtualPlaceLabel != null) {
+                    Icon(
+                        imageVector = AppIcons.Place,
+                        contentDescription = stringResource(R.string.places_virtual_marker),
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = virtualPlaceLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(
+                                if (redVisionMode) {
+                                    palette.primary
+                                } else {
+                                    if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
+                                },
+                                CircleShape,
+                            )
+                    )
+                    Text(
+                        text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = textColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
                     Text(
                         text = "• 🛰 GPS…",
@@ -1123,6 +1191,7 @@ internal fun NightSkyBottomHud(
     redVisionMode: Boolean,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
 ) {
     val palette = paletteForTheme(nightVisionTheme)
     val containerBg = if (redVisionMode) Color(0xFF000000) else Color(0xDD1A1A1A)
@@ -1178,8 +1247,8 @@ internal fun NightSkyBottomHud(
 
             // Virtual Time Readout tag (only displayed when virtual time is active)
             if (timeState.isVirtual && timeState.virtualTime != null) {
-                val zdt = remember(timeState.virtualTime) {
-                    timeState.virtualTime.atZone(java.time.ZoneId.systemDefault())
+                val zdt = remember(timeState.virtualTime, zone) {
+                    timeState.virtualTime.atZone(zone)
                 }
                 val timeStr = remember(zdt) {
                     String.format(java.util.Locale.US, "%02d:%02d", zdt.hour, zdt.minute)

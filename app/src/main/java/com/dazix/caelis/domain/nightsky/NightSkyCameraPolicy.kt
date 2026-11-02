@@ -10,9 +10,12 @@ package com.dazix.caelis.domain.nightsky
  * battery: a picture on screen poses the sky at its images' instants, so the stars moved only as
  * often as the camera delivered (15-30 times a second at night, measured on a Pixel 7 Pro) instead
  * of every vsync.
+ *
+ * Under a virtual place the camera never runs: it shows where the phone is, and the stars, horizon
+ * and terrain are those of somewhere else. Planetarium mode then keeps its opaque fill.
  */
 object NightSkyCameraPolicy {
 
-    fun isPictureVisible(planetariumMode: Boolean, milkyWayVisible: Boolean): Boolean =
-        planetariumMode && !milkyWayVisible
+    fun isPictureVisible(planetariumMode: Boolean, milkyWayVisible: Boolean, virtualPlace: Boolean = false): Boolean =
+        planetariumMode && !milkyWayVisible && !virtualPlace
 }

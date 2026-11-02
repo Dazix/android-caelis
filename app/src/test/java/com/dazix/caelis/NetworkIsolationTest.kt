@@ -336,7 +336,7 @@ class NetworkIsolationTest {
         val cloud = Regex("""<cloud-backup>(.*?)</cloud-backup>""", RegexOption.DOT_MATCHES_ALL)
             .find(rules)?.groupValues?.get(1)
             ?: error("data_extraction_rules.xml has no <cloud-backup> section")
-        listOf("horizons/", "dem_offline/", "debug/").forEach { path ->
+        listOf("horizons/", "locations/", "dem_offline/", "debug/").forEach { path ->
             assertTrue(
                 "the cloud backup still takes filesDir/$path",
                 cloud.contains("""<exclude domain="file" path="$path" />"""),

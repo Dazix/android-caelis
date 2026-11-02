@@ -646,6 +646,57 @@ object AppIcons {
         }
     }
 
+    /** Map: a folded three-panel map, the virtual places button on both AR screens. */
+    val Map: ImageVector by lazy {
+        icon("Map") {
+            strokePath {
+                moveTo(3.5f, 6.2f)
+                lineTo(9.0f, 4.0f)
+                lineTo(15.0f, 6.2f)
+                lineTo(20.5f, 4.0f)
+                lineTo(20.5f, 17.8f)
+                lineTo(15.0f, 20.0f)
+                lineTo(9.0f, 17.8f)
+                lineTo(3.5f, 20.0f)
+                close()
+                moveTo(9.0f, 4.0f)
+                lineTo(9.0f, 17.8f)
+                moveTo(15.0f, 6.2f)
+                lineTo(15.0f, 20.0f)
+            }
+        }
+    }
+
+    /** Place: a map pin, marking a virtual place in the location chip and the places list. */
+    val Place: ImageVector by lazy {
+        icon("Place") {
+            strokePath {
+                moveTo(12f, 21.0f)
+                curveTo(12f, 21.0f, 5.0f, 14.6f, 5.0f, 9.6f)
+                arcTo(7.0f, 7.0f, 0f, false, true, 19.0f, 9.6f)
+                curveTo(19.0f, 14.6f, 12f, 21.0f, 12f, 21.0f)
+                close()
+                circle(centerX = 12f, centerY = 9.6f, radius = 2.4f)
+            }
+        }
+    }
+
+    /** Edit: a pencil, editing a saved place. */
+    val Edit: ImageVector by lazy {
+        icon("Edit") {
+            strokePath {
+                moveTo(4.0f, 20.0f)
+                lineTo(4.6f, 16.2f)
+                lineTo(15.8f, 5.0f)
+                lineTo(19.0f, 8.2f)
+                lineTo(7.8f, 19.4f)
+                close()
+                moveTo(13.4f, 7.4f)
+                lineTo(16.6f, 10.6f)
+            }
+        }
+    }
+
     /** Landscape: photorealistic ground landscape and tree line horizon. */
     val Landscape: ImageVector by lazy {
         icon("Landscape") {

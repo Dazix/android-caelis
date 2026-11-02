@@ -8,6 +8,9 @@
   the terrain on the next visit, so nothing is lost by leaving it out. A transfer to the user's own
   new phone, over cable or local Wi-Fi, keeps it.
 
+  locations/ holds the virtual places the user saved (name and exact coordinates) and which one each
+  AR screen shows: the same kind of location history, kept on the same terms as horizons/.
+
   dem_offline/ holds whole elevation tiles (26 MB each). Auto Backup gives an app 25 MB and backs up
   nothing at all once that is exceeded, settings included; the tiles can be downloaded again.
   debug/ is the alignment dump of debug builds: camera frames and the position they were taken at.
@@ -20,6 +23,7 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="horizons/" />
+        <exclude domain="file" path="locations/" />
         <exclude domain="file" path="dem_offline/" />
         <exclude domain="file" path="debug/" />
         <exclude domain="sharedpref" path="session_runtime.xml" />
