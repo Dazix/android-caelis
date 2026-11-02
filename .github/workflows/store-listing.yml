@@ -1,0 +1,86 @@
+name: Store listing
+
+# The Google Play listing (texts, feature graphic, phone screenshots) lives in metadata/android/ and
+# is published from there by scripts/publish_listing.py. Only what differs from the store is sent,
+# and every committed change goes to Google's review again, so nothing runs unless the listing or the
+# script changed. Pull requests get the offline check; `main` publishes.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'metadata/**'
+      - 'scripts/publish_listing.py'
+      - 'scripts/test_publish_listing.py'
+      - '.github/workflows/store-listing.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'metadata/**'
+      - 'scripts/publish_listing.py'
+      - '.github/workflows/store-listing.yml'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Let Google Play check the edit, then discard it'
+        type: boolean
+        default: true
+
+# Two publishes of one listing must not interleave their edits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate listing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Test the publish script
+        run: python -m unittest discover -s scripts -p 'test_publish_listing.py'
+
+      # Lengths, image sizes and counts, without the key: a listing Play would refuse fails here, on
+      # the pull request, instead of in an edit on main.
+      - name: Check limits
+        run: python scripts/publish_listing.py validate
+
+  publish:
+    name: Publish to Google Play
+    # Only main publishes; a manual run on another branch would put its unmerged listing in the store.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        # The same hash-locked closure as the release promotion: this job holds the Play key.
+        run: pip install --require-hashes --no-deps -r scripts/requirements-promote.txt
+
+      - name: Publish listing
+        env:
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/publish_listing.py push --dry-run
+          else
+            python scripts/publish_listing.py push
+          fi
