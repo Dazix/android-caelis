@@ -1018,6 +1018,15 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    /**
+     * The field of view predicted from the lens while the camera is off ([stillBackCameraFov]). A
+     * FOV measured from the stream earlier in this screen is the better number and stays.
+     */
+    fun setPredictedCameraFov(fovResult: FovResult) {
+        if (isDynamicStreamCalculatedState.value) return
+        setCameraFov(fovResult)
+    }
+
     fun setCameraFov(fovDeg: Float, includesZoom: Boolean = false) {
         setCameraFov(FovResult(horizontalDegrees = fovDeg, isDynamicStreamCalculated = includesZoom, baseHorizontalDegrees = fovDeg))
     }

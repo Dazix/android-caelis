@@ -110,6 +110,16 @@ object CameraFovCalculator {
     }
 
     /**
+     * The lens the preview uses out of `LENS_INFO_AVAILABLE_FOCAL_LENGTHS`: the only one, or on a
+     * logical multi-camera (e.g. [1.95, 6.81, 19.0]) the standard wide lens between 3.5 and 8 mm.
+     */
+    fun primaryFocalLength(focalLengths: FloatArray?): Float? {
+        val list = focalLengths ?: return null
+        if (list.size == 1) return list[0]
+        return list.firstOrNull { it in 3.5f..8.0f } ?: list.firstOrNull()
+    }
+
+    /**
      * Effective horizontal FOV computed from what the camera **actually delivers**, not from the
      * lens geometry alone.
      *

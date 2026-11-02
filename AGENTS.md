@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level (335 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (641 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (318 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (642 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (333 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1131 JVM tests (335 intervalometer, 641 solar, horizon & pose, 318 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1139 JVM tests (335 intervalometer, 642 solar, horizon & pose, 333 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -284,9 +284,22 @@ Each of these was found by review or on the device and is now covered by a test.
   Each frame latches the newest image first and takes the pose at *that image's* instant
   (`CameraFrameSource.poseTimestampNs` -> `OrientationTracker.getRenderMatrix`), and keeps that
   image's instant for as long as the image stays on screen. The newest sensor sample is only for
-  frames with no picture to match (planetarium sky, no image yet, a stalled or non-realtime-clock
-  camera — `PoseTimestampPolicy`). The newest pose over an older picture ran the overlay ahead of
-  the ridge on every turn.
+  frames with no picture to match (Night Sky outside planetarium mode, no image yet, a stalled or
+  non-realtime-clock camera — `PoseTimestampPolicy`). The newest pose over an older picture ran the
+  overlay ahead of the ridge on every turn.
+- **Night Sky runs the camera only in planetarium mode, and only while its picture can be seen.**
+  Outside planetarium mode the sky is a dark dome with the stars (turning the Milky Way off does not
+  bring the camera in), and the Milky Way panorama has no alpha and covers the whole sphere, so with it
+  on the camera stays off in planetarium mode too. Otherwise the camera is unbound
+  (`NightSkyCameraPolicy`) and the sky is drawn with the live pose every vsync. With
+  the camera running under the default Milky Way, the previous invariant posed the sky at the images'
+  instants and the stars moved 15-30 times a second on a 120 Hz Pixel 7 Pro, invisibly to the user
+  and far less smoothly than a planetarium app. Without the camera the field of view is predicted from
+  its characteristics (`stillBackCameraFov`, no device opened) and a FOV measured earlier stays. The
+  camera permission is asked for only when the picture becomes wanted, never on entry, and a refusal
+  leaves the sky drawn with a chip that offers it again, not a screen that blocks it. The
+  orientation flow is never read in the Night Sky composition: it changes every 15 ms, and reading
+  it there recomposed the sky 61 times a second; the HUD reads it through `WholeDegreesPolicy`.
 - **The camera picture is cropped by `CameraBackgroundUv`, from the same FILL_CENTER fit as the FOV.**
   `CameraFovCalculator` assumes the stream is turned upright and scaled until it covers the
   viewport; the UVs do exactly that, so the picture and the overlay cannot disagree about what is
@@ -560,10 +573,10 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Contextual back handler in AR screens prioritizes dismissing active overlays.** Pressing back must
   dismiss open bottom sheets (layer settings, object details), search bar, or disambiguation dialogs
   before navigating out of the AR screen.
-- **Planetarium mode memorizes and restores prior Milky Way state.** Toggling Planetarium mode (opaque
-  background) temporarily turns off the procedural Milky Way for a clean star map, and restoring the
-  normal AR camera background restores the Milky Way to its previous state unless explicitly changed by
-  the user.
+- **Planetarium mode memorizes and restores prior Milky Way state.** Turning planetarium mode on (the
+  camera picture behind the sky, opaque fill until the first image) turns off the Milky Way, which
+  would cover the picture, and turning it off restores the Milky Way to its previous state unless
+  explicitly changed by the user.
 - **Celestial hit-testing scores both brightness and proximity.** In dense star fields, Euclidean distance
   alone selects faint background stars over prominent navigation stars. `StarHitTester` combines
   normalized distance and magnitude weights with a disambiguation popup for close candidate targets.
