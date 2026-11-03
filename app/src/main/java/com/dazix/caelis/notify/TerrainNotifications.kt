@@ -51,8 +51,12 @@ class TerrainNotifications(context: Context) {
             is HorizonState.Locating -> {
                 post(
                     channelId = CHANNEL_ID_ACTIVE,
-                    title = appContext.getString(R.string.horizon_notif_locating),
-                    text = appContext.getString(R.string.horizon_status_locating),
+                    title = appContext.getString(
+                        if (state.satellites) R.string.horizon_notif_locating else R.string.horizon_notif_locating_network,
+                    ),
+                    text = appContext.getString(
+                        if (state.satellites) R.string.horizon_status_locating else R.string.horizon_status_locating_network,
+                    ),
                     progress = null,
                     indeterminate = true,
                     throttled = !isPhaseChange,

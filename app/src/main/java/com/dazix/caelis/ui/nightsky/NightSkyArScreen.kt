@@ -151,6 +151,7 @@ fun NightSkyArScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isApproximateLocation by viewModel.isApproximateLocation.collectAsStateWithLifecycle()
     val alignAzimuthOffset by viewModel.panAzimuthOffset.collectAsStateWithLifecycle()
     val alignElevationOffset by viewModel.panPitchOffset.collectAsStateWithLifecycle()
     // Read where it is used, never here: a new orientation arrives every 15 ms, and reading it in this
@@ -652,7 +653,7 @@ fun NightSkyArScreen(
             } else {
                 NightSkyTopBar(
                     hasGpsFix = uiState.hasGpsFix,
-                    locationText = uiState.location.formatShort(),
+                    locationText = uiState.location.formatShort(approximate = isApproximateLocation),
                     orientation = hudOrientation,
                     cameraFovHorizontal = uiState.cameraFovHorizontal,
                     isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
@@ -1000,7 +1001,7 @@ internal fun NightSkyTopBar(
                 )
                 if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
                     Text(
-                        text = "• 🛰 GPS…",
+                        text = if (horizonState.satellites) "• 🛰 GPS…" else "• 📍…",
                         style = MaterialTheme.typography.labelMedium,
                         color = accentColor,
                         fontWeight = FontWeight.Bold,

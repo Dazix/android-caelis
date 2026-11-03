@@ -317,6 +317,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val location: StateFlow<GeoLocation> = locationProvider.location
     val hasGpsFix: StateFlow<Boolean> = locationProvider.hasGpsFix
+    val isApproximateLocation: StateFlow<Boolean> = locationProvider.isApproximate
 
     val keepScreenOn: StateFlow<Boolean> = settingsStore.nightSkyKeepScreenOn.stateIn(
         viewModelScope,
@@ -420,7 +421,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 if (locationProvider.hasGpsFix.value) {
                     horizonRepository.ensureProfile(locationProvider.location.value, updated)
                 } else {
-                    horizonRepository.setLocating()
+                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
                     val hasFix = locationProvider.awaitGpsFix()
                     if (hasFix) {
                         horizonRepository.ensureProfile(locationProvider.location.value, updated)
@@ -454,7 +455,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 if (locationProvider.hasGpsFix.value) {
                     horizonRepository.ensureProfile(locationProvider.location.value, updated)
                 } else {
-                    horizonRepository.setLocating()
+                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
                     val hasFix = locationProvider.awaitGpsFix()
                     if (hasFix) {
                         horizonRepository.ensureProfile(locationProvider.location.value, updated)

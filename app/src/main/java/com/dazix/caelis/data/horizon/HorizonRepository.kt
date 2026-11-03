@@ -34,8 +34,11 @@ sealed interface HorizonState {
     /** Nothing asked for yet, or the feature is off. */
     data object Idle : HorizonState
 
-    /** Waiting for GPS location fix before resolving or downloading. */
-    data object Locating : HorizonState
+    /**
+     * Waiting for a location fix before resolving or downloading. [satellites] is false on a device
+     * that has no GPS to wait for, where saying "waiting for GPS signal" would be untrue.
+     */
+    data class Locating(val satellites: Boolean = true) : HorizonState
 
     /** Tiles are needed and the app cannot fetch them itself — the user has to import them. */
     data class NeedsTiles(val keys: List<DemTileKey>) : HorizonState
@@ -206,13 +209,13 @@ class HorizonRepository private constructor(
         _state.value = HorizonState.Idle
     }
 
-    /** Indicates the app is waiting for GPS coordinates before downloading or computing. */
-    fun setLocating() {
+    /** Indicates the app is waiting for coordinates before downloading or computing. */
+    fun setLocating(satellites: Boolean) {
         inFlight?.cancel()
-        _state.value = HorizonState.Locating
+        _state.value = HorizonState.Locating(satellites)
     }
 
-    /** Sets the state to failed due to location timeout / unavailable GPS fix. */
+    /** Sets the state to failed due to location timeout / no usable fix. */
     fun setLocationFailed() {
         inFlight?.cancel()
         _state.value = HorizonState.Failed(HorizonState.Failed.Reason.LOCATION)

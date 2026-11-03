@@ -17,11 +17,15 @@ data class GeoLocation(
         require(longitude in -180.0..180.0) { "Longitude must be in [-180, 180], got $longitude" }
     }
 
-    /** Formats coordinates as a human-readable string, e.g. "50.08° N, 14.44° E". */
-    fun formatShort(): String {
+    /**
+     * Formats coordinates as a human-readable string, e.g. "50.08° N, 14.44° E"; an [approximate]
+     * (network, not satellite) position is prefixed with "≈ " so it is not read as a GPS fix.
+     */
+    fun formatShort(approximate: Boolean = false): String {
         val latDir = if (latitude >= 0) "N" else "S"
         val lonDir = if (longitude >= 0) "E" else "W"
-        return String.format(java.util.Locale.US, "%.2f° %s, %.2f° %s", Math.abs(latitude), latDir, Math.abs(longitude), lonDir)
+        val prefix = if (approximate) "≈ " else ""
+        return prefix + String.format(java.util.Locale.US, "%.2f° %s, %.2f° %s", Math.abs(latitude), latDir, Math.abs(longitude), lonDir)
     }
 
     companion object {

@@ -71,8 +71,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level (335 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (642 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level (336 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (653 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (333 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1139 JVM tests (335 intervalometer, 642 solar, horizon & pose, 333 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1151 JVM tests (336 intervalometer, 653 solar, horizon & pose, 333 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -458,6 +458,14 @@ Each of these was found by review or on the device and is now covered by a test.
   whether ARCore's TEXTURE_NORMALIZED has v down is `ArCoreFrameSource.TEXTURE_V_IS_DOWN`, the one
   switch that mirrors the picture and that only a device can confirm. Automatic alignment in ARCore
   mode uses the frame's own Y plane (`LumaRotation`), pose and fill scale (`LumaFramePose`).
+- **A device that cannot receive satellites does not wait for them.** A Pixel Tablet has no GPS
+  receiver, and the satellite-only rule left it on "Waiting for GPS signal…" for two minutes, then
+  reported the location as failed with a Wi-Fi position already in hand. `SolarLocationProvider.satellitesAvailable()` (the
+  `FEATURE_LOCATION_GPS` feature *and* the GPS provider on) picks the rules in `LocationFixPolicy`:
+  with satellites, GPS/fused within 100 m and a minute, waited for up to 2 min; without, a network
+  position within 500 m and 10 min, waited for 15 s, shown as approximate ("≈") and reported as
+  "Determining location" rather than GPS. Location switched off fails at once. Do not loosen the
+  satellite rule to match: a network position on a phone is what moved near ridges.
 - **A profile is never computed without the tile the observer is standing in.** Without it every ray
   runs out of data inside two kilometres, gives up, and the profile comes back as a flat ring at the
   geometric dip — which renders exactly like a real skyline. `HorizonRepository` treats that one tile

@@ -1129,7 +1129,9 @@ private fun ArCorePresenceRow(presence: ArCorePresence) {
 private fun HorizonStatusRow(state: HorizonState) {
     val text = when (state) {
         is HorizonState.Idle -> null
-        is HorizonState.Locating -> stringResource(R.string.horizon_status_locating)
+        is HorizonState.Locating -> stringResource(
+            if (state.satellites) R.string.horizon_status_locating else R.string.horizon_status_locating_network,
+        )
         is HorizonState.NeedsTiles -> stringResource(R.string.horizon_status_needs_tiles)
         is HorizonState.Downloading -> stringResource(
             R.string.horizon_status_downloading,

@@ -228,6 +228,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     val headingState: StateFlow<com.dazix.caelis.domain.arframe.HeadingState> = orientationTracker.headingState
     val location: StateFlow<GeoLocation> = locationProvider.location
     val hasGpsFix: StateFlow<Boolean> = locationProvider.hasGpsFix
+    val isApproximateLocation: StateFlow<Boolean> = locationProvider.isApproximate
 
     val keepScreenOn: StateFlow<Boolean> = settingsStore.sunArKeepScreenOn.stateIn(
         viewModelScope,
@@ -885,7 +886,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 if (locationProvider.hasGpsFix.value) {
                     horizonRepository.ensureProfile(locationProvider.location.value, updated)
                 } else {
-                    horizonRepository.setLocating()
+                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
                     val hasFix = locationProvider.awaitGpsFix()
                     if (hasFix) {
                         horizonRepository.ensureProfile(locationProvider.location.value, updated)
@@ -907,7 +908,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 if (locationProvider.hasGpsFix.value) {
                     horizonRepository.ensureProfile(locationProvider.location.value, updated)
                 } else {
-                    horizonRepository.setLocating()
+                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
                     val hasFix = locationProvider.awaitGpsFix()
                     if (hasFix) {
                         horizonRepository.ensureProfile(locationProvider.location.value, updated)
