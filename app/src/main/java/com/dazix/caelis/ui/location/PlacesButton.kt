@@ -3,6 +3,7 @@ package com.dazix.caelis.ui.location
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,20 +60,24 @@ fun PlacesButton(
         stringResource(R.string.places_button_gps)
     }
     Box(modifier = modifier.size(size)) {
-        IconButton(
-            onClick = onClick,
+        // The circle is drawn by this box, not by the IconButton: the button enforces a 48dp touch
+        // target, and with the background on it the circle grew past the requested size (it stood
+        // larger than the 44dp compass button next to it on the device).
+        Box(
             modifier = Modifier
-                .size(size)
+                .fillMaxSize()
                 .clip(CircleShape)
                 .background(if (active) accent else containerColor, CircleShape)
                 .border(1.dp, if (active) accent else borderColor, CircleShape),
         ) {
-            Icon(
-                imageVector = AppIcons.Map,
-                contentDescription = description,
-                tint = if (active) Color.Black else idleTint,
-                modifier = Modifier.size(size * 0.55f),
-            )
+            IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    imageVector = AppIcons.Map,
+                    contentDescription = description,
+                    tint = if (active) Color.Black else idleTint,
+                    modifier = Modifier.size(size * 0.55f),
+                )
+            }
         }
         if (active) {
             Box(

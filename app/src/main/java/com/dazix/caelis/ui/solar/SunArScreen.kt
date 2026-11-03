@@ -801,73 +801,83 @@ internal fun DateNavigatorBar(
     val accentColor = NormalGoldSolar
     val textColor = Color.White
 
+    // The places button stands beside the date pill as a circle of its own, the pill's height: it
+    // changes where, not when, and inside the pill it read as one more date control.
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CircleShape)
-            .background(containerBg)
-            .border(1.dp, containerBorder, CircleShape)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconButton(onClick = onPrevDay, modifier = Modifier.size(38.dp)) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = stringResource(R.string.sun_ar_prev_day),
-                tint = textColor,
-            )
-        }
-
         Row(
-            modifier = Modifier.clickable { onOpenDatePicker() },
+            modifier = Modifier
+                .weight(1f)
+                .clip(CircleShape)
+                .background(containerBg)
+                .border(1.dp, containerBorder, CircleShape)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Icon(
-                imageVector = AppIcons.Calendar,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = selectedDate.format(formatter),
-                style = MaterialTheme.typography.titleSmall,
-                color = textColor,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+            IconButton(onClick = onPrevDay, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    imageVector = AppIcons.Back,
+                    contentDescription = stringResource(R.string.sun_ar_prev_day),
+                    tint = textColor,
+                )
+            }
 
-        if (!isToday) {
-            FilledTonalButton(
-                onClick = onToday,
-                shape = CircleShape,
-                colors = ButtonDefaults.filledTonalButtonColors(),
-                modifier = Modifier.height(32.dp),
+            Row(
+                modifier = Modifier.clickable { onOpenDatePicker() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(stringResource(R.string.sun_ar_today), style = MaterialTheme.typography.labelSmall)
+                Icon(
+                    imageVector = AppIcons.Calendar,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = selectedDate.format(formatter),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = textColor,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            if (!isToday) {
+                FilledTonalButton(
+                    onClick = onToday,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    modifier = Modifier.height(32.dp),
+                ) {
+                    Text(stringResource(R.string.sun_ar_today), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            IconButton(
+                onClick = onNextDay,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Forward,
+                    contentDescription = stringResource(R.string.sun_ar_next_day),
+                    tint = textColor,
+                )
             }
         }
 
-        IconButton(
-            onClick = onNextDay,
-            modifier = Modifier.size(38.dp),
-        ) {
-            Icon(
-                imageVector = AppIcons.Forward,
-                contentDescription = stringResource(R.string.sun_ar_next_day),
-                tint = textColor,
-            )
-        }
-
         if (onOpenPlaces != null) {
-            Spacer(Modifier.width(4.dp))
             PlacesButton(
                 place = place,
                 onClick = onOpenPlaces,
                 accent = accentColor,
                 idleTint = accentColor,
-                size = 38.dp,
+                // The pill: a 38dp button plus 4dp padding above and below.
+                size = 46.dp,
+                containerColor = containerBg,
+                borderColor = containerBorder,
             )
         }
     }
