@@ -698,4 +698,14 @@
     <string name="places_button_virtual">Místa, zobrazeno virtuální místo %1$s</string>
     <string name="places_virtual_marker">Virtuální místo</string>
     <string name="ar_align_disabled_virtual">Vyrovnání je u virtuálního místa vypnuté: není podle čeho vyrovnávat, skutečný horizont ani obloha tu nejsou.</string>
+    <string name="incoming_place_share_label">Místo v Caelis</string>
+    <string name="incoming_place_title">Místo z jiné aplikace</string>
+    <string name="incoming_place_subtitle">Uložte ho jako virtuální místo, nebo si předem stáhněte jeho terén pro offline použití.</string>
+    <string name="incoming_place_short_link">Tohle je zkrácený odkaz. Souřadnice jsou jen na serveru mapy a Caelis odkaz neotevírá. Sdílejte raději souřadnice místa nebo celý odkaz, případně je zadejte níže.</string>
+    <string name="incoming_place_not_found">Ve sdíleném textu nejsou žádné souřadnice. Zadejte nebo vložte je níže.</string>
+    <string name="incoming_place_save">Uložit jako virtuální místo</string>
+    <string name="incoming_place_save_hint">Vyberete ho tlačítkem mapy ve Sledování slunce nebo v Noční obloze.</string>
+    <string name="incoming_place_prefetch">Stáhnout terén pro offline</string>
+    <string name="incoming_place_prefetch_hint">Otevře Offline terén s vyplněným místem; poloměr zvolíte tam.</string>
+    <string name="incoming_place_saved">Místo %1$s uloženo</string>
 </resources>

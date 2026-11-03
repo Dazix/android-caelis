@@ -157,4 +157,13 @@ class GeoCoordinateParserTest {
         val r2 = GeoCoordinateParser.parse("50.0755") // only one coordinate
         assertTrue(r2 is CoordinateParseResult.Failure.InvalidFormat)
     }
+
+    @Test
+    fun `geo link with a placeholder path reads the position from the query`() {
+        val r = GeoCoordinateParser.parse("geo:0,0?q=50.7360,15.7399(Snezka)")
+        assertTrue(r is CoordinateParseResult.Success)
+        val s = r as CoordinateParseResult.Success
+        assertEquals(50.7360, s.location.latitude, 0.0001)
+        assertEquals(15.7399, s.location.longitude, 0.0001)
+    }
 }

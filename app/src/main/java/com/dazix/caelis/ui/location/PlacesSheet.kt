@@ -313,7 +313,6 @@ private fun PlaceEditor(
         mutableStateOf(initial?.let { "%.5f, %.5f".format(Locale.US, it.latitude, it.longitude) }.orEmpty())
     }
     var zoneId by rememberSaveable(initial?.id) { mutableStateOf(initial?.zoneId ?: ZoneId.systemDefault().id) }
-    var pickingZone by remember { mutableStateOf(false) }
 
     val parseResult = remember(coordsText) { GeoCoordinateParser.parse(coordsText) }
     val parsed = (parseResult as? CoordinateParseResult.Success)?.location
@@ -338,22 +337,7 @@ private fun PlaceEditor(
         parseResult = parseResult,
         currentLocation = gpsLocation,
     )
-    OutlinedTextField(
-        value = zoneId,
-        onValueChange = {},
-        readOnly = true,
-        label = { Text(stringResource(R.string.places_zone_label)) },
-        supportingText = { Text(stringResource(R.string.places_zone_hint)) },
-        trailingIcon = {
-            IconButton(onClick = { pickingZone = true }) {
-                Icon(AppIcons.Search, contentDescription = stringResource(R.string.places_zone_search))
-            }
-        },
-        singleLine = true,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { pickingZone = true },
-    )
+    ZoneField(zoneId = zoneId, onZoneChange = { zoneId = it })
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
@@ -377,12 +361,33 @@ private fun PlaceEditor(
         ) { Text(stringResource(R.string.places_save)) }
     }
     Spacer(Modifier.size(4.dp))
+}
 
+/** The place's zone, read-only text that opens the searchable picker. */
+@Composable
+internal fun ZoneField(zoneId: String, onZoneChange: (String) -> Unit) {
+    var pickingZone by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = zoneId,
+        onValueChange = {},
+        readOnly = true,
+        label = { Text(stringResource(R.string.places_zone_label)) },
+        supportingText = { Text(stringResource(R.string.places_zone_hint)) },
+        trailingIcon = {
+            IconButton(onClick = { pickingZone = true }) {
+                Icon(AppIcons.Search, contentDescription = stringResource(R.string.places_zone_search))
+            }
+        },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { pickingZone = true },
+    )
     if (pickingZone) {
         ZonePickerDialog(
             selected = zoneId,
             onPick = {
-                zoneId = it
+                onZoneChange(it)
                 pickingZone = false
             },
             onDismiss = { pickingZone = false },

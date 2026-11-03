@@ -39,7 +39,8 @@ object GeoCoordinateParser {
     private val QUERY_PARAM_LAT_LON = Regex("""[?&](?:q|query|ll|loc|mlat)=(-?\d+\.?\d*)(?:[,%2C\s]+|&mlon=)(-?\d+\.?\d*)""")
     private val MAPY_CZ_XY_REGEX = Regex("""[?&]y=(-?\d+\.?\d*)&x=(-?\d+\.?\d*)|[?&]x=(-?\d+\.?\d*)&y=(-?\d+\.?\d*)""")
     private val OSM_MAP_HASH_REGEX = Regex("""#map=\d+/(-?\d+\.?\d*)/(-?\d+\.?\d*)""")
-    private val GEO_URI_REGEX = Regex("""geo:(-?\d+\.?\d*),(-?\d+\.?\d*)""")
+    private val GEO_QUERY_REGEX = Regex("""geo:[^?\s]*\?(?:\S*&)?q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)""")
+    private val GEO_URI_REGEX =Regex("""geo:(-?\d+\.?\d*),(-?\d+\.?\d*)""")
 
     /**
      * Parses an input string into a [CoordinateParseResult].
@@ -223,6 +224,15 @@ object GeoCoordinateParser {
 
     private fun parseMapUrl(url: String): CoordinateParseResult? {
         val decoded = decodePercent(url)
+
+        // A geo URI whose query names the point ("geo:0,0?q=50.7,15.7(Sněžka)", what Android's own
+        // share of a map pin looks like): the path is then a placeholder, often 0,0, and the query is
+        // the position.
+        GEO_QUERY_REGEX.find(decoded)?.let { m ->
+            val lat = m.groupValues[1].toDoubleOrNull() ?: return null
+            val lon = m.groupValues[2].toDoubleOrNull() ?: return null
+            return validateAndCreate(lat, lon, CoordinateFormat.MAP_LINK)
+        }
 
         // Check geo URI
         GEO_URI_REGEX.find(decoded)?.let { m ->

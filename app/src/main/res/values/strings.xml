@@ -687,4 +687,14 @@
     <string name="places_button_virtual">Places, showing virtual place %1$s</string>
     <string name="places_virtual_marker">Virtual place</string>
     <string name="ar_align_disabled_virtual">Alignment is off while a virtual place is shown: there is no real skyline or sky to align against.</string>
+    <string name="incoming_place_share_label">Caelis place</string>
+    <string name="incoming_place_title">Place from another app</string>
+    <string name="incoming_place_subtitle">Save it as a virtual place, or download its terrain for offline use.</string>
+    <string name="incoming_place_short_link">This is a shortened link. Its coordinates are only on the map server, and Caelis does not follow it. Share the place\'s coordinates or the full link instead, or type them in below.</string>
+    <string name="incoming_place_not_found">No coordinates found in what was shared. Type or paste them below.</string>
+    <string name="incoming_place_save">Save as virtual place</string>
+    <string name="incoming_place_save_hint">Choose it under the map button in Sun tracking or the night sky.</string>
+    <string name="incoming_place_prefetch">Download terrain for offline</string>
+    <string name="incoming_place_prefetch_hint">Opens Offline terrain with this place filled in; choose the radius there.</string>
+    <string name="incoming_place_saved">Place %1$s saved</string>
 </resources>

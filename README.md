@@ -113,7 +113,7 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   hidden, so it is obvious how much of the golden hour the hills take. Off by default; the elevation data is
   either downloaded once with your consent or imported by hand, and the computed profile then works offline.
 - **Virtual Places**: Plan a sunrise somewhere you are not. Save a place by name and coordinates (decimal,
-  DMS, or a pasted map link) with its time zone, pick it from the map button in Sun AR or Night Sky, and the
+  DMS, or a pasted map link, or share it straight from Mapy.com, Google Maps or any `geo:` link) with its time zone, pick it from the map button in Sun AR or Night Sky, and the
   app fetches that place's terrain and shows where and when the Sun and Moon rise and set behind its own
   skyline, in its local time. Turning the phone looks around the place; the camera and automatic alignment
   are off while it is shown, and a neutral backdrop with the place's terrain stands in for the picture. The

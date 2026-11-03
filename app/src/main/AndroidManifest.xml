@@ -131,6 +131,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+              A place handed over by a map app: shared text (Mapy.com, Google Maps, a message with
+              coordinates) or a geo: link. Only parsed (domain/location/IncomingPlaceParser), never
+              followed, and it does nothing until the user saves it or downloads its terrain.
+            -->
+            <intent-filter android:label="@string/incoming_place_share_label">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter android:label="@string/incoming_place_share_label">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="geo" />
+            </intent-filter>
         </activity>
 
         <!--
