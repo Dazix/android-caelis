@@ -6,18 +6,23 @@ import android.text.TextUtils
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
 import com.dazix.caelis.domain.arframe.MarkReservations
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.arframe.TiltedLabel
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import kotlin.math.ceil
 
 /**
  * The peak names on the terrain skyline, as sprites of a [SpriteAtlas] listed into a [LabelBatch].
  *
- * Each sprite is "Name · 1603 m" over a short tick whose foot is the anchor: pinned to the peak's
- * azimuth and apparent altitude, the text stands clear above the ridge and the tick says which
- * summit it means. The tick is part of the sprite rather than a [LineBatch] segment because it is a
- * length in screen pixels, which a sky-space line cannot be at every zoom, and a sprite costs
- * nothing per frame. The type is smaller than the time bubbles and in the terrain's own colour, so
- * the names read as part of the skyline rather than as a second layer of marks.
+ * Each peak is a short tick whose foot is the anchor, pinned to the peak's azimuth and apparent
+ * altitude, and "Name · 1603 m" starting at the tick's top and rising at [TEXT_ANGLE_DEG] from the
+ * horizon. Both stand on the local vertical rather than on the screen's up (`label.mat`'s align
+ * path): held screen-upright, the names swung against the ridge whenever the phone rolled, while
+ * turning with the landscape the tick keeps standing on its summit. The tick is a sprite rather than a
+ * [LineBatch] segment because it is a length in screen pixels, which a sky-space line cannot be at
+ * every zoom; one tick sprite serves every peak. The text is drawn level and turned on the GPU: baked
+ * at an angle it would take several times the atlas area per name and blur under a roll anyway. The
+ * type is smaller than the time bubbles and in the terrain's own colour, so the names read as part of
+ * the skyline rather than as a second layer of marks.
  *
  * Sprites are drawn when the list, the app language, the colour (night vision), the density or the
  * font scale change ([update] bumps [revision]; the owner of the atlas redraws it and calls
@@ -25,8 +30,9 @@ import kotlin.math.ceil
  * [MAX_LANDMARKS] up front.
  *
  * What the screen already shows keeps its place: the owner [reserve]s the rectangles of its time
- * bubbles and badges before [emit], and a peak whose label would land on one is left out of this
- * frame ([MarkClearance]) — a bubble is the precise reading, a peak name the decoration.
+ * bubbles and badges before [emit], and a peak whose name would land on one, or on a name listed
+ * before it, is left out of this frame ([MarkClearance]) — a bubble is the precise reading, a peak
+ * name the decoration. The names' boxes are laid out by [TiltedLabel], from the same projector.
  */
 class LandmarkMarks {
 
@@ -40,23 +46,34 @@ class LandmarkMarks {
     private var density = 0f
     private var fontScale = 0f
 
+    private var tickSprite = -1
+    private var textLift = 0f
     private val sprites = IntArray(MAX_LANDMARKS) { -1 }
     private val azimuth = DoubleArray(MAX_LANDMARKS)
     private val elevation = DoubleArray(MAX_LANDMARKS)
     private val direction = FloatArray(MAX_LANDMARKS * 3)
-    private val halfWidth = FloatArray(MAX_LANDMARKS)
-    private val halfHeight = FloatArray(MAX_LANDMARKS)
+    private val width = FloatArray(MAX_LANDMARKS)
+    private val height = FloatArray(MAX_LANDMARKS)
+    private val anchorX = FloatArray(MAX_LANDMARKS)
+    private val anchorY = FloatArray(MAX_LANDMARKS)
 
-    /** From the anchor (the foot of the tick) to the sprite's centre, Y down, so negative. */
-    private val centreOffsetY = FloatArray(MAX_LANDMARKS)
+    // The names accepted in this frame, for the clearance between peaks.
+    private var acceptedCount = 0
+    private val acceptedX = FloatArray(MAX_LANDMARKS)
+    private val acceptedY = FloatArray(MAX_LANDMARKS)
+    private val acceptedHalfLength = FloatArray(MAX_LANDMARKS)
+    private val acceptedHalfThickness = FloatArray(MAX_LANDMARKS)
 
     private val reservations = MarkReservations(MAX_RESERVED)
+    private val box = TiltedLabel()
     private val projected = FloatArray(3)
+    private val up = FloatArray(2)
+    private val scratch = FloatArray(3)
     private val fontMetrics = Paint.FontMetrics()
     private val scratchDirection = FloatArray(3)
 
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
     private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -100,12 +117,30 @@ class LandmarkMarks {
         tickPaint.strokeWidth = TICK_WIDTH_DP * density
         tickCasingPaint.strokeWidth = (TICK_WIDTH_DP + 1.6f) * density
         textPaint.getFontMetrics(fontMetrics)
-        val textHeight = fontMetrics.bottom - fontMetrics.top
         val pad = ceil(SHADOW_DP * density).toInt() + 2
         val tick = TICK_DP * density
-        val h = ceil(textHeight + tick).toInt() + 2 * pad
+        textLift = tick + TEXT_GAP_DP * density
         for (i in 0 until MAX_LANDMARKS) sprites[i] = -1
+        tickSprite = -1
         val count = minOf(landmarks.size, MAX_LANDMARKS)
+        if (count == 0) return
+
+        val tw = ceil(tickCasingPaint.strokeWidth).toInt() + 2 * pad
+        val th = ceil(tick).toInt() + 2 * pad
+        val tax = tw * 0.5f
+        val tay = (th - pad).toFloat()
+        tickSprite = atlas.add(tw, th, tax, tay) { canvas, left, top ->
+            val cx = left + tax
+            canvas.drawLine(cx, top + pad, cx, top + tay, tickCasingPaint)
+            canvas.drawLine(cx, top + pad, cx, top + tay, tickPaint)
+        }
+        if (tickSprite < 0) return
+
+        val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * pad
+        val baseline = pad - fontMetrics.top
+        // The text's axis runs through the middle of its letters, between ascent and descent, so the
+        // turned line starts squarely at the tick's top rather than with its baseline there.
+        val ay = baseline + (fontMetrics.ascent + fontMetrics.descent) * 0.5f
         for (i in 0 until count) {
             val landmark = landmarks[i]
             // An OSM name has no length limit. A sprite wider than the atlas cannot be packed at all
@@ -118,28 +153,27 @@ class LandmarkMarks {
                 TextUtils.TruncateAt.END,
             ).toString()
             val w = ceil(textPaint.measureText(text)).toInt() + 2 * pad
-            val ax = w * 0.5f
-            val ay = (h - pad).toFloat()
+            val ax = pad.toFloat()
             val sprite = atlas.add(w, h, ax, ay) { canvas, left, top ->
-                val cx = left + ax
-                canvas.drawText(text, cx, top + pad - fontMetrics.top, textPaint)
-                val tickTop = top + pad + textHeight
-                canvas.drawLine(cx, tickTop, cx, top + ay, tickCasingPaint)
-                canvas.drawLine(cx, tickTop, cx, top + ay, tickPaint)
+                canvas.drawText(text, left + ax, top + baseline, textPaint)
             }
             sprites[i] = sprite
             azimuth[i] = landmark.azimuthDegrees
             elevation[i] = landmark.apparentElevationDegrees
             AltAzGridBuilder.direction(azimuth[i], elevation[i], scratchDirection)
             scratchDirection.copyInto(direction, i * 3)
-            halfWidth[i] = w * 0.5f
-            halfHeight[i] = h * 0.5f
-            centreOffsetY[i] = h * 0.5f - ay
+            width[i] = w.toFloat()
+            height[i] = h.toFloat()
+            anchorX[i] = ax
+            anchorY[i] = ay
         }
     }
 
     /** How many names the last [addSprites] managed to draw (an atlas that is full drops the rest). */
     val spriteCount: Int get() = sprites.count { it >= 0 }
+
+    /** How many sprites of the atlas the last [addSprites] took: the names and the one tick. */
+    val atlasSpriteCount: Int get() = spriteCount + if (tickSprite >= 0) 1 else 0
 
     /** Starts a frame's clearance: nothing is reserved yet. */
     fun beginClearance() {
@@ -154,11 +188,14 @@ class LandmarkMarks {
     /**
      * Lists this frame's peak names into [labels] (between its `begin` and `end`), left to right.
      *
-     * A name on screen that would overlap something reserved (including a peak name listed before it)
-     * is left out. One that is off screen or behind the camera is always listed: the GPU hides it, and
-     * listing it regardless keeps the listing the same while the phone pans, so nothing is uploaded.
+     * A name on screen that would overlap something reserved or a peak name listed before it is left
+     * out, tick and all. One that is off screen or behind the camera is always listed: the GPU hides
+     * it, and listing it regardless keeps the listing the same while the phone pans, so nothing is
+     * uploaded.
      */
     fun emit(labels: LabelBatch, projector: SkyProjector) {
+        if (tickSprite < 0) return
+        acceptedCount = 0
         val count = minOf(landmarks.size, MAX_LANDMARKS)
         for (i in 0 until count) {
             val sprite = sprites[i]
@@ -166,20 +203,54 @@ class LandmarkMarks {
             val inFront = projector.projectAltAz(azimuth[i], elevation[i], projected)
             if (inFront) {
                 val x = projected[0]
-                val y = projected[1] + centreOffsetY[i]
-                val onScreen = x + halfWidth[i] >= 0f && x - halfWidth[i] <= projector.viewportWidth &&
-                    y + halfHeight[i] >= 0f && y - halfHeight[i] <= projector.viewportHeight
+                val y = projected[1]
+                TiltedLabel.screenUp(projector, azimuth[i], elevation[i], x, y, up, scratch)
+                box.place(x, y, up[0], up[1], textLift, TEXT_ANGLE_RAD, width[i], height[i], anchorX[i], anchorY[i])
+                val hw = box.boundsHalfWidth
+                val hh = box.boundsHalfHeight
+                val cx = box.centerX
+                val cy = box.centerY
+                val onScreen = cx + hw >= 0f && cx - hw <= projector.viewportWidth &&
+                    cy + hh >= 0f && cy - hh <= projector.viewportHeight
                 if (onScreen) {
-                    if (!reservations.tryReserve(x, y, halfWidth[i], halfHeight[i])) continue
+                    if (reservations.isTaken(cx, cy, hw, hh) || overlapsAccepted()) continue
+                    acceptedX[acceptedCount] = cx
+                    acceptedY[acceptedCount] = cy
+                    acceptedHalfLength[acceptedCount] = box.halfLength
+                    acceptedHalfThickness[acceptedCount] = box.halfThickness
+                    acceptedCount++
                 }
             }
-            labels.add(sprite, direction[i * 3], direction[i * 3 + 1], direction[i * 3 + 2])
+            val dx = direction[i * 3]
+            val dy = direction[i * 3 + 1]
+            val dz = direction[i * 3 + 2]
+            labels.add(tickSprite, dx, dy, dz, alignToHorizon = true)
+            labels.add(sprite, dx, dy, dz, alignToHorizon = true, liftPx = textLift, angleRad = TEXT_ANGLE_RAD)
         }
+    }
+
+    private fun overlapsAccepted(): Boolean {
+        for (j in 0 until acceptedCount) {
+            if (box.overlapsParallel(acceptedX[j], acceptedY[j], acceptedHalfLength[j], acceptedHalfThickness[j])) {
+                return true
+            }
+        }
+        return false
     }
 
     companion object {
         /** More than [com.dazix.caelis.domain.horizon.LandmarkVisibility.DEFAULT_MAX_LABELS] with room to spare. */
         const val MAX_LANDMARKS = 16
+
+        /** Sprites [addSprites] can put into an atlas: every name and the one tick. */
+        const val ATLAS_SPRITES = MAX_LANDMARKS + 1
+
+        /** Sprites [emit] can list into a batch: a tick and a name per peak. */
+        const val LISTED_SPRITES = 2 * MAX_LANDMARKS
+
+        /** Counter-clockwise from the horizon line, at which a name rises from its tick. */
+        const val TEXT_ANGLE_DEG = 60f
+        private val TEXT_ANGLE_RAD = Math.toRadians(TEXT_ANGLE_DEG.toDouble()).toFloat()
 
         /** Two days of bubbles, four badges and the peaks, with room to spare. */
         private const val MAX_RESERVED = 256
@@ -187,7 +258,8 @@ class LandmarkMarks {
         private const val MAX_LABEL_ATLAS_FRACTION = 0.6f
         private const val MAX_LABEL_DP = 260f
         private const val TEXT_SP = 10f
-        private const val TICK_DP = 7f
+        internal const val TICK_DP = 5.6f
+        internal const val TEXT_GAP_DP = 6f
         private const val TICK_WIDTH_DP = 1.2f
         private const val SHADOW_DP = 2f
         private const val CASING_ARGB = 0xB3000000.toInt()

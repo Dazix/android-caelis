@@ -1240,7 +1240,7 @@ class NightSkyRenderer {
         gridMarkers.addSprites(atlas)
         peakMarks.addSprites(atlas)
         atlas.end()
-        val peakSprites = peakMarks.spriteCount
+        val peakSprites = peakMarks.atlasSpriteCount
         if (atlas.spriteCount < constellationSprites.size + dsoSprites.size + meteorSprites.size + com.dazix.caelis.ar.scene.SkyGridMarkers.SPRITE_COUNT + peakSprites) {
             android.util.Log.e(TAG, "mark atlas full: ${atlas.spriteCount} sprites fit, some names are not drawn")
         }

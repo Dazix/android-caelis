@@ -94,6 +94,12 @@ class LabelBatch(
      * vector, model space), moved by ([offsetXPx], [offsetYPx]) screen pixels (Y down) and drawn at
      * [alpha]. With a margin, the sprite is hidden while its anchor is closer than [marginXPx] /
      * [marginYPx] to the screen edge (the grid's altitude labels, which would crowd the corners).
+     *
+     * With [alignToHorizon] the sprite stands on the local vertical at the anchor rather than on the
+     * screen's up: its anchor is moved [liftPx] along that vertical and the sprite is turned a
+     * further [angleRad] counter-clockwise around it (`label.mat`; the CPU twin is
+     * [com.dazix.caelis.domain.arframe.TiltedLabel]). The offsets should then stay zero.
+     *
      * Returns false when the batch is full or the sprite does not exist.
      */
     fun add(
@@ -104,6 +110,9 @@ class LabelBatch(
         alpha: Float = 1f,
         marginXPx: Float = 0f,
         marginYPx: Float = 0f,
+        alignToHorizon: Boolean = false,
+        liftPx: Float = 0f,
+        angleRad: Float = 0f,
     ): Boolean {
         val buffer = checkNotNull(writing) { "add outside begin/end" }
         if (sprite !in 0 until atlas.spriteCount || spriteCount >= maxSprites || alpha <= 0f) return false
@@ -118,10 +127,13 @@ class LabelBatch(
         val v0 = atlas.v0[sprite]
         val u1 = atlas.u1[sprite]
         val v1 = atlas.v1[sprite]
-        vertex(buffer, px, py, pz, u0, v0, left, top, alpha, marginXPx, marginYPx)
-        vertex(buffer, px, py, pz, u1, v0, right, top, alpha, marginXPx, marginYPx)
-        vertex(buffer, px, py, pz, u1, v1, right, bottom, alpha, marginXPx, marginYPx)
-        vertex(buffer, px, py, pz, u0, v1, left, bottom, alpha, marginXPx, marginYPx)
+        val angle = if (alignToHorizon) angleRad else 0f
+        val lift = if (alignToHorizon) liftPx else 0f
+        val align = if (alignToHorizon) 1f else 0f
+        vertex(buffer, px, py, pz, u0, v0, left, top, alpha, angle, marginXPx, marginYPx, lift, align)
+        vertex(buffer, px, py, pz, u1, v0, right, top, alpha, angle, marginXPx, marginYPx, lift, align)
+        vertex(buffer, px, py, pz, u1, v1, right, bottom, alpha, angle, marginXPx, marginYPx, lift, align)
+        vertex(buffer, px, py, pz, u0, v1, left, bottom, alpha, angle, marginXPx, marginYPx, lift, align)
         spriteCount++
         return true
     }
@@ -131,12 +143,14 @@ class LabelBatch(
         px: Float, py: Float, pz: Float,
         u: Float, v: Float,
         dx: Float, dy: Float,
-        alpha: Float, mx: Float, my: Float,
+        alpha: Float, angle: Float,
+        mx: Float, my: Float,
+        lift: Float, align: Float,
     ) {
         b.putFloat(px).putFloat(py).putFloat(pz)
         b.putFloat(u).putFloat(v)
-        b.putFloat(dx).putFloat(dy).putFloat(alpha).putFloat(0f)
-        b.putFloat(mx).putFloat(my).putFloat(0f).putFloat(0f)
+        b.putFloat(dx).putFloat(dy).putFloat(alpha).putFloat(angle)
+        b.putFloat(mx).putFloat(my).putFloat(lift).putFloat(align)
     }
 
     /** Uploads the listing, unless it is exactly what the GPU already has. */

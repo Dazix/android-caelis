@@ -6,8 +6,14 @@
 // disc), so the fragment only fades the sprite.
 //
 // Per-vertex: position = the anchor's sky direction (model space), uv0 = atlas coordinate,
-// custom0 = (dxPx, dyPx, alpha, 0): this corner's offset from the anchor in screen pixels, Y down,
-// custom1 = (marginXPx, marginYPx, 0, 0): hide the sprite while its anchor is that close to an edge.
+// custom0 = (dxPx, dyPx, alpha, angleRad): this corner's offset from the anchor in screen pixels, Y down,
+// custom1 = (marginXPx, marginYPx, liftPx, align): hide the sprite while its anchor is that close to an edge.
+//
+// With align = 1 the sprite is laid out against the horizon instead of the screen: its "up" is the
+// local vertical at the anchor (the projected direction towards the zenith), its pivot is liftPx
+// along that vertical, and it is turned a further angleRad counter-clockwise around the pivot. The
+// peak names use it: held screen-upright, a name swung against the ridge whenever the phone rolled.
+// TiltedLabel is the CPU twin of this layout (clearance); keep the two in step.
 material {
     name : Label,
     shadingModel : unlit,
@@ -48,12 +54,28 @@ vertex {
         // fractional position linear filtering smears every glyph across two pixels, which is what
         // made names on the horizon look blurred while the phone moved.
         float2 snap = float2(0.0);
+        float2 offset = c.xy;
         if (visible) {
             float4 aClip = mulMat4x4Float3(getClipFromViewMatrix(), viewPos.xyz);
             float2 aPx = (aClip.xy / aClip.w * 0.5 + 0.5) * getResolution().xy;
             snap = floor(aPx + 0.5) - aPx;
+            if (m.w > 0.5) {
+                // The local vertical: where a small step towards the zenith lands, Y down like c.xy.
+                float3 zenith = normalize(mulMat3x3Float3(getWorldFromModelMatrix(), float3(0.0, 0.0, 1.0)));
+                float4 bView = mulMat4x4Float3(getViewFromWorldMatrix(), wp + zenith * (dist * 0.002));
+                float4 bClip = mulMat4x4Float3(getClipFromViewMatrix(), bView.xyz);
+                float2 d = (bClip.xy / bClip.w * 0.5 + 0.5) * getResolution().xy - aPx;
+                float len = length(d);
+                float2 u = (bView.z < 0.0 && len > 1e-3) ? float2(d.x, -d.y) / len : float2(0.0, -1.0);
+                float2 r = float2(-u.y, u.x);
+                float ca = cos(c.w);
+                float sa = sin(c.w);
+                float2 t = r * ca + u * sa;
+                float2 n = u * ca - r * sa;
+                offset = u * m.z + t * c.x - n * c.y;
+            }
         }
-        material.worldPosition.xyz = wp + (right * (c.x + snap.x) - up * (c.y - snap.y)) * worldPerPx;
+        material.worldPosition.xyz = wp + (right * (offset.x + snap.x) - up * (offset.y - snap.y)) * worldPerPx;
         material.labelAlpha = float4(visible ? c.z : 0.0, 0.0, 0.0, 0.0);
     }
 }
