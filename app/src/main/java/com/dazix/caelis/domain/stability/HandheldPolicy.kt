@@ -32,6 +32,16 @@ object HandheldPolicy {
         enabled && !sessionActive && timelapse
 
     /**
+     * Whether the home screen holds the indicator's line while the answer is still unknown. Whenever
+     * the check is going to answer at all: the line used to appear only with the first verdict, three
+     * seconds after the screen opened (and again after every return to it, which restarts the
+     * window), and pushed everything under it down. Without a gyroscope there will never be an
+     * answer, so nothing is held for one.
+     */
+    fun holdStatusLine(watching: Boolean, hasGyroscope: Boolean): Boolean =
+        watching && hasGyroscope
+
+    /**
      * Whether pressing Start asks "start anyway?" first. Only on a positive answer: an unknown state
      * (no gyroscope, a window not yet full) starts straight away, never behind a question.
      */

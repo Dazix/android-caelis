@@ -28,6 +28,7 @@
     <!-- Navigation -->
     <string name="nav_setup">Nastavení série</string>
     <string name="nav_setup_summary">Režim, interval, počet snímků, podmínky ukončení</string>
+    <string name="home_show_settings">Zobrazit nastavení série</string>
     <string name="nav_ramp">Změna intervalu</string>
     <string name="nav_ramp_summary">Postupná změna intervalu během série</string>
     <string name="nav_advanced">Pokročilé doplňky</string>
@@ -52,6 +53,7 @@
     <string name="home_start">Spustit</string>
     <string name="home_handheld_steady">Telefon je stabilní</string>
     <string name="home_handheld_detected">Telefon se zdá být v ruce</string>
+    <string name="home_handheld_checking">Zjišťuji stabilitu telefonu…</string>
     <string name="home_handheld_dialog_title">Telefon v ruce?</string>
     <string name="home_handheld_dialog_body">Posledních pár sekund se telefon hýbal tak, jak se hýbe ruka. Časosběr z ruky skáče snímek od snímku; nejdřív telefon dejte na stativ nebo pevnou podložku.</string>
     <string name="home_handheld_dialog_start_anyway">Přesto spustit</string>

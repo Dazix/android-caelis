@@ -28,6 +28,7 @@
     <!-- Navigation -->
     <string name="nav_setup">Session setup</string>
     <string name="nav_setup_summary">Mode, interval, shots, stop conditions</string>
+    <string name="home_show_settings">Show session settings</string>
     <string name="nav_ramp">Interval ramp</string>
     <string name="nav_ramp_summary">Slowly change the interval during the session</string>
     <string name="nav_advanced">Advanced extras</string>
@@ -52,6 +53,7 @@
     <string name="home_start">Start</string>
     <string name="home_handheld_steady">The phone is steady</string>
     <string name="home_handheld_detected">The phone seems to be held in the hand</string>
+    <string name="home_handheld_checking">Checking whether the phone is steady…</string>
     <string name="home_handheld_dialog_title">Phone in the hand?</string>
     <string name="home_handheld_dialog_body">For the last few seconds the phone has moved the way a hand moves. A time-lapse shot from the hand jumps from frame to frame; put the phone on a tripod or a steady surface first.</string>
     <string name="home_handheld_dialog_start_anyway">Start anyway</string>

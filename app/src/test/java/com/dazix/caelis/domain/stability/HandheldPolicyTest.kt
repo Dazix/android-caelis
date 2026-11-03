@@ -43,6 +43,14 @@ class HandheldPolicyTest {
     }
 
     @Test
+    fun `the status line is held from the start whenever an answer is coming`() {
+        assertTrue(HandheldPolicy.holdStatusLine(watching = true, hasGyroscope = true))
+        // No gyroscope: no answer will ever come, so no empty line waits for one.
+        assertFalse(HandheldPolicy.holdStatusLine(watching = true, hasGyroscope = false))
+        assertFalse(HandheldPolicy.holdStatusLine(watching = false, hasGyroscope = true))
+    }
+
+    @Test
     fun `start asks only on a positive answer`() {
         assertTrue(HandheldPolicy.confirmStart(HandheldState.HANDHELD, timelapse = true, enabled = true))
         assertFalse(HandheldPolicy.confirmStart(HandheldState.STEADY, timelapse = true, enabled = true))

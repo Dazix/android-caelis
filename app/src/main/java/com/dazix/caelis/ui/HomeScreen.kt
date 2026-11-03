@@ -1,6 +1,8 @@
 package com.dazix.caelis.ui
 
 import android.os.SystemClock
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -11,11 +13,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -26,11 +31,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -42,6 +55,8 @@ import com.dazix.caelis.domain.stability.HandheldPolicy
 import com.dazix.caelis.domain.stability.HandheldState
 import com.dazix.caelis.overlay.OverlayPolicy
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -70,15 +85,43 @@ fun HomeScreen(
     // The "phone in hand" check before Start: a live line under the session card, and a question
     // when Start is pressed from the hand. Once the session runs, the engine watches instead.
     val timelapse = setup.mode == ModeChoice.TIMELAPSE
-    val handheldBeforeStart by rememberHandheldState(
-        HandheldPolicy.watchBeforeStart(active, timelapse, handheldWarning),
-    )
+    val watchHandheld = HandheldPolicy.watchBeforeStart(active, timelapse, handheldWarning)
+    val handheldBeforeStart by rememberHandheldState(watchHandheld)
+    val holdHandheldLine = HandheldPolicy.holdStatusLine(watchHandheld, rememberHasGyroscope())
     val startGuarded = rememberHandheldStartGuard(
         state = handheldBeforeStart,
         timelapse = timelapse,
         enabled = handheldWarning,
         onStart = onStart,
     )
+
+    // The settings button on the status card scrolls down to the settings card: where that card starts
+    // in the scrolled column, and how far the floating toolbar reaches over the bottom of the screen.
+    // Once there, the card's outline pulses once, so the eye lands on what it was sent to
+    // rather than having to find it among the other cards.
+    var settingsCardTop by remember { mutableIntStateOf(0) }
+    var settingsCardHeight by remember { mutableIntStateOf(0) }
+    val clearancePx = with(LocalDensity.current) { FloatingLayerClearance.roundToPx() }
+    val settingsHighlight = remember { Animatable(0f) }
+    val highlightSpec = ExpressiveMotion.effects<Float>()
+    val scope = rememberCoroutineScope()
+    val showSettings: () -> Unit = {
+        scope.launch {
+            settingsHighlight.snapTo(0f)
+            scrollState.animateScrollTo(
+                HomeScrollPolicy.settingsScrollTarget(
+                    cardTop = settingsCardTop,
+                    cardHeight = settingsCardHeight,
+                    viewportHeight = scrollState.viewportSize,
+                    bottomClearance = clearancePx,
+                    maxScroll = scrollState.maxValue,
+                ),
+            )
+            settingsHighlight.animateTo(1f, highlightSpec)
+            delay(SETTINGS_HIGHLIGHT_HOLD_MS)
+            settingsHighlight.animateTo(0f, tween(SETTINGS_HIGHLIGHT_FADE_MS))
+        }
+    }
 
     var savedScrollOffset by rememberSaveable { mutableIntStateOf(0) }
 
@@ -153,6 +196,8 @@ fun HomeScreen(
             setup = setup,
             active = active,
             handheldBeforeStart = handheldBeforeStart,
+            holdHandheldLine = holdHandheldLine,
+            onShowSettings = showSettings,
         )
 
         if (serviceUnavailable) {
@@ -246,7 +291,28 @@ fun HomeScreen(
             )
         }
 
-        SectionCard {
+        val highlightColor = MaterialTheme.colorScheme.primary
+        val cardShape = MaterialTheme.shapes.large
+        SectionCard(
+            modifier = Modifier
+                .onGloballyPositioned { coordinates ->
+                    settingsCardTop = coordinates.positionInParent().y.roundToInt()
+                    settingsCardHeight = coordinates.size.height
+                }
+                // Read in the draw phase only: the fade redraws the outline, it never recomposes.
+                .drawWithContent {
+                    drawContent()
+                    val alpha = settingsHighlight.value
+                    if (alpha > 0f) {
+                        val stroke = SETTINGS_HIGHLIGHT_STROKE.toPx()
+                        drawOutline(
+                            outline = cardShape.createOutline(size, layoutDirection, this),
+                            color = highlightColor.copy(alpha = alpha),
+                            style = Stroke(width = stroke),
+                        )
+                    }
+                },
+        ) {
             ListRowButton(
                 title = stringResource(R.string.nav_setup),
                 subtitle = stringResource(R.string.nav_setup_summary),
@@ -292,14 +358,28 @@ private fun SessionStatusCard(
     setup: SetupUiState,
     active: Boolean,
     handheldBeforeStart: HandheldState,
+    holdHandheldLine: Boolean,
+    onShowSettings: () -> Unit,
 ) {
     val now by rememberElapsedRealtime(active)
     val state = snapshot.state
     SectionCard(tone = if (active) CardTone.ACCENT else CardTone.NEUTRAL) {
-        Text(
-            text = stringResource(stateLabel(state)),
-            style = ExpressiveType.figureLabel,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(stateLabel(state)),
+                style = ExpressiveType.figureLabel,
+                modifier = Modifier.weight(1f),
+            )
+            // The same sliders as the "Session setup" row it leads to: the gear in the navigation bar
+            // already means the app's own settings. Into the card's corner by the button's own inner
+            // padding, so the glyph lines up with the text edge while the touch target keeps its 48dp.
+            IconButton(onClick = onShowSettings, modifier = Modifier.offset(x = 12.dp)) {
+                Icon(
+                    imageVector = AppIcons.Setup,
+                    contentDescription = stringResource(R.string.home_show_settings),
+                )
+            }
+        }
 
         val hero = heroText(snapshot = snapshot, setup = setup, now = now, active = active)
         Row(
@@ -366,7 +446,7 @@ private fun SessionStatusCard(
             )
         }
         // Before Start only; once a session runs, the line above carries the same news.
-        if (!active) HandheldStatusRow(handheldBeforeStart)
+        if (!active) HandheldStatusRow(handheldBeforeStart, holdLine = holdHandheldLine)
     }
 }
 
@@ -538,3 +618,11 @@ private fun trimmedNumber(value: Double): String =
     } else {
         String.format("%.1f", value)
     }
+
+/** A pulse, not a state: the outline peaks and goes at once, held only long enough to be seen. */
+private const val SETTINGS_HIGHLIGHT_HOLD_MS = 150L
+
+/** The outline fades out more slowly than it appears, so it reads as settling rather than blinking. */
+private const val SETTINGS_HIGHLIGHT_FADE_MS = 400
+
+private val SETTINGS_HIGHLIGHT_STROKE = 1.5.dp

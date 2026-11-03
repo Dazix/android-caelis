@@ -78,19 +78,35 @@ fun rememberHandheldState(watch: Boolean): State<HandheldState> {
     return state
 }
 
+/** Whether this phone has the gyroscope the check needs; without one it never answers. */
+@Composable
+fun rememberHasGyroscope(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { MotionMonitor(context).isAvailable }
+}
+
 /**
- * "Steady" or "Phone in hand" under the session card before a time-lapse starts. Shows nothing while
- * the answer is unknown (no gyroscope, the first three seconds): a placeholder would only teach the
- * user to ignore the line. Icon and text both carry the state, never the colour alone.
+ * "Steady" or "Phone in hand" under the session card before a time-lapse starts. While the first
+ * window fills (on opening the screen and on every return to it) the line says it is checking when
+ * [holdLine] is set, so the verdict replaces it in place instead of pushing the screen down three
+ * seconds in (see [HandheldPolicy.holdStatusLine]). Without [holdLine] an unknown answer shows nothing.
+ * Icon and text both carry the state, never the colour alone.
  */
 @Composable
-fun HandheldStatusRow(state: HandheldState, modifier: Modifier = Modifier) {
+fun HandheldStatusRow(state: HandheldState, holdLine: Boolean, modifier: Modifier = Modifier) {
     val handheld = when (state) {
         HandheldState.HANDHELD -> true
         HandheldState.STEADY -> false
-        HandheldState.UNKNOWN -> return
+        HandheldState.UNKNOWN -> if (holdLine) null else return
     }
-    val text = stringResource(if (handheld) R.string.home_handheld_detected else R.string.home_handheld_steady)
+    val text = stringResource(
+        when (handheld) {
+            true -> R.string.home_handheld_detected
+            false -> R.string.home_handheld_steady
+            null -> R.string.home_handheld_checking
+        },
+    )
+    val color = if (handheld == true) MaterialTheme.colorScheme.error else LocalContentColor.current
     Row(
         modifier = modifier
             .heightIn(min = 48.dp)
@@ -103,15 +119,19 @@ fun HandheldStatusRow(state: HandheldState, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            imageVector = if (handheld) AppIcons.Sensors else AppIcons.Check,
+            imageVector = when (handheld) {
+                true -> AppIcons.Sensors
+                false -> AppIcons.Check
+                null -> AppIcons.Pending
+            },
             contentDescription = null,
-            tint = if (handheld) MaterialTheme.colorScheme.error else LocalContentColor.current,
+            tint = color,
             modifier = Modifier.size(20.dp),
         )
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (handheld) MaterialTheme.colorScheme.error else LocalContentColor.current,
+            color = color,
         )
     }
 }
