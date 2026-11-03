@@ -131,6 +131,7 @@ import com.dazix.caelis.domain.nightsky.StarCatalog
 import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.CenteredBar
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.rememberBottomGestureSlopPx
@@ -1008,187 +1009,186 @@ internal fun NightSkyTopBar(
     val textColor = if (redVisionMode) palette.primary else Color.White
     val subTextColor = if (redVisionMode) palette.secondary else Color(0xCCFFFFFF)
 
-    Row(
+    CenteredBar(
         modifier = modifier
             .fillMaxWidth()
             .clip(CircleShape)
             .background(containerBg)
             .border(1.dp, containerBorder, CircleShape)
             .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = stringResource(R.string.action_back),
-                tint = textColor,
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            // Row 1: Status Dot + Location Text
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                if (virtualPlaceLabel != null) {
-                    Icon(
-                        imageVector = AppIcons.Place,
-                        contentDescription = stringResource(R.string.places_virtual_marker),
-                        tint = accentColor,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Text(
-                        text = virtualPlaceLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(
-                                if (redVisionMode) {
-                                    palette.primary
-                                } else {
-                                    if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
-                                },
-                                CircleShape,
-                            )
-                    )
-                    Text(
-                        text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = textColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
-                if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
-                    Text(
-                        text = if (horizonState.satellites) "• 🛰 GPS…" else "• 📍…",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = accentColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
-                // Download and compute progress is TerrainStatusChip's, under the bar.
-            }
-
-            // Row 2: Azimuth, Elevation, FOV Data
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                val az = orientation?.cameraAzimuthDegrees?.toInt() ?: 0
-                val el = orientation?.cameraElevationDegrees?.toInt() ?: 0
-                val cardinalRes = when {
-                    az < 23 || az >= 338 -> R.string.sun_ar_cardinal_n
-                    az < 68 -> R.string.sun_ar_cardinal_ne
-                    az < 113 -> R.string.sun_ar_cardinal_e
-                    az < 158 -> R.string.sun_ar_cardinal_se
-                    az < 203 -> R.string.sun_ar_cardinal_s
-                    az < 248 -> R.string.sun_ar_cardinal_sw
-                    az < 293 -> R.string.sun_ar_cardinal_w
-                    else -> R.string.sun_ar_cardinal_nw
-                }
-                val cardinalName = stringResource(cardinalRes).substringBefore(" ")
-                Text(
-                    text = "🧭 $az° $cardinalName",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = subTextColor,
-                )
-                Text(
-                    text = String.format(java.util.Locale.US, "%+d°", el),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accentColor,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = subTextColor,
-                )
-                val isZoomed = kotlin.math.abs(zoomRatio - 1.0f) > 0.05f
-                val fovLabel = if (isZoomed) {
-                    String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
-                } else {
-                    stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
-                }
-                val fovColor = when {
-                    isZoomed -> accentColor
-                    redVisionMode -> if (isDynamicStreamCalculated) palette.primary else Color(0xFFFF5252)
-                    isDynamicStreamCalculated -> Color(0xFF81C784)
-                    else -> MaterialTheme.colorScheme.error
-                }
-                Text(
-                    text = "📐 $fovLabel",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = fovColor,
-                    fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
-                    modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
-                )
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            IconButton(
-                onClick = onOpenSearch,
-                modifier = Modifier.size(38.dp),
-            ) {
+        start = {
+            IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
                 Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = stringResource(R.string.search_celestial_placeholder),
-                    tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                    imageVector = AppIcons.Back,
+                    contentDescription = stringResource(R.string.action_back),
+                    tint = textColor,
                 )
             }
+        },
+        center = {
+            Column(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                // Row 1: Status Dot + Location Text
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    if (virtualPlaceLabel != null) {
+                        Icon(
+                            imageVector = AppIcons.Place,
+                            contentDescription = stringResource(R.string.places_virtual_marker),
+                            tint = accentColor,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = virtualPlaceLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = accentColor,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    if (redVisionMode) {
+                                        palette.primary
+                                    } else {
+                                        if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28)
+                                    },
+                                    CircleShape,
+                                )
+                        )
+                        Text(
+                            text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = textColor,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                    if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
+                        Text(
+                            text = if (horizonState.satellites) "• 🛰 GPS…" else "• 📍…",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = accentColor,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                    // Download and compute progress is TerrainStatusChip's, under the bar.
+                }
 
-            Box {
+                // Row 2: Azimuth, Elevation, FOV Data
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    val az = orientation?.cameraAzimuthDegrees?.toInt() ?: 0
+                    val el = orientation?.cameraElevationDegrees?.toInt() ?: 0
+                    val cardinalRes = when {
+                        az < 23 || az >= 338 -> R.string.sun_ar_cardinal_n
+                        az < 68 -> R.string.sun_ar_cardinal_ne
+                        az < 113 -> R.string.sun_ar_cardinal_e
+                        az < 158 -> R.string.sun_ar_cardinal_se
+                        az < 203 -> R.string.sun_ar_cardinal_s
+                        az < 248 -> R.string.sun_ar_cardinal_sw
+                        az < 293 -> R.string.sun_ar_cardinal_w
+                        else -> R.string.sun_ar_cardinal_nw
+                    }
+                    val cardinalName = stringResource(cardinalRes).substringBefore(" ")
+                    Text(
+                        text = "🧭 $az° $cardinalName",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = subTextColor,
+                    )
+                    Text(
+                        text = String.format(java.util.Locale.US, "%+d°", el),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = subTextColor,
+                    )
+                    val isZoomed = kotlin.math.abs(zoomRatio - 1.0f) > 0.05f
+                    val fovLabel = if (isZoomed) {
+                        String.format(java.util.Locale.US, "%.1fx · FOV %.0f°", zoomRatio, cameraFovHorizontal)
+                    } else {
+                        stringResource(R.string.sun_ar_fov_label, cameraFovHorizontal)
+                    }
+                    val fovColor = when {
+                        isZoomed -> accentColor
+                        redVisionMode -> if (isDynamicStreamCalculated) palette.primary else Color(0xFFFF5252)
+                        isDynamicStreamCalculated -> Color(0xFF81C784)
+                        else -> MaterialTheme.colorScheme.error
+                    }
+                    Text(
+                        text = "📐 $fovLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = fovColor,
+                        fontWeight = if (isZoomed) FontWeight.Bold else FontWeight.Medium,
+                        modifier = Modifier.clickable(enabled = isZoomed, onClick = onResetZoom),
+                    )
+                }
+            }
+        },
+        end = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
                 IconButton(
-                    onClick = onOpenLayers,
+                    onClick = onOpenSearch,
                     modifier = Modifier.size(38.dp),
                 ) {
                     Icon(
-                        imageVector = AppIcons.MoreVert,
-                        contentDescription = stringResource(R.string.night_sky_layers_title),
-                        tint = if (redVisionMode) palette.primary else Color.White,
+                        imageVector = AppIcons.Search,
+                        contentDescription = stringResource(R.string.search_celestial_placeholder),
+                        tint = if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
                     )
                 }
-                if (isVirtualTime) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 6.dp, end = 6.dp)
-                            .size(7.dp)
-                            .background(
-                                if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
-                                CircleShape,
-                            )
-                    )
+
+                Box {
+                    IconButton(
+                        onClick = onOpenLayers,
+                        modifier = Modifier.size(38.dp),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.MoreVert,
+                            contentDescription = stringResource(R.string.night_sky_layers_title),
+                            tint = if (redVisionMode) palette.primary else Color.White,
+                        )
+                    }
+                    if (isVirtualTime) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 6.dp, end = 6.dp)
+                                .size(7.dp)
+                                .background(
+                                    if (redVisionMode) palette.primary else Color(0xFF4DD0E1),
+                                    CircleShape,
+                                )
+                        )
+                    }
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable

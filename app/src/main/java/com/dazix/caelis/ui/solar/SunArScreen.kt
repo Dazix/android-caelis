@@ -106,6 +106,7 @@ import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectory
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.CenteredBar
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
@@ -639,28 +640,54 @@ internal fun SunArTopBar(
     val textColor = Color.White
     val subTextColor = Color(0xCCFFFFFF)
 
-    Row(
+    CenteredBar(
         modifier = modifier
             .fillMaxWidth()
             .clip(CircleShape)
             .background(containerBg)
             .border(1.dp, containerBorder, CircleShape)
             .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = stringResource(R.string.action_back),
-                tint = textColor,
-            )
-        }
+        start = {
+            IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    imageVector = AppIcons.Back,
+                    contentDescription = stringResource(R.string.action_back),
+                    tint = textColor,
+                )
+            }
+        },
+        end = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isCalibrated) {
+                    IconButton(
+                        onClick = onResetCalibration,
+                        enabled = calibrationEnabled,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Compass,
+                            contentDescription = stringResource(R.string.sun_ar_calib_reset),
+                            tint = if (calibrationEnabled) accentColor else accentColor.copy(alpha = 0.38f),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
 
+                IconButton(
+                    onClick = onToggleInfo,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = AppIcons.MoreVert,
+                        contentDescription = stringResource(R.string.sun_ar_title),
+                        tint = accentColor,
+                    )
+                }
+            }
+        },
+    ) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 4.dp),
+            modifier = Modifier.padding(horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -751,32 +778,6 @@ internal fun SunArTopBar(
                     fontWeight = FontWeight.Medium,
                 )
             }
-        }
-
-        if (isCalibrated) {
-            IconButton(
-                onClick = onResetCalibration,
-                enabled = calibrationEnabled,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = AppIcons.Compass,
-                    contentDescription = stringResource(R.string.sun_ar_calib_reset),
-                    tint = if (calibrationEnabled) accentColor else accentColor.copy(alpha = 0.38f),
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
-
-        IconButton(
-            onClick = onToggleInfo,
-            modifier = Modifier.size(38.dp)
-        ) {
-            Icon(
-                imageVector = AppIcons.MoreVert,
-                contentDescription = stringResource(R.string.sun_ar_title),
-                tint = accentColor,
-            )
         }
     }
 }
