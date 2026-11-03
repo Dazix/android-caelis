@@ -3,6 +3,7 @@ package com.dazix.caelis.data
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import com.dazix.caelis.domain.RampCurve
 import com.dazix.caelis.domain.RampDomain
@@ -11,6 +12,7 @@ import com.dazix.caelis.domain.SessionConfig
 import com.dazix.caelis.domain.StopConditions
 import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.domain.TriggerMode
+import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.overlay.OverlayOptions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -669,6 +671,38 @@ class SettingsMappingTest {
 
         SettingsMapping.writeNightSkyConstellationArtVisible(prefs, true)
         assertEquals(true, SettingsMapping.readNightSkyConstellationArtVisible(prefs))
+    }
+
+    @Test
+    fun `night sky constellation art opacity defaults to the old alpha and is clamped both ways`() {
+        assertEquals(
+            ConstellationArtOpacity.DEFAULT,
+            SettingsMapping.readNightSkyConstellationArtOpacity(emptyPreferences()),
+            0f,
+        )
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyConstellationArtOpacity(prefs, 0.75f)
+        assertEquals(0.75f, SettingsMapping.readNightSkyConstellationArtOpacity(prefs), 0f)
+
+        SettingsMapping.writeNightSkyConstellationArtOpacity(prefs, 0f)
+        assertEquals(ConstellationArtOpacity.MIN, SettingsMapping.readNightSkyConstellationArtOpacity(prefs), 0f)
+
+        // A value stored outside the range (an older build, a restored backup) is clamped on read too.
+        prefs[floatPreferencesKey("night_sky_constellation_art_opacity")] = 3f
+        assertEquals(ConstellationArtOpacity.MAX, SettingsMapping.readNightSkyConstellationArtOpacity(prefs), 0f)
+    }
+
+    @Test
+    fun `night sky asterism names visible defaults to true and survives round trip`() {
+        assertEquals(true, SettingsMapping.readNightSkyAsterismNamesVisible(emptyPreferences()))
+
+        val prefs = mutablePreferencesOf()
+        SettingsMapping.writeNightSkyAsterismNamesVisible(prefs, false)
+        assertEquals(false, SettingsMapping.readNightSkyAsterismNamesVisible(prefs))
+
+        SettingsMapping.writeNightSkyAsterismNamesVisible(prefs, true)
+        assertEquals(true, SettingsMapping.readNightSkyAsterismNamesVisible(prefs))
     }
 
     @Test

@@ -22,6 +22,7 @@ import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
+import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.RealHorizonPolicy
 import com.dazix.caelis.domain.nightsky.CelestialSearchIndex
 import com.dazix.caelis.domain.nightsky.CelestialType
@@ -98,6 +99,8 @@ data class NightSkyArUiState(
     val isMeteorShowersVisible: Boolean = false,
     val isConstellationsVisible: Boolean = true,
     val isConstellationArtVisible: Boolean = true,
+    val constellationArtOpacity: Float = ConstellationArtOpacity.DEFAULT,
+    val isAsterismNamesVisible: Boolean = true,
     val isSensorTrackingEnabled: Boolean = true,
     val searchQuery: String = "",
     val searchResults: List<SearchResultItem> = emptyList(),
@@ -519,6 +522,27 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         true,
     )
 
+    /**
+     * The slider's value while a finger is on it. A drag shows every step on the sky at once but
+     * writes DataStore only when it ends, not on every one of the dozens of steps in between.
+     */
+    private val constellationArtOpacityDrag = MutableStateFlow<Float?>(null)
+
+    val constellationArtOpacity: StateFlow<Float> = combine(
+        settingsStore.nightSkyConstellationArtOpacity,
+        constellationArtOpacityDrag,
+    ) { stored, dragged -> dragged ?: stored }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ConstellationArtOpacity.DEFAULT,
+    )
+
+    val isAsterismNamesVisible: StateFlow<Boolean> = settingsStore.nightSkyAsterismNamesVisible.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        true,
+    )
+
     // In-App Calibration Debugger StateFlows
     val isDebugFocusRegionVisible = MutableStateFlow(false)
     val debugFocusRadiusMultiplier = MutableStateFlow(0.48f)
@@ -597,6 +621,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             _timeState,
             _visibilityState,
             _localScheduleDate,
+            constellationArtOpacity,
+            isAsterismNamesVisible,
         )
     ) { args: Array<Any?> ->
         val loc = args[0] as GeoLocation
@@ -648,6 +674,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val tState = args[43] as TimeState
         val visState = args[44] as VisibilityState
         val localDate = args[45] as LocalDate?
+        val artOpacity = args[46] as Float
+        val asterismNames = args[47] as Boolean
 
         NightSkyArUiState(
             timeState = tState,
@@ -678,6 +706,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             isMeteorShowersVisible = meteorsVisible,
             isConstellationsVisible = constellations,
             isConstellationArtVisible = constellationArt,
+            constellationArtOpacity = artOpacity,
+            isAsterismNamesVisible = asterismNames,
             isSensorTrackingEnabled = sensorTracking,
             searchQuery = query,
             searchResults = results,
@@ -1831,6 +1861,29 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     fun setConstellationArtVisible(enabled: Boolean) {
         viewModelScope.launch {
             settingsStore.saveNightSkyConstellationArtVisible(enabled)
+        }
+    }
+
+    fun dragConstellationArtOpacity(opacity: Float) {
+        constellationArtOpacityDrag.value = ConstellationArtOpacity.clamp(opacity)
+    }
+
+    fun commitConstellationArtOpacity() {
+        val opacity = constellationArtOpacityDrag.value ?: return
+        viewModelScope.launch {
+            settingsStore.saveNightSkyConstellationArtOpacity(opacity)
+            // Dropped only after the store holds the value, so the sky never jumps back for a frame.
+            constellationArtOpacityDrag.value = null
+        }
+    }
+
+    fun toggleAsterismNamesVisible() {
+        setAsterismNamesVisible(!isAsterismNamesVisible.value)
+    }
+
+    fun setAsterismNamesVisible(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.saveNightSkyAsterismNamesVisible(enabled)
         }
     }
 

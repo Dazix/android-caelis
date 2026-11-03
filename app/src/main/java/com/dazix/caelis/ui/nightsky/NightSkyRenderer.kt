@@ -199,6 +199,18 @@ class NightSkyRenderer {
         private const val SQRT_2 = 1.4142135f
 
         /**
+         * Whether a figure's name is printed. A selected figure always keeps its name, as it keeps
+         * its lines: the name is what says what was tapped. Hiding asterism names leaves their
+         * lines and every constellation name alone.
+         */
+        fun isConstellationNameShown(
+            isAsterism: Boolean,
+            isSelected: Boolean,
+            showConstellations: Boolean,
+            showAsterismNames: Boolean,
+        ): Boolean = isSelected || (showConstellations && (!isAsterism || showAsterismNames))
+
+        /**
          * How far below its final place a constellation name starts its slide, in dp. The drawn
          * offset and the tap hit test both read this: they once disagreed (40 px drawn, 40 dp
          * tested), so on a dense screen a tap on a half-grown name missed it. It was 40 dp, which
@@ -1325,7 +1337,7 @@ class NightSkyRenderer {
         // Constellation and asterism names, sliding up as the figure grows.
         for (c in 0 until scene.constellationCount) {
             val isSelected = c == frame.selectedConstellation
-            if (!showConstellations && !isSelected) continue
+            if (!isConstellationNameShown(labelIsAsterism.getOrElse(c) { false }, isSelected, showConstellations, frame.showAsterismNames)) continue
             if (constellationLabels.getOrNull(c) == null) continue
             val p = focus.progress[c]
             if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) continue

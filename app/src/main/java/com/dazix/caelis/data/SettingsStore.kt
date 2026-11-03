@@ -18,6 +18,7 @@ import com.dazix.caelis.domain.SessionConfig
 import com.dazix.caelis.domain.StopConditions
 import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.domain.TriggerMode
+import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.SearchHistoryCodec
@@ -103,6 +104,8 @@ class SettingsStore(context: Context) {
 
     val nightSkyConstellationsVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationsVisible(it) }
     val nightSkyConstellationArtVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyConstellationArtVisible(it) }
+    val nightSkyConstellationArtOpacity: Flow<Float> = preferences.map { SettingsMapping.readNightSkyConstellationArtOpacity(it) }
+    val nightSkyAsterismNamesVisible: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkyAsterismNamesVisible(it) }
 
     val nightSkySensorTracking: Flow<Boolean> = preferences.map { SettingsMapping.readNightSkySensorTracking(it) }
 
@@ -295,6 +298,14 @@ class SettingsStore(context: Context) {
         dataStore.edit { SettingsMapping.writeNightSkyConstellationArtVisible(it, enabled) }
     }
 
+    suspend fun saveNightSkyConstellationArtOpacity(opacity: Float) {
+        dataStore.edit { SettingsMapping.writeNightSkyConstellationArtOpacity(it, opacity) }
+    }
+
+    suspend fun saveNightSkyAsterismNamesVisible(enabled: Boolean) {
+        dataStore.edit { SettingsMapping.writeNightSkyAsterismNamesVisible(it, enabled) }
+    }
+
     suspend fun saveNightSkySensorTracking(enabled: Boolean) {
         dataStore.edit { SettingsMapping.writeNightSkySensorTracking(it, enabled) }
     }
@@ -412,6 +423,8 @@ internal object SettingsMapping {
     private val NIGHT_SKY_METEOR_SHOWERS_VISIBLE = booleanPreferencesKey("night_sky_meteor_showers_visible")
     private val NIGHT_SKY_CONSTELLATIONS_VISIBLE = booleanPreferencesKey("night_sky_constellations_visible")
     private val NIGHT_SKY_CONSTELLATION_ART_VISIBLE = booleanPreferencesKey("night_sky_constellation_art_visible")
+    private val NIGHT_SKY_CONSTELLATION_ART_OPACITY = floatPreferencesKey("night_sky_constellation_art_opacity")
+    private val NIGHT_SKY_ASTERISM_NAMES_VISIBLE = booleanPreferencesKey("night_sky_asterism_names_visible")
     private val NIGHT_SKY_SENSOR_TRACKING = booleanPreferencesKey("night_sky_sensor_tracking")
     private val NIGHT_SKY_SEARCH_HISTORY = stringPreferencesKey("night_sky_search_history")
     private val NIGHT_VISION_THEME_KEY = stringPreferencesKey("night_vision_theme")
@@ -803,6 +816,21 @@ internal object SettingsMapping {
 
     fun writeNightSkyConstellationArtVisible(prefs: MutablePreferences, enabled: Boolean) {
         prefs[NIGHT_SKY_CONSTELLATION_ART_VISIBLE] = enabled
+    }
+
+    /** Clamped on read as well: a stored value outside the range must not hide the artwork entirely. */
+    fun readNightSkyConstellationArtOpacity(prefs: Preferences): Float =
+        ConstellationArtOpacity.clamp(prefs[NIGHT_SKY_CONSTELLATION_ART_OPACITY] ?: ConstellationArtOpacity.DEFAULT)
+
+    fun writeNightSkyConstellationArtOpacity(prefs: MutablePreferences, opacity: Float) {
+        prefs[NIGHT_SKY_CONSTELLATION_ART_OPACITY] = ConstellationArtOpacity.clamp(opacity)
+    }
+
+    fun readNightSkyAsterismNamesVisible(prefs: Preferences): Boolean =
+        prefs[NIGHT_SKY_ASTERISM_NAMES_VISIBLE] ?: true
+
+    fun writeNightSkyAsterismNamesVisible(prefs: MutablePreferences, enabled: Boolean) {
+        prefs[NIGHT_SKY_ASTERISM_NAMES_VISIBLE] = enabled
     }
 
     fun readNightSkySensorTracking(prefs: Preferences): Boolean =

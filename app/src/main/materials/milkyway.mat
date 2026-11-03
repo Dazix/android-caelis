@@ -17,7 +17,8 @@ material {
     flipUV : false,
     parameters : [
         { type : sampler2d, name : milkyWay, precision : medium },
-        { type : mat3, name : enuToCelestial }
+        { type : mat3, name : enuToCelestial },
+        { type : float, name : opacity }
     ],
     variables : [ eyeDirection ]
 }
@@ -47,6 +48,7 @@ fragment {
             float luminance = dot(color.rgb, float3(0.299, 0.587, 0.114));
             color = float4(luminance * 0.3 * nv.rgb, color.a);
         }
-        material.baseColor = color;
+        // Premultiplied, so the whole sample scales: colour and coverage fade together.
+        material.baseColor = color * materialParams.opacity;
     }
 }
