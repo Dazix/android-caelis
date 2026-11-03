@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,14 +66,20 @@ import com.dazix.caelis.ui.CoordinateInputField
 import com.dazix.caelis.ui.ExpressiveMotion
 import com.dazix.caelis.ui.ScreenScaffold
 import com.dazix.caelis.ui.SectionCard
+import java.util.Locale
 
 private val RADIUS_OPTIONS = listOf(50, 100, 150, 200)
+
+/** A new region handed over from elsewhere (a place shared from a map app) to fill the form with. */
+data class OfflineTerrainPrefill(val name: String, val location: GeoLocation)
 
 @Composable
 fun OfflineTerrainScreen(
     savedRegions: List<OfflineRegion>,
     downloadState: OfflineDownloadState,
     currentLocation: GeoLocation?,
+    prefill: OfflineTerrainPrefill?,
+    onPrefillConsumed: () -> Unit,
     onEstimate: (Double, Double, Int) -> DownloadEstimate,
     onDownloadRegion: (name: String, lat: Double, lon: Double, radiusKm: Int) -> Unit,
     onCancelDownload: () -> Unit,
@@ -86,6 +93,15 @@ fun OfflineTerrainScreen(
     }
     var selectedRadius by remember { mutableIntStateOf(RADIUS_OPTIONS.first()) }
     var deleteCandidate by remember { mutableStateOf<OfflineRegion?>(null) }
+
+    // Taken once and cleared, so going back and forth does not overwrite what the user typed since.
+    LaunchedEffect(prefill) {
+        if (prefill != null) {
+            name = prefill.name
+            coordsText = "%.5f, %.5f".format(Locale.US, prefill.location.latitude, prefill.location.longitude)
+            onPrefillConsumed()
+        }
+    }
 
     val parseResult = remember(coordsText) { GeoCoordinateParser.parse(coordsText) }
     val parsedLocation = (parseResult as? CoordinateParseResult.Success)?.location

@@ -53,6 +53,11 @@ import kotlinx.coroutines.flow.firstOrNull
 import com.dazix.caelis.data.horizon.DownloadEstimate
 import com.dazix.caelis.data.horizon.OfflineDownloadState
 import com.dazix.caelis.domain.horizon.OfflineRegion
+import com.dazix.caelis.data.location.SavedPlaceRepository
+import com.dazix.caelis.domain.location.IncomingPlace
+import com.dazix.caelis.domain.location.IncomingPlaceParser
+import com.dazix.caelis.domain.location.SavedPlace
+import com.dazix.caelis.ui.horizon.OfflineTerrainPrefill
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -709,6 +714,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             horizonRepository.offlineRegionRepository.deleteRegion(regionId)
             refreshStorageMetrics()
         }
+    }
+
+    // ==== A place handed over by another app (share sheet, geo: link) ====
+    //
+    // Read from the text alone and never resolved over the network: a shortened link is reported as
+    // such, not followed. Nothing here is logged — it is a position.
+
+    private val savedPlaces = SavedPlaceRepository.getInstance(application)
+
+    private val incomingPlaceState = MutableStateFlow<IncomingPlace?>(null)
+
+    /** What the last share or geo: link carried, until the user has decided what to do with it. */
+    val incomingPlace: StateFlow<IncomingPlace?> = incomingPlaceState.asStateFlow()
+
+    fun receiveSharedPlace(text: String?, subject: String?) {
+        incomingPlaceState.value = IncomingPlaceParser.parse(text, subject)
+    }
+
+    fun dismissIncomingPlace() {
+        incomingPlaceState.value = null
+    }
+
+    /** Saved only; which screen shows it stays the user's choice under the map button. */
+    fun saveIncomingPlace(place: SavedPlace) {
+        incomingPlaceState.value = null
+        viewModelScope.launch { savedPlaces.save(place) }
+    }
+
+    private val offlineTerrainPrefillState = MutableStateFlow<OfflineTerrainPrefill?>(null)
+
+    /** A region the Offline terrain form should open with, cleared once the form has taken it. */
+    val offlineTerrainPrefill: StateFlow<OfflineTerrainPrefill?> = offlineTerrainPrefillState.asStateFlow()
+
+    /** The handed-over place as a new offline region: the form, filled in, with the radius left to the user. */
+    fun prefetchIncomingPlace(name: String, location: GeoLocation) {
+        incomingPlaceState.value = null
+        offlineTerrainPrefillState.value = OfflineTerrainPrefill(name, location)
+        navigate(Screen.OFFLINE_TERRAIN)
+    }
+
+    fun offlineTerrainPrefillConsumed() {
+        offlineTerrainPrefillState.value = null
     }
 
     /** Clears stored horizon profiles and refreshes storage metrics. */
