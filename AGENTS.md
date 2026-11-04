@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection (361 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (653 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (337 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (697 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (381 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1180 JVM tests (361 intervalometer, 653 solar, horizon & pose, 337 night sky — `solar` and `nightsky` overlap on `domain.arframe` and `ar.scene`, which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1225 JVM tests (361 intervalometer, 697 solar, horizon & pose, 381 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `domain.stability.*` is in `caelis`; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `domain.location.*` and `data.location.*` are in both `solar` and `nightsky`; `domain.stability.*` is in `caelis`; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -110,12 +110,14 @@ a session from the shell.
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, the peak model and `.peaks` tile codec (`HorizonLandmark`, `LandmarkTileCodec`) and which peaks stand on the skyline (`LandmarkVisibility`), ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/arframe/` | Pure Kotlin geometry and decisions behind the Filament sky and the pose hand-over, no Android imports and no ARCore types: frames and projection (`SkyFrameMath`, `SkyProjector`, `SkyQuadMath`, `AltAzGridBuilder`, `HorizonMeshBuilder`, `HorizonMorph`), the camera picture's crop (`CameraBackgroundUv`), the instant the overlay is drawn at (`PoseTimestampPolicy`), heading (`HeadingLock`, `YawOffset`), and ARCore's side: `ArWorldAlignment`, `ArYawEstimator` + `HeadingFusion`, `RealignTrigger`, `ArCoreFov`, `LumaRotation`, `PoseArbiter` (which tracker draws) and `CameraOwnerPolicy` (which client owns the camera). Tested by both the `solar` and the `nightsky` suite. |
 | `domain/nightsky/` | Pure Kotlin celestial astronomy (Meeus GMST/LST, J2000.0 RA/Dec to Az/Alt, vector frustum culling, star optics & B-V color temperature, planetary ephemeris, constellation tables, DSOs, meteor showers, visibility schedule `CelestialVisibilityCalculator`, search index). |
+| `domain/location/` | Pure Kotlin virtual places: `SavedPlace` (name, coordinates, the place's own zone), its codec, what a share or `geo:` link from a map app carried (`IncomingPlaceParser`: read from the text only, a short link is reported and never followed), which place each AR screen shows (`PlaceSelection` + `PlaceSelectionPolicy`, per screen or synced) and `ObserverPolicy`, the one decision of where the sky is computed from and what that allows (profile without a GPS fix, no auto-alignment, no camera, the place's zone). In `solar` and `nightsky`. |
 | `ar/` | AR projection math (`CameraProjection`), aspect-ratio crop aware FOV calculator (`CameraFovCalculator`), rotation vector tracker with True-North declination & user calibration (`OrientationTracker`), timestamp ring buffer (`SensorTimestampRingBuffer`), quaternion interpolation (`QuaternionSlerp`), GPS location provider (`SolarLocationProvider`), CameraX dynamic preview with measured FOV and single-frame analysis (`CameraPreview`), the app-owned preview surface that hands every camera image to the GPU (`CameraFrameSource`, `PreviewFrameClock`, and `CameraBackgroundSink`, the interface a test drives in place of the GPU picture), and the camera-geometry half of automatic horizon alignment (`SkylineAligner`, which takes a `CameraFrameGeometry` — frame size, viewport, fill scale, rotation, FOV — rather than loose parameters, so a CameraX frame and an ARCore frame go through the same fit). |
 | `ar/pose/` | `ArCoreSessionController`: the only place a `com.google.ar.core.Session` is constructed, resumed or installed, behind per-call consent. Other pose code may import ARCore types here and nowhere else. The rest of the package is ARCore-free and what the screens use: `PoseSource` (`SensorPoseSource` wraps `OrientationTracker`, `ArCorePoseSource` turns an ARCore frame into the sky's device→ENU), `PoseHandoff` (which of the two draws), `SkyPoseRig` (who owns the camera and the whole per-vsync decision; built by `ui/rememberSkyPoseRig`), `ArCoreHost` + `ArCoreFrameSource` (the live session, behind the `ArFrameSource` seam a test scripts). |
 | `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, the marks (`SpriteAtlas` + `LabelBatch` for pre-rendered names and badges, `GlyphBatch` for distance-field glyphs; the packing is `domain/arframe/AtlasPacker`), `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, the ARCore and Geospatial consent pair (`ArCoreSettings`, both default off, Geospatial never on without ARCore), and the process-wide `SessionRepository` snapshot. |
 | `data/horizon/` | Elevation and peak tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the peak tile cache (`LandmarkTileCache`), the profile codec (v3 carries the named peaks), `LandmarkSource` + `ProfileNamer` (peak tiles -> names on a stored profile), and `HorizonRepository` which orchestrates them. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`). |
+| `data/location/` | `SavedPlaceRepository`, a process singleton like `HorizonRepository`: the saved places and the selection in `filesDir/locations/` (out of the cloud backup), atomic writes, the place each screen shows resolved in the same call that writes. |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
 | `overlay/` | The floating panel and the calibration overlay. Timing/placement decisions live in `OverlayPolicy` and `PanelPlacement`, which are framework-free and unit-tested — put new decisions there, not in the view code. |
 | `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
@@ -125,6 +127,7 @@ a session from the shell.
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/horizon/` | Offline terrain management screen (`OfflineTerrainScreen`) and the terrain metrics debug HUD (`TerrainDebugOverlay`). The standalone Terrain AR screen is gone: the terrain skyline is drawn by Sun AR and Night Sky. |
 | `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), the GPU sky composable (`NightSkyGpuSky`), the CPU overlay and tap hit test over it (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override. |
+| `ui/location/` | The virtual places UI shared by both AR screens: `PlacesSheet` (GPS or a saved place, add/edit/delete, zone picker, the sync switch), `PlacesButton` (the map button; filled with a pin badge while a place is shown), `placeChipLabel`, and `IncomingPlaceSheet` (a place shared from another app becomes a saved place or a prefilled Offline terrain region). The coordinate field is `ui/CoordinateInputField`, shared with Offline terrain. |
 
 `ShutterAccessibilityService` marks its UI wiring with an `==== INTEGRATION POINT ====` block: those are
 the only calls into the notification and the panel.
@@ -375,9 +378,24 @@ Each of these was found by review or on the device and is now covered by a test.
   `tools:ignore`. `NetworkIsolationTest` pins both. A new package lookup by name needs its own
   `<package>` entry, or it silently finds nothing.
 - **The cloud backup takes no location history.** `filesDir/horizons/` is named after where the user
-  stood; `data_extraction_rules.xml` keeps it, `dem_offline/` (over Auto Backup's 25 MB, which would
-  stop the whole backup), `debug/` and the live run out of it. A new file holding a position goes on
-  that list.
+  stood; `data_extraction_rules.xml` keeps it, `locations/` (the saved virtual places), `dem_offline/`
+  (over Auto Backup's 25 MB, which would stop the whole backup), `debug/` and the live run out of it. A
+  new file holding a position goes on that list.
+- **A virtual place is an observer, never a calibration.** `ObserverPolicy` decides it once: the sky,
+  the trajectories, LST, visibility and the terrain profile are computed for the place, a profile is
+  asked for without a GPS fix (the place is exact), and every time is shown in the place's own zone
+  (stored with it; Android cannot tell a zone from a coordinate offline). The camera is off (CameraX
+  unbound, the rig parks ARCore, `NightSkyCameraPolicy` says no even in planetarium mode): its picture
+  shows this street under that skyline. Sun AR draws `virtual_backdrop.mat` and the place's terrain filled
+  below its ridge instead. Automatic alignment, nudges, drag-calibration and the calibration reset are
+  disabled in both screens (shown greyed with the reason, not hidden) and refused by the view models; Night
+  Sky's bottom reset button then only ends a pan and keeps the stored correction. There is no real
+  skyline or sky to align against, and a correction stored then would be wrong at home. Magnetic
+  declination and night vision stay on the GPS position: they belong to the phone and the eyes holding it.
+- **One horizon profile, so the screen in front asks for its own.** `HorizonRepository` holds a single
+  profile; with the selection not synced, Sun AR may show a place while Night Sky shows GPS. Each view
+  model filters the shared profile by `ObserverPolicy.profileBelongsTo` (a foreign skyline is null, never
+  drawn) and `startSensors` asks for its own profile again (stored, so instant).
 - **The deploy workflow never interpolates `${{ }}` into a `run:` script, third-party actions are
   pinned to a commit and `pip install` to exact versions.** The jobs hold the Play key; a release body
   pasted into bash would run as a command next to it, and a moved tag or a fresh package release would

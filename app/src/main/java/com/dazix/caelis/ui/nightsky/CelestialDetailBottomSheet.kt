@@ -80,6 +80,8 @@ fun CelestialDetailSheetContent(
     onClose: (() -> Unit)? = null,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
     modifier: Modifier = Modifier,
+    /** The zone rise, transit and set are shown in: the observer's (a virtual place has its own). */
+    zone: ZoneId = ZoneId.systemDefault(),
 ) {
     if (selectedBody == null) {
         Spacer(modifier = Modifier.height(1.dp))
@@ -626,7 +628,7 @@ fun CelestialDetailSheetContent(
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = formatTime(vis.riseInstant),
+                                            text = formatTime(zone, vis.riseInstant),
                                             color = valueColor,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -677,7 +679,7 @@ fun CelestialDetailSheetContent(
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = formatTime(vis.transitInstant),
+                                            text = formatTime(zone, vis.transitInstant),
                                             color = valueColor,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -713,7 +715,7 @@ fun CelestialDetailSheetContent(
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = formatTime(vis.setInstant),
+                                            text = formatTime(zone, vis.setInstant),
                                             color = valueColor,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -769,7 +771,7 @@ fun CelestialDetailSheetContent(
                                         )
                                     }
                                     Text(
-                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
+                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(zone, vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
                                         color = labelColor,
                                         fontSize = 11.sp,
                                     )
@@ -789,7 +791,7 @@ fun CelestialDetailSheetContent(
                                         fontWeight = FontWeight.Medium,
                                     )
                                     Text(
-                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
+                                        text = "${stringResource(R.string.celestial_visibility_transit)}: ${formatTime(zone, vis.transitInstant)} (${String.format(Locale.US, "%+.0f°", vis.maxElevationDegrees)})",
                                         color = labelColor.copy(alpha = 0.8f),
                                         fontSize = 11.sp,
                                     )
@@ -849,7 +851,7 @@ private fun formatDec(decDegrees: Double): String {
     return String.format(Locale.US, "%s%02d° %02d' %02d\"", sign, d, m, s)
 }
 
-private fun formatTime(instant: Instant): String {
-    val localTime = instant.atZone(ZoneId.systemDefault()).toLocalTime()
+private fun formatTime(zone: ZoneId, instant: Instant): String {
+    val localTime = instant.atZone(zone).toLocalTime()
     return String.format(Locale.US, "%02d:%02d", localTime.hour, localTime.minute)
 }

@@ -106,6 +106,7 @@ import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectory
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.CenteredBar
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
@@ -117,6 +118,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.dazix.caelis.ar.stillBackCameraFov
+import com.dazix.caelis.domain.location.SavedPlace
+import com.dazix.caelis.ui.location.PlacesButton
+import com.dazix.caelis.ui.location.PlacesSheet
+import com.dazix.caelis.ui.location.PlacesSheetColors
+import com.dazix.caelis.ui.location.placeChipLabel
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -159,6 +169,9 @@ fun SunArScreen(
     }
     var showDatePicker by remember { mutableStateOf(false) }
     var showInfoSheet by remember { mutableStateOf(false) }
+    var showPlacesSheet by remember { mutableStateOf(false) }
+    // A virtual place: no camera, no alignment, the place's own skyline on a neutral backdrop.
+    val isVirtual = uiState.observer.isVirtual
     val previewFrameClock = remember { PreviewFrameClock() }
     // The camera picture is drawn by the sky's own Filament frame; see CameraFrameSource.
     val cameraFrameSource = remember(previewFrameClock) { CameraFrameSource(previewFrameClock) }
@@ -200,6 +213,7 @@ fun SunArScreen(
 
     BackHandler {
         when {
+            showPlacesSheet -> showPlacesSheet = false
             showDatePicker -> showDatePicker = false
             showInfoSheet -> showInfoSheet = false
             else -> onBack()
@@ -275,6 +289,17 @@ fun SunArScreen(
         }
     }
 
+    // With the camera off under a virtual place, a field of view never measured is predicted from the
+    // lens, as Night Sky does without its camera; a measured one stays.
+    LaunchedEffect(isVirtual, isPortrait) {
+        if (!isVirtual || uiState.isDynamicStreamCalculated) return@LaunchedEffect
+        val bounds = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+        val fov = withContext(Dispatchers.Default) {
+            stillBackCameraFov(context, bounds.width().toFloat(), bounds.height().toFloat(), isPortrait)
+        }
+        fov?.let(viewModel::setCameraFov)
+    }
+
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     // The automatic alignment fits in the viewport the overlay is drawn in, on the sensor path only.
     LaunchedEffect(viewportSize, displayRotation, poseIndicator) {
@@ -346,9 +371,10 @@ fun SunArScreen(
                 }
             }
     ) {
-        if (hasCameraPermission) {
+        if (hasCameraPermission || isVirtual) {
             // Camera stream with dynamic FOV extraction; the picture itself is drawn by SunArGpuSky below.
-            CameraPreview(
+            // Under a virtual place the camera is unbound: it would show this street under that skyline.
+            if (hasCameraPermission) CameraPreview(
                 modifier = Modifier.fillMaxSize(),
                 lifecycleOwner = lifecycleOwner,
                 isPortrait = isPortrait,
@@ -359,7 +385,7 @@ fun SunArScreen(
                 frameClock = previewFrameClock,
                 frameSource = cameraFrameSource,
                 displayRotation = displayRotation,
-                cameraEnabled = cameraXEnabled,
+                cameraEnabled = cameraXEnabled && uiState.observer.cameraWanted,
                 onCameraReleased = poseRig::onCameraXReleased,
             )
 
@@ -379,6 +405,7 @@ fun SunArScreen(
                 terrainTimes = uiState.terrainTimes,
                 showPeakNames = uiState.horizonSettings.peakNamesInSunAr,
                 modifier = Modifier.fillMaxSize(),
+                virtualPlace = isVirtual,
             )
         } else {
             // Camera Permission Needed Surface
@@ -393,6 +420,8 @@ fun SunArScreen(
         SunArTopBar(
             hasGpsFix = uiState.hasGpsFix,
             locationText = uiState.location.formatShort(approximate = isApproximateLocation),
+            virtualPlaceLabel = uiState.observer.place?.let { placeChipLabel(it) },
+            calibrationEnabled = !isVirtual,
             orientation = orientation,
             cameraFovHorizontal = uiState.cameraFovHorizontal,
             isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
@@ -487,6 +516,7 @@ fun SunArScreen(
                             displayRotation = displayRotation,
                         )
                     },
+                    alignmentAvailable = !isVirtual,
                 )
             }
 
@@ -498,6 +528,8 @@ fun SunArScreen(
                 onNextDay = viewModel::nextDay,
                 onToday = viewModel::setToday,
                 onOpenDatePicker = { showDatePicker = true },
+                place = uiState.observer.place,
+                onOpenPlaces = { showPlacesSheet = true },
             )
 
             // Interval Selector Pills
@@ -509,6 +541,25 @@ fun SunArScreen(
             ) { interval ->
                 interval.formatLabel()
             }
+        }
+
+        if (showPlacesSheet) {
+            PlacesSheet(
+                places = uiState.places,
+                selectedId = uiState.observer.place?.id,
+                syncEnabled = uiState.placeSyncEnabled,
+                gpsLocation = uiState.location.takeIf { uiState.hasGpsFix },
+                colors = PlacesSheetColors(
+                    container = Color(0xF2181818),
+                    content = Color.White,
+                    accent = NormalGoldSolar,
+                ),
+                onSelect = viewModel::selectPlace,
+                onSave = viewModel::savePlace,
+                onDelete = viewModel::deletePlace,
+                onSyncChange = viewModel::setPlaceSync,
+                onDismiss = { showPlacesSheet = false },
+            )
         }
 
         // Terrain horizon: the one-off network question, only shown when enabling.
@@ -578,6 +629,10 @@ internal fun SunArTopBar(
     onResetCalibration: () -> Unit,
     modifier: Modifier = Modifier,
     horizonState: com.dazix.caelis.data.horizon.HorizonState = com.dazix.caelis.data.horizon.HorizonState.Idle,
+    /** The virtual place shown instead of GPS ([placeChipLabel]), or null. */
+    virtualPlaceLabel: String? = null,
+    /** False under a virtual place: the calibration reset is disabled with the rest of the alignment. */
+    calibrationEnabled: Boolean = true,
 ) {
     val containerBg = Color(0xDD1A1A1A)
     val containerBorder = Color(0x33FFFFFF)
@@ -585,28 +640,54 @@ internal fun SunArTopBar(
     val textColor = Color.White
     val subTextColor = Color(0xCCFFFFFF)
 
-    Row(
+    CenteredBar(
         modifier = modifier
             .fillMaxWidth()
             .clip(CircleShape)
             .background(containerBg)
             .border(1.dp, containerBorder, CircleShape)
             .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = stringResource(R.string.action_back),
-                tint = textColor,
-            )
-        }
+        start = {
+            IconButton(onClick = onBack, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    imageVector = AppIcons.Back,
+                    contentDescription = stringResource(R.string.action_back),
+                    tint = textColor,
+                )
+            }
+        },
+        end = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isCalibrated) {
+                    IconButton(
+                        onClick = onResetCalibration,
+                        enabled = calibrationEnabled,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Compass,
+                            contentDescription = stringResource(R.string.sun_ar_calib_reset),
+                            tint = if (calibrationEnabled) accentColor else accentColor.copy(alpha = 0.38f),
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
 
+                IconButton(
+                    onClick = onToggleInfo,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = AppIcons.MoreVert,
+                        contentDescription = stringResource(R.string.sun_ar_title),
+                        tint = accentColor,
+                    )
+                }
+            }
+        },
+    ) {
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 4.dp),
+            modifier = Modifier.padding(horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -614,21 +695,38 @@ internal fun SunArTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(
-                            if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28),
-                            CircleShape
-                        )
-                )
-                Text(
-                    text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = textColor,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
+                if (virtualPlaceLabel != null) {
+                    Icon(
+                        imageVector = AppIcons.Place,
+                        contentDescription = stringResource(R.string.places_virtual_marker),
+                        tint = accentColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = virtualPlaceLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(
+                                if (hasGpsFix) Color(0xFF66BB6A) else Color(0xFFFFCA28),
+                                CircleShape
+                            )
+                    )
+                    Text(
+                        text = if (hasGpsFix) locationText else stringResource(R.string.sun_ar_location_default),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = textColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 if (horizonState is com.dazix.caelis.data.horizon.HorizonState.Locating) {
                     Text(
                         text = if (horizonState.satellites) "• 🛰 GPS…" else "• 📍…",
@@ -681,31 +779,6 @@ internal fun SunArTopBar(
                 )
             }
         }
-
-        if (isCalibrated) {
-            IconButton(
-                onClick = onResetCalibration,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = AppIcons.Compass,
-                    contentDescription = stringResource(R.string.sun_ar_calib_reset),
-                    tint = accentColor,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
-
-        IconButton(
-            onClick = onToggleInfo,
-            modifier = Modifier.size(38.dp)
-        ) {
-            Icon(
-                imageVector = AppIcons.MoreVert,
-                contentDescription = stringResource(R.string.sun_ar_title),
-                tint = accentColor,
-            )
-        }
     }
 }
 
@@ -717,6 +790,8 @@ internal fun DateNavigatorBar(
     onNextDay: () -> Unit,
     onToday: () -> Unit,
     onOpenDatePicker: () -> Unit,
+    place: SavedPlace? = null,
+    onOpenPlaces: (() -> Unit)? = null,
 ) {
     val formatter = remember {
         DateTimeFormatter.ofPattern("EEE d. MMM", Locale.getDefault())
@@ -727,62 +802,83 @@ internal fun DateNavigatorBar(
     val accentColor = NormalGoldSolar
     val textColor = Color.White
 
+    // The places button stands beside the date pill as a circle of its own, the pill's height: it
+    // changes where, not when, and inside the pill it read as one more date control.
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CircleShape)
-            .background(containerBg)
-            .border(1.dp, containerBorder, CircleShape)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconButton(onClick = onPrevDay, modifier = Modifier.size(38.dp)) {
-            Icon(
-                imageVector = AppIcons.Back,
-                contentDescription = stringResource(R.string.sun_ar_prev_day),
-                tint = textColor,
-            )
-        }
-
         Row(
-            modifier = Modifier.clickable { onOpenDatePicker() },
+            modifier = Modifier
+                .weight(1f)
+                .clip(CircleShape)
+                .background(containerBg)
+                .border(1.dp, containerBorder, CircleShape)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Icon(
-                imageVector = AppIcons.Calendar,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = selectedDate.format(formatter),
-                style = MaterialTheme.typography.titleSmall,
-                color = textColor,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+            IconButton(onClick = onPrevDay, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    imageVector = AppIcons.Back,
+                    contentDescription = stringResource(R.string.sun_ar_prev_day),
+                    tint = textColor,
+                )
+            }
 
-        if (!isToday) {
-            FilledTonalButton(
-                onClick = onToday,
-                shape = CircleShape,
-                colors = ButtonDefaults.filledTonalButtonColors(),
-                modifier = Modifier.height(32.dp),
+            Row(
+                modifier = Modifier.clickable { onOpenDatePicker() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(stringResource(R.string.sun_ar_today), style = MaterialTheme.typography.labelSmall)
+                Icon(
+                    imageVector = AppIcons.Calendar,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = selectedDate.format(formatter),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = textColor,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            if (!isToday) {
+                FilledTonalButton(
+                    onClick = onToday,
+                    shape = CircleShape,
+                    colors = ButtonDefaults.filledTonalButtonColors(),
+                    modifier = Modifier.height(32.dp),
+                ) {
+                    Text(stringResource(R.string.sun_ar_today), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            IconButton(
+                onClick = onNextDay,
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Forward,
+                    contentDescription = stringResource(R.string.sun_ar_next_day),
+                    tint = textColor,
+                )
             }
         }
 
-        IconButton(
-            onClick = onNextDay,
-            modifier = Modifier.size(38.dp),
-        ) {
-            Icon(
-                imageVector = AppIcons.Forward,
-                contentDescription = stringResource(R.string.sun_ar_next_day),
-                tint = textColor,
+        if (onOpenPlaces != null) {
+            PlacesButton(
+                place = place,
+                onClick = onOpenPlaces,
+                accent = accentColor,
+                idleTint = accentColor,
+                // The pill: a 38dp button plus 4dp padding above and below.
+                size = 46.dp,
+                containerColor = containerBg,
+                borderColor = containerBorder,
             )
         }
     }
@@ -808,6 +904,8 @@ internal fun SunMoonTimesInfoCard(
     onNudgeAlignment: (Float, Float) -> Unit = { _, _ -> },
     isAutoAligning: Boolean = false,
     onAutoAlign: () -> Unit = {},
+    /** False under a virtual place: no real skyline in view, so every alignment control is disabled. */
+    alignmentAvailable: Boolean = true,
 ) {
     val dayTimes = solarTrajectory.dayTimes
     val lTimes = lunarTrajectory.dayTimes
@@ -1042,6 +1140,7 @@ internal fun SunMoonTimesInfoCard(
                 onReset = onResetCalibration,
                 titleColor = titleColor,
                 subColor = subColor,
+                enabled = alignmentAvailable,
             )
         }
     }
@@ -1067,6 +1166,7 @@ private fun HorizonAlignRow(
     onReset: () -> Unit,
     titleColor: Color,
     subColor: Color,
+    enabled: Boolean = true,
 ) {
     // Show the azimuth the short way round: +359° is a tenth of a degree left, not almost a full turn.
     val signedAzimuth = if (azimuthOffsetDeg > 180f) azimuthOffsetDeg - 360f else azimuthOffsetDeg
@@ -1094,12 +1194,20 @@ private fun HorizonAlignRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = subColor,
                 )
+                if (!enabled) {
+                    // Disabled, not hidden: the stored correction stays visible, and the reason is said.
+                    Text(
+                        text = stringResource(R.string.ar_align_disabled_virtual),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NormalGoldSolar,
+                    )
+                }
             }
             if (isCalibrated) {
-                TextButton(onClick = onReset) {
+                TextButton(onClick = onReset, enabled = enabled) {
                     Text(
                         text = stringResource(R.string.sun_ar_calib_reset),
-                        color = NormalGoldSolar,
+                        color = if (enabled) NormalGoldSolar else NormalGoldSolar.copy(alpha = 0.38f),
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -1116,6 +1224,7 @@ private fun HorizonAlignRow(
             onFineIncrease = { onNudge(fine, 0f) },
             onCoarseIncrease = { onNudge(coarse, 0f) },
             subColor = subColor,
+            enabled = enabled,
         )
 
         AlignNudgeRow(
@@ -1128,13 +1237,14 @@ private fun HorizonAlignRow(
             onFineIncrease = { onNudge(0f, fine) },
             onCoarseIncrease = { onNudge(0f, coarse) },
             subColor = subColor,
+            enabled = enabled,
         )
 
         // One press does what the nudges do by hand: find the sky/terrain boundary in the camera
         // image and put the overlay on it. It refuses rather than guesses, and says which.
         Button(
             onClick = onAutoAlign,
-            enabled = !isAutoAligning,
+            enabled = enabled && !isAutoAligning,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
@@ -1171,6 +1281,7 @@ private fun AlignNudgeRow(
     onFineIncrease: () -> Unit,
     onCoarseIncrease: () -> Unit,
     subColor: Color,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1183,8 +1294,8 @@ private fun AlignNudgeRow(
             color = subColor,
             modifier = Modifier.weight(1f),
         )
-        NudgeButton("⏪", decreaseDescription, onCoarseDecrease)
-        NudgeButton("◀", decreaseDescription, onFineDecrease)
+        NudgeButton("⏪", decreaseDescription, onCoarseDecrease, enabled)
+        NudgeButton("◀", decreaseDescription, onFineDecrease, enabled)
         Text(
             text = valueText,
             style = MaterialTheme.typography.labelMedium,
@@ -1193,18 +1304,23 @@ private fun AlignNudgeRow(
             textAlign = TextAlign.Center,
             modifier = Modifier.width(56.dp),
         )
-        NudgeButton("▶", increaseDescription, onFineIncrease)
-        NudgeButton("⏩", increaseDescription, onCoarseIncrease)
+        NudgeButton("▶", increaseDescription, onFineIncrease, enabled)
+        NudgeButton("⏩", increaseDescription, onCoarseIncrease, enabled)
     }
 }
 
 @Composable
-private fun NudgeButton(glyph: String, description: String, onClick: () -> Unit) {
+private fun NudgeButton(glyph: String, description: String, onClick: () -> Unit, enabled: Boolean = true) {
     IconButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.size(48.dp).semantics { contentDescription = description },
     ) {
-        Text(text = glyph, style = MaterialTheme.typography.labelLarge, color = NormalGoldSolar)
+        Text(
+            text = glyph,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (enabled) NormalGoldSolar else NormalGoldSolar.copy(alpha = 0.38f),
+        )
     }
 }
 

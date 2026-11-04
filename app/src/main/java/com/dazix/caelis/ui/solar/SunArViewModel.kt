@@ -26,6 +26,11 @@ import com.dazix.caelis.domain.horizon.AutoAlignPolicy
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.horizon.StillnessDetector
 import com.dazix.caelis.domain.horizon.SkylineRefusal
+import com.dazix.caelis.data.location.SavedPlaceRepository
+import com.dazix.caelis.domain.location.Observer
+import com.dazix.caelis.domain.location.ObserverPolicy
+import com.dazix.caelis.domain.location.PlaceScreen
+import com.dazix.caelis.domain.location.SavedPlace
 import com.dazix.caelis.domain.solar.BubbleInterval
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.solar.LunarCoordinates
@@ -48,6 +53,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -159,6 +165,10 @@ data class SunArUiState(
     val debugPreferences: com.dazix.caelis.data.DebugPreferences = com.dazix.caelis.data.DebugPreferences(),
     val effectiveRangeKm: Int? = null,
     val activeTileCount: Int = 0,
+    /** Where the sky is computed from: the phone's GPS position, or a saved virtual place. */
+    val observer: Observer = ObserverPolicy.observe(GeoLocation.DEFAULT, false, null, ZoneId.systemDefault()),
+    val places: List<SavedPlace> = emptyList(),
+    val placeSyncEnabled: Boolean = false,
 ) {
     val cameraFovHorizontal: Float get() = cameraFov.horizontalDegrees
     val isDynamicStreamCalculated: Boolean get() = cameraFov.isDynamicStreamCalculated
@@ -173,6 +183,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     private val orientationTracker = OrientationTracker(application)
     private val locationProvider = SolarLocationProvider(application)
     private val horizonRepository = HorizonRepository.getInstance(application)
+    private val placeRepository = SavedPlaceRepository.getInstance(application)
 
     val horizonSettings: StateFlow<HorizonSettings> = settingsStore.horizon.stateIn(
         viewModelScope,
@@ -180,7 +191,44 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         HorizonSettings(),
     )
 
-    val horizonProfile: StateFlow<HorizonProfile?> = horizonRepository.profile
+    /**
+     * Where the sky is computed from. The GPS position stays the magnetic declination's input either
+     * way (it corrects the compass where the phone is), so [locationProvider] keeps feeding that.
+     */
+    val observer: StateFlow<Observer> = combine(
+        locationProvider.location,
+        locationProvider.hasGpsFix,
+        placeRepository.placeFor(PlaceScreen.SUN_AR),
+    ) { gps, fix, place ->
+        ObserverPolicy.observe(gps, fix, place, ZoneId.systemDefault())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        ObserverPolicy.observe(
+            locationProvider.location.value,
+            locationProvider.hasGpsFix.value,
+            placeRepository.placeFor(PlaceScreen.SUN_AR).value,
+            ZoneId.systemDefault(),
+        ),
+    )
+    private val observerLocation: StateFlow<GeoLocation> = observer.map { it.location }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, observer.value.location)
+    private val observerZone: StateFlow<ZoneId> = observer.map { it.zone }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, observer.value.zone)
+    /** The zone "today" was last taken in; see the place-change collector in init. */
+    private var previousZone: ZoneId = observer.value.zone
+
+    val places: StateFlow<List<SavedPlace>> = placeRepository.places
+    private val placeSyncEnabled: StateFlow<Boolean> = placeRepository.selection.map { it.sync }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, placeRepository.selection.value.sync)
+
+    /**
+     * The shared profile, only while it belongs to this screen's observer: the repository holds one
+     * profile for the whole app, and Night Sky may have asked for another place a moment ago.
+     */
+    val horizonProfile: StateFlow<HorizonProfile?> = combine(horizonRepository.profile, observerLocation) { profile, loc ->
+        profile?.takeIf { ObserverPolicy.profileBelongsTo(it, loc) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
     val effectiveRangeKm: StateFlow<Int?> = horizonRepository.effectiveRangeKm
     val activeTileCount: StateFlow<Int> = horizonRepository.activeTileCount
@@ -251,21 +299,24 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val currentSunPosState = MutableStateFlow(
-        SolarPositionCalculator.computePosition(Instant.now(), locationProvider.location.value)
+        SolarPositionCalculator.computePosition(Instant.now(), observer.value.location)
     )
     val currentSunPosition: StateFlow<SolarCoordinates> = currentSunPosState.asStateFlow()
 
     private val currentMoonPosState = MutableStateFlow(
-        LunarPositionCalculator.computePosition(Instant.now(), locationProvider.location.value)
+        LunarPositionCalculator.computePosition(Instant.now(), observer.value.location)
     )
     val currentMoonPosition: StateFlow<LunarCoordinates> = currentMoonPosState.asStateFlow()
 
+    // The day and its clock times are the observer's: a virtual place in another zone has its own
+    // midnight, and its sunrise is planned and labelled in its local time.
     val trajectory: StateFlow<SolarTrajectory> = combine(
         selectedDateState,
-        locationProvider.location,
+        observerLocation,
         bubbleIntervalState,
-    ) { date, loc, interval ->
-        SolarTrajectoryPlanner.planTrajectory(date, loc, interval, ZoneId.systemDefault())
+        observerZone,
+    ) { date, loc, interval, zone ->
+        SolarTrajectoryPlanner.planTrajectory(date, loc, interval, zone)
     }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -274,10 +325,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     val lunarTrajectory: StateFlow<LunarTrajectory> = combine(
         selectedDateState,
-        locationProvider.location,
+        observerLocation,
         bubbleIntervalState,
-    ) { date, loc, interval ->
-        LunarTrajectoryPlanner.planTrajectory(date, loc, interval, ZoneId.systemDefault())
+        observerZone,
+    ) { date, loc, interval, zone ->
+        LunarTrajectoryPlanner.planTrajectory(date, loc, interval, zone)
     }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -295,11 +347,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         lunarTrajectory,
         horizonProfile,
         horizonSettings,
-    ) { traj, lTraj, prof, cfg ->
+        observerZone,
+    ) { traj, lTraj, prof, cfg, zone ->
         if (prof == null || !cfg.enabled) {
             TerrainTimes()
         } else {
-            val zone = ZoneId.systemDefault()
             TerrainTimes(
                 sunrise = TerrainRiseSetCalculator.terrainSunrise(traj, prof, zone),
                 sunset = TerrainRiseSetCalculator.terrainSunset(traj, prof, zone),
@@ -334,6 +386,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         debugPreferences,
         effectiveRangeKm,
         activeTileCount,
+        observer,
+        places,
+        placeSyncEnabled,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -354,10 +409,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val debugPrefs = args[16] as com.dazix.caelis.data.DebugPreferences
         val effRange = args[17] as Int?
         val actTiles = args[18] as Int
+        val obs = args[19] as Observer
+        @Suppress("UNCHECKED_CAST")
+        val placeList = args[20] as List<SavedPlace>
+        val sync = args[21] as Boolean
 
         SunArUiState(
             selectedDate = date,
-            isToday = date == LocalDate.now(),
+            isToday = date == LocalDate.now(obs.zone),
             bubbleInterval = interval,
             location = loc,
             hasGpsFix = gps,
@@ -377,6 +436,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             debugPreferences = debugPrefs,
             effectiveRangeKm = effRange,
             activeTileCount = actTiles,
+            observer = obs,
+            places = placeList,
+            placeSyncEnabled = sync,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SunArUiState())
 
@@ -400,7 +462,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 .collect { (az, pitch) -> settingsStore.saveArCalibration(az, pitch) }
         }
 
-        // Update magnetic declination whenever location updates
+        // Update magnetic declination whenever location updates. Always the GPS position, also under
+        // a virtual place: the declination corrects the compass where the phone physically is.
         viewModelScope.launch {
             locationProvider.location.collect { loc ->
                 orientationTracker.updateLocation(loc)
@@ -422,27 +485,42 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         // Debounced because the location provider emits every few seconds while the GPS settles, and
         // each emission would otherwise be a candidate for a 26 MB download. The repository rounds
         // the position to about 110 m and ignores a repeat of the same request, so a stationary
-        // observer resolves this exactly once.
+        // observer resolves this exactly once. A virtual place needs no fix: its position is exact.
         viewModelScope.launch {
-            combine(locationProvider.location, locationProvider.hasGpsFix, horizonSettings) { loc, hasFix, cfg ->
-                Triple(loc, hasFix, cfg)
-            }
+            combine(observer, horizonSettings) { obs, cfg -> obs to cfg }
                 .debounce(1_000L)
-                .collect { (loc, hasFix, cfg) ->
-                    if (hasFix) {
-                        horizonRepository.ensureProfile(loc, cfg)
+                .collect { (obs, cfg) ->
+                    if (obs.canRequestProfile) {
+                        horizonRepository.ensureProfile(obs.location, cfg)
                     }
                 }
         }
 
-        // Ticker to update sun and moon positions every 2 seconds for selected date at current time-of-day
+        // Entering or leaving a virtual place. Leaving it is a fresh look at the real skyline, so the
+        // automatic alignment may try again; the "today" of the date bar follows the new zone.
+        viewModelScope.launch {
+            observer.map { it.place?.id }.distinctUntilChanged().drop(1).collect {
+                if (selectedDateState.value == LocalDate.now(previousZone)) {
+                    selectedDateState.value = LocalDate.now(observer.value.zone)
+                }
+                previousZone = observer.value.zone
+                if (!observer.value.isVirtual) {
+                    finishAutomaticAttempt(accepted = false)
+                    autoAlignPolicy.reset()
+                }
+            }
+        }
+
+        // Ticker to update sun and moon positions every 2 seconds for selected date at current
+        // time-of-day — the observer's time of day, so a place in another zone shows its own "now".
         viewModelScope.launch {
             while (isActive) {
                 val date = selectedDateState.value
-                val loc = locationProvider.location.value
+                val obs = observer.value
+                val loc = obs.location
                 val now = Instant.now()
-                val localTime = now.atZone(ZoneId.systemDefault()).toLocalTime()
-                val targetInstant = date.atTime(localTime).atZone(ZoneId.systemDefault()).toInstant()
+                val localTime = now.atZone(obs.zone).toLocalTime()
+                val targetInstant = date.atTime(localTime).atZone(obs.zone).toInstant()
                 currentSunPosState.value = SolarPositionCalculator.computePosition(targetInstant, loc)
                 currentMoonPosState.value = LunarPositionCalculator.computePosition(targetInstant, loc)
                 delay(2000L)
@@ -482,6 +560,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
      * the real ridge while the overlay keeps following the phone.
      */
     fun nudgeCalibration(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
+        // The calibration corrects this phone's compass against a skyline the camera sees. Behind a
+        // virtual place there is none, and a drag would store a correction measured against nothing.
+        if (!observer.value.autoAlignAllowed) return
         // A hand alignment outranks an automatic one for the rest of the session.
         autoAlignPolicy.onManualAlignment()
         orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
@@ -545,7 +626,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 val still = stillness.add(now, -stillnessMatrix[2].toDouble(), -stillnessMatrix[6].toDouble(), -stillnessMatrix[10].toDouble())
                 // Not before the game vector has settled: the heading it then locks would keep
                 // turning for seconds afterwards (GameVectorSettle).
-                val ready = sensorsOwnPose && orientationTracker.isGameVectorSettled &&
+                // Never under a virtual place: the camera shows where the phone is, not that skyline.
+                val ready = observer.value.autoAlignAllowed &&
+                    sensorsOwnPose && orientationTracker.isGameVectorSettled &&
                     horizonProfile.value != null && horizonSettings.value.enabled &&
                     frameGrabber != null &&
                     autoViewportWidth > 1f && autoViewportHeight > 1f &&
@@ -619,6 +702,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         val grabber = frameGrabber
         val profile = horizonProfile.value
         when {
+            !observer.value.autoAlignAllowed -> {
+                publish(AutoAlignResult.NoCamera)
+                return
+            }
             profile == null || !horizonSettings.value.enabled -> {
                 publish(AutoAlignResult.NoProfile)
                 return
@@ -785,6 +872,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resetCalibration() {
+        // Disabled in the UI under a virtual place; the stored correction belongs to the real skyline.
+        if (!observer.value.autoAlignAllowed) return
         resumeSensorTracking()
         // A reset says "the alignment is wrong": look for the skyline again.
         finishAutomaticAttempt(accepted = false)
@@ -797,6 +886,15 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         // A new session is a fresh compass reference (start() unlocks the heading), so it needs
         // aligning again however well the last one was.
         startAutoAlignLoop()
+        // The terrain profile is one slot for the whole app and Night Sky may have filled it with
+        // another place: the screen in front asks for its own again (stored, so instant on return).
+        val obs = observer.value
+        if (obs.canRequestProfile) {
+            viewModelScope.launch {
+                val cfg = settingsStore.currentHorizon()
+                if (cfg.enabled) horizonRepository.ensureProfile(obs.location, cfg)
+            }
+        }
     }
 
     fun stopSensors() {
@@ -820,7 +918,26 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setToday() {
-        selectedDateState.value = LocalDate.now()
+        selectedDateState.value = LocalDate.now(observer.value.zone)
+    }
+
+    // ==== Virtual places ====
+
+    /** Shows [id] on this screen (and on Night Sky while the selection is synced); null is GPS. */
+    fun selectPlace(id: String?) {
+        viewModelScope.launch { placeRepository.select(PlaceScreen.SUN_AR, id) }
+    }
+
+    fun savePlace(place: SavedPlace) {
+        viewModelScope.launch { placeRepository.save(place) }
+    }
+
+    fun deletePlace(id: String) {
+        viewModelScope.launch { placeRepository.delete(id) }
+    }
+
+    fun setPlaceSync(sync: Boolean) {
+        viewModelScope.launch { placeRepository.setSync(sync, PlaceScreen.SUN_AR) }
     }
 
     fun setDate(date: LocalDate) {
@@ -883,18 +1000,29 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             // while the real skyline is missing (RealHorizonPolicy.showsStylisedLandscape).
             settingsStore.saveNightSkyLandscapeVisible(false)
             if (granted) {
-                if (locationProvider.hasGpsFix.value) {
-                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                } else {
-                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
-                    val hasFix = locationProvider.awaitGpsFix()
-                    if (hasFix) {
-                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                    } else {
-                        horizonRepository.setLocationFailed()
-                    }
-                }
+                requestProfileHere(updated)
             }
+        }
+    }
+
+    /**
+     * Asks for the profile of where this screen looks from. A virtual place is exact and asks at once;
+     * GPS waits for a fix (the default fallback must never become a skyline).
+     */
+    private suspend fun requestProfileHere(settings: HorizonSettings) {
+        val obs = observer.value
+        if (obs.isVirtual || locationProvider.hasGpsFix.value) {
+            horizonRepository.ensureProfile(obs.location, settings)
+            return
+        }
+        horizonRepository.setLocating(locationProvider.satellitesAvailable())
+        val hasFix = locationProvider.awaitGpsFix()
+        // The user may have picked a place while the GPS was being waited for.
+        val now = observer.value
+        if (hasFix || now.isVirtual) {
+            horizonRepository.ensureProfile(now.location, settings)
+        } else {
+            horizonRepository.setLocationFailed()
         }
     }
 
@@ -905,17 +1033,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             val updated = current.copy(enabled = !current.enabled)
             settingsStore.saveHorizon(updated)
             if (updated.enabled && updated.networkDownloadAllowed) {
-                if (locationProvider.hasGpsFix.value) {
-                    horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                } else {
-                    horizonRepository.setLocating(locationProvider.satellitesAvailable())
-                    val hasFix = locationProvider.awaitGpsFix()
-                    if (hasFix) {
-                        horizonRepository.ensureProfile(locationProvider.location.value, updated)
-                    } else {
-                        horizonRepository.setLocationFailed()
-                    }
-                }
+                requestProfileHere(updated)
             }
         }
     }

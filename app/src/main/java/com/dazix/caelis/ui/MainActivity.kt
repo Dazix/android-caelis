@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -48,19 +49,47 @@ import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.overlay.CalibrationOverlay
 import com.dazix.caelis.service.CameraProfile
 import com.dazix.caelis.service.CameraProfiles
+import com.dazix.caelis.ui.location.IncomingPlaceSheet
 
 /**
  * The whole UI: one activity, one view model, plain state hoisting instead of a navigation library.
  */
 class MainActivity : ComponentActivity() {
+    // The same instance CaelisApp gets from viewModel(): same owner, same default key.
+    private val mainViewModel: MainViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Every screen is a Scaffold whose bars consume the system insets themselves, so the app
         // draws behind the status and navigation bars instead of being letterboxed by them.
         enableEdgeToEdge()
+        // Only a fresh start: a recreated activity still carries the intent it was started with,
+        // and offering the same shared place again after a rotation would be a bug.
+        if (savedInstanceState == null) handlePlaceIntent(intent)
         setContent {
             CaelisTheme {
-                CaelisApp()
+                CaelisApp(mainViewModel)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // singleTask: a share while the app is open arrives here, not in onCreate.
+        handlePlaceIntent(intent)
+    }
+
+    /** A text shared from a map app or a geo: link. Any app can send one, so it is only parsed. */
+    private fun handlePlaceIntent(intent: Intent?) {
+        when (intent?.action) {
+            Intent.ACTION_SEND -> if (intent.type == "text/plain") {
+                mainViewModel.receiveSharedPlace(
+                    text = intent.getStringExtra(Intent.EXTRA_TEXT),
+                    subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                )
+            }
+            Intent.ACTION_VIEW -> if (intent.data?.scheme == "geo") {
+                mainViewModel.receiveSharedPlace(text = intent.dataString, subject = null)
             }
         }
     }
@@ -87,6 +116,7 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
     val customEndTime by viewModel.customEndTime.collectAsStateWithLifecycle()
     val debugPreferences by viewModel.debugPreferences.collectAsStateWithLifecycle()
     val notificationPrompted by viewModel.notificationPermissionPrompted.collectAsStateWithLifecycle()
+    val incomingPlace by viewModel.incomingPlace.collectAsStateWithLifecycle()
 
     // Every one of these is granted outside the app, so the state is re-read on each resume.
     LifecycleResumeEffect(Unit) {
@@ -214,6 +244,23 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
+            // Over whichever screen is open: a share can arrive at any moment.
+            incomingPlace?.let { incoming ->
+                val horizonLocation by viewModel.horizonLocation.collectAsStateWithLifecycle()
+                val hasFix by viewModel.horizonHasGpsFix.collectAsStateWithLifecycle()
+                val resources = LocalResources.current
+                IncomingPlaceSheet(
+                    incoming = incoming,
+                    gpsLocation = horizonLocation.takeIf { hasFix },
+                    onSavePlace = { place ->
+                        viewModel.saveIncomingPlace(place)
+                        toastHostState.showToast(resources.getString(R.string.incoming_place_saved, place.name))
+                    },
+                    onPrefetch = viewModel::prefetchIncomingPlace,
+                    onDismiss = viewModel::dismissIncomingPlace,
+                )
+            }
+
             AppToastHost(
                 hostState = toastHostState,
                 modifier = Modifier
@@ -265,6 +312,7 @@ private fun CaelisScreen(
     val storageMetrics by viewModel.storageMetrics.collectAsStateWithLifecycle()
     val offlineRegions by viewModel.offlineRegions.collectAsStateWithLifecycle()
     val offlineDownloadState by viewModel.offlineDownloadState.collectAsStateWithLifecycle()
+    val offlineTerrainPrefill by viewModel.offlineTerrainPrefill.collectAsStateWithLifecycle()
 
     // LocalResources, not LocalContext: a Configuration change does not invalidate LocalContext
     // reads, so a string fetched through the context can be stale after a locale switch.
@@ -427,6 +475,8 @@ private fun CaelisScreen(
             savedRegions = offlineRegions,
             downloadState = offlineDownloadState,
             currentLocation = horizonLocation,
+            prefill = offlineTerrainPrefill,
+            onPrefillConsumed = viewModel::offlineTerrainPrefillConsumed,
             onEstimate = viewModel::estimateOfflineRegion,
             onDownloadRegion = viewModel::downloadOfflineRegion,
             onCancelDownload = viewModel::cancelOfflineDownload,

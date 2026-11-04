@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,22 +58,28 @@ import com.dazix.caelis.data.horizon.DownloadEstimate
 import com.dazix.caelis.data.horizon.OfflineDownloadState
 import com.dazix.caelis.data.horizon.StorageMetrics
 import com.dazix.caelis.domain.horizon.OfflineRegion
-import com.dazix.caelis.domain.solar.CoordinateFormat
 import com.dazix.caelis.domain.solar.CoordinateParseResult
 import com.dazix.caelis.domain.solar.GeoCoordinateParser
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.CoordinateInputField
 import com.dazix.caelis.ui.ExpressiveMotion
 import com.dazix.caelis.ui.ScreenScaffold
 import com.dazix.caelis.ui.SectionCard
+import java.util.Locale
 
 private val RADIUS_OPTIONS = listOf(50, 100, 150, 200)
+
+/** A new region handed over from elsewhere (a place shared from a map app) to fill the form with. */
+data class OfflineTerrainPrefill(val name: String, val location: GeoLocation)
 
 @Composable
 fun OfflineTerrainScreen(
     savedRegions: List<OfflineRegion>,
     downloadState: OfflineDownloadState,
     currentLocation: GeoLocation?,
+    prefill: OfflineTerrainPrefill?,
+    onPrefillConsumed: () -> Unit,
     onEstimate: (Double, Double, Int) -> DownloadEstimate,
     onDownloadRegion: (name: String, lat: Double, lon: Double, radiusKm: Int) -> Unit,
     onCancelDownload: () -> Unit,
@@ -86,6 +93,15 @@ fun OfflineTerrainScreen(
     }
     var selectedRadius by remember { mutableIntStateOf(RADIUS_OPTIONS.first()) }
     var deleteCandidate by remember { mutableStateOf<OfflineRegion?>(null) }
+
+    // Taken once and cleared, so going back and forth does not overwrite what the user typed since.
+    LaunchedEffect(prefill) {
+        if (prefill != null) {
+            name = prefill.name
+            coordsText = "%.5f, %.5f".format(Locale.US, prefill.location.latitude, prefill.location.longitude)
+            onPrefillConsumed()
+        }
+    }
 
     val parseResult = remember(coordsText) { GeoCoordinateParser.parse(coordsText) }
     val parsedLocation = (parseResult as? CoordinateParseResult.Success)?.location
@@ -118,132 +134,13 @@ fun OfflineTerrainScreen(
                 enabled = !isDownloading,
             )
 
-            OutlinedTextField(
-                value = coordsText,
-                onValueChange = { coordsText = it },
-                label = { Text(stringResource(R.string.offline_terrain_coords_label)) },
-                placeholder = {
-                    Text(
-                        text = stringResource(R.string.offline_terrain_coords_hint),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                isError = parseResult is CoordinateParseResult.Failure && parseResult !is CoordinateParseResult.Failure.Empty,
-                trailingIcon = {
-                    if (coordsText.isNotEmpty()) {
-                        IconButton(onClick = { coordsText = "" }, enabled = !isDownloading) {
-                            Icon(AppIcons.Clear, contentDescription = stringResource(R.string.action_clear))
-                        }
-                    } else if (currentLocation != null) {
-                        IconButton(
-                            onClick = {
-                                coordsText = "%.4f, %.4f".format(currentLocation.latitude, currentLocation.longitude)
-                            },
-                            enabled = !isDownloading,
-                        ) {
-                            Icon(AppIcons.Compass, contentDescription = stringResource(R.string.offline_terrain_use_current_location))
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+            CoordinateInputField(
+                text = coordsText,
+                onTextChange = { coordsText = it },
+                parseResult = parseResult,
+                currentLocation = currentLocation,
                 enabled = !isDownloading,
             )
-
-            // Coordinate parser status indicator & format badge
-            when (parseResult) {
-                is CoordinateParseResult.Success -> {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            val formatBadge = when (parseResult.format) {
-                                CoordinateFormat.DECIMAL_DEGREES -> stringResource(R.string.offline_terrain_format_dd)
-                                CoordinateFormat.DEGREES_MINUTES_SECONDS -> stringResource(R.string.offline_terrain_format_dms)
-                                CoordinateFormat.DEGREES_DECIMAL_MINUTES -> stringResource(R.string.offline_terrain_format_ddm)
-                                CoordinateFormat.MAP_LINK -> stringResource(R.string.offline_terrain_format_link)
-                            }
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                            ) {
-                                Text(
-                                    text = formatBadge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                            Text(
-                                text = stringResource(
-                                    R.string.offline_terrain_coords_parsed_preview,
-                                    parseResult.location.latitude,
-                                    parseResult.location.longitude,
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
-                }
-
-                is CoordinateParseResult.Failure.OutOfBounds -> {
-                    Text(
-                        text = stringResource(R.string.offline_terrain_coords_out_of_bounds),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
-
-                is CoordinateParseResult.Failure.InvalidFormat -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.offline_terrain_coords_invalid),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            text = stringResource(R.string.offline_terrain_coords_examples_title) + ":\n" +
-                                "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
-                                "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
-                                "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                is CoordinateParseResult.Failure.Empty -> {
-                    Text(
-                        text = "• DD: " + stringResource(R.string.offline_terrain_coords_example_dd) + "\n" +
-                            "• DMS: " + stringResource(R.string.offline_terrain_coords_example_dms) + "\n" +
-                            "• DDM: " + stringResource(R.string.offline_terrain_coords_example_ddm),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
-            }
 
             Text(
                 text = stringResource(R.string.offline_terrain_radius_label),

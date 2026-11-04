@@ -59,7 +59,7 @@ class SkyMaterialSourceTest {
     @Test
     fun `every textured or glowing material reads the night vision global`() {
         // line and disc are themed on the CPU (LineBatch / DiscBatch colours), so they do not read it.
-        for (name in listOf("milkyway", "atmosphere", "landscape", "terrain", "textured", "star")) {
+        for (name in listOf("milkyway", "atmosphere", "landscape", "terrain", "textured", "star", "virtual_backdrop")) {
             assertContains(material(name), "getMaterialGlobal", "$name must follow night vision")
         }
     }
@@ -90,5 +90,19 @@ class SkyMaterialSourceTest {
             assertContains(src, "dist > 1e-4", "$name collapses behind the camera")
             assertContains(src, "getResolution().y", "$name sizes itself in screen pixels")
         }
+    }
+
+    /**
+     * Under a virtual place the backdrop stands in for the camera picture: it must cover the whole
+     * screen (opaque, so no stale camera image or black shows through) and split sky from ground at
+     * the geometric horizon in the Earth-fixed frame, not at the screen's middle.
+     */
+    @Test
+    fun `the virtual backdrop is opaque and splits sky from ground at the horizon`() {
+        val src = material("virtual_backdrop")
+        assertContains(src, "blending : opaque", "the backdrop replaces the camera picture")
+        assertContains(src, "vertexDomain : device", "one full-screen triangle, ray-cast per pixel")
+        assertContains(src, "getWorldFromViewMatrix()", "the ray is turned into the Earth-fixed frame")
+        assertContains(src, "sinElevation >= 0.0", "sky above the geometric horizon, ground below")
     }
 }
