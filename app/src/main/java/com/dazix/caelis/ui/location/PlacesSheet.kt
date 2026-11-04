@@ -12,6 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.LaunchedEffect
+import com.dazix.caelis.domain.location.ZoneOrdering
+import java.time.Instant
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -367,10 +374,20 @@ private fun PlaceEditor(
 @Composable
 internal fun ZoneField(zoneId: String, onZoneChange: (String) -> Unit) {
     var pickingZone by remember { mutableStateOf(false) }
+    // A tap anywhere on the field opens the picker. The text field consumes the pointer itself, so a
+    // `clickable` on its modifier never fired and only the search icon did; its own press release
+    // is what reaches us.
+    val interactionSource = remember { MutableInteractionSource() }
+    LaunchedEffect(interactionSource) {
+        interactionSource.interactions.collect {
+            if (it is PressInteraction.Release) pickingZone = true
+        }
+    }
     OutlinedTextField(
         value = zoneId,
         onValueChange = {},
         readOnly = true,
+        interactionSource = interactionSource,
         label = { Text(stringResource(R.string.places_zone_label)) },
         supportingText = { Text(stringResource(R.string.places_zone_hint)) },
         trailingIcon = {
@@ -379,9 +396,7 @@ internal fun ZoneField(zoneId: String, onZoneChange: (String) -> Unit) {
             }
         },
         singleLine = true,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { pickingZone = true },
+        modifier = Modifier.fillMaxWidth(),
     )
     if (pickingZone) {
         ZonePickerDialog(
@@ -402,11 +417,19 @@ private fun ZonePickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val allZones = remember { ZoneId.getAvailableZoneIds().sorted() }
+    // West to east by today's offset, the selected zone (the place's, or the phone's for a new one)
+    // checked and scrolled into view with a couple of its neighbours above it.
+    val allZones = remember { ZoneOrdering.sorted(ZoneId.getAvailableZoneIds(), Instant.now()) }
     var query by remember { mutableStateOf("") }
-    val filtered = remember(query) {
-        val q = query.trim().replace(' ', '_')
-        if (q.isEmpty()) allZones else allZones.filter { it.contains(q, ignoreCase = true) }
+    val filtered = remember(query) { ZoneOrdering.filter(allZones, query) }
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (ZoneOrdering.indexOf(allZones, selected) - 2).coerceAtLeast(0),
+    )
+    LaunchedEffect(query) {
+        if (query.isNotBlank()) {
+            val index = ZoneOrdering.indexOf(filtered, selected)
+            listState.scrollToItem(if (index >= 0) (index - 2).coerceAtLeast(0) else 0)
+        }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -420,18 +443,29 @@ private fun ZonePickerDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                    items(filtered, key = { it }) { zone ->
+                LazyColumn(state = listState, modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(filtered, key = { it.id }) { zone ->
+                        val isSelected = zone.id == selected
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
-                                .selectable(selected = zone == selected, onClick = { onPick(zone) }, role = Role.RadioButton),
+                                .selectable(selected = isSelected, onClick = { onPick(zone.id) }, role = Role.RadioButton),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            RadioButton(selected = zone == selected, onClick = null)
-                            Text(zone, style = MaterialTheme.typography.bodyMedium)
+                            RadioButton(selected = isSelected, onClick = null)
+                            Text(
+                                text = zone.offsetLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.widthIn(min = 76.dp),
+                            )
+                            Text(
+                                text = zone.id,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
                         }
                     }
                 }
