@@ -3,6 +3,7 @@
 <resources>
     <string name="session_warning_wrong_app">Pozastaveno: aplikace %1$s není v popředí. Znovu ji otevřete a série bude pokračovat.</string>
     <string name="session_warning_screen_off">Pozastaveno: obrazovka je vypnutá nebo zamčená, takže není kam klepnout. Odemkněte telefon a série bude pokračovat.</string>
+    <string name="session_warning_handheld">Telefon se hýbe, jako by byl v ruce. Pro časosběr ho dejte na stativ nebo pevnou podložku.</string>
     <string name="session_warning_no_shutter_found">Spoušť se nenašla a není nastavený žádný bod pro klepnutí.</string>
     <string name="session_warning_tap_failed">Klepnutí na spoušť neprošlo.</string>
     <string name="session_warning_capture_unverified">Po posledním snímku se neobjevila žádná nová fotka.</string>

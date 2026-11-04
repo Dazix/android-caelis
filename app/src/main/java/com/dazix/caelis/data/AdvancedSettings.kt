@@ -33,4 +33,10 @@ data class AdvancedSettings(
      * [com.dazix.caelis.overlay.OverlayOptions.dimPanel] exactly as [keepScreenOn] does.
      */
     val dimOverlay: Boolean = false,
+    /**
+     * Warn when a time-lapse looks shot from the hand rather than a tripod: on the home screen before
+     * the start, as a question when Start is pressed, and on the panel and the notification while it
+     * runs. Only ever a warning. On by default; off is for a hyperlapse shot from the hand on purpose.
+     */
+    val handheldWarning: Boolean = true,
 )

@@ -388,6 +388,7 @@ internal object SettingsMapping {
     private val ADV_DISMISS_POST_CAPTURE_UI = booleanPreferencesKey("advanced_dismiss_post_capture_ui")
     private val ADV_KEEP_SCREEN_ON = booleanPreferencesKey("advanced_keep_screen_on")
     private val ADV_DIM_OVERLAY = booleanPreferencesKey("advanced_dim_overlay")
+    private val ADV_HANDHELD_WARNING = booleanPreferencesKey("advanced_handheld_warning")
     private val SUN_AR_KEEP_SCREEN_ON = booleanPreferencesKey("sun_ar_keep_screen_on")
     private val SUN_AR_RED_VISION_MODE = booleanPreferencesKey("sun_ar_red_vision_mode")
     /**
@@ -576,6 +577,7 @@ internal object SettingsMapping {
         prefs[ADV_DISMISS_POST_CAPTURE_UI] = settings.dismissPostCaptureUi
         prefs[ADV_KEEP_SCREEN_ON] = settings.keepScreenOn
         prefs[ADV_DIM_OVERLAY] = settings.dimOverlay
+        prefs[ADV_HANDHELD_WARNING] = settings.handheldWarning
     }
 
     fun readAdvanced(prefs: Preferences): AdvancedSettings = runCatching {
@@ -590,6 +592,7 @@ internal object SettingsMapping {
             // install. Hence AdvancedSettings()'s own values rather than a literal here.
             keepScreenOn = prefs[ADV_KEEP_SCREEN_ON] ?: AdvancedSettings().keepScreenOn,
             dimOverlay = prefs[ADV_DIM_OVERLAY] ?: AdvancedSettings().dimOverlay,
+            handheldWarning = prefs[ADV_HANDHELD_WARNING] ?: AdvancedSettings().handheldWarning,
         )
     }.getOrElse { AdvancedSettings() }
 

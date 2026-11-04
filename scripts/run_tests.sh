@@ -34,6 +34,7 @@ case "$TARGET" in
             --tests "com.dazix.caelis.verify.*" \
             --tests "com.dazix.caelis.domain.IntervalScheduleTest" \
             --tests "com.dazix.caelis.domain.SessionPlannerTest" \
+            --tests "com.dazix.caelis.domain.stability.*" \
             --tests "com.dazix.caelis.data.SettingsMappingTest" \
             --tests "com.dazix.caelis.res.*" \
             --tests "com.dazix.caelis.NetworkIsolationTest" \
@@ -48,6 +49,7 @@ case "$TARGET" in
             --tests "com.dazix.caelis.ui.NavigationDestinationTest" \
             --tests "com.dazix.caelis.ui.PermissionsPlatformLevelTest" \
             --tests "com.dazix.caelis.ui.SetupUiStateTest" \
+            --tests "com.dazix.caelis.ui.HomeScrollPolicyTest" \
             --tests "com.dazix.caelis.ui.WaitProgressTest" \
             --rerun-tasks)
         check_xml_results

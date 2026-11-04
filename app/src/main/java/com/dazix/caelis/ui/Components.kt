@@ -192,7 +192,7 @@ fun ScreenScaffold(
                 Spacer(
                     Modifier.height(
                         if (floating != null) {
-                            FloatingToolbarDefaults.ContainerSize + FLOATING_LAYER_MARGIN
+                            FloatingLayerClearance
                         } else {
                             24.dp
                         }
@@ -209,6 +209,7 @@ fun SectionCard(
     title: String? = null,
     subtitle: String? = null,
     tone: CardTone = CardTone.NEUTRAL,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = when (tone) {
@@ -225,7 +226,7 @@ fun SectionCard(
         )
     }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = colors,
         shape = MaterialTheme.shapes.large,
     ) {
@@ -649,6 +650,13 @@ private val CONTENT_MAX_WIDTH = 640.dp
 
 /** Bottom padding above the floating toolbar: its own offset plus the room its FAB overhangs into. */
 private val FLOATING_LAYER_MARGIN = 48.dp
+
+/**
+ * How much of the bottom of a [ScreenScaffold] with a floating layer that layer covers. Whatever is
+ * scrolled to has to end this far above the bottom edge to be seen whole.
+ */
+val FloatingLayerClearance: Dp
+    get() = FloatingToolbarDefaults.ContainerSize + FLOATING_LAYER_MARGIN
 
 private val SESSION_ACTION_START_CORNER = 32.dp
 private val SESSION_ACTION_STOP_CORNER = 20.dp

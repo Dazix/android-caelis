@@ -373,7 +373,10 @@ class OverlayController(context: Context) {
 
         countdown.text = countdownTextFor(snapshot)
 
-        val warningText = snapshot.warning
+        val warningText = OverlayPolicy.warningText(
+            snapshot,
+            appContext.getString(R.string.session_warning_handheld),
+        )
         if (warningText.isNullOrBlank()) {
             warning.visibility = View.GONE
         } else {
@@ -470,11 +473,11 @@ class OverlayController(context: Context) {
             )
             letterSpacing = -0.01f
         }
-        val warning = TextView(themed).apply {
+        val warning = OverlayRootView.WidthFollowingTextView(themed).apply {
             setTextColor(palette.warning)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             visibility = View.GONE
-            maxWidth = dp(themed, 200f)
+            setPadding(0, dp(themed, ROW_GAP_DP), 0, 0)
         }
         val buttons = EqualCellRow(themed).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -519,11 +522,15 @@ class OverlayController(context: Context) {
 
         panel.addView(shots)
         panel.addView(countdown)
-        panel.addView(warning)
         // The rows span the panel rather than their own content, which is what lets the cells inside
         // them share that width equally and keeps the two rows flush with each other.
         panel.addView(buttons, rowParams())
         panel.addView(toggles, rowParams())
+        // Under the controls, and as wide as they are (see OverlayRootView.widthFollower): the warning
+        // appears whenever the phone starts moving, and above the rows it pushed Pause and Stop down
+        // under a finger that was on its way to them.
+        panel.addView(warning, rowParams())
+        panel.widthFollower = warning
 
         statusView = shots
         controlsRow = buttons
@@ -1047,8 +1054,17 @@ class OverlayController(context: Context) {
  *
  * So after the normal measure the row checks its cells, adopts the tallest one's height and gives
  * every cell that height, which also keeps two pills side by side the same size. See [RowMetrics].
+ *
+ * Not baseline-aligned. A label wrapped to two lines has its first baseline higher than a one-line
+ * label next to it, and a baseline-aligned row moved the *other* cell down to match: "Ztlumení: vyp."
+ * stood lower than "Displej: zap." and lost the bottom of its pill to the row's edge. The cells are
+ * pills of one height with centred text; their tops are what has to line up.
  */
-private class EqualCellRow(context: Context) : LinearLayout(context) {
+internal class EqualCellRow(context: Context) : LinearLayout(context) {
+
+    init {
+        isBaselineAligned = false
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -1079,13 +1095,47 @@ private class EqualCellRow(context: Context) : LinearLayout(context) {
  * Root view that reports the events the controller has to react to: a display configuration change
  * (i.e. a rotation), the panel's own size settling, and the first touch on a dimmed panel.
  */
-private class OverlayRootView(context: Context) : LinearLayout(context) {
+internal class OverlayRootView(context: Context) : LinearLayout(context) {
+
+    /** A text that [OverlayRootView] can take out of the panel's width; see [widthFollower]. */
+    class WidthFollowingTextView(context: Context) : android.widget.TextView(context) {
+        var measuredAsNothing = false
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            if (measuredAsNothing) setMeasuredDimension(0, 0) else super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }
 
     var onConfigChanged: (() -> Unit)? = null
     var onSizeChanged: (() -> Unit)? = null
 
     /** Returns true when the touch was consumed purely to wake the panel up. */
     var onWakeTouch: (() -> Boolean)? = null
+
+    /**
+     * A child that takes the panel's width and never sets it: the handheld warning. It comes and goes
+     * with the phone's movement, and as an ordinary child its longer text widened the panel while it
+     * was shown — every button under it changed width, and the toggle labels wrapped differently each
+     * time. Measured as nothing in a first pass, then laid into whatever width the rest of the panel
+     * asked for.
+     */
+    var widthFollower: WidthFollowingTextView? = null
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val follower = widthFollower
+        if (follower == null || follower.visibility == View.GONE) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        // Not by changing its layout params or visibility: every child here is MATCH_PARENT, and a
+        // single other value turns LinearLayout's width rule over to the remaining children (a width
+        // of 0 made the whole panel as narrow as its padding); a visibility change would request
+        // another layout from inside this one.
+        follower.measuredAsNothing = true
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        follower.measuredAsNothing = false
+        super.onMeasure(MeasureSpec.makeMeasureSpec(measuredWidth, MeasureSpec.EXACTLY), heightMeasureSpec)
+    }
 
     override fun onConfigurationChanged(newConfig: Configuration?) {
         super.onConfigurationChanged(newConfig)

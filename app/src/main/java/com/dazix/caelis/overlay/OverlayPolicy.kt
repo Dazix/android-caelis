@@ -57,6 +57,16 @@ object OverlayPolicy {
         optionEnabled && state is SessionState.Running
 
     /**
+     * The one warning line the panel, the notification and the home screen show. The session's own
+     * [SessionSnapshot.warning] wins: it says why nothing is being shot (screen off, wrong app) or
+     * that a shot failed, which outranks a shaky frame. Only without it does a raised
+     * [SessionSnapshot.handheld] put [handheldText] there, and it goes as soon as the hand does.
+     */
+    fun warningText(snapshot: SessionSnapshot, handheldText: String): String? =
+        snapshot.warning?.takeIf { it.isNotBlank() }
+            ?: handheldText.takeIf { snapshot.handheld }
+
+    /**
      * True when the floating panel must stand down because the app's own UI is the thing on screen.
      *
      * The panel exists to control a session running *inside another app*. Over our own screens it is

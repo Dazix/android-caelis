@@ -159,4 +159,22 @@ class OverlayPolicyTest {
             )
         }
     }
+
+    @Test
+    fun `the handheld line shows only while the hand is there and nothing else is said`() {
+        val hand = "in the hand"
+
+        assertNull(OverlayPolicy.warningText(SessionSnapshot(), hand))
+        assertEquals(hand, OverlayPolicy.warningText(SessionSnapshot(handheld = true), hand))
+        // A blank session warning is no warning: it must not hide the hand.
+        assertEquals(hand, OverlayPolicy.warningText(SessionSnapshot(warning = " ", handheld = true), hand))
+    }
+
+    @Test
+    fun `the session's own warning outranks the hand`() {
+        val snapshot = SessionSnapshot(warning = "screen is off", handheld = true)
+
+        assertEquals("screen is off", OverlayPolicy.warningText(snapshot, "in the hand"))
+        assertEquals("screen is off", OverlayPolicy.warningText(snapshot.copy(handheld = false), "in the hand"))
+    }
 }

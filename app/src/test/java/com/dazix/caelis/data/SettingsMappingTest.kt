@@ -175,6 +175,8 @@ class SettingsMappingTest {
             dismissPostCaptureUi = true,
             keepScreenOn = true,
             dimOverlay = true,
+            // Off, because on is the default: a flag that was never written would read back as on.
+            handheldWarning = false,
         )
 
         val prefs = mutablePreferencesOf()
@@ -194,12 +196,13 @@ class SettingsMappingTest {
     fun `a record written before the new flags existed reads as the shared defaults`() {
         val older = mutablePreferencesOf()
         SettingsMapping.writeAdvanced(older, AdvancedSettings(adaptiveLongExposureWait = true))
-        older.removeByName("advanced_keep_screen_on", "advanced_dim_overlay")
+        older.removeByName("advanced_keep_screen_on", "advanced_dim_overlay", "advanced_handheld_warning")
 
         val restored = SettingsMapping.readAdvanced(older)
 
         assertEquals(AdvancedSettings().keepScreenOn, restored.keepScreenOn)
         assertEquals(AdvancedSettings().dimOverlay, restored.dimOverlay)
+        assertEquals(AdvancedSettings().handheldWarning, restored.handheldWarning)
         assertEquals(true, restored.adaptiveLongExposureWait)
     }
 
