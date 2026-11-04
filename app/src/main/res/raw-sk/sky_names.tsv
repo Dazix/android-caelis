@@ -1,0 +1,312 @@
+# Night sky names: <key> TAB <name>. Keys and format: domain/nightsky/SkyNames.kt
+ast.Arr	Šíp
+ast.BA1	Davisov pes
+ast.BA2	Sláva Fridricha
+ast.BDr	Veľký voz
+ast.BPN	Poniatowského býk
+ast.Bfl	Motýľ
+ast.Bie	Nosidlá
+ast.ChG	Vianočná hus
+ast.Cir	Kruh
+ast.CoH	Vešiak
+ast.DCr	Diamantový kríž
+ast.ECr	Egyptský kríž
+ast.FCr	Nepravý kríž
+ast.FHA	Rybársky háčik
+ast.FMi	Lietajúca plotica
+ast.GDi	Diamant
+ast.GSP	Pegasov štvorec
+ast.GoP	Strážcovia pólu
+ast.Goa	Kozľatá
+ast.HCn	Hlava Kentaura
+ast.HDr	Hlava Draka
+ast.HHy	Hlava Hydry
+ast.HMG	Hlava Medúzy
+ast.HSr	Hlava Hada
+ast.HWl	Hlava Veľryby
+ast.HeG	Nebeské G
+ast.Hr7	Harrington 7
+ast.JbC	Jóbova truhla
+ast.KSt	Základný kameň
+ast.Kit	Drak
+ast.LDr	Malý voz
+ast.MCs	Malá Kasiopeja
+ast.Mlk	Mliečny voz
+ast.NCr	Severný kríž
+ast.NFy	Severná muška
+ast.OBf	Motýľ v Orióne
+ast.OSh	Orionov štít
+ast.OrB	Orionov pás
+ast.OrC	Orionova palica
+ast.OrS	Orionov meč
+ast.Ptr	Ukazovatele
+ast.SSR	Rad siedmich hviezd
+ast.STr	Letný trojuholník
+ast.Sal	Plachta
+ast.Sic	Kosák
+ast.SoP	Perseov oblúk
+ast.SpT	Jarný trojuholník
+ast.SuO	Sudor Ophiuchi
+ast.TA10	Emu
+ast.TA7	Malý voz (Mini)
+ast.TAK	Kráľovský oblúk
+ast.TPT	Traja patriarchovia
+ast.Tea	Čajník
+ast.Ter	Terebellum
+ast.TrB	Lichobežník
+ast.TrM	Malý trojuholník
+ast.TrP	Ptolemaiov trojuholník
+ast.Urn	Džbán Vodnára
+ast.VMr	Venušino zrkadielko
+ast.VTa	Véčko v Býkovi
+ast.WAs	W (Kasiopeja)
+ast.WHx	Zimný šesťuholník
+ast.WTr	Zimný trojuholník
+con.And	Andromeda
+con.Ant	Vývevy
+con.Aps	Rajka
+con.Aql	Orol
+con.Aqr	Vodnár
+con.Ara	Oltár
+con.Ari	Baran
+con.Aur	Povozník
+con.Boo	Pastier
+con.CMa	Veľký pes
+con.CMi	Malý pes
+con.CVn	Poľovnícke psy
+con.Cae	Rydlo
+con.Cam	Žirafa
+con.Cap	Kozorožec
+con.Car	Lodný kýl
+con.Cas	Kasiopeja
+con.Cen	Kentaur
+con.Cep	Cefeus
+con.Cet	Veľryba
+con.Cha	Chameleón
+con.Cir	Kružidlo
+con.Cnc	Rak
+con.Col	Holubica
+con.Com	Berenikine vlasy
+con.CrA	Južná koruna
+con.CrB	Severná koruna
+con.Crt	Pohár
+con.Cru	Južný kríž
+con.Crv	Havran
+con.Cyg	Labuť
+con.Del	Delfín
+con.Dor	Mečiar
+con.Dra	Drak
+con.Equ	Koník
+con.Eri	Eridanus
+con.For	Pec
+con.Gem	Blížence
+con.Gru	Žeriav
+con.Her	Herkules
+con.Hor	Hodiny
+con.Hya	Hydra
+con.Hyi	Malý vodný had
+con.Ind	Indián
+con.LMi	Malý lev
+con.Lac	Jašterica
+con.Leo	Lev
+con.Lep	Zajac
+con.Lib	Váhy
+con.Lup	Vlk
+con.Lyn	Rys
+con.Lyr	Lyra
+con.Men	Stolová hora
+con.Mic	Mikroskop
+con.Mon	Jednorožec
+con.Mus	Mucha
+con.Nor	Pravítko
+con.Oct	Oktant
+con.Oph	Hadonos
+con.Ori	Orión
+con.Pav	Páv
+con.Peg	Pegas
+con.Per	Perzeus
+con.Phe	Fénix
+con.Pic	Maliar
+con.PsA	Južná ryba
+con.Psc	Ryby
+con.Pup	Korma
+con.Pyx	Kompas
+con.Ret	Sieť
+con.Scl	Sochár
+con.Sco	Škorpión
+con.Sct	Štít
+con.Ser	Had
+con.Sex	Sextant
+con.Sge	Šíp
+con.Sgr	Strelec
+con.Tau	Býk
+con.Tel	Ďalekohľad
+con.TrA	Južný trojuholník
+con.Tri	Trojuholník
+con.Tuc	Tukan
+con.UMa	Veľká medvedica
+con.UMi	Malá medvedica
+con.Vel	Plachty
+con.Vir	Panna
+con.Vol	Lietajúca ryba
+con.Vul	Líška
+dso.M1	Krabia hmlovina
+dso.M10	Guľová hviezdokopa M10
+dso.M100	Zrkadlová galaxia M100
+dso.M101	Galaxia Veterník
+dso.M102	Galaxia Vreteno
+dso.M103	Otvorená hviezdokopa M103
+dso.M104	Galaxia Sombrero
+dso.M105	Eliptická galaxia M105
+dso.M106	Špirálová galaxia M106
+dso.M107	Guľová hviezdokopa M107
+dso.M108	Surfovacia doska
+dso.M109	Vysávačová galaxia
+dso.M11	Hviezdokopa Divá kačica
+dso.M110	Satelitná galaxia M110
+dso.M12	Guľová hviezdokopa M12
+dso.M13	Veľká guľová hviezdokopa v Herkulovi
+dso.M14	Guľová hviezdokopa M14
+dso.M15	Pegasova guľová hviezdokopa
+dso.M16	Orlia hmlovina
+dso.M17	Hmlovina Omega / Labuť
+dso.M18	Čierna labuť
+dso.M19	Guľová hviezdokopa M19
+dso.M2	Guľová hviezdokopa M2
+dso.M20	Hmlovina Trifid
+dso.M21	Hviezdokopa Webb's Cross
+dso.M22	Veľká guľová hviezdokopa v Strelcovi
+dso.M23	Otvorená hviezdokopa M23
+dso.M24	Hviezdny oblak v Strelcovi
+dso.M25	Otvorená hviezdokopa M25
+dso.M26	Otvorená hviezdokopa M26
+dso.M27	Hmlovina Činka
+dso.M28	Guľová hviezdokopa M28
+dso.M29	Chladiaca veža
+dso.M3	Guľová hviezdokopa M3
+dso.M30	Guľová hviezdokopa M30
+dso.M31	Galaxia v Andromede
+dso.M32	Satelitná galaxia M32
+dso.M33	Galaxia v Trojuholníku
+dso.M34	Špirála
+dso.M35	Hviezdokopa v Blížencoch
+dso.M36	Veterník v Povozníkovi
+dso.M37	Zlatá hviezdokopa
+dso.M38	Hviezdokopa Hviezdica
+dso.M39	Otvorená hviezdokopa M39
+dso.M4	Guľová hviezdokopa M4
+dso.M40	Dvojhviezda Winnecke 4
+dso.M41	Malý včelí úľ
+dso.M42	Veľká hmlovina v Orióne
+dso.M43	De Mairanova hmlovina
+dso.M44	Jasličky / Praesepe
+dso.M45	Plejády
+dso.M46	Otvorená hviezdokopa M46
+dso.M47	Otvorená hviezdokopa M47
+dso.M48	Otvorená hviezdokopa M48
+dso.M49	Eliptická galaxia M49
+dso.M5	Guľová hviezdokopa M5
+dso.M50	Hviezdokopa v tvare srdca
+dso.M51	Vírivá galaxia
+dso.M52	Hviezdokopa Škorpión
+dso.M53	Guľová hviezdokopa M53
+dso.M54	Guľová hviezdokopa M54
+dso.M55	Guľová hviezdokopa M55
+dso.M56	Guľová hviezdokopa M56
+dso.M57	Prstencová hmlovina
+dso.M58	Špirála s priečkou M58
+dso.M59	Eliptická galaxia M59
+dso.M6	Motýlia hviezdokopa
+dso.M60	Eliptická galaxia M60
+dso.M61	Galaxia Opuchnuté prsty
+dso.M62	Deformovaná hviezdokopa
+dso.M63	Galaxia Slnečnica
+dso.M64	Galaxia Čierne oko
+dso.M65	Galaxia z Levieho tripletu
+dso.M66	Galaxia z Levieho tripletu
+dso.M67	Hviezdokopa Kráľ Kobra
+dso.M68	Guľová hviezdokopa M68
+dso.M69	Guľová hviezdokopa M69
+dso.M7	Ptolemaiova hviezdokopa
+dso.M70	Guľová hviezdokopa M70
+dso.M71	Hviezdokopa Anjelik
+dso.M72	Guľová hviezdokopa M72
+dso.M73	Asterizmus štyroch hviezd M73
+dso.M74	Galaxia Fantóm
+dso.M75	Guľová hviezdokopa M75
+dso.M76	Malá činka / Motýlik
+dso.M77	Galaxia Chobotnica
+dso.M78	Reflexná hmlovina M78
+dso.M79	Guľová hviezdokopa M79
+dso.M8	Hmlovina Lagúna
+dso.M80	Guľová hviezdokopa M80
+dso.M81	Bodeho galaxia
+dso.M82	Cigarová galaxia
+dso.M83	Južný veterník
+dso.M84	Eliptická galaxia M84
+dso.M85	Šošovková galaxia M85
+dso.M86	Eliptická galaxia M86
+dso.M87	Obria eliptická galaxia Virgo A
+dso.M88	Špirálová galaxia M88
+dso.M89	Eliptická galaxia M89
+dso.M9	Guľová hviezdokopa M9
+dso.M90	Špirálová galaxia M90
+dso.M91	Špirála s priečkou M91
+dso.M92	Guľová hviezdokopa M92
+dso.M93	Hviezdokopa Motýlik / Hviezdna loď
+dso.M94	Krokodílie oko / Mačacie oko
+dso.M95	Špirála s priečkou M95
+dso.M96	Dvojitá špirála M96
+dso.M97	Sovia hmlovina
+dso.M98	Špirálová galaxia M98
+dso.M99	Galaxia Veterník v Panne
+met.1	Kvadrantidy
+met.10	Orionidy
+met.11	Južné Tauridy
+met.12	Severné Tauridy
+met.13	Leonidy
+met.14	Geminidy
+met.15	Ursidy
+met.16	Puppidy-Velidy
+met.17	Kentauridy
+met.18	Gama Normidy
+met.19	Pí Puppidy
+met.2	Lyridy
+met.20	Kamelopardalidy
+met.21	Denné Arietidy
+met.22	Júnové Bootidy
+met.23	Piscis Austrinidy
+met.24	Kappa Cygnidy
+met.25	Andromedidy
+met.26	Fénixidy
+met.27	Monocerotidy
+met.28	Sigma Hydridy
+met.3	Eta Akvaridy
+met.4	Južné Delta Akvaridy
+met.5	Alfa Kaprikornidy
+met.6	Perzeidy
+met.7	Aurigidy
+met.8	Septembrové Epsilon Perzeidy
+met.9	Drakonidy
+planet.Jupiter	Jupiter
+planet.Mars	Mars
+planet.Mercury	Merkúr
+planet.Moon	Mesiac
+planet.Neptune	Neptún
+planet.Saturn	Saturn
+planet.Uranus	Urán
+planet.Venus	Venuša
+type.blue_giant	Modrý obor
+type.blue_supergiant	Modrý veleobor
+type.giant_star	Obor
+type.main_sequence	Hlavná postupnosť
+type.orange_red_star	Oranžová/červená hviezda
+type.red_dwarf	Červený trpaslík
+type.red_giant	Červený obor
+type.red_supergiant	Červený veleobor
+type.star	Hviezda
+type.subgiant	Podobor
+type.supergiant	Veleobor
+term.meteor_shower	Meteorický roj
+term.planet	Planéta
+term.radiant	Radiant

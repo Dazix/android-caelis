@@ -66,14 +66,21 @@ class SolarPositionCalculatorTest {
 
     @Test
     fun `verifies cardinal directions formatting`() {
-        assertEquals("N", SolarCoordinates(0.0, 10.0).cardinalDirection())
-        assertEquals("N", SolarCoordinates(350.0, 10.0).cardinalDirection())
-        assertEquals("E", SolarCoordinates(90.0, 10.0).cardinalDirection())
-        assertEquals("SE", SolarCoordinates(135.0, 10.0).cardinalDirection())
-        assertEquals("S", SolarCoordinates(180.0, 10.0).cardinalDirection())
-        assertEquals("SW", SolarCoordinates(225.0, 10.0).cardinalDirection())
-        assertEquals("W", SolarCoordinates(270.0, 10.0).cardinalDirection())
-        assertEquals("NW", SolarCoordinates(315.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.N, SolarCoordinates(0.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.N, SolarCoordinates(350.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.E, SolarCoordinates(90.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.SE, SolarCoordinates(135.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.S, SolarCoordinates(180.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.SW, SolarCoordinates(225.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.W, SolarCoordinates(270.0, 10.0).cardinalDirection())
+        assertEquals(CardinalDirection.NW, SolarCoordinates(315.0, 10.0).cardinalDirection())
+        // Sector edges: each point owns [centre - 22.5°, centre + 22.5°)
+        assertEquals(CardinalDirection.N, CardinalDirection.of(22.4))
+        assertEquals(CardinalDirection.NE, CardinalDirection.of(22.5))
+        assertEquals(CardinalDirection.NW, CardinalDirection.of(337.4))
+        assertEquals(CardinalDirection.N, CardinalDirection.of(337.5))
+        assertEquals(CardinalDirection.N, CardinalDirection.of(-5.0))
+        assertEquals(CardinalDirection.E, LunarCoordinates(100.0, 10.0).cardinalDirection())
     }
 
     @Test

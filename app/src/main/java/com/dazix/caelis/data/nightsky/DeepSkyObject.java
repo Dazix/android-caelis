@@ -23,9 +23,6 @@ public final class DeepSkyObject extends Table {
     public float mag() { int o = __offset(10); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
     public float sizeArcmin() { int o = __offset(12); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
     public byte type() { int o = __offset(14); return o != 0 ? bb.get(o + bb_pos) : 0; }
-    public String localizedName() { int o = __offset(16); return o != 0 ? __string(o + bb_pos) : null; }
-    public ByteBuffer localizedNameAsByteBuffer() { return __vector_as_bytebuffer(16, 1); }
-    public ByteBuffer localizedNameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 16, 1); }
     public String constellationId() { int o = __offset(18); return o != 0 ? __string(o + bb_pos) : null; }
     public ByteBuffer constellationIdAsByteBuffer() { return __vector_as_bytebuffer(18, 1); }
     public ByteBuffer constellationIdInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 18, 1); }
@@ -50,7 +47,6 @@ public final class DeepSkyObject extends Table {
         float mag,
         float sizeArcmin,
         byte type,
-        int localizedNameOffset,
         int constellationIdOffset,
         int englishNameOffset,
         int ngcIdOffset,
@@ -68,7 +64,6 @@ public final class DeepSkyObject extends Table {
         DeepSkyObject.addNgcId(builder, ngcIdOffset);
         DeepSkyObject.addEnglishName(builder, englishNameOffset);
         DeepSkyObject.addConstellationId(builder, constellationIdOffset);
-        DeepSkyObject.addLocalizedName(builder, localizedNameOffset);
         DeepSkyObject.addSizeArcmin(builder, sizeArcmin);
         DeepSkyObject.addMag(builder, mag);
         DeepSkyObject.addDec(builder, dec);
@@ -85,7 +80,6 @@ public final class DeepSkyObject extends Table {
     public static void addMag(FlatBufferBuilder builder, float mag) { builder.addFloat(3, mag, 0.0f); }
     public static void addSizeArcmin(FlatBufferBuilder builder, float sizeArcmin) { builder.addFloat(4, sizeArcmin, 0.0f); }
     public static void addType(FlatBufferBuilder builder, byte type) { builder.addByte(5, type, 0); }
-    public static void addLocalizedName(FlatBufferBuilder builder, int localizedNameOffset) { builder.addOffset(6, localizedNameOffset, 0); }
     public static void addConstellationId(FlatBufferBuilder builder, int constellationIdOffset) { builder.addOffset(7, constellationIdOffset, 0); }
     public static void addEnglishName(FlatBufferBuilder builder, int englishNameOffset) { builder.addOffset(8, englishNameOffset, 0); }
     public static void addNgcId(FlatBufferBuilder builder, int ngcIdOffset) { builder.addOffset(9, ngcIdOffset, 0); }

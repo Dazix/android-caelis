@@ -9,8 +9,7 @@ package com.dazix.caelis.domain.solar
  * @param distanceKm Instantaneous distance from observer to Moon center in kilometers (~356,000 to 406,000 km).
  * @param illuminationFraction Fraction of lunar disk illuminated by sunlight [0.0, 1.0].
  * @param elongationDegrees Angular separation between Moon and Sun [0.0, 360.0).
- * @param phaseName Localized name of current lunar phase (e.g. "Úplněk", "První čtvrť").
- * @param phaseGlyph Emoji/Glyph representation (e.g. "🌕", "🌓", "🌒").
+ * @param phase Current lunar phase; the UI names it in the user's language.
  */
 data class LunarCoordinates(
     val azimuthDegrees: Double,
@@ -19,24 +18,14 @@ data class LunarCoordinates(
     val distanceKm: Double = 384400.0,
     val illuminationFraction: Double = 0.5,
     val elongationDegrees: Double = 90.0,
-    val phaseName: String = "",
-    val phaseGlyph: String = "🌕",
+    val phase: LunarPhase = LunarPhase.FULL,
 ) {
     /** True if the lunar disk center is above the visual horizon (apparent elevation >= -0.8333°). */
     val isAboveHorizon: Boolean get() = apparentElevationDegrees >= -0.8333
 
-    /** Returns azimuth cardinal direction name, e.g. "N", "NE", "E", "SE", "S", "SW", "W", "NW". */
-    fun cardinalDirection(): String {
-        val norm = (azimuthDegrees % 360.0 + 360.0) % 360.0
-        return when {
-            norm < 22.5 || norm >= 337.5 -> "N"
-            norm < 67.5 -> "NE"
-            norm < 112.5 -> "E"
-            norm < 157.5 -> "SE"
-            norm < 202.5 -> "S"
-            norm < 247.5 -> "SW"
-            norm < 292.5 -> "W"
-            else -> "NW"
-        }
-    }
+    /** Emoji of the phase, e.g. "🌕", "🌓", "🌒". */
+    val phaseGlyph: String get() = phase.glyph
+
+    /** Compass point of the azimuth; the UI names it in the user's language. */
+    fun cardinalDirection(): CardinalDirection = CardinalDirection.of(azimuthDegrees)
 }

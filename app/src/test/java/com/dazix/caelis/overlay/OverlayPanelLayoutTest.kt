@@ -12,7 +12,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.math.roundToInt
@@ -24,15 +25,25 @@ import kotlin.math.roundToInt
  * On the device the warning appeared above the rows and widened the panel, so Pause and Stop jumped
  * down and every button changed width; and the Czech "Ztlumení: vyp." toggle, wrapped to two lines in
  * the narrower panel, was moved down by the baseline-aligned row and lost the bottom of its pill.
- * The panel here is built the way `OverlayController.buildPanel` builds it.
+ * The panel here is built the way `OverlayController.buildPanel` builds it, once per language the
+ * app ships: the panel is the narrowest place a translation lands, and a longer word than the Czech
+ * one wraps the same way.
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], qualifiers = "cs")
+@RunWith(ParameterizedRobolectricTestRunner::class)
+@Config(sdk = [34])
 // Real text layout: the legacy shadows never wrap a label, and the wrap is what the bug needs.
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class OverlayPanelLayoutTest {
+class OverlayPanelLayoutTest(private val language: String) {
 
-    private val context: Context = ApplicationProvider.getApplicationContext()
+    companion object {
+        @JvmStatic
+        @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
+        fun languages() = listOf("en", "cs", "sk", "pl", "de").map { arrayOf<Any>(it) }
+    }
+
+    // Before anything below reads a string.
+    private val context: Context = RuntimeEnvironment.setQualifiers(language)
+        .let { ApplicationProvider.getApplicationContext() }
 
     private fun dp(value: Float) = (value * context.resources.displayMetrics.density).roundToInt()
 
@@ -104,6 +115,7 @@ class OverlayPanelLayoutTest {
 
     @Test
     fun `a wrapped toggle label does not push its neighbour out of the row`() {
+        assertEquals("the panel is built in the language under test", language, context.resources.configuration.locales[0].language)
         layOut()
         assertCellsInRow("without the warning")
         warning.visibility = View.VISIBLE

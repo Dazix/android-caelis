@@ -3,6 +3,7 @@ package com.dazix.caelis.ui.solar
 import android.Manifest
 import android.content.Context
 import android.hardware.SensorManager
+import android.text.format.DateFormat
 import android.hardware.camera2.CameraCharacteristics
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -101,16 +102,19 @@ import com.dazix.caelis.ar.DeviceOrientation
 import com.dazix.caelis.ar.PreviewFrameClock
 import com.dazix.caelis.domain.horizon.SkylineRefusal
 import com.dazix.caelis.domain.solar.BubbleInterval
+import com.dazix.caelis.domain.solar.CardinalDirection
 import com.dazix.caelis.domain.solar.LunarCoordinates
 import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectory
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.CenteredBar
+import com.dazix.caelis.ui.cardinalName
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.SegmentedChoice
 import com.dazix.caelis.ui.formatOffsetDegrees
+import com.dazix.caelis.ui.nameRes
 import com.dazix.caelis.ui.rememberBottomGestureSlopPx
 import com.dazix.caelis.ui.rememberSkyPoseRig
 import com.dazix.caelis.domain.arframe.SystemGestureZone
@@ -744,19 +748,9 @@ internal fun SunArTopBar(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 val az = orientation?.cameraAzimuthDegrees?.toInt() ?: 0
-                val cardinalRes = when {
-                    az < 23 || az >= 338 -> R.string.sun_ar_cardinal_n
-                    az < 68 -> R.string.sun_ar_cardinal_ne
-                    az < 113 -> R.string.sun_ar_cardinal_e
-                    az < 158 -> R.string.sun_ar_cardinal_se
-                    az < 203 -> R.string.sun_ar_cardinal_s
-                    az < 248 -> R.string.sun_ar_cardinal_sw
-                    az < 293 -> R.string.sun_ar_cardinal_w
-                    else -> R.string.sun_ar_cardinal_nw
-                }
-                val cardinalName = stringResource(cardinalRes).substringBefore(" ")
+                val cardinal = cardinalName(CardinalDirection.of(az.toDouble()))
                 Text(
-                    text = "🧭 $az° $cardinalName",
+                    text = "🧭 $az° $cardinal",
                     style = MaterialTheme.typography.labelSmall,
                     color = accentColor,
                     fontWeight = FontWeight.Bold,
@@ -793,8 +787,10 @@ internal fun DateNavigatorBar(
     place: SavedPlace? = null,
     onOpenPlaces: (() -> Unit)? = null,
 ) {
+    // The locale's own order and punctuation: a fixed "d. MMM" read "czw. 5. lis" in Polish.
     val formatter = remember {
-        DateTimeFormatter.ofPattern("EEE d. MMM", Locale.getDefault())
+        val locale = Locale.getDefault()
+        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEdMMM"), locale)
     }
 
     val containerBg = Color(0xDD1A1A1A)
@@ -948,7 +944,7 @@ internal fun SunMoonTimesInfoCard(
 
             // 1. SOLAR SECTION
             Text(
-                text = "☀️ Slunce",
+                text = "☀️ ${stringResource(R.string.sun_ar_section_sun)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = NormalGoldSolar,
                 fontWeight = FontWeight.Bold,
@@ -960,7 +956,7 @@ internal fun SunMoonTimesInfoCard(
                 InfoItem(
                     label = stringResource(R.string.sun_ar_sunrise),
                     value = solarTrajectory.sunriseMarker?.formattedTime ?: "—",
-                    sub = solarTrajectory.sunriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${it.coordinates.cardinalDirection()}" } ?: "",
+                    sub = solarTrajectory.sunriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
                     color = NormalSunrise,
                     subColor = subColor,
                 )
@@ -974,7 +970,7 @@ internal fun SunMoonTimesInfoCard(
                 InfoItem(
                     label = stringResource(R.string.sun_ar_sunset),
                     value = solarTrajectory.sunsetMarker?.formattedTime ?: "—",
-                    sub = solarTrajectory.sunsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${it.coordinates.cardinalDirection()}" } ?: "",
+                    sub = solarTrajectory.sunsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
                     color = NormalSunset,
                     subColor = subColor,
                 )
@@ -1001,7 +997,7 @@ internal fun SunMoonTimesInfoCard(
 
             // 2. LUNAR SECTION
             Text(
-                text = "🌙 Měsíc (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${lTimes.phaseName})",
+                text = "🌙 ${stringResource(R.string.sun_ar_section_moon)} (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${stringResource(lTimes.phase.nameRes())})",
                 style = MaterialTheme.typography.labelMedium,
                 color = MoonSilverCyan,
                 fontWeight = FontWeight.Bold,
@@ -1013,7 +1009,7 @@ internal fun SunMoonTimesInfoCard(
                 InfoItem(
                     label = stringResource(R.string.moon_ar_moonrise),
                     value = lunarTrajectory.moonriseMarker?.formattedTime ?: "—",
-                    sub = lunarTrajectory.moonriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${it.coordinates.cardinalDirection()}" } ?: "",
+                    sub = lunarTrajectory.moonriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
                     color = MoonRiseColor,
                     subColor = subColor,
                 )
@@ -1027,7 +1023,7 @@ internal fun SunMoonTimesInfoCard(
                 InfoItem(
                     label = stringResource(R.string.moon_ar_moonset),
                     value = lunarTrajectory.moonsetMarker?.formattedTime ?: "—",
-                    sub = lunarTrajectory.moonsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${it.coordinates.cardinalDirection()}" } ?: "",
+                    sub = lunarTrajectory.moonsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
                     color = MoonSetColor,
                     subColor = subColor,
                 )

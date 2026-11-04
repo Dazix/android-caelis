@@ -1,0 +1,312 @@
+# Night sky names: <key> TAB <name>. Keys and format: domain/nightsky/SkyNames.kt
+ast.Arr	Pfeil
+ast.BA1	Davis’ Hund
+ast.BA2	Ehre Friedrichs
+ast.BDr	Großer Wagen
+ast.BPN	Poniatowski-Stier
+ast.Bfl	Schmetterling
+ast.Bie	Totenbahre
+ast.ChG	Weihnachtsgans
+ast.Cir	Ring
+ast.CoH	Kleiderbügel
+ast.DCr	Diamantkreuz
+ast.ECr	Ägyptisches Kreuz
+ast.FCr	Falsches Kreuz
+ast.FHA	Fischhaken
+ast.FMi	Fliegende Elritze
+ast.GDi	Großer Diamant
+ast.GSP	Pegasus-Viereck
+ast.GoP	Wächter des Pols
+ast.Goa	Zicklein
+ast.HCn	Kopf des Zentauren
+ast.HDr	Drachenkopf
+ast.HHy	Kopf der Hydra
+ast.HMG	Kopf der Medusa
+ast.HSr	Kopf der Schlange
+ast.HWl	Kopf des Walfischs
+ast.HeG	Himmels-G
+ast.Hr7	Harrington 7
+ast.JbC	Hiobs Sarg
+ast.KSt	Schlussstein
+ast.Kit	Drachen
+ast.LDr	Kleiner Wagen
+ast.MCs	Mini-Kassiopeia
+ast.Mlk	Milchkännchen
+ast.NCr	Kreuz des Nordens
+ast.NFy	Nördliche Fliege
+ast.OBf	Orion-Schmetterling
+ast.OSh	Orions Schild
+ast.OrB	Gürtel des Orion
+ast.OrC	Orions Keule
+ast.OrS	Orions Schwert
+ast.Ptr	Zeiger
+ast.SSR	Sieben-Sterne-Reihe
+ast.STr	Sommerdreieck
+ast.Sal	Segel
+ast.Sic	Sichel
+ast.SoP	Perseus-Segment
+ast.SpT	Frühlingsdreieck
+ast.SuO	Sudor Ophiuchi
+ast.TA10	Rothalsemu
+ast.TA7	Mini-Wagen
+ast.TAK	Bogen des Königs
+ast.TPT	Drei Patriarchen
+ast.Tea	Teekanne
+ast.Ter	Terebellum
+ast.TrB	Trapez
+ast.TrM	Kleines Dreieck
+ast.TrP	Ptolemäus-Dreieck
+ast.Urn	Wasserkrug
+ast.VMr	Venusspiegel
+ast.VTa	V im Stier
+ast.WAs	W
+ast.WHx	Wintersechseck
+ast.WTr	Winterdreieck
+con.And	Andromeda
+con.Ant	Luftpumpe
+con.Aps	Paradiesvogel
+con.Aql	Adler
+con.Aqr	Wassermann
+con.Ara	Altar
+con.Ari	Widder
+con.Aur	Fuhrmann
+con.Boo	Bärenhüter
+con.CMa	Großer Hund
+con.CMi	Kleiner Hund
+con.CVn	Jagdhunde
+con.Cae	Grabstichel
+con.Cam	Giraffe
+con.Cap	Steinbock
+con.Car	Kiel des Schiffs
+con.Cas	Kassiopeia
+con.Cen	Zentaur
+con.Cep	Kepheus
+con.Cet	Walfisch
+con.Cha	Chamäleon
+con.Cir	Zirkel
+con.Cnc	Krebs
+con.Col	Taube
+con.Com	Haar der Berenike
+con.CrA	Südliche Krone
+con.CrB	Nördliche Krone
+con.Crt	Becher
+con.Cru	Kreuz des Südens
+con.Crv	Rabe
+con.Cyg	Schwan
+con.Del	Delphin
+con.Dor	Schwertfisch
+con.Dra	Drache
+con.Equ	Füllen
+con.Eri	Eridanus
+con.For	Chemischer Ofen
+con.Gem	Zwillinge
+con.Gru	Kranich
+con.Her	Herkules
+con.Hor	Pendeluhr
+con.Hya	Wasserschlange
+con.Hyi	Kleine Wasserschlange
+con.Ind	Inder
+con.LMi	Kleiner Löwe
+con.Lac	Eidechse
+con.Leo	Löwe
+con.Lep	Hase
+con.Lib	Waage
+con.Lup	Wolf
+con.Lyn	Luchs
+con.Lyr	Leier
+con.Men	Tafelberg
+con.Mic	Mikroskop
+con.Mon	Einhorn
+con.Mus	Fliege
+con.Nor	Winkelmaß
+con.Oct	Oktant
+con.Oph	Schlangenträger
+con.Ori	Orion
+con.Pav	Pfau
+con.Peg	Pegasus
+con.Per	Perseus
+con.Phe	Phönix
+con.Pic	Maler
+con.PsA	Südlicher Fisch
+con.Psc	Fische
+con.Pup	Achterdeck
+con.Pyx	Kompass
+con.Ret	Netz
+con.Scl	Bildhauer
+con.Sco	Skorpion
+con.Sct	Schild
+con.Ser	Schlange
+con.Sex	Sextant
+con.Sge	Pfeil
+con.Sgr	Schütze
+con.Tau	Stier
+con.Tel	Teleskop
+con.TrA	Südliches Dreieck
+con.Tri	Dreieck
+con.Tuc	Tukan
+con.UMa	Großer Bär
+con.UMi	Kleiner Bär
+con.Vel	Segel des Schiffs
+con.Vir	Jungfrau
+con.Vol	Fliegender Fisch
+con.Vul	Fuchs
+dso.M1	Krebsnebel
+dso.M10	Kugelsternhaufen M10
+dso.M100	Spiegelgalaxie M100
+dso.M101	Feuerradgalaxie
+dso.M102	Spindelgalaxie
+dso.M103	Offener Sternhaufen M103
+dso.M104	Sombrerogalaxie
+dso.M105	Elliptische Galaxie M105
+dso.M106	Spiralgalaxie M106
+dso.M107	Kugelsternhaufen M107
+dso.M108	Surfbrettgalaxie
+dso.M109	Spiralgalaxie M109
+dso.M11	Wildentenhaufen
+dso.M110	Satellitengalaxie M110
+dso.M12	Kugelsternhaufen M12
+dso.M13	Herkuleshaufen
+dso.M14	Kugelsternhaufen M14
+dso.M15	Pegasushaufen
+dso.M16	Adlernebel
+dso.M17	Omeganebel / Schwan
+dso.M18	Offener Sternhaufen M18
+dso.M19	Kugelsternhaufen M19
+dso.M2	Kugelsternhaufen M2
+dso.M20	Trifidnebel
+dso.M21	Offener Sternhaufen M21
+dso.M22	Kugelsternhaufen M22
+dso.M23	Offener Sternhaufen M23
+dso.M24	Schütze-Sternwolke
+dso.M25	Offener Sternhaufen M25
+dso.M26	Offener Sternhaufen M26
+dso.M27	Hantelnebel
+dso.M28	Kugelsternhaufen M28
+dso.M29	Kühlturm
+dso.M3	Kugelsternhaufen M3
+dso.M30	Kugelsternhaufen M30
+dso.M31	Andromedagalaxie
+dso.M32	Satellitengalaxie M32
+dso.M33	Dreiecksgalaxie
+dso.M34	Offener Sternhaufen M34
+dso.M35	Offener Sternhaufen M35
+dso.M36	Offener Sternhaufen M36
+dso.M37	Offener Sternhaufen M37
+dso.M38	Seestern-Haufen
+dso.M39	Offener Sternhaufen M39
+dso.M4	Kugelsternhaufen M4
+dso.M40	Winnecke 4
+dso.M41	Offener Sternhaufen M41
+dso.M42	Orionnebel
+dso.M43	De-Mairan-Nebel
+dso.M44	Krippe / Praesepe
+dso.M45	Plejaden / Siebengestirn
+dso.M46	Offener Sternhaufen M46
+dso.M47	Offener Sternhaufen M47
+dso.M48	Offener Sternhaufen M48
+dso.M49	Elliptische Galaxie M49
+dso.M5	Kugelsternhaufen M5
+dso.M50	Herzhaufen
+dso.M51	Strudelgalaxie
+dso.M52	Offener Sternhaufen M52
+dso.M53	Kugelsternhaufen M53
+dso.M54	Kugelsternhaufen M54
+dso.M55	Kugelsternhaufen M55
+dso.M56	Kugelsternhaufen M56
+dso.M57	Ringnebel
+dso.M58	Balkenspirale M58
+dso.M59	Elliptische Galaxie M59
+dso.M6	Schmetterlingshaufen
+dso.M60	Elliptische Galaxie M60
+dso.M61	Spiralgalaxie M61
+dso.M62	Kugelsternhaufen M62
+dso.M63	Sonnenblumengalaxie
+dso.M64	Schwarzauggalaxie
+dso.M65	Leo-Triplett M65
+dso.M66	Leo-Triplett M66
+dso.M67	Offener Sternhaufen M67
+dso.M68	Kugelsternhaufen M68
+dso.M69	Kugelsternhaufen M69
+dso.M7	Ptolemäus-Haufen
+dso.M70	Kugelsternhaufen M70
+dso.M71	Kugelsternhaufen M71
+dso.M72	Kugelsternhaufen M72
+dso.M73	Asterismus M73
+dso.M74	Phantomgalaxie
+dso.M75	Kugelsternhaufen M75
+dso.M76	Kleiner Hantelnebel
+dso.M77	Spiralgalaxie M77
+dso.M78	Reflexionsnebel M78
+dso.M79	Kugelsternhaufen M79
+dso.M8	Lagunennebel
+dso.M80	Kugelsternhaufen M80
+dso.M81	Bodes Galaxie
+dso.M82	Zigarrengalaxie
+dso.M83	Südliche Feuerradgalaxie
+dso.M84	Elliptische Galaxie M84
+dso.M85	Linsengalaxie M85
+dso.M86	Elliptische Galaxie M86
+dso.M87	Virgo A
+dso.M88	Spiralgalaxie M88
+dso.M89	Elliptische Galaxie M89
+dso.M9	Kugelsternhaufen M9
+dso.M90	Spiralgalaxie M90
+dso.M91	Balkenspirale M91
+dso.M92	Kugelsternhaufen M92
+dso.M93	Offener Sternhaufen M93
+dso.M94	Spiralgalaxie M94
+dso.M95	Balkenspirale M95
+dso.M96	Spiralgalaxie M96
+dso.M97	Eulennebel
+dso.M98	Spiralgalaxie M98
+dso.M99	Spiralgalaxie M99
+met.1	Quadrantiden
+met.10	Orioniden
+met.11	Südliche Tauriden
+met.12	Nördliche Tauriden
+met.13	Leoniden
+met.14	Geminiden
+met.15	Ursiden
+met.16	Puppid-Veliden
+met.17	Centauriden
+met.18	Gamma-Normiden
+met.19	Pi-Puppiden
+met.2	Lyriden
+met.20	Camelopardaliden
+met.21	Tages-Arietiden
+met.22	Juni-Bootiden
+met.23	Piscis-Austriniden
+met.24	Kappa-Cygniden
+met.25	Andromediden
+met.26	Phoeniciden
+met.27	Monocerotiden
+met.28	Sigma-Hydriden
+met.3	Eta-Aquariden
+met.4	Südliche Delta-Aquariden
+met.5	Alpha-Capricorniden
+met.6	Perseiden
+met.7	Aurigiden
+met.8	September-Epsilon-Perseiden
+met.9	Draconiden
+planet.Jupiter	Jupiter
+planet.Mars	Mars
+planet.Mercury	Merkur
+planet.Moon	Mond
+planet.Neptune	Neptun
+planet.Saturn	Saturn
+planet.Uranus	Uranus
+planet.Venus	Venus
+type.blue_giant	Blauer Riese
+type.blue_supergiant	Blauer Überriese
+type.giant_star	Riesenstern
+type.main_sequence	Hauptreihe
+type.orange_red_star	Orange-roter Stern
+type.red_dwarf	Roter Zwerg
+type.red_giant	Roter Riese
+type.red_supergiant	Roter Überriese
+type.star	Stern
+type.subgiant	Unterriese
+type.supergiant	Überriese
+term.meteor_shower	Meteorstrom
+term.planet	Planet
+term.radiant	Radiant

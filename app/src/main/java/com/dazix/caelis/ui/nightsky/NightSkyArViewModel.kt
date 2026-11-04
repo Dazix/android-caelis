@@ -29,8 +29,8 @@ import com.dazix.caelis.domain.nightsky.CelestialType
 import com.dazix.caelis.domain.nightsky.CelestialVisibility
 import com.dazix.caelis.domain.nightsky.CelestialVisibilityCalculator
 import com.dazix.caelis.domain.nightsky.EquatorialCoordinates
-import com.dazix.caelis.domain.nightsky.IAU_CONSTELLATION_NAMES_CS
-import com.dazix.caelis.domain.nightsky.IAU_CONSTELLATION_NAMES_EN
+import com.dazix.caelis.data.nightsky.SkyNamesResource
+import com.dazix.caelis.domain.nightsky.SkyNames
 import com.dazix.caelis.domain.nightsky.NightSkyCatalogLoader
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
 import com.dazix.caelis.domain.nightsky.NightVisionState
@@ -791,6 +791,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         // Load FlatBuffers Star Catalog binary asynchronously from res/raw/catalog.bin,
         // precompute J2000 celestial vectors, and build search index on background thread (Dispatchers.Default).
         viewModelScope.launch {
+            renderer.skyNames = skyNames()
             val (cat, index) = withContext(Dispatchers.Default) {
                 val catalog = withContext(Dispatchers.IO) {
                     try {
@@ -803,7 +804,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 val builtIndex = if (catalog != null) {
                     renderer.ensureStaticCelestialVectors(catalog)
-                    CelestialSearchIndex.buildSearchIndex(catalog, planetStates.value)
+                    CelestialSearchIndex.buildSearchIndex(catalog, planetStates.value, skyNames())
                 } else {
                     emptyList()
                 }
@@ -1177,14 +1178,15 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
         val app = getApplication<Application>()
         val name = matchedName ?: "HIP ${starIndex + 1}"
-        val subtitle = matchedType ?: app.getString(R.string.celestial_star_subtitle)
+        val names = skyNames()
+        val subtitle = names.starType(matchedType) ?: app.getString(R.string.celestial_star_subtitle)
         val distanceFormatted = if (matchedDistanceLy > 0f) {
             String.format(java.util.Locale.US, "%.1f ly", matchedDistanceLy)
         } else {
             "—"
         }
 
-        val prop1 = matchedConstellation?.let {
+        val prop1 = names.constellationOfCode(matchedConstellation)?.let {
             Pair(app.getString(R.string.celestial_constellation), it)
         }
         val prop2 = Pair(app.getString(R.string.celestial_distance), distanceFormatted)
@@ -1225,8 +1227,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         cat.constellations(reusableConst, constellationIndex)
 
         val app = getApplication<Application>()
-        val name = reusableConst.localizedName() ?: reusableConst.name() ?: ""
         val isAsterism = reusableConst.isAsterism()
+        val name = skyNames().constellation(reusableConst.id(), isAsterism, reusableConst.name()) ?: ""
         val subtitle = if (isAsterism) {
             app.getString(R.string.celestial_asterism_subtitle)
         } else {
@@ -1280,16 +1282,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         cat.dsos(reusableDso, dsoIndex)
 
         val app = getApplication<Application>()
-        val mNum = reusableDso.messierId()
+        val mNum = reusableDso.messierId().toInt()
         val messierId = "M$mNum"
-        val dsoName = reusableDso.englishName()
-        val czechName = com.dazix.caelis.domain.nightsky.CZECH_DSO_NAMES[messierId] ?: reusableDso.localizedName()
-        val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
-        val name = when {
-            isCzech && !czechName.isNullOrEmpty() -> "$messierId ($czechName)"
-            !dsoName.isNullOrEmpty() -> "$messierId ($dsoName)"
-            else -> messierId
-        }
+        val dsoName = skyNames().messier(mNum, reusableDso.englishName())
+        val name = if (!dsoName.isNullOrEmpty()) "$messierId ($dsoName)" else messierId
 
         val dsoTypeStr = when (reusableDso.type()) {
             com.dazix.caelis.data.nightsky.DsoType.GALAXY -> app.getString(R.string.dso_type_galaxy)
@@ -1349,36 +1345,30 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         cat.meteorShowers(reusableMeteor, meteorIndex)
 
         val app = getApplication<Application>()
-        val name = reusableMeteor.localizedName() ?: "Meteor Shower"
+        val names = skyNames()
+        val englishName = reusableMeteor.name() ?: "Meteor Shower"
+        val name = names.meteorShower(reusableMeteor.id().toInt(), englishName) ?: englishName
         val subtitle = app.getString(R.string.celestial_meteor_shower_subtitle)
 
-        val peakMonth = reusableMeteor.peakMonth().toInt()
-        val peakDay = reusableMeteor.peakDay().toInt()
-        val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
-        val monthStr = if (isCzech) {
-            when (peakMonth) {
-                1 -> "ledna"; 2 -> "února"; 3 -> "března"; 4 -> "dubna"
-                5 -> "května"; 6 -> "června"; 7 -> "července"; 8 -> "srpna"
-                9 -> "září"; 10 -> "října"; 11 -> "listopadu"; 12 -> "prosince"
-                else -> "$peakMonth"
-            }
-        } else {
-            when (peakMonth) {
-                1 -> "Jan"; 2 -> "Feb"; 3 -> "Mar"; 4 -> "Apr"
-                5 -> "May"; 6 -> "Jun"; 7 -> "Jul"; 8 -> "Aug"
-                9 -> "Sep"; 10 -> "Oct"; 11 -> "Nov"; 12 -> "Dec"
-                else -> "$peakMonth"
-            }
+        // "12. srpna", "12. August", "12 sierpnia", "Aug 12": the order and the month's case come
+        // from the locale's own day-and-month pattern, not from a table per language.
+        val locale = app.resources.configuration.locales[0]
+        val peakFormatted = try {
+            java.time.MonthDay.of(reusableMeteor.peakMonth().toInt(), reusableMeteor.peakDay().toInt()).format(
+                java.time.format.DateTimeFormatter.ofPattern(
+                    android.text.format.DateFormat.getBestDateTimePattern(locale, "dMMMM"),
+                    locale,
+                )
+            )
+        } catch (_: java.time.DateTimeException) {
+            "${reusableMeteor.peakDay()}/${reusableMeteor.peakMonth()}"
         }
-        val peakFormatted = if (isCzech) "$peakDay. $monthStr" else "$monthStr $peakDay"
 
         val zhr = reusableMeteor.zhr()
-        val zhrFormatted = String.format(java.util.Locale.getDefault(), app.getString(R.string.celestial_zhr_format), zhr)
+        val zhrFormatted = String.format(locale, app.getString(R.string.celestial_zhr_format), zhr)
 
         val constCode = reusableMeteor.constellationId()
-        val constName = if (!constCode.isNullOrEmpty()) {
-            resolveConstellationName(constCode, isCzech)
-        } else null
+        val constName = if (!constCode.isNullOrEmpty()) names.constellationOfCode(constCode) else null
 
         val prop1: Pair<String, String>? = Pair(app.getString(R.string.celestial_peak), peakFormatted)
         val prop2: Pair<String, String>? = Pair(app.getString(R.string.celestial_zhr), zhrFormatted)
@@ -1400,13 +1390,25 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         fetchVisibilityForSelectedBody(meteorRa, meteorDec, isInitialSelection = true)
     }
 
-    private fun resolveConstellationName(constCode: String, isCzech: Boolean): String {
-        return if (isCzech) {
-            IAU_CONSTELLATION_NAMES_CS[constCode] ?: constCode
-        } else {
-            IAU_CONSTELLATION_NAMES_EN[constCode] ?: constCode
+    /**
+     * Follows a change of the app's language: this view model outlives the activity recreated for
+     * it, so the sky labels and the search index would otherwise keep the names they were built in.
+     * Called by the screen whenever its locale changes; the same names are a no-op.
+     */
+    fun refreshSkyNames() {
+        val names = skyNames()
+        if (names === renderer.skyNames) return
+        renderer.skyNames = names
+        val cat = catalogState.value ?: return
+        viewModelScope.launch {
+            searchIndex = withContext(Dispatchers.Default) {
+                CelestialSearchIndex.buildSearchIndex(cat, planetStates.value, names)
+            }
         }
     }
+
+    /** Night-sky names in the app's current language (reloaded after a language change). */
+    private fun skyNames(): SkyNames = SkyNamesResource.forResources(getApplication<Application>().resources)
 
     /**
      * Selects a celestial body from search results, updates selection state,
@@ -1521,8 +1523,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun createPlanetDetails(planet: PlanetState): CelestialBodyDetails {
         val app = getApplication<Application>()
-        val isCzech = java.util.Locale.getDefault().language == "cs"
-        val name = planet.localizedName(isCzech)
+        val name = skyNames().planet(planet.id, planet.nameEn)
         val subtitle = if (planet.isMoon) {
             app.getString(R.string.celestial_moon_subtitle)
         } else {

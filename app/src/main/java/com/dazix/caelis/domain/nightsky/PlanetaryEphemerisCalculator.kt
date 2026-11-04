@@ -15,8 +15,7 @@ import kotlin.math.sqrt
  * Pure Kotlin, no Android imports.
  *
  * @param id Unique identifier (e.g. "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Moon").
- * @param nameEn English designation (e.g. "Jupiter").
- * @param nameCs Czech designation (e.g. "Jupiter").
+ * @param nameEn English designation (e.g. "Jupiter"); the name shown comes from [SkyNames.planet].
  * @param raDegrees Right Ascension in degrees J2000.0 [0.0, 360.0).
  * @param decDegrees Declination in degrees J2000.0 [-90.0, +90.0].
  * @param magnitude Apparent visual magnitude (V band).
@@ -29,7 +28,6 @@ import kotlin.math.sqrt
 data class PlanetState(
     val id: String,
     val nameEn: String,
-    val nameCs: String,
     val raDegrees: Double,
     val decDegrees: Double,
     val magnitude: Float,
@@ -38,9 +36,7 @@ data class PlanetState(
     val illuminationFraction: Float = 1.0f,
     val colorRgb: Int,
     val isMoon: Boolean = false,
-) {
-    fun localizedName(isCzech: Boolean): String = if (isCzech) nameCs else nameEn
-}
+)
 
 /**
  * Pure Kotlin astronomical service that computes dynamic Keplerian orbital mechanics (J2000.0 epoch)
@@ -70,7 +66,6 @@ object PlanetaryEphemerisCalculator {
     private class PlanetElements(
         val id: String,
         val nameEn: String,
-        val nameCs: String,
         val colorRgb: Int,
         val theta0Arcsec: Double, // Angular diameter at 1 AU in arcseconds
         val a0: Double, val aDot: Double,
@@ -84,7 +79,6 @@ object PlanetaryEphemerisCalculator {
     private val earthElements = PlanetElements(
         id = "Earth",
         nameEn = "Earth",
-        nameCs = "Země",
         colorRgb = 0xFF2196F3.toInt(),
         theta0Arcsec = 0.0,
         a0 = 1.00000011, aDot = -0.00000005,
@@ -99,7 +93,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Mercury",
             nameEn = "Mercury",
-            nameCs = "Merkur",
             colorRgb = COLOR_MERCURY,
             theta0Arcsec = 6.74,
             a0 = 0.38709893, aDot = 0.00000066,
@@ -112,7 +105,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Venus",
             nameEn = "Venus",
-            nameCs = "Venuše",
             colorRgb = COLOR_VENUS,
             theta0Arcsec = 16.92,
             a0 = 0.72333199, aDot = 0.00000092,
@@ -125,7 +117,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Mars",
             nameEn = "Mars",
-            nameCs = "Mars",
             colorRgb = COLOR_MARS,
             theta0Arcsec = 9.36,
             a0 = 1.52366231, aDot = -0.00007221,
@@ -138,7 +129,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Jupiter",
             nameEn = "Jupiter",
-            nameCs = "Jupiter",
             colorRgb = COLOR_JUPITER,
             theta0Arcsec = 196.9,
             a0 = 5.20336301, aDot = 0.00060737,
@@ -151,7 +141,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Saturn",
             nameEn = "Saturn",
-            nameCs = "Saturn",
             colorRgb = COLOR_SATURN,
             theta0Arcsec = 165.6, // Physical body diameter (rings scaled via bodyToImageRatio)
             a0 = 9.53707032, aDot = -0.00301530,
@@ -164,7 +153,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Uranus",
             nameEn = "Uranus",
-            nameCs = "Uran",
             colorRgb = COLOR_URANUS,
             theta0Arcsec = 70.0,
             a0 = 19.19126393, aDot = 0.00152025,
@@ -177,7 +165,6 @@ object PlanetaryEphemerisCalculator {
         PlanetElements(
             id = "Neptune",
             nameEn = "Neptune",
-            nameCs = "Neptun",
             colorRgb = COLOR_NEPTUNE,
             theta0Arcsec = 68.0,
             a0 = 30.06896348, aDot = -0.00125196,
@@ -304,7 +291,6 @@ object PlanetaryEphemerisCalculator {
                 PlanetState(
                     id = planet.id,
                     nameEn = planet.nameEn,
-                    nameCs = planet.nameCs,
                     raDegrees = raDeg,
                     decDegrees = decDeg,
                     magnitude = mag,
@@ -398,7 +384,6 @@ object PlanetaryEphemerisCalculator {
         return PlanetState(
             id = "Moon",
             nameEn = "Moon",
-            nameCs = "Měsíc",
             raDegrees = raRad * DEG,
             decDegrees = decRad * DEG,
             magnitude = mag,

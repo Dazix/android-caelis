@@ -133,19 +133,21 @@ def parse_stellarium_art(stars_by_hip):
 def serialize_dsos(builder, dsos_data):
     """
     dsos_data: list of tuples:
-    (messier_id, ra, dec, mag, size_arcmin, dso_type, czech_name, english_name, ngc_id, con_abbr,
+    (messier_id, ra, dec, mag, size_arcmin, dso_type, english_name, ngc_id, con_abbr,
      [position_angle_deg, axis_ratio, art_resource_name, art_width_deg, art_rotation_deg])
+
+    Slot 6 (localized_name) is deprecated and left empty: the names a user reads come from
+    res/raw*/sky_names.tsv, keyed "dso.M<messier_id>", one file per language.
     """
     dso_offsets = []
     for item in dsos_data:
-        m_id, ra, dec, mag, size_arcmin, dso_type, czech_name, english_name, ngc_id, con_abbr = item[:10]
-        pos_angle = item[10] if len(item) > 10 else 0.0
-        axis_ratio = item[11] if len(item) > 11 else 1.0
-        art_res = item[12] if len(item) > 12 else ""
-        art_width_deg = item[13] if len(item) > 13 else 0.0
-        art_rot_deg = item[14] if len(item) > 14 else 0.0
+        m_id, ra, dec, mag, size_arcmin, dso_type, english_name, ngc_id, con_abbr = item[:9]
+        pos_angle = item[9] if len(item) > 9 else 0.0
+        axis_ratio = item[10] if len(item) > 10 else 1.0
+        art_res = item[11] if len(item) > 11 else ""
+        art_width_deg = item[12] if len(item) > 12 else 0.0
+        art_rot_deg = item[13] if len(item) > 13 else 0.0
 
-        loc_off = builder.CreateString(czech_name) if czech_name else 0
         con_off = builder.CreateString(con_abbr) if con_abbr else 0
         eng_off = builder.CreateString(english_name) if english_name else 0
         ngc_off = builder.CreateString(ngc_id) if ngc_id else 0
@@ -159,8 +161,6 @@ def serialize_dsos(builder, dsos_data):
         builder.PrependFloat32Slot(3, float(mag), 0.0)
         builder.PrependFloat32Slot(4, float(size_arcmin), 0.0)
         builder.PrependByteSlot(5, int(dso_type), 0)
-        if loc_off:
-            builder.PrependUOffsetTRelativeSlot(6, loc_off, 0)
         if con_off:
             builder.PrependUOffsetTRelativeSlot(7, con_off, 0)
         if eng_off:
@@ -184,19 +184,21 @@ def serialize_dsos(builder, dsos_data):
 def serialize_meteor_showers(builder, meteor_showers_data):
     """
     meteor_showers_data: list of tuples:
-    (id, localized_name, ra, dec, zhr, peak_month, peak_day, constellation_id)
+    (id, name, ra, dec, zhr, peak_month, peak_day, constellation_id)
+
+    `name` is English; the name a user reads comes from res/raw*/sky_names.tsv, keyed "met.<id>".
     """
     offsets = []
     for item in meteor_showers_data:
-        m_id, loc_name, ra, dec, zhr, peak_m, peak_d, con_id = item
-        loc_off = builder.CreateString(loc_name) if loc_name else 0
+        m_id, name, ra, dec, zhr, peak_m, peak_d, con_id = item
+        name_off = builder.CreateString(name) if name else 0
         con_off = builder.CreateString(con_id) if con_id else 0
 
         # Start MeteorShower table (8 fields)
         builder.StartObject(8)
         builder.PrependInt16Slot(0, int(m_id), 0)
-        if loc_off:
-            builder.PrependUOffsetTRelativeSlot(1, loc_off, 0)
+        if name_off:
+            builder.PrependUOffsetTRelativeSlot(1, name_off, 0)
         builder.PrependFloat32Slot(2, float(ra), 0.0)
         builder.PrependFloat32Slot(3, float(dec), 0.0)
         builder.PrependInt16Slot(4, int(zhr), 0)
@@ -217,18 +219,22 @@ def pack_catalog(stars_data, star_names, constellations_data, dsos_data, meteor_
     Serializes star list, metadata, constellations (including asterisms), DSOs, and Meteor Showers using FlatBuffers.
     
     stars_data: list of (ra_deg, dec_deg, mag)
-    star_names: list of (star_index, name_str, body_type, constel, dist_ly)
-    constellations_data: list of (name, c_ra, c_dec, lines, loc_name, bright, fam, is_ast, art_res, art_corner_ra, art_corner_dec)
-    dsos_data: list of (messier_id, ra, dec, mag, size_arcmin, dso_type, czech_name, english_name, ngc_id, con_abbr)
-    meteor_showers_data: list of (id, localized_name, ra, dec, zhr, peak_month, peak_day, constellation_id)
+    star_names: list of (star_index, name_str, body_type, constel_id, dist_ly)
+    constellations_data: list of (name, c_ra, c_dec, lines, id, bright, fam, is_ast, art_res, art_corner_ra, art_corner_dec)
+    dsos_data: list of (messier_id, ra, dec, mag, size_arcmin, dso_type, english_name, ngc_id, con_abbr)
+    meteor_showers_data: list of (id, name, ra, dec, zhr, peak_month, peak_day, constellation_id)
+
+    The catalog carries no language but English: every name a user reads is looked up by id in
+    res/raw*/sky_names.tsv (Constellation.id, "dso.M<n>", "met.<id>", StarMetadata.constellation is
+    the IAU code, body_type the English class), so a language is a file and not a rebuild.
     """
     builder = flatbuffers.Builder(1024 * 1024)
 
     # 1. Serialize Constellations and Asterisms
     constellation_offsets = []
-    for name, c_ra, c_dec, line_indices, loc_name, bright_star, fam, is_ast, art_res, art_corner_ra, art_corner_dec in constellations_data:
+    for name, c_ra, c_dec, line_indices, const_id, bright_star, fam, is_ast, art_res, art_corner_ra, art_corner_dec in constellations_data:
         name_off = builder.CreateString(name)
-        loc_name_off = builder.CreateString(loc_name) if loc_name else 0
+        id_off = builder.CreateString(const_id)
         bright_off = builder.CreateString(bright_star) if bright_star else 0
         fam_off = builder.CreateString(fam) if fam else 0
         art_res_off = builder.CreateString(art_res) if art_res else 0
@@ -256,14 +262,12 @@ def pack_catalog(stars_data, star_names, constellations_data, dsos_data, meteor_
         else:
             art_corner_dec_vec = 0
         
-        # Start Constellation table (11 fields)
-        builder.StartObject(11)
+        # Start Constellation table (12 fields; slot 4, localized_name, is deprecated and left empty)
+        builder.StartObject(12)
         builder.PrependUOffsetTRelativeSlot(0, name_off, 0)
         builder.PrependFloat32Slot(1, float(c_ra), 0.0)
         builder.PrependFloat32Slot(2, float(c_dec), 0.0)
         builder.PrependUOffsetTRelativeSlot(3, lines_vec, 0)
-        if loc_name_off:
-            builder.PrependUOffsetTRelativeSlot(4, loc_name_off, 0)
         if bright_off:
             builder.PrependUOffsetTRelativeSlot(5, bright_off, 0)
         if fam_off:
@@ -275,6 +279,7 @@ def pack_catalog(stars_data, star_names, constellations_data, dsos_data, meteor_
             builder.PrependUOffsetTRelativeSlot(9, art_corner_ra_vec, 0)
         if art_corner_dec_vec:
             builder.PrependUOffsetTRelativeSlot(10, art_corner_dec_vec, 0)
+        builder.PrependUOffsetTRelativeSlot(11, id_off, 0)
         const_off = builder.EndObject()
         constellation_offsets.append(const_off)
 
@@ -344,97 +349,6 @@ def pack_catalog(stars_data, star_names, constellations_data, dsos_data, meteor_
     print(f"  Deep Sky Objects (Messier): {len(dsos_data):,}")
     return buf
 
-# 88 IAU Constellations: Czech Localized Names
-CZECH_CONSTELLATION_NAMES = {
-    "And": "Andromeda",
-    "Ant": "Vývěva",
-    "Aps": "Rajka",
-    "Aqr": "Vodnář",
-    "Aql": "Orel",
-    "Ara": "Oltář",
-    "Ari": "Beran",
-    "Aur": "Vozka",
-    "Boo": "Pastýř",
-    "Cae": "Rycí rytidlo",
-    "Cam": "Žirafa",
-    "Cnc": "Rak",
-    "CVn": "Honicí psi",
-    "CMa": "Velký pes",
-    "CMi": "Malý pes",
-    "Cap": "Kozoroh",
-    "Car": "Lodní kýl",
-    "Cas": "Kasiopeja",
-    "Cen": "Kentaur",
-    "Cep": "Cefeus",
-    "Cet": "Velryba",
-    "Cha": "Chameleon",
-    "Cir": "Kružítko",
-    "Col": "Holubice",
-    "Com": "Vlasy Bereniky",
-    "CrA": "Jižní koruna",
-    "CrB": "Severní koruna",
-    "Crv": "Havran",
-    "Crt": "Pohár",
-    "Cru": "Jižní kříž",
-    "Cyg": "Labuť",
-    "Del": "Delfín",
-    "Dor": "Mečoun",
-    "Dra": "Drak",
-    "Equ": "Koníček",
-    "Eri": "Eridanus",
-    "For": "Pec",
-    "Gem": "Blíženci",
-    "Gru": "Jeřáb",
-    "Her": "Herkules",
-    "Hor": "Hodiny",
-    "Hya": "Hydra",
-    "Hyi": "Malý vodní had",
-    "Ind": "Indián",
-    "Lac": "Ještěrka",
-    "Leo": "Lev",
-    "LMi": "Malý lev",
-    "Lep": "Zajíc",
-    "Lib": "Váhy",
-    "Lup": "Vlk",
-    "Lyn": "Rys",
-    "Lyr": "Lyra",
-    "Men": "Tabulová hora",
-    "Mic": "Mikroskop",
-    "Mon": "Jednorožec",
-    "Mus": "Moucha",
-    "Nor": "Pravítko",
-    "Oct": "Oktant",
-    "Oph": "Hadonoš",
-    "Ori": "Orion",
-    "Pav": "Páv",
-    "Peg": "Pegas",
-    "Per": "Perseus",
-    "Phe": "Fénix",
-    "Pic": "Malíř",
-    "Psc": "Ryby",
-    "PsA": "Jižní ryba",
-    "Pup": "Kormidlo",
-    "Pyx": "Kompas",
-    "Ret": "Síť",
-    "Sge": "Šíp",
-    "Sgr": "Střelec",
-    "Sco": "Štír",
-    "Scl": "Sochař",
-    "Sct": "Štít",
-    "Ser": "Had",
-    "Sex": "Sextant",
-    "Tau": "Býk",
-    "Tel": "Dalekohled",
-    "Tri": "Trojúhelník",
-    "TrA": "Jižní trojúhelník",
-    "Tuc": "Tukan",
-    "UMa": "Velká medvědice",
-    "UMi": "Malý medvěd",
-    "Vel": "Plachty",
-    "Vir": "Panna",
-    "Vol": "Létající ryba",
-    "Vul": "Lištička",
-}
 
 # 88 IAU Constellations: Constellation Families
 CONSTELLATION_FAMILIES = {
@@ -535,73 +449,6 @@ CONSTELLATION_FAMILIES = {
     "Scl": "La Caille Family",
 }
 
-# Asterisms: Czech Localized Names
-CZECH_ASTERISM_NAMES = {
-    "Big Dipper (Plough)": "Velký vůz",
-    "Big Dipper": "Velký vůz",
-    "Little Dipper": "Malý vůz",
-    "Summer Triangle": "Letní trojúhelník",
-    "Winter Triangle": "Zimní trojúhelník",
-    "Winter Hexagon (Winter Circle)": "Zimní šestiúhelník",
-    "Great Square of Pegasus": "Pegasův čtverec",
-    "Northern Cross": "Severní kříž",
-    "Keystone": "Základní kámen",
-    "Butterfly": "Motýl",
-    "Kite": "Drak",
-    "Sail": "Plachta",
-    "Coathanger": "Ramínko",
-    "Job's Coffin": "Jobova rakev",
-    "V of Taurus": "Véčko v Býku",
-    "Triangulum Minus": "Malý trojúhelník",
-    "Ptolemy's Triangle": "Ptolemaiův trojúhelník",
-    "Seven Stars Row": "Řada sedmi hvězd",
-    "The Pointers": "Ukazatelé",
-    "Dragon Head (Lozenge)": "Hlava draka",
-    "Head of Medusa Gorgon": "Hlava Medúzy",
-    "Goatlings (Kids)": "Kůzlata",
-    "The Y in Aquarius (The Urn or Water Jar)": "Džbán Vodnáře",
-    "Orion's Belt": "Orionův pás",
-    "Orion's Sword": "Orionův meč",
-    "Orion's Shield": "Orionův štít",
-    "Orion's Cudgel": "Orionův kyj",
-    "Head of Whale": "Hlava Velryby",
-    "Head of Serpent": "Hlava Hada",
-    "Head of Hydra": "Hlava Hydry",
-    "Teapot": "Čajník",
-    "Milk Dipper": "Mléčný vůz",
-    "Terebellum": "Terebellum",
-    "Egyptian Cross": "Egyptský kříž",
-    "False Cross": "Nepravý kříž",
-    "Sickle": "Srp",
-    "Diamond Cross": "Diamantový kříž",
-    "Circlet": "Kroužek",
-    "The Arc of the King": "Královský oblouk",
-    "Head of Centaurus": "Hlava Kentaura",
-    "Sudor Ophiuchi": "Sudor Ophiuchi",
-    "Venus' Mirror": "Venušino zrcátko",
-    "The Butterfly of Orion": "Motýl v Orionu",
-    "The Fish Hook": "Rybářský háček",
-    "The Bull of Poniatowski": "Býk Poniatowského",
-    "The Trapezoid": "Lichoběžník",
-    "The Three Patriarchs": "Tři patriarchové",
-    "The Northern Fly": "Severní moucha",
-    "Great Diamond": "Diamant",
-    "Spring Triangle": "Jarní trojúhelník",
-    "Segment of Perseus": "Perseův oblouk",
-    "Heavenly G": "Nebeské G",
-    "W": "W (Kasiopeja)",
-    "Bier": "Nosítka",
-    "Guardians of the Pole (Guards)": "Strážci pólu",
-    "Mini-Cassiopeia": "Malá Kasiopeja",
-    "Mini-Dipper": "Malý vůz (Mini)",
-    "Davis' Dog": "Davisův pes",
-    "Honores Friderici (Frederick's Glory)": "Sláva Fridricha",
-    "Christmas Goose": "Vánoční husa",
-    "The Arrow": "Šíp",
-    "The Flying Minnow": "Létající střevle",
-    "Harrington 7": "Harrington 7",
-    "Red-Necked Emu": "Emu",
-}
 
 # Asterisms: Parent Constellations
 ASTERISM_PARENTS = {
@@ -839,7 +686,6 @@ def load_hyg_database():
                     display_name = "Star"
                     
                 body_type = classify_spectral_type(spect, mag, dist_ly)
-                constel_full = CZECH_CONSTELLATION_NAMES.get(con, con) if con else ""
                 
                 star_entry = {
                     "hip": hip_id,
@@ -914,7 +760,7 @@ def build_astronomical_catalog():
         if star["proper"] or star["mag"] <= 3.5:
             name = star["display_name"]
             body_type = star["body_type"]
-            constel_name = CZECH_CONSTELLATION_NAMES.get(star["con"], star["con"]) if star["con"] else ""
+            constel_name = star["con"] or ""
             dist_ly = star["dist_ly"]
             star_metadata.append((idx, name, body_type, constel_name, dist_ly))
 
@@ -929,7 +775,6 @@ def build_astronomical_catalog():
     for abbr in sorted(constellation_lines.keys()):
         hip_list = constellation_lines[abbr]
         eng_name = english_names.get(abbr, abbr)
-        czech_name = CZECH_CONSTELLATION_NAMES.get(abbr, eng_name)
         family = CONSTELLATION_FAMILIES.get(abbr, "General")
         
         # Build line indices pairs
@@ -982,7 +827,7 @@ def build_astronomical_catalog():
             centroid_ra,
             centroid_dec,
             line_indices,
-            czech_name,
+            abbr,  # id: the IAU code, the key of its name in sky_names.tsv
             brightest_star_name,
             family,
             False, # is_asterism = False
@@ -999,7 +844,6 @@ def build_astronomical_catalog():
     for abbr in sorted(asterism_lines.keys()):
         hip_list = asterism_lines[abbr]
         eng_name = asterism_names.get(abbr, abbr)
-        czech_name = CZECH_ASTERISM_NAMES.get(eng_name, CZECH_ASTERISM_NAMES.get(abbr, eng_name))
         family = ASTERISM_PARENTS.get(abbr, "General")
 
         line_indices = []
@@ -1041,7 +885,7 @@ def build_astronomical_catalog():
             centroid_ra,
             centroid_dec,
             line_indices,
-            czech_name,
+            abbr,  # id: the Stellarium asterism code, the key of its name in sky_names.tsv
             brightest_star_name,
             family,
             True, # is_asterism = True
@@ -1056,147 +900,147 @@ def build_astronomical_catalog():
     return stars_data, star_metadata, all_constellations_and_asterisms
 
 MESSIER_OBJECTS = [
-    (1, 83.633, 22.017, 8.4, 6.0, 3, "Krabí mlhovina", "Crab Nebula", "NGC 1952", "Tau", 124.0, 0.67, "", 0.0, 0.0),
-    (2, 323.363, -0.823, 6.5, 16.0, 1, "Kulová hvězdokupa M2", "Globular Cluster M2", "NGC 7089", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
-    (3, 205.546, 28.377, 6.2, 18.0, 1, "Kulová hvězdokupa M3", "Globular Cluster M3", "NGC 5272", "CVn", 0.0, 1.0, "", 0.0, 0.0),
-    (4, 245.897, -26.526, 5.9, 36.0, 1, "Kulová hvězdokupa M4", "Globular Cluster M4", "NGC 6121", "Sco", 0.0, 1.0, "", 0.0, 0.0),
-    (5, 229.638, 2.082, 5.6, 23.0, 1, "Kulová hvězdokupa M5", "Rose Cluster", "NGC 5904", "Ser", 0.0, 1.0, "", 0.0, 0.0),
-    (6, 265.025, -32.217, 4.2, 25.0, 2, "Motýlí hvězdokupa", "Butterfly Cluster", "NGC 6405", "Sco", 0.0, 1.0, "", 0.0, 0.0),
-    (7, 268.463, -34.806, 3.3, 80.0, 2, "Ptolemaiova hvězdokupa", "Ptolemy's Cluster", "NGC 6475", "Sco", 0.0, 1.0, "", 0.0, 0.0),
-    (8, 270.900, -24.383, 6.0, 90.0, 3, "Mlhovina Laguna", "Lagoon Nebula", "NGC 6523", "Sgr", 0.0, 0.60, "dso_m8", 1.5, 0.0),
-    (9, 259.796, -18.516, 7.7, 12.0, 1, "Kulová hvězdokupa M9", "Globular Cluster M9", "NGC 6333", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (10, 254.288, -4.100, 6.6, 20.0, 1, "Kulová hvězdokupa M10", "Globular Cluster M10", "NGC 6254", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (11, 282.763, -6.267, 5.8, 14.0, 2, "Hvězdokupa Divoká kachna", "Wild Duck Cluster", "NGC 6705", "Sct", 0.0, 1.0, "", 0.0, 0.0),
-    (12, 251.813, -1.948, 6.7, 16.0, 1, "Kulová hvězdokupa M12", "Gung-Ho Cluster", "NGC 6218", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (13, 250.423, 36.460, 5.8, 20.0, 1, "Velká kulová hvězdokupa v Herkulovi", "Great Hercules Cluster", "NGC 6205", "Her", 0.0, 1.0, "dso_m13", 0.45, 0.0),
-    (14, 264.400, -3.247, 7.6, 11.0, 1, "Kulová hvězdokupa M14", "Globular Cluster M14", "NGC 6402", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (15, 322.493, 12.172, 6.2, 18.0, 1, "Pegasova kulová hvězdokupa", "Great Pegasus Cluster", "NGC 7078", "Peg", 0.0, 1.0, "", 0.0, 0.0),
-    (16, 274.700, -13.790, 6.0, 70.0, 3, "Orlí mlhovina (Sloupy stvoření)", "Eagle Nebula", "NGC 6611", "Ser", 0.0, 1.0, "", 0.0, 0.0),
-    (17, 275.196, -16.177, 6.0, 11.0, 3, "Mlhovina Labuť / Omega", "Omega / Swan Nebula", "NGC 6618", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (18, 274.983, -17.135, 7.5, 9.0, 2, "Černá labuť", "Black Swan Cluster", "NGC 6613", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (19, 255.658, -26.268, 6.8, 17.0, 1, "Kulová hvězdokupa M19", "Globular Cluster M19", "NGC 6273", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (20, 270.575, -23.030, 6.3, 28.0, 3, "Mlhovina Trifid", "Trifid Nebula", "NGC 6514", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (21, 271.163, -22.500, 6.5, 13.0, 2, "Hvězdokupa Webb's Cross", "Crosshairs Cluster", "NGC 6531", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (22, 279.100, -23.903, 5.1, 32.0, 1, "Velká hvězdokupa ve Střelci", "Sagittarius Cluster", "NGC 6656", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (23, 269.204, -19.017, 5.5, 27.0, 2, "Otevřená hvězdokupa M23", "Open Cluster M23", "NGC 6494", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (24, 274.238, -18.483, 4.6, 90.0, 2, "Hvězdné mračno ve Střelci", "Small Sagittarius Star Cloud", "IC 4715", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (25, 277.900, -19.250, 4.6, 40.0, 2, "Otevřená hvězdokupa M25", "Open Cluster M25", "IC 4725", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (26, 281.300, -9.400, 8.0, 15.0, 2, "Otevřená hvězdokupa M26", "Open Cluster M26", "NGC 6694", "Sct", 0.0, 1.0, "", 0.0, 0.0),
-    (27, 299.901, 22.721, 7.4, 8.0, 4, "Mlhovina Činka", "Dumbbell Nebula", "NGC 6853", "Vul", 125.0, 0.70, "dso_m27", 0.25, 0.0),
-    (28, 276.138, -24.870, 6.8, 11.2, 1, "Kulová hvězdokupa M28", "Globular Cluster M28", "NGC 6626", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (29, 305.983, 38.533, 7.1, 7.0, 2, "Chladicí věž", "Cooling Tower", "NGC 6913", "Cyg", 0.0, 1.0, "", 0.0, 0.0),
-    (30, 325.092, -23.180, 7.2, 12.0, 1, "Kulová hvězdokupa M30", "Jellyfish Cluster", "NGC 7099", "Cap", 0.0, 1.0, "", 0.0, 0.0),
-    (31, 10.685, 41.269, 3.44, 180.0, 0, "Galaxie v Andromedě", "Andromeda Galaxy", "NGC 224", "And", 35.0, 0.32, "dso_m31", 3.2, 0.0),
-    (32, 10.674, 40.865, 8.1, 8.7, 0, "Satelitní galaxie M32", "Le Gentil", "NGC 221", "And", 150.0, 0.73, "", 0.0, 0.0),
-    (33, 23.462, 30.660, 5.7, 73.0, 0, "Galaxie v Trojúhelníku", "Triangulum Galaxy", "NGC 598", "Tri", 23.0, 0.62, "", 0.0, 0.0),
-    (34, 40.500, 42.783, 5.5, 35.0, 2, "Spirála", "Spiral Cluster", "NGC 1039", "Per", 0.0, 1.0, "", 0.0, 0.0),
-    (35, 92.225, 24.333, 5.3, 28.0, 2, "Hvězdokupa v Blížencích", "Shoe-Buckle Cluster", "NGC 2168", "Gem", 0.0, 1.0, "", 0.0, 0.0),
-    (36, 84.025, 34.133, 6.3, 12.0, 2, "Větrník ve Vozkovi", "Pinwheel Cluster", "NGC 1960", "Aur", 0.0, 1.0, "", 0.0, 0.0),
-    (37, 88.100, 32.550, 6.2, 24.0, 2, "Zlatá hvězdokupa", "Auriga Salt and Pepper", "NGC 2099", "Aur", 0.0, 1.0, "", 0.0, 0.0),
-    (38, 82.175, 35.833, 7.4, 21.0, 2, "Hvězdokupa Hvězdice", "Starfish Cluster", "NGC 1912", "Aur", 0.0, 1.0, "", 0.0, 0.0),
-    (39, 323.050, 48.433, 4.6, 32.0, 2, "Otevřená hvězdokupa M39", "Open Cluster M39", "NGC 7092", "Cyg", 0.0, 1.0, "", 0.0, 0.0),
-    (40, 185.600, 58.083, 8.4, 0.8, 2, "Dvojhvězda Winnecke 4", "Winnecke 4", "WNC 4", "UMa", 0.0, 1.0, "", 0.0, 0.0),
-    (41, 101.500, -20.733, 4.5, 38.0, 2, "Malý včelí úl", "Little Beehive Cluster", "NGC 2287", "CMa", 0.0, 1.0, "", 0.0, 0.0),
-    (42, 83.822, -5.391, 4.0, 65.0, 3, "Velká mlhovina v Orionu", "Great Orion Nebula", "NGC 1976", "Ori", 0.0, 0.90, "dso_m42", 1.2, 0.0),
-    (43, 83.896, -5.267, 9.0, 20.0, 3, "De Mairanovo křídlo", "De Mairan's Nebula", "NGC 1982", "Ori", 0.0, 1.0, "", 0.0, 0.0),
-    (44, 130.025, 19.983, 3.7, 95.0, 2, "Jesličky / Včelí úl", "Beehive Cluster / Praesepe", "NGC 2632", "Cnc", 0.0, 1.0, "", 0.0, 0.0),
-    (45, 56.850, 24.117, 1.6, 110.0, 2, "Plejády / Kuřátka", "Pleiades / Seven Sisters", "Mel 22", "Tau", 0.0, 1.0, "dso_m45", 2.0, 0.0),
-    (46, 115.450, -14.817, 6.1, 27.0, 2, "Otevřená hvězdokupa M46", "Open Cluster M46", "NGC 2437", "Pup", 0.0, 1.0, "", 0.0, 0.0),
-    (47, 114.150, -14.500, 4.2, 30.0, 2, "Otevřená hvězdokupa M47", "Open Cluster M47", "NGC 2422", "Pup", 0.0, 1.0, "", 0.0, 0.0),
-    (48, 123.450, -5.800, 5.5, 54.0, 2, "Otevřená hvězdokupa M48", "Open Cluster M48", "NGC 2548", "Hya", 0.0, 1.0, "", 0.0, 0.0),
-    (49, 187.446, 8.000, 8.4, 10.2, 0, "Eliptická galaxie M49", "Elliptical Galaxy M49", "NGC 4472", "Vir", 155.0, 0.83, "", 0.0, 0.0),
-    (50, 105.800, -8.333, 5.9, 16.0, 2, "Hvězdokupa ve tvaru srdce", "Heart-Shaped Cluster", "NGC 2323", "Mon", 0.0, 1.0, "", 0.0, 0.0),
-    (51, 202.469, 47.195, 8.4, 11.2, 0, "Vírová galaxie", "Whirlpool Galaxy", "NGC 5194", "CVn", 0.0, 0.85, "dso_m51", 0.35, 0.0),
-    (52, 351.050, 61.583, 7.3, 13.0, 2, "Hvězdokupa Štír", "Scorpion Cluster", "NGC 7654", "Cas", 0.0, 1.0, "", 0.0, 0.0),
-    (53, 198.230, 18.169, 7.6, 13.0, 1, "Kulová hvězdokupa M53", "Globular Cluster M53", "NGC 5024", "Com", 0.0, 1.0, "", 0.0, 0.0),
-    (54, 283.763, -30.479, 7.6, 12.0, 1, "Kulová hvězdokupa M54", "Globular Cluster M54", "NGC 6715", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (55, 294.998, -30.964, 6.3, 19.0, 1, "Kulová hvězdokupa M55", "Specter Cluster", "NGC 6809", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (56, 289.148, 30.184, 8.3, 8.8, 1, "Kulová hvězdokupa M56", "Globular Cluster M56", "NGC 6779", "Lyr", 0.0, 1.0, "", 0.0, 0.0),
-    (57, 283.396, 33.029, 8.8, 3.0, 4, "Prstencová mlhovina", "Ring Nebula", "NGC 6720", "Lyr", 60.0, 0.80, "dso_m57", 0.12, 0.0),
-    (58, 189.431, 11.818, 9.7, 5.9, 0, "Spirála s příčkou M58", "Barred Spiral M58", "NGC 4579", "Vir", 95.0, 0.76, "", 0.0, 0.0),
-    (59, 190.509, 11.647, 9.6, 5.4, 0, "Eliptická galaxie M59", "Elliptical Galaxy M59", "NGC 4621", "Vir", 165.0, 0.69, "", 0.0, 0.0),
-    (60, 190.917, 11.553, 8.8, 7.6, 0, "Eliptická galaxie M60", "Elliptical Galaxy M60", "NGC 4649", "Vir", 100.0, 0.84, "", 0.0, 0.0),
-    (61, 185.477, 4.474, 9.7, 6.5, 0, "Galaxie Oteklé prsty", "Swelling Spiral Galaxy", "NGC 4303", "Vir", 0.0, 0.90, "", 0.0, 0.0),
-    (62, 255.300, -30.112, 6.5, 15.0, 1, "Deformovaná hvězdokupa", "Flickering Globular", "NGC 6266", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (63, 198.955, 42.029, 8.6, 12.6, 0, "Galaxie Slunečnice", "Sunflower Galaxy", "NGC 5055", "CVn", 105.0, 0.57, "", 0.0, 0.0),
-    (64, 194.182, 21.683, 8.5, 10.7, 0, "Galaxie Černé oko", "Black Eye Galaxy", "NGC 4826", "Com", 115.0, 0.52, "", 0.0, 0.0),
-    (65, 169.733, 13.090, 9.3, 9.8, 0, "Galaxie ze Lvího tripletu", "Leo Triplet Galaxy M65", "NGC 3623", "Leo", 170.0, 0.30, "", 0.0, 0.0),
-    (66, 170.063, 12.990, 8.9, 9.1, 0, "Galaxie ze Lvího tripletu", "Leo Triplet Galaxy M66", "NGC 3627", "Leo", 173.0, 0.42, "", 0.0, 0.0),
-    (67, 132.825, 11.817, 6.1, 30.0, 2, "Hvězdokupa Král Kobra", "King Cobra Cluster", "NGC 2682", "Cnc", 0.0, 1.0, "", 0.0, 0.0),
-    (68, 189.867, -26.745, 7.8, 11.0, 1, "Kulová hvězdokupa M68", "Globular Cluster M68", "NGC 4590", "Hya", 0.0, 1.0, "", 0.0, 0.0),
-    (69, 277.846, -32.348, 7.6, 9.8, 1, "Kulová hvězdokupa M69", "Globular Cluster M69", "NGC 6637", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (70, 280.803, -32.292, 7.9, 8.0, 1, "Kulová hvězdokupa M70", "Globular Cluster M70", "NGC 6681", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (71, 298.442, 18.779, 8.2, 7.2, 1, "Hvězdokupa Andělíček", "Angelfish Cluster", "NGC 6838", "Sge", 0.0, 1.0, "", 0.0, 0.0),
-    (72, 313.366, -12.538, 9.3, 6.6, 1, "Kulová hvězdokupa M72", "Globular Cluster M72", "NGC 6981", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
-    (73, 314.725, -12.633, 9.0, 2.8, 2, "Asterismus čtyř hvězd M73", "Y-Group Asterism", "NGC 6994", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
-    (74, 24.174, 15.783, 9.4, 10.5, 0, "Galaxie Fantom", "Phantom Galaxy", "NGC 628", "Psc", 0.0, 0.95, "", 0.0, 0.0),
-    (75, 301.520, -21.922, 8.5, 6.8, 1, "Kulová hvězdokupa M75", "Globular Cluster M75", "NGC 6864", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
-    (76, 25.599, 51.575, 10.1, 2.7, 4, "Malá činka / Motýlek", "Little Dumbbell Nebula", "NGC 650", "Per", 130.0, 0.55, "", 0.0, 0.0),
-    (77, 40.670, -0.013, 8.9, 7.1, 0, "Galaxie Chobotnice", "Squid Galaxy / Cetus A", "NGC 1068", "Cet", 70.0, 0.85, "", 0.0, 0.0),
-    (78, 86.685, 0.050, 8.3, 8.0, 3, "Reflexní mlhovina M78", "Casper the Friendly Ghost", "NGC 2068", "Ori", 0.0, 1.0, "", 0.0, 0.0),
-    (79, 81.138, -24.524, 7.7, 9.6, 1, "Kulová hvězdokupa M79", "Globular Cluster M79", "NGC 1904", "Lep", 0.0, 1.0, "", 0.0, 0.0),
-    (80, 244.260, -22.976, 7.3, 10.0, 1, "Kulová hvězdokupa M80", "Globular Cluster M80", "NGC 6093", "Sco", 0.0, 1.0, "", 0.0, 0.0),
-    (81, 148.888, 69.065, 6.9, 26.9, 0, "Bodeova galaxie", "Bode's Galaxy", "NGC 3031", "UMa", 157.0, 0.52, "", 0.0, 0.0),
-    (82, 148.968, 69.680, 8.4, 11.2, 0, "Doutníková galaxie", "Cigar Galaxy", "NGC 3034", "UMa", 65.0, 0.25, "", 0.0, 0.0),
-    (83, 204.254, -29.866, 7.5, 12.9, 0, "Jižní větrník", "Southern Pinwheel Galaxy", "NGC 5236", "Hya", 45.0, 0.88, "", 0.0, 0.0),
-    (84, 186.266, 12.887, 9.1, 6.5, 0, "Eliptická galaxie M84", "Elliptical Galaxy M84", "NGC 4374", "Vir", 135.0, 0.86, "", 0.0, 0.0),
-    (85, 186.350, 18.190, 9.1, 7.1, 0, "Čočková galaxie M85", "Lenticular Galaxy M85", "NGC 4382", "Com", 15.0, 0.77, "", 0.0, 0.0),
-    (86, 186.550, 12.946, 8.9, 8.9, 0, "Eliptická galaxie M86", "Elliptical Galaxy M86", "NGC 4406", "Vir", 125.0, 0.65, "", 0.0, 0.0),
-    (87, 187.706, 12.391, 8.6, 8.3, 0, "Obří eliptická galaxie Virgo A", "Virgo A / Smoking Gun", "NGC 4486", "Vir", 0.0, 0.95, "", 0.0, 0.0),
-    (88, 187.997, 14.419, 9.6, 6.8, 0, "Spirální galaxie M88", "Spiral Galaxy M88", "NGC 4501", "Com", 140.0, 0.54, "", 0.0, 0.0),
-    (89, 188.916, 12.556, 9.8, 5.1, 0, "Eliptická galaxie M89", "Elliptical Galaxy M89", "NGC 4552", "Vir", 0.0, 0.95, "", 0.0, 0.0),
-    (90, 189.208, 13.164, 9.5, 9.5, 0, "Spirální galaxie M90", "Spiral Galaxy M90", "NGC 4569", "Vir", 25.0, 0.46, "", 0.0, 0.0),
-    (91, 188.860, 14.496, 10.2, 5.4, 0, "Spirála s příčkou M91", "Barred Spiral M91", "NGC 4548", "Com", 65.0, 0.79, "", 0.0, 0.0),
-    (92, 259.281, 43.136, 6.3, 14.0, 1, "Kulová hvězdokupa M92", "Globular Cluster M92", "NGC 6341", "Her", 0.0, 1.0, "", 0.0, 0.0),
-    (93, 116.150, -23.867, 6.0, 22.0, 2, "Hvězdokupa Motýlek / Hvězdná loď", "Butterfly / Starfish", "NGC 2447", "Pup", 0.0, 1.0, "", 0.0, 0.0),
-    (94, 192.721, 41.120, 8.2, 11.2, 0, "Krokodýlí oko / Kočičí oko", "Cat's Eye / Croc's Eye", "NGC 4736", "CVn", 110.0, 0.81, "", 0.0, 0.0),
-    (95, 160.990, 11.704, 9.7, 7.3, 0, "Spirála s příčkou M95", "Barred Spiral M95", "NGC 3351", "Leo", 15.0, 0.60, "", 0.0, 0.0),
-    (96, 161.691, 11.820, 9.2, 7.8, 0, "Dvojitá spirála M96", "Spiral Galaxy M96", "NGC 3368", "Leo", 175.0, 0.67, "", 0.0, 0.0),
-    (97, 168.699, 55.018, 9.9, 3.4, 4, "Soví mlhovina", "Owl Nebula", "NGC 3587", "UMa", 0.0, 0.95, "", 0.0, 0.0),
-    (98, 183.451, 14.900, 10.1, 9.8, 0, "Spirální galaxie M98", "Spiral Galaxy M98", "NGC 4192", "Com", 150.0, 0.29, "", 0.0, 0.0),
-    (99, 184.707, 14.417, 9.9, 5.4, 0, "Galaxie Větrník v Panně", "Coma Pinwheel Galaxy", "NGC 4254", "Com", 0.0, 0.88, "", 0.0, 0.0),
-    (100, 185.729, 15.823, 9.3, 7.4, 0, "Zrcadlová galaxie M100", "Mirror Galaxy", "NGC 4321", "Com", 30.0, 0.84, "", 0.0, 0.0),
-    (101, 210.802, 54.349, 7.9, 28.8, 0, "Galaxie Větrník", "Pinwheel Galaxy", "NGC 5457", "UMa", 0.0, 0.95, "", 0.0, 0.0),
-    (102, 226.623, 55.763, 9.9, 5.2, 0, "Galaxie Vřeteno", "Spindle Galaxy", "NGC 5866", "Dra", 128.0, 0.44, "", 0.0, 0.0),
-    (103, 23.300, 60.700, 7.4, 6.0, 2, "Otevřená hvězdokupa M103", "Open Cluster M103", "NGC 581", "Cas", 0.0, 1.0, "", 0.0, 0.0),
-    (104, 189.998, -11.623, 8.0, 8.7, 0, "Galaxie Sombrero", "Sombrero Galaxy", "NGC 4594", "Vir", 90.0, 0.40, "", 0.0, 0.0),
-    (105, 161.957, 12.582, 9.3, 5.4, 0, "Eliptická galaxie M105", "Elliptical Galaxy M105", "NGC 3379", "Leo", 70.0, 0.90, "", 0.0, 0.0),
-    (106, 184.740, 47.304, 8.4, 18.6, 0, "Spirální galaxie M106", "Spiral Galaxy M106", "NGC 4258", "CVn", 150.0, 0.39, "", 0.0, 0.0),
-    (107, 248.133, -13.056, 7.9, 13.0, 1, "Kulová hvězdokupa M107", "Crucifix Globular", "NGC 6171", "Oph", 0.0, 1.0, "", 0.0, 0.0),
-    (108, 167.879, 55.674, 10.0, 8.6, 0, "Surfovací prkno", "Surfboard Galaxy", "NGC 3556", "UMa", 80.0, 0.28, "", 0.0, 0.0),
-    (109, 179.399, 53.375, 9.8, 7.6, 0, "Vysavačová galaxie", "Vacuum Cleaner Galaxy", "NGC 3992", "UMa", 65.0, 0.58, "", 0.0, 0.0),
-    (110, 10.092, 41.685, 8.1, 21.9, 0, "Satelitní galaxie M110", "Edward Young Star", "NGC 205", "And", 170.0, 0.55, "", 0.0, 0.0),
+    (1, 83.633, 22.017, 8.4, 6.0, 3, "Crab Nebula", "NGC 1952", "Tau", 124.0, 0.67, "", 0.0, 0.0),
+    (2, 323.363, -0.823, 6.5, 16.0, 1, "Globular Cluster M2", "NGC 7089", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
+    (3, 205.546, 28.377, 6.2, 18.0, 1, "Globular Cluster M3", "NGC 5272", "CVn", 0.0, 1.0, "", 0.0, 0.0),
+    (4, 245.897, -26.526, 5.9, 36.0, 1, "Globular Cluster M4", "NGC 6121", "Sco", 0.0, 1.0, "", 0.0, 0.0),
+    (5, 229.638, 2.082, 5.6, 23.0, 1, "Rose Cluster", "NGC 5904", "Ser", 0.0, 1.0, "", 0.0, 0.0),
+    (6, 265.025, -32.217, 4.2, 25.0, 2, "Butterfly Cluster", "NGC 6405", "Sco", 0.0, 1.0, "", 0.0, 0.0),
+    (7, 268.463, -34.806, 3.3, 80.0, 2, "Ptolemy's Cluster", "NGC 6475", "Sco", 0.0, 1.0, "", 0.0, 0.0),
+    (8, 270.900, -24.383, 6.0, 90.0, 3, "Lagoon Nebula", "NGC 6523", "Sgr", 0.0, 0.60, "dso_m8", 1.5, 0.0),
+    (9, 259.796, -18.516, 7.7, 12.0, 1, "Globular Cluster M9", "NGC 6333", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (10, 254.288, -4.100, 6.6, 20.0, 1, "Globular Cluster M10", "NGC 6254", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (11, 282.763, -6.267, 5.8, 14.0, 2, "Wild Duck Cluster", "NGC 6705", "Sct", 0.0, 1.0, "", 0.0, 0.0),
+    (12, 251.813, -1.948, 6.7, 16.0, 1, "Gung-Ho Cluster", "NGC 6218", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (13, 250.423, 36.460, 5.8, 20.0, 1, "Great Hercules Cluster", "NGC 6205", "Her", 0.0, 1.0, "dso_m13", 0.45, 0.0),
+    (14, 264.400, -3.247, 7.6, 11.0, 1, "Globular Cluster M14", "NGC 6402", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (15, 322.493, 12.172, 6.2, 18.0, 1, "Great Pegasus Cluster", "NGC 7078", "Peg", 0.0, 1.0, "", 0.0, 0.0),
+    (16, 274.700, -13.790, 6.0, 70.0, 3, "Eagle Nebula", "NGC 6611", "Ser", 0.0, 1.0, "", 0.0, 0.0),
+    (17, 275.196, -16.177, 6.0, 11.0, 3, "Omega / Swan Nebula", "NGC 6618", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (18, 274.983, -17.135, 7.5, 9.0, 2, "Black Swan Cluster", "NGC 6613", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (19, 255.658, -26.268, 6.8, 17.0, 1, "Globular Cluster M19", "NGC 6273", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (20, 270.575, -23.030, 6.3, 28.0, 3, "Trifid Nebula", "NGC 6514", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (21, 271.163, -22.500, 6.5, 13.0, 2, "Crosshairs Cluster", "NGC 6531", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (22, 279.100, -23.903, 5.1, 32.0, 1, "Sagittarius Cluster", "NGC 6656", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (23, 269.204, -19.017, 5.5, 27.0, 2, "Open Cluster M23", "NGC 6494", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (24, 274.238, -18.483, 4.6, 90.0, 2, "Small Sagittarius Star Cloud", "IC 4715", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (25, 277.900, -19.250, 4.6, 40.0, 2, "Open Cluster M25", "IC 4725", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (26, 281.300, -9.400, 8.0, 15.0, 2, "Open Cluster M26", "NGC 6694", "Sct", 0.0, 1.0, "", 0.0, 0.0),
+    (27, 299.901, 22.721, 7.4, 8.0, 4, "Dumbbell Nebula", "NGC 6853", "Vul", 125.0, 0.70, "dso_m27", 0.25, 0.0),
+    (28, 276.138, -24.870, 6.8, 11.2, 1, "Globular Cluster M28", "NGC 6626", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (29, 305.983, 38.533, 7.1, 7.0, 2, "Cooling Tower", "NGC 6913", "Cyg", 0.0, 1.0, "", 0.0, 0.0),
+    (30, 325.092, -23.180, 7.2, 12.0, 1, "Jellyfish Cluster", "NGC 7099", "Cap", 0.0, 1.0, "", 0.0, 0.0),
+    (31, 10.685, 41.269, 3.44, 180.0, 0, "Andromeda Galaxy", "NGC 224", "And", 35.0, 0.32, "dso_m31", 3.2, 0.0),
+    (32, 10.674, 40.865, 8.1, 8.7, 0, "Le Gentil", "NGC 221", "And", 150.0, 0.73, "", 0.0, 0.0),
+    (33, 23.462, 30.660, 5.7, 73.0, 0, "Triangulum Galaxy", "NGC 598", "Tri", 23.0, 0.62, "", 0.0, 0.0),
+    (34, 40.500, 42.783, 5.5, 35.0, 2, "Spiral Cluster", "NGC 1039", "Per", 0.0, 1.0, "", 0.0, 0.0),
+    (35, 92.225, 24.333, 5.3, 28.0, 2, "Shoe-Buckle Cluster", "NGC 2168", "Gem", 0.0, 1.0, "", 0.0, 0.0),
+    (36, 84.025, 34.133, 6.3, 12.0, 2, "Pinwheel Cluster", "NGC 1960", "Aur", 0.0, 1.0, "", 0.0, 0.0),
+    (37, 88.100, 32.550, 6.2, 24.0, 2, "Auriga Salt and Pepper", "NGC 2099", "Aur", 0.0, 1.0, "", 0.0, 0.0),
+    (38, 82.175, 35.833, 7.4, 21.0, 2, "Starfish Cluster", "NGC 1912", "Aur", 0.0, 1.0, "", 0.0, 0.0),
+    (39, 323.050, 48.433, 4.6, 32.0, 2, "Open Cluster M39", "NGC 7092", "Cyg", 0.0, 1.0, "", 0.0, 0.0),
+    (40, 185.600, 58.083, 8.4, 0.8, 2, "Winnecke 4", "WNC 4", "UMa", 0.0, 1.0, "", 0.0, 0.0),
+    (41, 101.500, -20.733, 4.5, 38.0, 2, "Little Beehive Cluster", "NGC 2287", "CMa", 0.0, 1.0, "", 0.0, 0.0),
+    (42, 83.822, -5.391, 4.0, 65.0, 3, "Great Orion Nebula", "NGC 1976", "Ori", 0.0, 0.90, "dso_m42", 1.2, 0.0),
+    (43, 83.896, -5.267, 9.0, 20.0, 3, "De Mairan's Nebula", "NGC 1982", "Ori", 0.0, 1.0, "", 0.0, 0.0),
+    (44, 130.025, 19.983, 3.7, 95.0, 2, "Beehive Cluster / Praesepe", "NGC 2632", "Cnc", 0.0, 1.0, "", 0.0, 0.0),
+    (45, 56.850, 24.117, 1.6, 110.0, 2, "Pleiades / Seven Sisters", "Mel 22", "Tau", 0.0, 1.0, "dso_m45", 2.0, 0.0),
+    (46, 115.450, -14.817, 6.1, 27.0, 2, "Open Cluster M46", "NGC 2437", "Pup", 0.0, 1.0, "", 0.0, 0.0),
+    (47, 114.150, -14.500, 4.2, 30.0, 2, "Open Cluster M47", "NGC 2422", "Pup", 0.0, 1.0, "", 0.0, 0.0),
+    (48, 123.450, -5.800, 5.5, 54.0, 2, "Open Cluster M48", "NGC 2548", "Hya", 0.0, 1.0, "", 0.0, 0.0),
+    (49, 187.446, 8.000, 8.4, 10.2, 0, "Elliptical Galaxy M49", "NGC 4472", "Vir", 155.0, 0.83, "", 0.0, 0.0),
+    (50, 105.800, -8.333, 5.9, 16.0, 2, "Heart-Shaped Cluster", "NGC 2323", "Mon", 0.0, 1.0, "", 0.0, 0.0),
+    (51, 202.469, 47.195, 8.4, 11.2, 0, "Whirlpool Galaxy", "NGC 5194", "CVn", 0.0, 0.85, "dso_m51", 0.35, 0.0),
+    (52, 351.050, 61.583, 7.3, 13.0, 2, "Scorpion Cluster", "NGC 7654", "Cas", 0.0, 1.0, "", 0.0, 0.0),
+    (53, 198.230, 18.169, 7.6, 13.0, 1, "Globular Cluster M53", "NGC 5024", "Com", 0.0, 1.0, "", 0.0, 0.0),
+    (54, 283.763, -30.479, 7.6, 12.0, 1, "Globular Cluster M54", "NGC 6715", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (55, 294.998, -30.964, 6.3, 19.0, 1, "Specter Cluster", "NGC 6809", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (56, 289.148, 30.184, 8.3, 8.8, 1, "Globular Cluster M56", "NGC 6779", "Lyr", 0.0, 1.0, "", 0.0, 0.0),
+    (57, 283.396, 33.029, 8.8, 3.0, 4, "Ring Nebula", "NGC 6720", "Lyr", 60.0, 0.80, "dso_m57", 0.12, 0.0),
+    (58, 189.431, 11.818, 9.7, 5.9, 0, "Barred Spiral M58", "NGC 4579", "Vir", 95.0, 0.76, "", 0.0, 0.0),
+    (59, 190.509, 11.647, 9.6, 5.4, 0, "Elliptical Galaxy M59", "NGC 4621", "Vir", 165.0, 0.69, "", 0.0, 0.0),
+    (60, 190.917, 11.553, 8.8, 7.6, 0, "Elliptical Galaxy M60", "NGC 4649", "Vir", 100.0, 0.84, "", 0.0, 0.0),
+    (61, 185.477, 4.474, 9.7, 6.5, 0, "Swelling Spiral Galaxy", "NGC 4303", "Vir", 0.0, 0.90, "", 0.0, 0.0),
+    (62, 255.300, -30.112, 6.5, 15.0, 1, "Flickering Globular", "NGC 6266", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (63, 198.955, 42.029, 8.6, 12.6, 0, "Sunflower Galaxy", "NGC 5055", "CVn", 105.0, 0.57, "", 0.0, 0.0),
+    (64, 194.182, 21.683, 8.5, 10.7, 0, "Black Eye Galaxy", "NGC 4826", "Com", 115.0, 0.52, "", 0.0, 0.0),
+    (65, 169.733, 13.090, 9.3, 9.8, 0, "Leo Triplet Galaxy M65", "NGC 3623", "Leo", 170.0, 0.30, "", 0.0, 0.0),
+    (66, 170.063, 12.990, 8.9, 9.1, 0, "Leo Triplet Galaxy M66", "NGC 3627", "Leo", 173.0, 0.42, "", 0.0, 0.0),
+    (67, 132.825, 11.817, 6.1, 30.0, 2, "King Cobra Cluster", "NGC 2682", "Cnc", 0.0, 1.0, "", 0.0, 0.0),
+    (68, 189.867, -26.745, 7.8, 11.0, 1, "Globular Cluster M68", "NGC 4590", "Hya", 0.0, 1.0, "", 0.0, 0.0),
+    (69, 277.846, -32.348, 7.6, 9.8, 1, "Globular Cluster M69", "NGC 6637", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (70, 280.803, -32.292, 7.9, 8.0, 1, "Globular Cluster M70", "NGC 6681", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (71, 298.442, 18.779, 8.2, 7.2, 1, "Angelfish Cluster", "NGC 6838", "Sge", 0.0, 1.0, "", 0.0, 0.0),
+    (72, 313.366, -12.538, 9.3, 6.6, 1, "Globular Cluster M72", "NGC 6981", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
+    (73, 314.725, -12.633, 9.0, 2.8, 2, "Y-Group Asterism", "NGC 6994", "Aqr", 0.0, 1.0, "", 0.0, 0.0),
+    (74, 24.174, 15.783, 9.4, 10.5, 0, "Phantom Galaxy", "NGC 628", "Psc", 0.0, 0.95, "", 0.0, 0.0),
+    (75, 301.520, -21.922, 8.5, 6.8, 1, "Globular Cluster M75", "NGC 6864", "Sgr", 0.0, 1.0, "", 0.0, 0.0),
+    (76, 25.599, 51.575, 10.1, 2.7, 4, "Little Dumbbell Nebula", "NGC 650", "Per", 130.0, 0.55, "", 0.0, 0.0),
+    (77, 40.670, -0.013, 8.9, 7.1, 0, "Squid Galaxy / Cetus A", "NGC 1068", "Cet", 70.0, 0.85, "", 0.0, 0.0),
+    (78, 86.685, 0.050, 8.3, 8.0, 3, "Casper the Friendly Ghost", "NGC 2068", "Ori", 0.0, 1.0, "", 0.0, 0.0),
+    (79, 81.138, -24.524, 7.7, 9.6, 1, "Globular Cluster M79", "NGC 1904", "Lep", 0.0, 1.0, "", 0.0, 0.0),
+    (80, 244.260, -22.976, 7.3, 10.0, 1, "Globular Cluster M80", "NGC 6093", "Sco", 0.0, 1.0, "", 0.0, 0.0),
+    (81, 148.888, 69.065, 6.9, 26.9, 0, "Bode's Galaxy", "NGC 3031", "UMa", 157.0, 0.52, "", 0.0, 0.0),
+    (82, 148.968, 69.680, 8.4, 11.2, 0, "Cigar Galaxy", "NGC 3034", "UMa", 65.0, 0.25, "", 0.0, 0.0),
+    (83, 204.254, -29.866, 7.5, 12.9, 0, "Southern Pinwheel Galaxy", "NGC 5236", "Hya", 45.0, 0.88, "", 0.0, 0.0),
+    (84, 186.266, 12.887, 9.1, 6.5, 0, "Elliptical Galaxy M84", "NGC 4374", "Vir", 135.0, 0.86, "", 0.0, 0.0),
+    (85, 186.350, 18.190, 9.1, 7.1, 0, "Lenticular Galaxy M85", "NGC 4382", "Com", 15.0, 0.77, "", 0.0, 0.0),
+    (86, 186.550, 12.946, 8.9, 8.9, 0, "Elliptical Galaxy M86", "NGC 4406", "Vir", 125.0, 0.65, "", 0.0, 0.0),
+    (87, 187.706, 12.391, 8.6, 8.3, 0, "Virgo A / Smoking Gun", "NGC 4486", "Vir", 0.0, 0.95, "", 0.0, 0.0),
+    (88, 187.997, 14.419, 9.6, 6.8, 0, "Spiral Galaxy M88", "NGC 4501", "Com", 140.0, 0.54, "", 0.0, 0.0),
+    (89, 188.916, 12.556, 9.8, 5.1, 0, "Elliptical Galaxy M89", "NGC 4552", "Vir", 0.0, 0.95, "", 0.0, 0.0),
+    (90, 189.208, 13.164, 9.5, 9.5, 0, "Spiral Galaxy M90", "NGC 4569", "Vir", 25.0, 0.46, "", 0.0, 0.0),
+    (91, 188.860, 14.496, 10.2, 5.4, 0, "Barred Spiral M91", "NGC 4548", "Com", 65.0, 0.79, "", 0.0, 0.0),
+    (92, 259.281, 43.136, 6.3, 14.0, 1, "Globular Cluster M92", "NGC 6341", "Her", 0.0, 1.0, "", 0.0, 0.0),
+    (93, 116.150, -23.867, 6.0, 22.0, 2, "Butterfly / Starfish", "NGC 2447", "Pup", 0.0, 1.0, "", 0.0, 0.0),
+    (94, 192.721, 41.120, 8.2, 11.2, 0, "Cat's Eye / Croc's Eye", "NGC 4736", "CVn", 110.0, 0.81, "", 0.0, 0.0),
+    (95, 160.990, 11.704, 9.7, 7.3, 0, "Barred Spiral M95", "NGC 3351", "Leo", 15.0, 0.60, "", 0.0, 0.0),
+    (96, 161.691, 11.820, 9.2, 7.8, 0, "Spiral Galaxy M96", "NGC 3368", "Leo", 175.0, 0.67, "", 0.0, 0.0),
+    (97, 168.699, 55.018, 9.9, 3.4, 4, "Owl Nebula", "NGC 3587", "UMa", 0.0, 0.95, "", 0.0, 0.0),
+    (98, 183.451, 14.900, 10.1, 9.8, 0, "Spiral Galaxy M98", "NGC 4192", "Com", 150.0, 0.29, "", 0.0, 0.0),
+    (99, 184.707, 14.417, 9.9, 5.4, 0, "Coma Pinwheel Galaxy", "NGC 4254", "Com", 0.0, 0.88, "", 0.0, 0.0),
+    (100, 185.729, 15.823, 9.3, 7.4, 0, "Mirror Galaxy", "NGC 4321", "Com", 30.0, 0.84, "", 0.0, 0.0),
+    (101, 210.802, 54.349, 7.9, 28.8, 0, "Pinwheel Galaxy", "NGC 5457", "UMa", 0.0, 0.95, "", 0.0, 0.0),
+    (102, 226.623, 55.763, 9.9, 5.2, 0, "Spindle Galaxy", "NGC 5866", "Dra", 128.0, 0.44, "", 0.0, 0.0),
+    (103, 23.300, 60.700, 7.4, 6.0, 2, "Open Cluster M103", "NGC 581", "Cas", 0.0, 1.0, "", 0.0, 0.0),
+    (104, 189.998, -11.623, 8.0, 8.7, 0, "Sombrero Galaxy", "NGC 4594", "Vir", 90.0, 0.40, "", 0.0, 0.0),
+    (105, 161.957, 12.582, 9.3, 5.4, 0, "Elliptical Galaxy M105", "NGC 3379", "Leo", 70.0, 0.90, "", 0.0, 0.0),
+    (106, 184.740, 47.304, 8.4, 18.6, 0, "Spiral Galaxy M106", "NGC 4258", "CVn", 150.0, 0.39, "", 0.0, 0.0),
+    (107, 248.133, -13.056, 7.9, 13.0, 1, "Crucifix Globular", "NGC 6171", "Oph", 0.0, 1.0, "", 0.0, 0.0),
+    (108, 167.879, 55.674, 10.0, 8.6, 0, "Surfboard Galaxy", "NGC 3556", "UMa", 80.0, 0.28, "", 0.0, 0.0),
+    (109, 179.399, 53.375, 9.8, 7.6, 0, "Vacuum Cleaner Galaxy", "NGC 3992", "UMa", 65.0, 0.58, "", 0.0, 0.0),
+    (110, 10.092, 41.685, 8.1, 21.9, 0, "Edward Young Star", "NGC 205", "And", 170.0, 0.55, "", 0.0, 0.0),
 ]
 
 METEOR_SHOWERS = [
-    (1, "Kvadrantidy", 230.1, 49.5, 120, 1, 4, "Boo"),
-    (2, "Lyridy", 271.4, 34.3, 18, 4, 22, "Lyr"),
-    (3, "Eta Akvaridy", 338.0, -1.0, 50, 5, 6, "Aqr"),
-    (4, "Jižní Delta Akvaridy", 339.8, -16.4, 25, 7, 30, "Aqr"),
-    (5, "Alfa Kaprikornidy", 307.0, -10.2, 5, 7, 30, "Cap"),
-    (6, "Perseidy", 46.2, 57.8, 100, 8, 12, "Per"),
-    (7, "Aurigidy", 91.0, 39.0, 6, 9, 1, "Aur"),
-    (8, "Zářijové Epsilon Perseidy", 48.0, 40.0, 5, 9, 9, "Per"),
-    (9, "Drakonidy", 262.5, 54.0, 10, 10, 8, "Dra"),
-    (10, "Orionidy", 94.5, 15.8, 20, 10, 21, "Ori"),
-    (11, "Jižní Tauridy", 50.0, 14.0, 5, 11, 5, "Tau"),
-    (12, "Severní Tauridy", 58.5, 22.0, 5, 11, 12, "Tau"),
-    (13, "Leonidy", 152.0, 21.6, 15, 11, 17, "Leo"),
-    (14, "Geminidy", 112.5, 32.5, 150, 12, 14, "Gem"),
-    (15, "Ursidy", 217.5, 76.0, 10, 12, 22, "UMi"),
-    (16, "Puppidy-Velidy", 123.0, -45.0, 10, 12, 7, "Pup"),
-    (17, "Kentauridy", 211.0, -59.0, 6, 2, 8, "Cen"),
-    (18, "Gama Normidy", 239.0, -50.0, 6, 3, 14, "Nor"),
-    (19, "Pí Puppidy", 110.0, -45.0, 10, 4, 23, "Pup"),
-    (20, "Kamelopardalidy", 124.0, 79.0, 5, 5, 24, "Cam"),
-    (21, "Denní Arietidy", 44.0, 24.0, 30, 6, 7, "Ari"),
-    (22, "Červnové Bootidy", 224.0, 48.0, 5, 6, 27, "Boo"),
-    (23, "Piscis Austrinidy", 341.0, -30.0, 5, 7, 28, "PsA"),
-    (24, "Kappa Cygnidy", 286.0, 59.0, 3, 8, 17, "Cyg"),
-    (25, "Andromedidy", 26.0, 37.0, 5, 11, 27, "And"),
-    (26, "Fénixidy", 18.0, -42.0, 5, 12, 2, "Phe"),
-    (27, "Monocerotidy", 100.0, 8.0, 3, 12, 9, "Mon"),
-    (28, "Sigma Hydridy", 127.0, 2.0, 3, 12, 12, "Hya"),
+    (1, "Quadrantids", 230.1, 49.5, 120, 1, 4, "Boo"),
+    (2, "Lyrids", 271.4, 34.3, 18, 4, 22, "Lyr"),
+    (3, "Eta Aquariids", 338.0, -1.0, 50, 5, 6, "Aqr"),
+    (4, "Southern Delta Aquariids", 339.8, -16.4, 25, 7, 30, "Aqr"),
+    (5, "Alpha Capricornids", 307.0, -10.2, 5, 7, 30, "Cap"),
+    (6, "Perseids", 46.2, 57.8, 100, 8, 12, "Per"),
+    (7, "Aurigids", 91.0, 39.0, 6, 9, 1, "Aur"),
+    (8, "September Epsilon Perseids", 48.0, 40.0, 5, 9, 9, "Per"),
+    (9, "Draconids", 262.5, 54.0, 10, 10, 8, "Dra"),
+    (10, "Orionids", 94.5, 15.8, 20, 10, 21, "Ori"),
+    (11, "Southern Taurids", 50.0, 14.0, 5, 11, 5, "Tau"),
+    (12, "Northern Taurids", 58.5, 22.0, 5, 11, 12, "Tau"),
+    (13, "Leonids", 152.0, 21.6, 15, 11, 17, "Leo"),
+    (14, "Geminids", 112.5, 32.5, 150, 12, 14, "Gem"),
+    (15, "Ursids", 217.5, 76.0, 10, 12, 22, "UMi"),
+    (16, "Puppid-Velids", 123.0, -45.0, 10, 12, 7, "Pup"),
+    (17, "Centaurids", 211.0, -59.0, 6, 2, 8, "Cen"),
+    (18, "Gamma Normids", 239.0, -50.0, 6, 3, 14, "Nor"),
+    (19, "Pi Puppids", 110.0, -45.0, 10, 4, 23, "Pup"),
+    (20, "Camelopardalids", 124.0, 79.0, 5, 5, 24, "Cam"),
+    (21, "Daytime Arietids", 44.0, 24.0, 30, 6, 7, "Ari"),
+    (22, "June Bootids", 224.0, 48.0, 5, 6, 27, "Boo"),
+    (23, "Piscis Austrinids", 341.0, -30.0, 5, 7, 28, "PsA"),
+    (24, "Kappa Cygnids", 286.0, 59.0, 3, 8, 17, "Cyg"),
+    (25, "Andromedids", 26.0, 37.0, 5, 11, 27, "And"),
+    (26, "Phoenicids", 18.0, -42.0, 5, 12, 2, "Phe"),
+    (27, "Monocerotids", 100.0, 8.0, 3, 12, 9, "Mon"),
+    (28, "Sigma Hydrids", 127.0, 2.0, 3, 12, 12, "Hya"),
 ]
 
 def main():

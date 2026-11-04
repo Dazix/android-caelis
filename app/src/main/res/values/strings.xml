@@ -375,6 +375,16 @@
     <string name="sun_ar_cardinal_sw">SW (225°)</string>
     <string name="sun_ar_cardinal_w">W (270°)</string>
     <string name="sun_ar_cardinal_nw">NW (315°)</string>
+    <string name="sun_ar_section_sun">Sun</string>
+    <string name="sun_ar_section_moon">Moon</string>
+    <string name="moon_phase_new">New moon</string>
+    <string name="moon_phase_waxing_crescent">Waxing crescent</string>
+    <string name="moon_phase_first_quarter">First quarter</string>
+    <string name="moon_phase_waxing_gibbous">Waxing gibbous</string>
+    <string name="moon_phase_full">Full moon</string>
+    <string name="moon_phase_waning_gibbous">Waning gibbous</string>
+    <string name="moon_phase_last_quarter">Last quarter</string>
+    <string name="moon_phase_waning_crescent">Waning crescent</string>
     <string name="sun_ar_keep_screen_on">Keep screen awake</string>
     <string name="sun_ar_keep_screen_on_desc">Prevent screen timeout while using Sun AR</string>
     <string name="sun_ar_red_vision">Night Mode</string>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Polish side of the debug-variant-only resources.
+
+  Only the launcher label lives here: the `shutter_button` id and the fake shutter's content
+  description are deliberately locale-independent (see values/strings_debug.xml), so nothing else in
+  the harness may be translated.
+-->
+<resources>
+
+    <string name="debug_fake_camera_label">Fałszywy aparat (debug)</string>
+    <string name="debug_filament_spike_label">Filament niebo – test (debug)</string>
+
+</resources>

@@ -24,6 +24,7 @@ import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.StarMetadata
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.EquatorialCoordinates
+import com.dazix.caelis.domain.nightsky.SkyNames
 import com.dazix.caelis.domain.nightsky.StarHitTester
 import com.dazix.caelis.domain.nightsky.StarOptics
 import kotlin.math.tan
@@ -42,6 +43,18 @@ class NightSkyRenderer {
 
     /** Labels and markers of the GPU grid. */
     val gridMarkers = com.dazix.caelis.ar.scene.SkyGridMarkers()
+
+    /**
+     * Names in the app's language. A new set (the language changed while the view model lived on)
+     * drops the cached labels, so the sky is relabelled on the next frame rather than at the next
+     * catalogue.
+     */
+    var skyNames: SkyNames = SkyNames.NONE
+        set(value) {
+            if (field === value) return
+            field = value
+            overlayCatalog = null
+        }
 
 
     // Precalculated static ENU World Unit Vectors (East, North, Up) for all catalog stars
@@ -618,7 +631,8 @@ class NightSkyRenderer {
             catalog.metadata(reusableMeta, m)
             if (reusableMeta.starIndex() == starIndex) {
                 val name = reusableMeta.name() ?: "HIP ${starIndex + 1}"
-                val subtitle = reusableMeta.bodyType() ?: reusableMeta.constellation()
+                val subtitle = skyNames.starType(reusableMeta.bodyType())
+                    ?: skyNames.constellationOfCode(reusableMeta.constellation())
                 return Pair(name, subtitle)
             }
         }
@@ -674,14 +688,13 @@ class NightSkyRenderer {
             alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
             alignElevationOffsetDeg = hitAlignElevationDeg,
         )
-        val isCzech = java.util.Locale.getDefault().language.equals("cs", ignoreCase = true)
         for (i in 0 until planetCount) {
             val p = planets[topPlanetIndices[i]]
             val sub = if (p.isMoon || p.id.equals("Moon", ignoreCase = true)) "Natural Satellite" else "Planet"
             bodyCandidates.add(
                 CelestialCandidate.Planet(
                     planetId = p.id,
-                    name = p.localizedName(isCzech),
+                    name = skyNames.planet(p.id, p.nameEn),
                     magnitude = p.magnitude,
                     score = topPlanetScores[i],
                     subtitle = sub,
@@ -717,9 +730,9 @@ class NightSkyRenderer {
             for (i in 0 until dsoTopCount) {
                 val dIdx = topDsoIndices[i]
                 catalog.dsos(reusableDso, dIdx)
-                val mNum = reusableDso.messierId()
+                val mNum = reusableDso.messierId().toInt()
                 val mId = "M$mNum"
-                val dName = reusableDso.englishName()
+                val dName = skyNames.messier(mNum, reusableDso.englishName())
                 val displayName = if (!dName.isNullOrEmpty()) "$mId ($dName)" else mId
                 val sub = reusableDso.ngcId() ?: "Deep Sky Object"
                 bodyCandidates.add(
@@ -761,7 +774,7 @@ class NightSkyRenderer {
             for (i in 0 until meteorTopCount) {
                 val mIdx = topMeteorIndices[i]
                 catalog.meteorShowers(reusableMeteor, mIdx)
-                val mName = reusableMeteor.localizedName() ?: "Meteor Shower"
+                val mName = skyNames.meteorShower(reusableMeteor.id().toInt(), reusableMeteor.name()) ?: "Meteor Shower"
                 val zhr = reusableMeteor.zhr()
                 val sub = "Peak: ${reusableMeteor.peakMonth()}/${reusableMeteor.peakDay()} • ZHR: $zhr"
                 bodyCandidates.add(
@@ -1156,14 +1169,14 @@ class NightSkyRenderer {
         }
         meteorLabels = Array(minOf(catalog.meteorShowersLength(), MAX_METEOR_SHOWERS)) {
             catalog.meteorShowers(reusableMeteor, it)
-            reusableMeteor.localizedName() ?: ""
+            skyNames.meteorShower(reusableMeteor.id().toInt(), reusableMeteor.name()) ?: ""
         }
         val count = minOf(catalog.constellationsLength(), maxConstellations)
         labelIsAsterism = BooleanArray(count)
         constellationLabels = Array(count) {
             catalog.constellations(reusableConstellation, it)
             labelIsAsterism[it] = reusableConstellation.isAsterism()
-            reusableConstellation.localizedName() ?: reusableConstellation.name()
+            skyNames.constellation(reusableConstellation.id(), labelIsAsterism[it], reusableConstellation.name())
         }
         markAtlasScene = null
     }

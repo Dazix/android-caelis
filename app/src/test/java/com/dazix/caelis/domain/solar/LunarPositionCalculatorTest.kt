@@ -28,9 +28,9 @@ class LunarPositionCalculatorTest {
         // Elevation between -90.0 and +90.0
         assertTrue("Elevation was ${coords.elevationDegrees}", coords.elevationDegrees in -90.0..90.0)
 
-        // Non-empty phase name and glyph
-        assertTrue(coords.phaseName.isNotEmpty())
-        assertTrue(coords.phaseGlyph.isNotEmpty())
+        // The phase follows the elongation, and its glyph the phase
+        assertEquals(LunarPhase.fromElongation(coords.elongationDegrees), coords.phase)
+        assertEquals(coords.phase.glyph, coords.phaseGlyph)
     }
 
     @Test
@@ -45,6 +45,24 @@ class LunarPositionCalculatorTest {
         val newCoords = LunarPositionCalculator.computePosition(newMoonInstant, prague)
 
         assertTrue("Expected low illumination near new moon, was ${newCoords.illuminationFraction}", newCoords.illuminationFraction < 0.15)
+
+        assertEquals(LunarPhase.FULL, fullCoords.phase)
+        assertEquals(LunarPhase.NEW, newCoords.phase)
+    }
+
+    @Test
+    fun `each phase is centred on its 45 degree step of elongation`() {
+        assertEquals(LunarPhase.NEW, LunarPhase.fromElongation(0.0))
+        assertEquals(LunarPhase.NEW, LunarPhase.fromElongation(337.5))
+        assertEquals(LunarPhase.NEW, LunarPhase.fromElongation(-10.0))
+        assertEquals(LunarPhase.WAXING_CRESCENT, LunarPhase.fromElongation(22.5))
+        assertEquals(LunarPhase.FIRST_QUARTER, LunarPhase.fromElongation(90.0))
+        assertEquals(LunarPhase.WAXING_GIBBOUS, LunarPhase.fromElongation(157.4))
+        assertEquals(LunarPhase.FULL, LunarPhase.fromElongation(157.5))
+        assertEquals(LunarPhase.FULL, LunarPhase.fromElongation(202.4))
+        assertEquals(LunarPhase.WANING_GIBBOUS, LunarPhase.fromElongation(202.5))
+        assertEquals(LunarPhase.LAST_QUARTER, LunarPhase.fromElongation(270.0))
+        assertEquals(LunarPhase.WANING_CRESCENT, LunarPhase.fromElongation(337.4))
     }
 
     @Test

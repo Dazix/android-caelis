@@ -12,8 +12,8 @@ struct Star {
 table StarMetadata {
   star_index: int; // Points to the index in the 'stars' vector
   name: string;
-  body_type: string;
-  constellation: string;
+  body_type: string;         // English class, shown via sky_names.tsv "type.<snake_case>"
+  constellation: string;     // IAU code, e.g. "CMa"
   distance_ly: float;
 }
 
@@ -23,7 +23,7 @@ table Constellation {
   centroid_dec: float;
   // Sequence of star indices representing line segments (e.g., [A, B, B, C] for a connected line)
   lines: [int];
-  localized_name: string;
+  localized_name: string (deprecated); // names live in res/raw*/sky_names.tsv, keyed by id
   brightest_star: string;
   family: string;
   is_asterism: bool;
@@ -31,6 +31,7 @@ table Constellation {
   // Celestial coordinates for the 4 image corners (TL, TR, BR, BL) in degrees
   art_corner_ra: [float];
   art_corner_dec: [float];
+  id: string; // IAU code ("UMa") or Stellarium asterism code ("BDr"): the sky_names.tsv key
 }
 
 enum DsoType : byte {
@@ -48,7 +49,7 @@ table DeepSkyObject {
   mag: float;                // Visual magnitude
   size_arcmin: float;        // Angular size in arcminutes (for rendering scale)
   type: DsoType;
-  localized_name: string;    // e.g., "Galaxie v Andromedě"
+  localized_name: string (deprecated); // names live in res/raw*/sky_names.tsv as "dso.M<id>"
   constellation_id: string;  // IAU 3-letter code (e.g., "And")
   english_name: string;      // e.g., "Andromeda Galaxy"
   ngc_id: string;            // e.g., "NGC 224"
@@ -61,7 +62,7 @@ table DeepSkyObject {
 
 table MeteorShower {
   id: short;                 // Internal ID
-  localized_name: string;    // e.g., "Perseids" / "Perseidy"
+  name: string;              // English, e.g. "Perseids"; shown via sky_names.tsv "met.<id>"
   ra: float;                 // J2000.0 Right Ascension (degrees)
   dec: float;                // J2000.0 Declination (degrees)
   zhr: short;                // Zenithal Hourly Rate (peak activity)

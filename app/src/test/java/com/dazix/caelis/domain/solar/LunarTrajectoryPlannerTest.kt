@@ -31,7 +31,7 @@ class LunarTrajectoryPlannerTest {
 
         // Trajectory contains day times info
         assertNotNull(traj.dayTimes)
-        assertTrue(traj.dayTimes.phaseName.isNotEmpty())
+        assertEquals(traj.dayTimes.phase.glyph, traj.dayTimes.phaseGlyph)
         assertTrue(traj.dayTimes.illuminationPercent in 0..100)
     }
 

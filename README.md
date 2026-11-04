@@ -152,7 +152,7 @@ Augmented reality planetarium for night sky framing, astrophotography alignment,
 - **Celestial Visibility Schedule & Local Date Override**: Precise daily Rise, Transit/Culmination, and Set times
   computed against the physical terrain (`HorizonProfile`) with bisection search. Features an isolated local date override
   (stepper and date picker) in the object detail sheet that updates visibility without altering global AR time.
-- **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (Czech / Latin / IAU names / Messier) and
+- **Celestial Search & Smart Camera Routing**: Search index with prioritized ranking (names in the app's language / English / IAU names / Messier) and
   search history. Features animated camera routing in AR mode (freeze-frame accelerate-decelerate re-calibration) and
   interactive manual virtual planetarium pan mode (FastOutSlowIn S-curve).
 - **Adaptive Celestial Hit-Testing & Disambiguation**: Weighted brightness and proximity scoring (`StarHitTester`),
@@ -183,7 +183,9 @@ device cannot support it: launch the camera into a named mode (Photo / Night Sig
 wait while the camera is busy with a long exposure, ensure the self-timer is off, clear the post-capture
 chip between shots.
 
-**Languages**: English and Czech, with real Czech plurals.
+**Languages**: English, Czech, Slovak, Polish and German, with each language's real plurals and its own
+names for the night sky. Austria gets the German strings; dates and months come from the platform in the
+Austrian form.
 
 ---
 
@@ -479,8 +481,14 @@ retrying while the camera is still writing them.
   skipping.
 - **Comments explain why, and especially why not.** Most of the comments here record a failure mode that
   was actually observed on a device; if you change that code, update the comment to match.
-- **Every user-visible string is a resource** with an English (`values/`) and a Czech (`values-cs/`)
-  entry. Countable nouns are `<plurals>`; Czech needs `one` / `few` / `many` / `other`.
+- **Every user-visible string is a resource** in English (`values/`) and in every shipped language
+  (`values-cs/`, `values-sk/`, `values-pl/`, `values-de/`). Countable nouns are `<plurals>`; Czech, Slovak
+  and Polish need `one` / `few` / `many` / `other`, German `one` / `other`. Night-sky names are not
+  strings but `res/raw-<language>/sky_names.tsv`, keyed by catalog id.
+- **Adding a language** is adding files: `values-xx/` (and `app/src/debug/res/values-xx/`),
+  `res/raw-xx/sky_names.tsv`, `metadata/android/xx-XX/` with the images rendered from
+  `design/play-store/*.html?lang=xx`, and the language's plural forms in `TranslationParityTest`, which
+  then names anything still missing.
 
 `CLAUDE.md` is the same material in the form a coding agent needs it.
 

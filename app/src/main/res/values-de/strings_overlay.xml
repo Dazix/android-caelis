@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Owned by the overlay/notification slice. All names are prefixed `ovl_` to stay collision-free. -->
+<resources>
+    <plurals name="ovl_shots">
+        <item quantity="one">%1$d Foto</item>
+        <item quantity="other">%1$d Fotos</item>
+    </plurals>
+    <plurals name="ovl_shots_of">
+        <item quantity="one">%1$d / %2$d Foto</item>
+        <item quantity="other">%1$d / %2$d Fotos</item>
+    </plurals>
+    <string name="ovl_next_in">Nächstes in %1$s</string>
+    <string name="ovl_starts_in">Start in %1$s</string>
+    <string name="ovl_shooting_now">Aufnahme…</string>
+    <string name="ovl_paused">Pausiert</string>
+    <string name="ovl_idle">Bereit</string>
+    <string name="ovl_stopped">Gestoppt</string>
+
+    <string name="ovl_action_pause">Pause</string>
+    <string name="ovl_action_resume">Weiter</string>
+    <string name="ovl_action_stop">Stopp</string>
+    <string name="ovl_action_drag_handle">Zum Verschieben des Panels ziehen</string>
+
+    <string name="ovl_option_screen_on">Display: an</string>
+    <string name="ovl_option_screen_off">Display: auto</string>
+    <string name="ovl_option_screen_description">Display während der Aufnahme eingeschaltet lassen. Die meisten Kamera-Apps zeigen keine Vorschau mehr an – und nehmen keine Fotos mehr auf –, sobald sich das Display ausschaltet.</string>
+    <string name="ovl_option_dim_on">Dimmen: an</string>
+    <string name="ovl_option_dim_off">Dimmen: aus</string>
+    <string name="ovl_option_dim_description">Dieses Panel zwischen den Aufnahmen abdunkeln. Zum Aufhellen antippen.</string>
+
+    <string name="ovl_permission_missing">Die Berechtigung zum Einblenden über anderen Apps ist aus, daher kann das schwebende Panel nicht angezeigt werden.</string>
+
+    <string name="ovl_calib_instruction">Tippen Sie unten auf den Auslöser von %1$s oder ziehen Sie ein Rechteck darum.</string>
+    <string name="ovl_calib_instruction_generic">Tippen Sie unten auf den Auslöser oder ziehen Sie ein Rechteck darum.</string>
+    <string name="ovl_calib_instruction_not_launched">%1$s konnte nicht geöffnet werden. Wechseln Sie selbst dorthin und tippen Sie auf den Auslöser oder ziehen Sie ein Rechteck darum.</string>
+    <string name="ovl_calib_hint">Ein Tipp speichert einen genauen Punkt; bei einem Rechteck werden die Aufnahmen darin verteilt.</string>
+    <string name="ovl_calib_cancel">Abbrechen</string>
+    <string name="ovl_calib_saved_point">Auslöserposition gespeichert.</string>
+    <string name="ovl_calib_saved_area">Auslöserbereich gespeichert.</string>
+    <string name="ovl_calib_timed_out">Kalibrierung abgebrochen – es wurde nichts angetippt.</string>
+    <string name="ovl_calib_unavailable">Die Kalibrierung konnte nicht gestartet werden. Versuchen Sie es in der App erneut.</string>
+
+    <string name="ovl_notif_channel_name">Laufende Sitzung</string>
+    <string name="ovl_notif_channel_desc">Aufgenommene Fotos und Countdown bis zur nächsten Aufnahme während einer Sitzung.</string>
+    <string name="ovl_notif_title_running">Zeitraffer läuft</string>
+    <string name="ovl_notif_title_paused">Zeitraffer pausiert</string>
+    <string name="ovl_notif_title_waiting">Zeitraffer startet</string>
+    <string name="ovl_notif_title_stopped">Zeitraffer beendet</string>
+    <string name="ovl_notif_title_idle">CAELIS bereit</string>
+    <string name="ovl_action_move_panel">Panel auf die andere Seite verschieben</string>
+    <string name="ovl_panel_moved_left">Panel nach links verschoben</string>
+    <string name="ovl_panel_moved_right">Panel nach rechts verschoben</string>
+</resources>

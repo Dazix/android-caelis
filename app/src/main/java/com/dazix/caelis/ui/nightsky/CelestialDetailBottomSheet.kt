@@ -350,19 +350,15 @@ fun CelestialDetailSheetContent(
                 val effectiveDate = localScheduleDate ?: activeGlobalDate
                 val isOverridden = localScheduleDate != null
                 val currentLocale = LocalConfiguration.current.locales[0]
-                val isCzech = currentLocale.language.equals("cs", ignoreCase = true)
-                val dateFormatted = remember(effectiveDate, isCzech) {
-                    if (isCzech) {
-                        val monthStr = when (effectiveDate.monthValue) {
-                            1 -> "led"; 2 -> "úno"; 3 -> "bře"; 4 -> "dub"
-                            5 -> "kvě"; 6 -> "čer"; 7 -> "čvc"; 8 -> "srp"
-                            9 -> "zář"; 10 -> "říj"; 11 -> "lis"; 12 -> "pro"
-                            else -> "${effectiveDate.monthValue}"
-                        }
-                        "${effectiveDate.dayOfMonth}. $monthStr ${effectiveDate.year}"
-                    } else {
-                        effectiveDate.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US))
-                    }
+                // The locale's own short date with the month's name: no table per language, and
+                // de-AT gets "Jän." from the platform.
+                val dateFormatted = remember(effectiveDate, currentLocale) {
+                    effectiveDate.format(
+                        DateTimeFormatter.ofPattern(
+                            android.text.format.DateFormat.getBestDateTimePattern(currentLocale, "dMMMyyyy"),
+                            currentLocale,
+                        )
+                    )
                 }
 
                 Row(

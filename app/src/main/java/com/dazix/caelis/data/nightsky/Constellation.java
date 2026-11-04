@@ -31,9 +31,6 @@ public final class Constellation extends Table {
     public IntVector linesVector(IntVector obj) { int o = __offset(10); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
     public ByteBuffer linesAsByteBuffer() { return __vector_as_bytebuffer(10, 4); }
     public ByteBuffer linesInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 10, 4); }
-    public String localizedName() { int o = __offset(12); return o != 0 ? __string(o + bb_pos) : null; }
-    public ByteBuffer localizedNameAsByteBuffer() { return __vector_as_bytebuffer(12, 1); }
-    public ByteBuffer localizedNameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 12, 1); }
     public String brightestStar() { int o = __offset(14); return o != 0 ? __string(o + bb_pos) : null; }
     public ByteBuffer brightestStarAsByteBuffer() { return __vector_as_bytebuffer(14, 1); }
     public ByteBuffer brightestStarInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 14, 1); }
@@ -56,26 +53,30 @@ public final class Constellation extends Table {
     public FloatVector artCornerDecVector(FloatVector obj) { int o = __offset(24); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
     public ByteBuffer artCornerDecAsByteBuffer() { return __vector_as_bytebuffer(24, 4); }
     public ByteBuffer artCornerDecInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 24, 4); }
+    /** IAU code or Stellarium asterism code: the key of its name in sky_names.tsv ({@code SkyNames}). Slot 4 is the deprecated localized name. */
+    public String id() { int o = __offset(26); return o != 0 ? __string(o + bb_pos) : null; }
+    public ByteBuffer idAsByteBuffer() { return __vector_as_bytebuffer(26, 1); }
+    public ByteBuffer idInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 26, 1); }
 
     public static int createConstellation(FlatBufferBuilder builder,
         int nameOffset,
         float centroidRa,
         float centroidDec,
         int linesOffset,
-        int localizedNameOffset,
+        int idOffset,
         int brightestStarOffset,
         int familyOffset,
         boolean isAsterism,
         int artResourceNameOffset,
         int artCornerRaOffset,
         int artCornerDecOffset) {
-        builder.startTable(11);
+        builder.startTable(12);
         Constellation.addArtCornerDec(builder, artCornerDecOffset);
         Constellation.addArtCornerRa(builder, artCornerRaOffset);
         Constellation.addArtResourceName(builder, artResourceNameOffset);
         Constellation.addFamily(builder, familyOffset);
         Constellation.addBrightestStar(builder, brightestStarOffset);
-        Constellation.addLocalizedName(builder, localizedNameOffset);
+        Constellation.addId(builder, idOffset);
         Constellation.addLines(builder, linesOffset);
         Constellation.addCentroidDec(builder, centroidDec);
         Constellation.addCentroidRa(builder, centroidRa);
@@ -89,11 +90,11 @@ public final class Constellation extends Table {
         float centroidRa,
         float centroidDec,
         int linesOffset,
-        int localizedNameOffset,
+        int idOffset,
         int brightestStarOffset,
         int familyOffset,
         boolean isAsterism) {
-        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, isAsterism, 0, 0, 0);
+        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, idOffset, brightestStarOffset, familyOffset, isAsterism, 0, 0, 0);
     }
 
     public static int createConstellation(FlatBufferBuilder builder,
@@ -101,10 +102,10 @@ public final class Constellation extends Table {
         float centroidRa,
         float centroidDec,
         int linesOffset,
-        int localizedNameOffset,
+        int idOffset,
         int brightestStarOffset,
         int familyOffset) {
-        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, localizedNameOffset, brightestStarOffset, familyOffset, false, 0, 0, 0);
+        return createConstellation(builder, nameOffset, centroidRa, centroidDec, linesOffset, idOffset, brightestStarOffset, familyOffset, false, 0, 0, 0);
     }
 
     public static int createConstellation(FlatBufferBuilder builder,
@@ -113,12 +114,12 @@ public final class Constellation extends Table {
         return createConstellation(builder, nameOffset, 0.0f, 0.0f, linesOffset, 0, 0, 0, false, 0, 0, 0);
     }
 
-    public static void startConstellation(FlatBufferBuilder builder) { builder.startTable(11); }
+    public static void startConstellation(FlatBufferBuilder builder) { builder.startTable(12); }
     public static void addName(FlatBufferBuilder builder, int nameOffset) { builder.addOffset(0, nameOffset, 0); }
     public static void addCentroidRa(FlatBufferBuilder builder, float centroidRa) { builder.addFloat(1, centroidRa, 0.0f); }
     public static void addCentroidDec(FlatBufferBuilder builder, float centroidDec) { builder.addFloat(2, centroidDec, 0.0f); }
     public static void addLines(FlatBufferBuilder builder, int linesOffset) { builder.addOffset(3, linesOffset, 0); }
-    public static void addLocalizedName(FlatBufferBuilder builder, int localizedNameOffset) { builder.addOffset(4, localizedNameOffset, 0); }
+    public static void addId(FlatBufferBuilder builder, int idOffset) { builder.addOffset(11, idOffset, 0); }
     public static void addBrightestStar(FlatBufferBuilder builder, int brightestStarOffset) { builder.addOffset(5, brightestStarOffset, 0); }
     public static void addFamily(FlatBufferBuilder builder, int familyOffset) { builder.addOffset(6, familyOffset, 0); }
     public static void addIsAsterism(FlatBufferBuilder builder, boolean isAsterism) { builder.addBoolean(7, isAsterism, false); }
