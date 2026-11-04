@@ -34,6 +34,6 @@ PRIVACY FIRST
 WHY THE ACCESSIBILITY SERVICE
 CAELIS uses the Accessibility Service only to open the camera app you chose, press its shutter, or tap the point you set yourself. Nothing the service sees is stored or sent anywhere. Time-lapse does not work without it; the AR modules do not need it.
 
-Requires Android 11 or newer. In English, Czech, Slovak, Polish and German.
+Requires Android 13 or newer. English and Czech.
 
 Peak names © OpenStreetMap contributors (ODbL).

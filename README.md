@@ -486,9 +486,10 @@ retrying while the camera is still writing them.
   and Polish need `one` / `few` / `many` / `other`, German `one` / `other`. Night-sky names are not
   strings but `res/raw-<language>/sky_names.tsv`, keyed by catalog id.
 - **Adding a language** is adding files: `values-xx/` (and `app/src/debug/res/values-xx/`),
-  `res/raw-xx/sky_names.tsv`, `metadata/android/xx-XX/` with the images rendered from
-  `design/play-store/*.html?lang=xx`, and the language's plural forms in `TranslationParityTest`, which
-  then names anything still missing.
+  `res/raw-xx/sky_names.tsv` and the language's plural forms in `TranslationParityTest`, which then
+  names anything still missing. The store listing, `metadata/android/xx-XX/` with the images rendered
+  from `design/play-store/*.html?lang=xx`, goes live on merge rather than with a release, so it follows
+  in a PR of its own once a release speaks the language.
 
 `CLAUDE.md` is the same material in the form a coding agent needs it.
 

@@ -646,8 +646,10 @@ Each of these was found by review or on the device and is now covered by a test.
   not the running count. Keep a translation about as long as the English or Czech one: the overlay
   panel and the navigation bar have no room (`OverlayPanelLayoutTest` lays the panel out in every
   language). `TranslationParityTest` pins keys, plural forms, format arguments, debug strings, sky
-  names and store listings for every language; adding one is adding files, and that test lists what is
-  still missing.
+  names for every language, and that no store listing is in a language the app lacks; adding one is
+  adding files, and that test lists what is still missing. The listing (`metadata/android/`) goes live
+  on merge to `main`, not with a release, so a new language's listing comes in a PR of its own once the
+  release that speaks it is out.
 - **Night-sky names live in `res/raw/sky_names.tsv` (English) and `res/raw-<language>/`, never in the
   catalog or the code.** `catalog.bin` carries ids and English only (`Constellation.id`, Messier number,
   shower id, IAU code on a star, English body type; the old `localized_name` slots are deprecated and

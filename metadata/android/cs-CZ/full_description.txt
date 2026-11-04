@@ -34,6 +34,6 @@ SOUKROMÍ NA PRVNÍM MÍSTĚ
 PROČ SLUŽBA PŘÍSTUPNOSTI
 CAELIS používá službu přístupnosti (Accessibility Service) jen k tomu, aby otevřela zvolenou aplikaci fotoaparátu, stiskla v ní spoušť nebo klepla na bod, který jste sami nastavili. Nic z toho, co služba vidí, neukládá ani neodesílá. Bez tohoto oprávnění časosběr nefunguje; AR moduly ho nepotřebují.
 
-Vyžaduje Android 11 nebo novější. Česky, slovensky, polsky, německy a anglicky.
+Vyžaduje Android 13 nebo novější. Česky i anglicky.
 
 Názvy vrcholů © přispěvatelé OpenStreetMap (ODbL).

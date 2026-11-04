@@ -12,16 +12,6 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-# The store listing's languages (metadata/android/<locale>/) are the release notes' languages too,
-# so a language added to the listing gets the notes without a change here.
-LISTING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "metadata", "android")
-
-
-def listing_locales() -> List[str]:
-    if not os.path.isdir(LISTING_DIR):
-        return ["en-US"]
-    return sorted(d for d in os.listdir(LISTING_DIR) if os.path.isdir(os.path.join(LISTING_DIR, d)))
-
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -177,7 +167,10 @@ def promote_release(
         if release_notes and release_notes.strip():
             # Truncate notes if necessary and provide for standard locales
             trimmed_notes = release_notes.strip()[:500]
-            final_release_notes = [{"language": locale, "text": trimmed_notes} for locale in listing_locales()]
+            final_release_notes = [
+                {"language": "en-US", "text": trimmed_notes},
+                {"language": "cs-CZ", "text": trimmed_notes},
+            ]
 
         print(
             f"Found source release: source_name='{source_release.get('name')}', versionCodes={version_codes}, status='{source_release.get('status')}'"

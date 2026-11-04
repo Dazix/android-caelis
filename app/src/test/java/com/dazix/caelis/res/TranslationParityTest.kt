@@ -15,7 +15,7 @@ import org.w3c.dom.Element
  * checklist: the same strings and plurals as `values/`, the plural forms the language needs, the
  * same format arguments in every string (a dropped `%1$d` is a crash or a wrong sentence on a
  * device nobody tests in that language), the debug strings, the night-sky names in
- * `raw-<language>/sky_names.tsv` and a store listing in `metadata/android/<language>-*`. A regional
+ * `raw-<language>/sky_names.tsv`, and no store listing in a language the app lacks. A regional
  * directory such as `values-de-rAT` is an override and may hold only keys the default has.
  *
  * Lint's MissingTranslation sees a missing string, not a missing plural form or a changed argument,
@@ -113,11 +113,16 @@ class TranslationParityTest {
         }
     }
 
+    /**
+     * The listing goes live on merge, independently of a release, so a language reaches the store in a
+     * change of its own once the app speaks it. Until then the app may ship a language with no listing,
+     * never the other way round.
+     */
     @Test
-    fun `every language has a store listing`() {
+    fun `every store listing is in a language the app ships`() {
         val metadata = listOf(File("../metadata/android"), File("metadata/android")).first { it.isDirectory }
         val listed = metadata.listFiles { file -> file.isDirectory }.orEmpty().map { it.name.substringBefore('-') }.toSet()
-        assertEquals("store listing languages (metadata/android/<language>-<REGION>)", languages() + "en", listed)
+        assertEquals("store listings in a language the app lacks (metadata/android/<language>-<REGION>)", emptySet<String>(), listed - (languages() + "en"))
     }
 
     /** `values-cs`, `values-de`, ... with strings in them: a language the app ships. */
