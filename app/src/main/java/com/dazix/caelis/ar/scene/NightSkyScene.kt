@@ -30,8 +30,8 @@ import kotlin.math.sin
  * Everything the Night Sky screen draws on the GPU, owned in one place and driven by one
  * [NightSkyFrame] per vsync.
  *
- * Layers, in draw order (see [SkyPriority]): Milky Way, atmosphere, stars, constellation artwork,
- * DSO photographs and planet glows, constellation lines and planet discs, the stylised landscape or
+ * Layers, in draw order (see [SkyPriority]): Milky Way, atmosphere, stars and the peak names,
+ * constellation artwork, DSO photographs and planet glows, constellation lines and planet discs, the stylised landscape or
  * the real terrain ring, the alt-az grid, and on top the marks: names, DSO and meteor glyphs, the
  * selection reticle and the grid's labels. The marks' batches and atlases are here, so they are in
  * the same Filament frame as the stars; what goes into them is listed by `NightSkyRenderer` each
@@ -83,8 +83,13 @@ class NightSkyScene(
     val gridLabels = LabelBatch(surface, labelMaterial, markAtlas, SkyGridMarkers.LABEL_COUNT, SkyPriority.GRID, 2)
 
     // Peak names are Earth-fixed like the grid's labels (no celestial transform): pinned to the
-    // terrain skyline by azimuth and altitude.
-    val landmarkLabels = LabelBatch(surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, SkyPriority.GRID, 2)
+    // terrain skyline by azimuth and altitude. Unlike the other marks they are drawn under the
+    // constellation artwork and lines: on top, a name on the ridge competed with a figure standing
+    // there and drew the eye away from the sky. The terrain (LANDSCAPE) is drawn after them, but it
+    // fills only below the ridge and the names rise above it, so it covers at most the tick's foot.
+    val landmarkLabels = LabelBatch(
+        surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, PEAK_LABEL_PRIORITY, PEAK_LABEL_BLEND_ORDER,
+    )
 
     private var milkyWayTexture: Texture? = null
     private var landscapeTexture: Texture? = null
@@ -528,7 +533,7 @@ class NightSkyScene(
                     reusableDso.positionAngleDeg().toDouble() + reusableDso.artRotationDeg().toDouble(),
                     scratchCorners,
                 )
-                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL).also {
+                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER).also {
                     it.setCorners(scratchCorners)
                     it.setTexture(texture)
                     it.setOpacity(230f / 255f)
@@ -554,7 +559,7 @@ class NightSkyScene(
                 continue
             }
             val texture = artTexture(name) ?: continue
-            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL).also {
+            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER).also {
                 it.setCorners(artCorners.copyOfRange(c * 12, c * 12 + 12))
                 artQuads[c] = it
             }
@@ -622,6 +627,13 @@ class NightSkyScene(
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
         const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.ATLAS_SPRITES
         const val HIGHLIGHT_SPRITES = 4
+
+        /** Peak names share the artwork's priority and are blended before it (lower blend order). */
+        const val PEAK_LABEL_PRIORITY = SkyPriority.CELESTIAL
+        const val PEAK_LABEL_BLEND_ORDER = 0
+
+        /** Constellation artwork and DSO photographs, blended over the peak names. */
+        const val ART_BLEND_ORDER = 1
         private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
         /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
         private const val MAX_CELESTIAL_GLYPHS = 2 * MAX_DSOS + 32 + 1

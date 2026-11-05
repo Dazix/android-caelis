@@ -456,6 +456,7 @@
     <string name="night_sky_layers_desc">Configure night sky AR layers and visual toggles</string>
     <string name="night_sky_group_time">Time Travel &amp; Virtual Clock</string>
     <string name="night_sky_time_live">LIVE</string>
+    <string name="night_sky_time_set_live">SET LIVE</string>
     <string name="night_sky_time_live_desc">Live device clock</string>
     <string name="night_sky_virtual_clock_active">Virtual clock active</string>
     <string name="night_sky_time_reset_live">Return to live time</string>

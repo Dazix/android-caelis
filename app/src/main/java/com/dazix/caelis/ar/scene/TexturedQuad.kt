@@ -18,6 +18,8 @@ class TexturedQuad(
     private val surface: SkySurface,
     material: Material,
     priority: Int,
+    /** Order among the transparent renderables of the same [priority]; higher draws later. */
+    blendOrder: Int = 0,
 ) {
     val entity: Int = EntityManager.get().create()
     val materialInstance: MaterialInstance = material.createInstance()
@@ -53,6 +55,7 @@ class TexturedQuad(
             .castShadows(false)
             .receiveShadows(false)
             .priority(priority)
+            .blendOrder(0, blendOrder)
             .build(engine, entity)
         engine.transformManager.create(entity)
         surface.scene.addEntity(entity)

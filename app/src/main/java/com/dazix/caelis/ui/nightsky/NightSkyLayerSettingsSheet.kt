@@ -220,8 +220,10 @@ fun NightSkyLayerSettingsSheet(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         modifier = Modifier.height(28.dp),
                     ) {
+                        // An action, not a status: a bare "LIVE" here read as "the sky is live now"
+                        // while the virtual time it appears for was running.
                         Text(
-                            text = stringResource(R.string.night_sky_time_live),
+                            text = stringResource(R.string.night_sky_time_set_live),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (redVisionMode) palette.primary else Color(0xFF66BB6A),

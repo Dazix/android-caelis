@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (372 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (704 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (392 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (717 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (405 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1248 JVM tests (372 intervalometer, 704 solar, horizon & pose, 392 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 50
+`skipped`), not from the console. Current baseline: **1261 JVM tests (372 intervalometer, 717 solar, horizon & pose, 405 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 50
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -450,11 +450,20 @@ Each of these was found by review or on the device and is now covered by a test.
   lies on its own arc, on the stretch below the horizon (before the dot at a rise, after it at a set,
   `BadgeOnArc`): that stretch is the faint one and nothing else needs it, and a pill searching for a free
   spot beside the arc drifted off it whenever the phone turned. Night Sky
-  reserves nothing: its peak names sit on the ridge and can overprint a planet, DSO or constellation
-  label that lands there, a known limitation. Night Sky passes font scale 1f on purpose, as every other
+  reserves nothing, and draws its peak names *under* the constellation artwork and lines
+  (`NightSkyScene.PEAK_LABEL_PRIORITY` = CELESTIAL, blended before the artwork's `ART_BLEND_ORDER`;
+  `NightSkyLayerOrderTest`): on top, a name on the ridge drew the eye away from a figure standing there.
+  The other marks print over them. Night Sky passes font scale 1f on purpose, as every other
   name on that screen is a fixed pixel size; Sun AR scales all of its marks with the real one. A name
   longer than 260 dp (or 60 % of the atlas) is ellipsized, never dropped by a full page. The per-screen
   switches (`peakNamesInSunAr`, `peakNamesInNightSky`) work only while the terrain is on.
+- **Constellation and asterism names clear each other.** Asterisms sit inside constellations, and
+  printed at their centroids "Orion's Belt" and the "Winter Hexagon" landed on other names and none of
+  them could be read. `LabelDeclutter` places them in priority order (the selection, which never moves,
+  then constellations, then asterisms): a taken spot moves the name one line down, then one line up,
+  and only then leaves it out of the frame. A moved or hidden name goes back only once its own spot is
+  free by 4 dp, or hand tremor swaps it every frame. A name off screen or behind the camera is listed at
+  its own spot without a check, so a pan over a settled sky still uploads nothing.
 - **Deleting the `INTERNET` line from the manifest must keep working.** It is a documented way to
   build from source without a network. `NetworkAvailability.hasInternetPermission()` is how the UI
   finds out at runtime; never gate that on a build flag, which would drift from the manifest.
