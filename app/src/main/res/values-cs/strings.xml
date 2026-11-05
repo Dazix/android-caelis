@@ -381,6 +381,16 @@
     <string name="sun_ar_cardinal_sw">JZ (225°)</string>
     <string name="sun_ar_cardinal_w">Z (270°)</string>
     <string name="sun_ar_cardinal_nw">SZ (315°)</string>
+    <string name="sun_ar_section_sun">Slunce</string>
+    <string name="sun_ar_section_moon">Měsíc</string>
+    <string name="moon_phase_new">Nov</string>
+    <string name="moon_phase_waxing_crescent">Dorůstající srpek</string>
+    <string name="moon_phase_first_quarter">První čtvrť</string>
+    <string name="moon_phase_waxing_gibbous">Dorůstající měsíc</string>
+    <string name="moon_phase_full">Úplněk</string>
+    <string name="moon_phase_waning_gibbous">Couvající měsíc</string>
+    <string name="moon_phase_last_quarter">Poslední čtvrť</string>
+    <string name="moon_phase_waning_crescent">Ubývající srpek</string>
     <string name="sun_ar_keep_screen_on">Stále zapnutý displej</string>
     <string name="sun_ar_keep_screen_on_desc">Zabránit zhasnutí displeje při zobrazení AR</string>
     <string name="sun_ar_red_vision">Noční režim</string>

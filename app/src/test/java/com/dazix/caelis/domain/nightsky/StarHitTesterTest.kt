@@ -259,7 +259,6 @@ class StarHitTesterTest {
             PlanetState(
                 id = "Jupiter",
                 nameEn = "Jupiter",
-                nameCs = "Jupiter",
                 raDegrees = 100.0,
                 decDegrees = 20.0,
                 magnitude = -2.5f,
@@ -271,7 +270,6 @@ class StarHitTesterTest {
             PlanetState(
                 id = "Mars",
                 nameEn = "Mars",
-                nameCs = "Mars",
                 raDegrees = 150.0,
                 decDegrees = 10.0,
                 magnitude = -1.2f,
@@ -309,7 +307,6 @@ class StarHitTesterTest {
             PlanetState(
                 id = "Venus",
                 nameEn = "Venus",
-                nameCs = "Venuše",
                 raDegrees = 50.0,
                 decDegrees = 15.0,
                 magnitude = -4.0f,
@@ -321,7 +318,6 @@ class StarHitTesterTest {
             PlanetState(
                 id = "Mercury",
                 nameEn = "Mercury",
-                nameCs = "Merkur",
                 raDegrees = 50.5,
                 decDegrees = 15.2,
                 magnitude = -0.5f,
@@ -360,7 +356,6 @@ class StarHitTesterTest {
             PlanetState(
                 id = "Saturn",
                 nameEn = "Saturn",
-                nameCs = "Saturn",
                 raDegrees = 200.0,
                 decDegrees = -15.0,
                 magnitude = 0.5f,
@@ -434,7 +429,6 @@ class StarHitTesterTest {
         val moonAtNorthPole = PlanetState(
             id = "Moon",
             nameEn = "Moon",
-            nameCs = "Měsíc",
             raDegrees = 0.0,
             decDegrees = 90.0, // Directly in front (camera center)
             magnitude = -12.0f,
@@ -447,7 +441,6 @@ class StarHitTesterTest {
         val saturnOffscreen = PlanetState(
             id = "Saturn",
             nameEn = "Saturn",
-            nameCs = "Saturn",
             raDegrees = 180.0,
             decDegrees = 0.0, // Behind camera
             magnitude = 0.5f,
@@ -638,7 +631,6 @@ class StarHitTesterTest {
         val jupiter = PlanetState(
             id = "Jupiter",
             nameEn = "Jupiter",
-            nameCs = "Jupiter",
             raDegrees = 0.0,
             decDegrees = 0.0,
             magnitude = -2.5f,
@@ -650,7 +642,6 @@ class StarHitTesterTest {
         val mars = PlanetState(
             id = "Mars",
             nameEn = "Mars",
-            nameCs = "Mars",
             raDegrees = 0.0,
             decDegrees = 0.0,
             magnitude = -0.5f,
@@ -945,7 +936,6 @@ class StarHitTesterTest {
         val planet = PlanetState(
             id = "Jupiter",
             nameEn = "Jupiter",
-            nameCs = "Jupiter",
             raDegrees = 0.0,
             decDegrees = 0.0,
             magnitude = -2.0f,

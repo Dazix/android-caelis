@@ -18,9 +18,9 @@ public final class MeteorShower extends Table {
     public MeteorShower __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
     public short id() { int o = __offset(4); return o != 0 ? bb.getShort(o + bb_pos) : 0; }
-    public String localizedName() { int o = __offset(6); return o != 0 ? __string(o + bb_pos) : null; }
-    public ByteBuffer localizedNameAsByteBuffer() { return __vector_as_bytebuffer(6, 1); }
-    public ByteBuffer localizedNameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 6, 1); }
+    public String name() { int o = __offset(6); return o != 0 ? __string(o + bb_pos) : null; }
+    public ByteBuffer nameAsByteBuffer() { return __vector_as_bytebuffer(6, 1); }
+    public ByteBuffer nameInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 6, 1); }
     public float ra() { int o = __offset(8); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
     public float dec() { int o = __offset(10); return o != 0 ? bb.getFloat(o + bb_pos) : 0.0f; }
     public short zhr() { int o = __offset(12); return o != 0 ? bb.getShort(o + bb_pos) : 0; }
@@ -32,7 +32,7 @@ public final class MeteorShower extends Table {
 
     public static int createMeteorShower(FlatBufferBuilder builder,
         short id,
-        int localizedNameOffset,
+        int nameOffset,
         float ra,
         float dec,
         short zhr,
@@ -43,7 +43,7 @@ public final class MeteorShower extends Table {
         MeteorShower.addConstellationId(builder, constellationIdOffset);
         MeteorShower.addDec(builder, dec);
         MeteorShower.addRa(builder, ra);
-        MeteorShower.addLocalizedName(builder, localizedNameOffset);
+        MeteorShower.addName(builder, nameOffset);
         MeteorShower.addZhr(builder, zhr);
         MeteorShower.addId(builder, id);
         MeteorShower.addPeakDay(builder, peakDay);
@@ -53,7 +53,7 @@ public final class MeteorShower extends Table {
 
     public static void startMeteorShower(FlatBufferBuilder builder) { builder.startTable(8); }
     public static void addId(FlatBufferBuilder builder, short id) { builder.addShort(0, id, 0); }
-    public static void addLocalizedName(FlatBufferBuilder builder, int localizedNameOffset) { builder.addOffset(1, localizedNameOffset, 0); }
+    public static void addName(FlatBufferBuilder builder, int nameOffset) { builder.addOffset(1, nameOffset, 0); }
     public static void addRa(FlatBufferBuilder builder, float ra) { builder.addFloat(2, ra, 0.0f); }
     public static void addDec(FlatBufferBuilder builder, float dec) { builder.addFloat(3, dec, 0.0f); }
     public static void addZhr(FlatBufferBuilder builder, short zhr) { builder.addShort(4, zhr, 0); }

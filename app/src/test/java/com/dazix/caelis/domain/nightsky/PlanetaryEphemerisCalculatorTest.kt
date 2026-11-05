@@ -41,8 +41,12 @@ class PlanetaryEphemerisCalculatorTest {
         val moon = planets.first { it.id == "Moon" }
 
         assertTrue(moon.isMoon)
-        assertEquals("Měsíc", moon.localizedName(isCzech = true))
-        assertEquals("Moon", moon.localizedName(isCzech = false))
+        assertEquals("Moon", moon.nameEn)
+        assertEquals("Měsíc", skyNames("cs").planet(moon.id, moon.nameEn))
+        assertEquals("Mond", skyNames("de").planet(moon.id, moon.nameEn))
+        assertEquals("Moon", skyNames(null).planet(moon.id, moon.nameEn))
+        // Every body the calculator produces has a name in the default file, so none falls back silently.
+        planets.forEach { assertTrue("planet.${it.id} missing", skyNames(null)["planet.${it.id}"] != null) }
 
         // Lunar physical disk angular diameter is ~0.48° to ~0.57° (29.3' to 33.5')
         assertTrue("Moon physical disk angular diameter should be ~0.52°", moon.angularDiameterDeg in 0.45f..0.60f)

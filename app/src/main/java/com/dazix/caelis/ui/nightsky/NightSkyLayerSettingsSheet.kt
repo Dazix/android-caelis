@@ -803,8 +803,10 @@ private fun TimeTravelSectionContent(
     val activeInstant = timeState.activeInstant()
     val zonedDateTime = remember(activeInstant, zone) { activeInstant.atZone(zone) }
 
+    // The locale's own order and punctuation: a fixed "d. MMM" read "czw., 5. lis" in Polish.
     val dateChipFormatter = remember {
-        DateTimeFormatter.ofPattern("EEE, d. MMM yyyy", Locale.getDefault())
+        val locale = Locale.getDefault()
+        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEdMMMyyyy"), locale)
     }
     val timeChipFormatter = remember {
         DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())

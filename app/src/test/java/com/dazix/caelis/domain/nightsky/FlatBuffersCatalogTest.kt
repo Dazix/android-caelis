@@ -23,28 +23,28 @@ class FlatBuffersCatalogTest {
 
         // 1. Constellations: 1 IAU Constellation (isAsterism = false) and 1 Asterism (isAsterism = true)
         val constNameOff = fbb.createString("Ursa Major")
-        val locNameOff = fbb.createString("Velká medvědice")
+        val idOff = fbb.createString("UMa")
         val brightOff = fbb.createString("Alioth")
         val famOff = fbb.createString("Ursa Major Family")
         val artResOff = fbb.createString("art_uma")
         val artCornerRaOff = Constellation.createArtCornerRaVector(fbb, floatArrayOf(160.0f, 180.0f, 185.0f, 162.0f))
         val artCornerDecOff = Constellation.createArtCornerDecVector(fbb, floatArrayOf(65.0f, 63.0f, 45.0f, 48.0f))
         val linesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2, 2, 3))
-        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, locNameOff, brightOff, famOff, false, artResOff, artCornerRaOff, artCornerDecOff)
+        val constOff = Constellation.createConstellation(fbb, constNameOff, 184.8f, 55.7f, linesVec, idOff, brightOff, famOff, false, artResOff, artCornerRaOff, artCornerDecOff)
 
         val astNameOff = fbb.createString("Big Dipper (Plough)")
-        val astLocNameOff = fbb.createString("Velký vůz")
+        val astIdOff = fbb.createString("BDr")
         val astBrightOff = fbb.createString("Alioth")
         val astFamOff = fbb.createString("Ursa Major")
         val astLinesVec = Constellation.createLinesVector(fbb, intArrayOf(0, 1, 1, 2))
-        val astOff = Constellation.createConstellation(fbb, astNameOff, 175.5f, 56.2f, astLinesVec, astLocNameOff, astBrightOff, astFamOff, true, 0, 0, 0)
+        val astOff = Constellation.createConstellation(fbb, astNameOff, 175.5f, 56.2f, astLinesVec, astIdOff, astBrightOff, astFamOff, true, 0, 0, 0)
 
         val constsVec = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(constOff, astOff))
 
         // 2. StarMetadata with rich fields
         val metaNameOff = fbb.createString("Sirius")
         val metaTypeOff = fbb.createString("Binary Star")
-        val metaConstOff = fbb.createString("Canis Major")
+        val metaConstOff = fbb.createString("CMa")
         val metaOff = StarMetadata.createStarMetadata(fbb, 0, metaNameOff, metaTypeOff, metaConstOff, 8.6f)
         val metaVec = NightSkyCatalog.createMetadataVector(fbb, intArrayOf(metaOff))
 
@@ -56,7 +56,6 @@ class FlatBuffersCatalogTest {
 
         // 4. DeepSkyObjects
         val m31NameOff = fbb.createString("Andromeda Galaxy")
-        val m31LocOff = fbb.createString("Galaxie v Andromedě")
         val m31ConstOff = fbb.createString("And")
         val m31NgcOff = fbb.createString("NGC 224")
         val m31ArtOff = fbb.createString("dso_m31")
@@ -68,7 +67,6 @@ class FlatBuffersCatalogTest {
             3.44f,
             178.0f,
             DsoType.GALAXY,
-            m31LocOff,
             m31ConstOff,
             m31NameOff,
             m31NgcOff,
@@ -113,7 +111,7 @@ class FlatBuffersCatalogTest {
         val meteorObj = catalog.meteorShowers(0)
         assertNotNull(meteorObj)
         assertEquals(1.toShort(), meteorObj.id())
-        assertEquals("Perseids", meteorObj.localizedName())
+        assertEquals("Perseids", meteorObj.name())
         assertEquals(46.2f, meteorObj.ra(), 0.01f)
         assertEquals(57.6f, meteorObj.dec(), 0.01f)
         assertEquals(8.toByte(), meteorObj.peakMonth())
@@ -126,7 +124,6 @@ class FlatBuffersCatalogTest {
         assertNotNull(dsoObj)
         assertEquals(31.toShort(), dsoObj.messierId())
         assertEquals("Andromeda Galaxy", dsoObj.englishName())
-        assertEquals("Galaxie v Andromedě", dsoObj.localizedName())
         assertEquals("NGC 224", dsoObj.ngcId())
         assertEquals(DsoType.GALAXY, dsoObj.type())
         assertEquals(10.68f, dsoObj.ra(), 0.01f)
@@ -157,7 +154,7 @@ class FlatBuffersCatalogTest {
         assertEquals(0, meta.starIndex())
         assertEquals("Sirius", meta.name())
         assertEquals("Binary Star", meta.bodyType())
-        assertEquals("Canis Major", meta.constellation())
+        assertEquals("CMa", meta.constellation())
         assertEquals(8.6f, meta.distanceLy(), 0.01f)
 
         // Verify IAU constellation (isAsterism = false)
@@ -166,7 +163,7 @@ class FlatBuffersCatalogTest {
         assertEquals("Ursa Major", constObj.name())
         assertEquals(184.8f, constObj.centroidRa(), 0.01f)
         assertEquals(55.7f, constObj.centroidDec(), 0.01f)
-        assertEquals("Velká medvědice", constObj.localizedName())
+        assertEquals("UMa", constObj.id())
         assertEquals("Alioth", constObj.brightestStar())
         assertEquals("Ursa Major Family", constObj.family())
         assertEquals(false, constObj.isAsterism())
@@ -189,7 +186,7 @@ class FlatBuffersCatalogTest {
         val astObj = catalog.constellations(1)
         assertNotNull(astObj)
         assertEquals("Big Dipper (Plough)", astObj.name())
-        assertEquals("Velký vůz", astObj.localizedName())
+        assertEquals("BDr", astObj.id())
         assertEquals("Alioth", astObj.brightestStar())
         assertEquals("Ursa Major", astObj.family())
         assertEquals(true, astObj.isAsterism())
@@ -243,7 +240,7 @@ class FlatBuffersCatalogTest {
 
         // Check Ursa Major metadata (IAU constellation)
         val um = iauConsts.first { it.name() == "Ursa Major" }
-        assertEquals("Velká medvědice", um.localizedName())
+        assertEquals("UMa", um.id())
         assertEquals("Alioth", um.brightestStar())
         assertEquals("Ursa Major Family", um.family())
         assertEquals(false, um.isAsterism())
@@ -255,7 +252,7 @@ class FlatBuffersCatalogTest {
 
         // Check Orion metadata (IAU constellation)
         val ori = iauConsts.first { it.name() == "Orion" }
-        assertEquals("Orion", ori.localizedName())
+        assertEquals("Ori", ori.id())
         assertEquals("Rigel", ori.brightestStar())
         assertEquals("Orion Family", ori.family())
         assertEquals(false, ori.isAsterism())
@@ -267,7 +264,7 @@ class FlatBuffersCatalogTest {
 
         // Check Lacerta metadata (IAU constellation)
         val lac = iauConsts.first { it.name() == "Lacerta" }
-        assertEquals("Ještěrka", lac.localizedName())
+        assertEquals("Lac", lac.id())
         assertEquals(false, lac.isAsterism())
         assertEquals("art_lac", lac.artResourceName())
         assertEquals(4, lac.artCornerRaLength())
@@ -275,7 +272,7 @@ class FlatBuffersCatalogTest {
 
         // Check Crux metadata (IAU constellation)
         val crux = iauConsts.first { it.name() == "Crux" }
-        assertEquals("Jižní kříž", crux.localizedName())
+        assertEquals("Cru", crux.id())
         assertEquals(false, crux.isAsterism())
         assertEquals("art_cru", crux.artResourceName())
         assertEquals(4, crux.artCornerRaLength())
@@ -283,7 +280,7 @@ class FlatBuffersCatalogTest {
 
         // Check Big Dipper metadata (Asterism)
         val bigDipper = asterisms.first { it.name() == "Big Dipper (Plough)" }
-        assertEquals("Velký vůz", bigDipper.localizedName())
+        assertEquals("BDr", bigDipper.id())
         assertEquals("Alioth", bigDipper.brightestStar())
         assertEquals("Ursa Major", bigDipper.family())
         assertEquals(true, bigDipper.isAsterism())
@@ -293,7 +290,7 @@ class FlatBuffersCatalogTest {
 
         // Check Summer Triangle (Asterism)
         val summerTriangle = asterisms.first { it.name() == "Summer Triangle" }
-        assertEquals("Letní trojúhelník", summerTriangle.localizedName())
+        assertEquals("STr", summerTriangle.id())
         assertEquals("Vega", summerTriangle.brightestStar())
         assertEquals("Lyra / Cygnus / Aquila", summerTriangle.family())
         assertEquals(true, summerTriangle.isAsterism())
@@ -356,7 +353,7 @@ class FlatBuffersCatalogTest {
         assertEquals("Must have exactly 28 meteor showers", 28, catalog.meteorShowersLength())
 
         val allMeteors = (0 until catalog.meteorShowersLength()).map { catalog.meteorShowers(it) }
-        val perseids = allMeteors.first { it.localizedName() == "Perseidy" }
+        val perseids = allMeteors.first { it.name() == "Perseids" }
         assertEquals("Per", perseids.constellationId())
         assertEquals(8.toByte(), perseids.peakMonth())
         assertEquals(12.toByte(), perseids.peakDay())
@@ -364,7 +361,7 @@ class FlatBuffersCatalogTest {
         assertEquals(46.2f, perseids.ra(), 0.1f)
         assertEquals(57.8f, perseids.dec(), 0.1f)
 
-        val geminids = allMeteors.first { it.localizedName() == "Geminidy" }
+        val geminids = allMeteors.first { it.name() == "Geminids" }
         assertEquals("Gem", geminids.constellationId())
         assertEquals(12.toByte(), geminids.peakMonth())
         assertEquals(14.toByte(), geminids.peakDay())

@@ -13,10 +13,11 @@ data class LunarDayTimes(
     val moonriseAzimuth: Double?,
     val moonsetAzimuth: Double?,
     val maxElevationDegrees: Double,
-    val phaseName: String,
-    val phaseGlyph: String,
+    val phase: LunarPhase,
     val illuminationPercent: Int,
-)
+) {
+    val phaseGlyph: String get() = phase.glyph
+}
 
 object LunarDayTimesCalculator {
 
@@ -113,8 +114,7 @@ object LunarDayTimesCalculator {
             moonriseAzimuth = moonriseAz,
             moonsetAzimuth = moonsetAz,
             maxElevationDegrees = maxElevation,
-            phaseName = noonLunar.phaseName,
-            phaseGlyph = noonLunar.phaseGlyph,
+            phase = noonLunar.phase,
             illuminationPercent = (noonLunar.illuminationFraction * 100.0).toInt().coerceIn(0, 100),
         )
     }

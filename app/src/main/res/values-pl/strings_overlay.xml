@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Owned by the overlay/notification slice. All names are prefixed `ovl_` to stay collision-free. -->
+<resources>
+    <plurals name="ovl_shots">
+        <item quantity="one">%1$d zdjęcie</item>
+        <item quantity="few">%1$d zdjęcia</item>
+        <item quantity="many">%1$d zdjęć</item>
+        <item quantity="other">%1$d zdjęcia</item>
+    </plurals>
+    <plurals name="ovl_shots_of">
+        <item quantity="one">%1$d / %2$d zdjęcia</item>
+        <item quantity="few">%1$d / %2$d zdjęć</item>
+        <item quantity="many">%1$d / %2$d zdjęć</item>
+        <item quantity="other">%1$d / %2$d zdjęcia</item>
+    </plurals>
+    <string name="ovl_next_in">Następne za %1$s</string>
+    <string name="ovl_starts_in">Start za %1$s</string>
+    <string name="ovl_shooting_now">Fotografowanie…</string>
+    <string name="ovl_paused">Wstrzymano</string>
+    <string name="ovl_idle">Gotowy</string>
+    <string name="ovl_stopped">Zatrzymano</string>
+
+    <string name="ovl_action_pause">Wstrzymaj</string>
+    <string name="ovl_action_resume">Wznów</string>
+    <string name="ovl_action_stop">Stop</string>
+    <string name="ovl_action_drag_handle">Przeciągnij, aby przesunąć panel</string>
+
+    <string name="ovl_option_screen_on">Ekran: wł.</string>
+    <string name="ovl_option_screen_off">Ekran: auto</string>
+    <string name="ovl_option_screen_description">Utrzymuj ekran włączony podczas fotografowania. Większość aplikacji aparatu przestaje pokazywać podgląd – i robić zdjęcia – gdy ekran się wyłączy.</string>
+    <string name="ovl_option_dim_on">Przyciemn.: wł.</string>
+    <string name="ovl_option_dim_off">Przyciemn.: wył.</string>
+    <string name="ovl_option_dim_description">Wygaszaj ten panel między zdjęciami. Dotknij go, aby przywrócić.</string>
+
+    <string name="ovl_permission_missing">Uprawnienie do wyświetlania nad innymi aplikacjami jest wyłączone, więc pływający panel nie może być pokazany.</string>
+
+    <string name="ovl_calib_instruction">Stuknij przycisk spustu aplikacji %1$s poniżej lub przeciągnij wokół niego ramkę.</string>
+    <string name="ovl_calib_instruction_generic">Stuknij przycisk spustu poniżej lub przeciągnij wokół niego ramkę.</string>
+    <string name="ovl_calib_instruction_not_launched">Nie udało się otworzyć aplikacji %1$s. Przełącz się na nią sam, a następnie stuknij jej przycisk spustu lub przeciągnij wokół niego ramkę.</string>
+    <string name="ovl_calib_hint">Stuknięcie zapisuje jeden dokładny punkt; ramka pozwala rozłożyć zdjęcia wewnątrz niej.</string>
+    <string name="ovl_calib_cancel">Anuluj</string>
+    <string name="ovl_calib_saved_point">Zapisano pozycję spustu.</string>
+    <string name="ovl_calib_saved_area">Zapisano obszar spustu.</string>
+    <string name="ovl_calib_timed_out">Kalibracja anulowana — nic nie zostało stuknięte.</string>
+    <string name="ovl_calib_unavailable">Nie udało się rozpocząć kalibracji. Spróbuj ponownie z aplikacji.</string>
+
+    <string name="ovl_notif_channel_name">Trwająca sesja</string>
+    <string name="ovl_notif_channel_desc">Wykonane zdjęcia i odliczanie do następnego zdjęcia, gdy sesja trwa.</string>
+    <string name="ovl_notif_title_running">Timelapse trwa</string>
+    <string name="ovl_notif_title_paused">Timelapse wstrzymany</string>
+    <string name="ovl_notif_title_waiting">Timelapse startuje</string>
+    <string name="ovl_notif_title_stopped">Timelapse zakończony</string>
+    <string name="ovl_notif_title_idle">CAELIS gotowy</string>
+    <string name="ovl_action_move_panel">Przesuń panel na drugą stronę</string>
+    <string name="ovl_panel_moved_left">Panel przesunięto w lewo</string>
+    <string name="ovl_panel_moved_right">Panel przesunięto w prawo</string>
+</resources>

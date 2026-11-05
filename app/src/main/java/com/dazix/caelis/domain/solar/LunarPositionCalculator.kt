@@ -157,8 +157,6 @@ object LunarPositionCalculator {
         val phaseAngle = normalizeDeg(180.0 - d)
         val illumination = ((1.0 + cos(phaseAngle * RAD)) * 0.5).coerceIn(0.0, 1.0)
 
-        val (phaseName, phaseGlyph) = determinePhase(d)
-
         return LunarCoordinates(
             azimuthDegrees = azDeg,
             elevationDegrees = elevDeg,
@@ -166,23 +164,8 @@ object LunarPositionCalculator {
             distanceKm = distanceKm,
             illuminationFraction = illumination,
             elongationDegrees = d,
-            phaseName = phaseName,
-            phaseGlyph = phaseGlyph,
+            phase = LunarPhase.fromElongation(d),
         )
-    }
-
-    private fun determinePhase(d: Double): Pair<String, String> {
-        val norm = (d % 360.0 + 360.0) % 360.0
-        return when {
-            norm < 22.5 || norm >= 337.5 -> Pair("Nov", "🌑")
-            norm < 67.5 -> Pair("Dorůstající srpek", "🌒")
-            norm < 112.5 -> Pair("První čtvrť", "🌓")
-            norm < 157.5 -> Pair("Dorůstající měsíc", "🌔")
-            norm < 202.5 -> Pair("Úplněk", "🌕")
-            norm < 247.5 -> Pair("Couvající měsíc", "🌖")
-            norm < 292.5 -> Pair("Poslední čtvrť", "🌗")
-            else -> Pair("Ubývající srpek", "🌘")
-        }
     }
 
     private fun normalizeDeg(deg: Double): Double {

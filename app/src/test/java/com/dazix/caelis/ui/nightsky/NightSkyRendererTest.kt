@@ -15,6 +15,7 @@ import com.dazix.caelis.domain.arframe.SkyProjector
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.ConstellationFocusState
 import com.dazix.caelis.domain.nightsky.NightSkyCatalogLoader
+import com.dazix.caelis.domain.nightsky.SkyNames
 import com.dazix.caelis.domain.nightsky.NightVisionState
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.PlanetState
@@ -117,7 +118,6 @@ class NightSkyRendererTest {
     private fun planet(id: String, magnitude: Float, dec: Double = 90.0, diameter: Float = 0.01f) = PlanetState(
         id = id,
         nameEn = id,
-        nameCs = id,
         raDegrees = 0.0,
         decDegrees = dec,
         magnitude = magnitude,
@@ -163,7 +163,7 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val name = fbb.createString("Crater")
             val lines = Constellation.createLinesVector(fbb, intArrayOf(0, 1))
-            val c = Constellation.createConstellation(fbb, name, 0f, 90f, lines, fbb.createString("Pohár"), 0, 0)
+            val c = Constellation.createConstellation(fbb, name, 0f, 90f, lines, fbb.createString("Crt"), 0, 0)
             val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(c))
             val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
             NightSkyCatalog.startStarsVector(fbb, 4)
@@ -195,11 +195,11 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val um = Constellation.createConstellation(
                 fbb, fbb.createString("Ursa Major"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
-                fbb.createString("Velká medvědice"), 0, 0, false,
+                fbb.createString("UMa"), 0, 0, false,
             )
             val bd = Constellation.createConstellation(
                 fbb, fbb.createString("Big Dipper (Plough)"), 0f, 85f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
-                fbb.createString("Velký vůz"), 0, 0, true,
+                fbb.createString("BDr"), 0, 0, true,
             )
             val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(um, bd))
             val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
@@ -227,11 +227,11 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val peg = Constellation.createConstellation(
                 fbb, fbb.createString("Pegasus"), 340f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
-                fbb.createString("Pegas"), 0, 0, false,
+                fbb.createString("Peg"), 0, 0, false,
             )
             val square = Constellation.createConstellation(
                 fbb, fbb.createString("Great Square of Pegasus"), 355f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
-                fbb.createString("Pegasův čtverec"), 0, 0, true,
+                fbb.createString("GSP"), 0, 0, true,
             )
             val unnamed = Constellation.createConstellation(
                 fbb, fbb.createString("Unnamed"), 10f, 20f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
@@ -246,6 +246,10 @@ class NightSkyRendererTest {
         }
         val renderer = NightSkyRenderer()
 
+        assertEquals("no names loaded: the catalog's English", "Pegasus" to false, renderer.constellationLabelOf(catalog, 0))
+
+        // The asterism's key is "ast.", the constellation's "con.": the same code must not cross over.
+        renderer.skyNames = SkyNames(mapOf("con.Peg" to "Pegas", "ast.GSP" to "Pegasův čtverec", "con.GSP" to "wrong"))
         assertEquals("Pegas" to false, renderer.constellationLabelOf(catalog, 0))
         assertEquals("Pegasův čtverec" to true, renderer.constellationLabelOf(catalog, 1))
         assertEquals("falls back to the English name", "Unnamed" to true, renderer.constellationLabelOf(catalog, 2))
@@ -291,11 +295,11 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val low = Constellation.createConstellation(
                 fbb, fbb.createString("Capricornus"), 0f, 85f, Constellation.createLinesVector(fbb, intArrayOf(0)),
-                fbb.createString("Kozoroh"), 0, 0,
+                fbb.createString("Cap"), 0, 0,
             )
             val under = Constellation.createConstellation(
                 fbb, fbb.createString("Under"), 180f, 85f, Constellation.createLinesVector(fbb, intArrayOf(1)),
-                fbb.createString("Pod"), 0, 0,
+                fbb.createString("Und"), 0, 0,
             )
             val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(low, under))
             val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
@@ -447,7 +451,7 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val c = Constellation.createConstellation(
                 fbb, fbb.createString("Ursa Minor"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 0)),
-                fbb.createString("Malý medvěd"), 0, 0, false,
+                fbb.createString("UMi"), 0, 0, false,
             )
             val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(c))
             val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
@@ -553,7 +557,7 @@ class NightSkyRendererTest {
     fun `a selected DSO stays hit-testable with the DSO layer off`() {
         val catalog = catalog { fbb ->
             fun dso(m: Int, type: Byte, size: Float, ratio: Float) = DeepSkyObject.createDeepSkyObject(
-                fbb, m.toShort(), 0f, 90f, 8f, size, type, fbb.createString("M$m"), fbb.createString("X"),
+                fbb, m.toShort(), 0f, 90f, 8f, size, type, fbb.createString("X"),
                 fbb.createString("Object $m"), fbb.createString("NGC $m"), 0f, ratio, fbb.createString(""), 0f, 0f,
             )
             val dsos = NightSkyCatalog.createDsosVector(fbb, intArrayOf(dso(1, DsoType.NEBULA, 6f, 0f), dso(31, DsoType.GALAXY, 178f, 0.32f)))
@@ -588,11 +592,11 @@ class NightSkyRendererTest {
         val catalog = catalog { fbb ->
             val orion = Constellation.createConstellation(
                 fbb, fbb.createString("Orion"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
-                fbb.createString("Orion"), 0, 0, false, 0, 0, 0,
+                fbb.createString("Ori"), 0, 0, false, 0, 0, 0,
             )
             val uma = Constellation.createConstellation(
                 fbb, fbb.createString("Ursa Major"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(2, 3)),
-                fbb.createString("Velká medvědice"), 0, 0, false, 0, 0, 0,
+                fbb.createString("UMa"), 0, 0, false, 0, 0, 0,
             )
             val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(orion, uma))
             val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())

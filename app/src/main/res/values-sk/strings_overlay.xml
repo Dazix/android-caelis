@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Owned by the overlay/notification slice. All names are prefixed `ovl_` to stay collision-free. -->
+<resources>
+    <plurals name="ovl_shots">
+        <item quantity="one">%1$d snímka</item>
+        <item quantity="few">%1$d snímky</item>
+        <item quantity="many">%1$d snímok</item>
+        <item quantity="other">%1$d snímok</item>
+    </plurals>
+    <plurals name="ovl_shots_of">
+        <item quantity="one">%1$d / %2$d snímka</item>
+        <item quantity="few">%1$d / %2$d snímky</item>
+        <item quantity="many">%1$d / %2$d snímok</item>
+        <item quantity="other">%1$d / %2$d snímok</item>
+    </plurals>
+    <string name="ovl_next_in">Ďalšia o %1$s</string>
+    <string name="ovl_starts_in">Štart o %1$s</string>
+    <string name="ovl_shooting_now">Fotím…</string>
+    <string name="ovl_paused">Pozastavené</string>
+    <string name="ovl_idle">Pripravené</string>
+    <string name="ovl_stopped">Zastavené</string>
+
+    <string name="ovl_action_pause">Pozastaviť</string>
+    <string name="ovl_action_resume">Pokračovať</string>
+    <string name="ovl_action_stop">Zastaviť</string>
+    <string name="ovl_action_drag_handle">Ťahaním posuniete panel</string>
+
+    <string name="ovl_option_screen_on">Displej: zap.</string>
+    <string name="ovl_option_screen_off">Displej: auto</string>
+    <string name="ovl_option_screen_description">Nechá displej svietiť počas fotenia. Väčšina fotoaplikácií po zhasnutí displeja prestane zobrazovať náhľad a prestane fotiť.</string>
+    <string name="ovl_option_dim_on">Stlmenie: zap.</string>
+    <string name="ovl_option_dim_off">Stlmenie: vyp.</string>
+    <string name="ovl_option_dim_description">Medzi snímkami sa panel stlmí. Dotykom ho vrátite.</string>
+
+    <string name="ovl_permission_missing">Oprávnenie kresliť cez ostatné aplikácie je vypnuté, plávajúci panel sa nedá zobraziť.</string>
+
+    <string name="ovl_calib_instruction">Klepnite nižšie na spúšť v aplikácii %1$s, alebo ju ťahaním označte rámčekom.</string>
+    <string name="ovl_calib_instruction_generic">Klepnite nižšie na spúšť, alebo ju ťahaním označte rámčekom.</string>
+    <string name="ovl_calib_instruction_not_launched">Aplikáciu %1$s sa nepodarilo otvoriť. Prepnite sa do nej sami a potom klepnite na spúšť, alebo ju ťahaním označte rámčekom.</string>
+    <string name="ovl_calib_hint">Klepnutie uloží jeden presný bod, rámček umožní snímky rozptýliť vnútri neho.</string>
+    <string name="ovl_calib_cancel">Zrušiť</string>
+    <string name="ovl_calib_saved_point">Pozícia spúšte uložená.</string>
+    <string name="ovl_calib_saved_area">Oblasť spúšte uložená.</string>
+    <string name="ovl_calib_timed_out">Kalibrácia zrušená — nič ste neoznačili.</string>
+    <string name="ovl_calib_unavailable">Kalibráciu sa nepodarilo spustiť. Skúste to znova z aplikácie.</string>
+
+    <string name="ovl_notif_channel_name">Bežiaca séria</string>
+    <string name="ovl_notif_channel_desc">Počet snímok a čas do ďalšej snímky počas bežiacej série.</string>
+    <string name="ovl_notif_title_running">Časozber beží</string>
+    <string name="ovl_notif_title_paused">Časozber pozastavený</string>
+    <string name="ovl_notif_title_waiting">Časozber štartuje</string>
+    <string name="ovl_notif_title_stopped">Časozber dokončený</string>
+    <string name="ovl_notif_title_idle">CAELIS pripravený</string>
+    <string name="ovl_action_move_panel">Presunúť panel na druhú stranu</string>
+    <string name="ovl_panel_moved_left">Panel presunutý doľava</string>
+    <string name="ovl_panel_moved_right">Panel presunutý doprava</string>
+</resources>

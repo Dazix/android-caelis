@@ -86,6 +86,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -129,9 +130,11 @@ import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.SiderealTime
 import com.dazix.caelis.domain.nightsky.StarCatalog
 import com.dazix.caelis.domain.nightsky.TimeState
+import com.dazix.caelis.domain.solar.CardinalDirection
 import com.dazix.caelis.service.DisplayGeometry
 import com.dazix.caelis.ui.AppIcons
 import com.dazix.caelis.ui.CenteredBar
+import com.dazix.caelis.ui.cardinalName
 import com.dazix.caelis.ui.ImmersiveModeEffect
 import com.dazix.caelis.ui.Permissions
 import com.dazix.caelis.ui.rememberBottomGestureSlopPx
@@ -167,6 +170,10 @@ fun NightSkyArScreen(
     val useRealHorizon by viewModel.useRealHorizon.collectAsStateWithLifecycle()
     val showStylisedLandscape by viewModel.showStylisedLandscape.collectAsStateWithLifecycle()
     val horizonSettings by viewModel.horizonSettings.collectAsStateWithLifecycle()
+
+    // The view model survives a change of the app language; this relabels the sky and the search.
+    val appLocale = LocalConfiguration.current.locales[0]
+    LaunchedEffect(appLocale, catalog) { viewModel.refreshSkyNames() }
 
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -1091,19 +1098,9 @@ internal fun NightSkyTopBar(
                 ) {
                     val az = orientation?.cameraAzimuthDegrees?.toInt() ?: 0
                     val el = orientation?.cameraElevationDegrees?.toInt() ?: 0
-                    val cardinalRes = when {
-                        az < 23 || az >= 338 -> R.string.sun_ar_cardinal_n
-                        az < 68 -> R.string.sun_ar_cardinal_ne
-                        az < 113 -> R.string.sun_ar_cardinal_e
-                        az < 158 -> R.string.sun_ar_cardinal_se
-                        az < 203 -> R.string.sun_ar_cardinal_s
-                        az < 248 -> R.string.sun_ar_cardinal_sw
-                        az < 293 -> R.string.sun_ar_cardinal_w
-                        else -> R.string.sun_ar_cardinal_nw
-                    }
-                    val cardinalName = stringResource(cardinalRes).substringBefore(" ")
+                    val cardinal = cardinalName(CardinalDirection.of(az.toDouble()))
                     Text(
-                        text = "🧭 $az° $cardinalName",
+                        text = "🧭 $az° $cardinal",
                         style = MaterialTheme.typography.labelSmall,
                         color = accentColor,
                         fontWeight = FontWeight.Bold,

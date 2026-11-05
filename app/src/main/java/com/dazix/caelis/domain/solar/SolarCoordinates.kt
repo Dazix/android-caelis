@@ -15,18 +15,6 @@ data class SolarCoordinates(
     /** True if the solar disk center is above the visual horizon (zenith angle <= 90.8333°). */
     val isAboveHorizon: Boolean get() = apparentElevationDegrees >= -0.8333
 
-    /** Returns azimuth cardinal direction name, e.g. "N", "NE", "E", "SE", "S", "SW", "W", "NW". */
-    fun cardinalDirection(): String {
-        val norm = (azimuthDegrees % 360.0 + 360.0) % 360.0
-        return when {
-            norm < 22.5 || norm >= 337.5 -> "N"
-            norm < 67.5 -> "NE"
-            norm < 112.5 -> "E"
-            norm < 157.5 -> "SE"
-            norm < 202.5 -> "S"
-            norm < 247.5 -> "SW"
-            norm < 292.5 -> "W"
-            else -> "NW"
-        }
-    }
+    /** Compass point of the azimuth; the UI names it in the user's language. */
+    fun cardinalDirection(): CardinalDirection = CardinalDirection.of(azimuthDegrees)
 }

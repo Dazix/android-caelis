@@ -1,0 +1,312 @@
+# Night sky names: <key> TAB <name>. Keys and format: domain/nightsky/SkyNames.kt
+ast.Arr	The Arrow
+ast.BA1	Davis' Dog
+ast.BA2	Honores Friderici (Frederick's Glory)
+ast.BDr	Big Dipper (Plough)
+ast.BPN	The Bull of Poniatowski
+ast.Bfl	Butterfly
+ast.Bie	Bier
+ast.ChG	Christmas Goose
+ast.Cir	Circlet
+ast.CoH	Coathanger
+ast.DCr	Diamond Cross
+ast.ECr	Egyptian Cross
+ast.FCr	False Cross
+ast.FHA	The Fish Hook
+ast.FMi	The Flying Minnow
+ast.GDi	Great Diamond
+ast.GSP	Great Square of Pegasus
+ast.GoP	Guardians of the Pole (Guards)
+ast.Goa	Goatlings (Kids)
+ast.HCn	Head of Centaurus
+ast.HDr	Dragon Head (Lozenge)
+ast.HHy	Head of Hydra
+ast.HMG	Head of Medusa Gorgon
+ast.HSr	Head of Serpent
+ast.HWl	Head of Whale
+ast.HeG	Heavenly G
+ast.Hr7	Harrington 7
+ast.JbC	Job's Coffin
+ast.KSt	Keystone
+ast.Kit	Kite
+ast.LDr	Little Dipper
+ast.MCs	Mini-Cassiopeia
+ast.Mlk	Milk Dipper
+ast.NCr	Northern Cross
+ast.NFy	The Northern Fly
+ast.OBf	The Butterfly of Orion
+ast.OSh	Orion's Shield
+ast.OrB	Orion's Belt
+ast.OrC	Orion's Cudgel
+ast.OrS	Orion's Sword
+ast.Ptr	The Pointers
+ast.SSR	Seven Stars Row
+ast.STr	Summer Triangle
+ast.Sal	Sail
+ast.Sic	Sickle
+ast.SoP	Segment of Perseus
+ast.SpT	Spring Triangle
+ast.SuO	Sudor Ophiuchi
+ast.TA10	Red-Necked Emu
+ast.TA7	Mini-Dipper
+ast.TAK	The Arc of the King
+ast.TPT	The Three Patriarchs
+ast.Tea	Teapot
+ast.Ter	Terebellum
+ast.TrB	The Trapezoid
+ast.TrM	Triangulum Minus
+ast.TrP	Ptolemy's Triangle
+ast.Urn	The Y in Aquarius (The Urn or Water Jar)
+ast.VMr	Venus' Mirror
+ast.VTa	V of Taurus
+ast.WAs	W
+ast.WHx	Winter Hexagon (Winter Circle)
+ast.WTr	Winter Triangle
+con.And	Andromeda
+con.Ant	Antlia
+con.Aps	Apus
+con.Aql	Aquila
+con.Aqr	Aquarius
+con.Ara	Ara
+con.Ari	Aries
+con.Aur	Auriga
+con.Boo	Bootes
+con.CMa	Canis Major
+con.CMi	Canis Minor
+con.CVn	Canes Venatici
+con.Cae	Caelum
+con.Cam	Camelopardalis
+con.Cap	Capricornus
+con.Car	Carina
+con.Cas	Cassiopeia
+con.Cen	Centaurus
+con.Cep	Cepheus
+con.Cet	Cetus
+con.Cha	Chamaeleon
+con.Cir	Circinus
+con.Cnc	Cancer
+con.Col	Columba
+con.Com	Coma Berenices
+con.CrA	Corona Australis
+con.CrB	Corona Borealis
+con.Crt	Crater
+con.Cru	Crux
+con.Crv	Corvus
+con.Cyg	Cygnus
+con.Del	Delphinus
+con.Dor	Dorado
+con.Dra	Draco
+con.Equ	Equuleus
+con.Eri	Eridanus
+con.For	Fornax
+con.Gem	Gemini
+con.Gru	Grus
+con.Her	Hercules
+con.Hor	Horologium
+con.Hya	Hydra
+con.Hyi	Hydrus
+con.Ind	Indus
+con.LMi	Leo Minor
+con.Lac	Lacerta
+con.Leo	Leo
+con.Lep	Lepus
+con.Lib	Libra
+con.Lup	Lupus
+con.Lyn	Lynx
+con.Lyr	Lyra
+con.Men	Mensa
+con.Mic	Microscopium
+con.Mon	Monoceros
+con.Mus	Musca
+con.Nor	Norma
+con.Oct	Octans
+con.Oph	Ophiuchus
+con.Ori	Orion
+con.Pav	Pavo
+con.Peg	Pegasus
+con.Per	Perseus
+con.Phe	Phoenix
+con.Pic	Pictor
+con.PsA	Piscis Austrinus
+con.Psc	Pisces
+con.Pup	Puppis
+con.Pyx	Pyxis
+con.Ret	Reticulum
+con.Scl	Sculptor
+con.Sco	Scorpius
+con.Sct	Scutum
+con.Ser	Serpens
+con.Sex	Sextans
+con.Sge	Sagitta
+con.Sgr	Sagittarius
+con.Tau	Taurus
+con.Tel	Telescopium
+con.TrA	Triangulum Australe
+con.Tri	Triangulum
+con.Tuc	Tucana
+con.UMa	Ursa Major
+con.UMi	Ursa Minor
+con.Vel	Vela
+con.Vir	Virgo
+con.Vol	Volans
+con.Vul	Vulpecula
+dso.M1	Crab Nebula
+dso.M10	Globular Cluster M10
+dso.M100	Mirror Galaxy
+dso.M101	Pinwheel Galaxy
+dso.M102	Spindle Galaxy
+dso.M103	Open Cluster M103
+dso.M104	Sombrero Galaxy
+dso.M105	Elliptical Galaxy M105
+dso.M106	Spiral Galaxy M106
+dso.M107	Crucifix Globular
+dso.M108	Surfboard Galaxy
+dso.M109	Vacuum Cleaner Galaxy
+dso.M11	Wild Duck Cluster
+dso.M110	Edward Young Star
+dso.M12	Gung-Ho Cluster
+dso.M13	Great Hercules Cluster
+dso.M14	Globular Cluster M14
+dso.M15	Great Pegasus Cluster
+dso.M16	Eagle Nebula
+dso.M17	Omega / Swan Nebula
+dso.M18	Black Swan Cluster
+dso.M19	Globular Cluster M19
+dso.M2	Globular Cluster M2
+dso.M20	Trifid Nebula
+dso.M21	Crosshairs Cluster
+dso.M22	Sagittarius Cluster
+dso.M23	Open Cluster M23
+dso.M24	Small Sagittarius Star Cloud
+dso.M25	Open Cluster M25
+dso.M26	Open Cluster M26
+dso.M27	Dumbbell Nebula
+dso.M28	Globular Cluster M28
+dso.M29	Cooling Tower
+dso.M3	Globular Cluster M3
+dso.M30	Jellyfish Cluster
+dso.M31	Andromeda Galaxy
+dso.M32	Le Gentil
+dso.M33	Triangulum Galaxy
+dso.M34	Spiral Cluster
+dso.M35	Shoe-Buckle Cluster
+dso.M36	Pinwheel Cluster
+dso.M37	Auriga Salt and Pepper
+dso.M38	Starfish Cluster
+dso.M39	Open Cluster M39
+dso.M4	Globular Cluster M4
+dso.M40	Winnecke 4
+dso.M41	Little Beehive Cluster
+dso.M42	Great Orion Nebula
+dso.M43	De Mairan's Nebula
+dso.M44	Beehive Cluster / Praesepe
+dso.M45	Pleiades / Seven Sisters
+dso.M46	Open Cluster M46
+dso.M47	Open Cluster M47
+dso.M48	Open Cluster M48
+dso.M49	Elliptical Galaxy M49
+dso.M5	Rose Cluster
+dso.M50	Heart-Shaped Cluster
+dso.M51	Whirlpool Galaxy
+dso.M52	Scorpion Cluster
+dso.M53	Globular Cluster M53
+dso.M54	Globular Cluster M54
+dso.M55	Specter Cluster
+dso.M56	Globular Cluster M56
+dso.M57	Ring Nebula
+dso.M58	Barred Spiral M58
+dso.M59	Elliptical Galaxy M59
+dso.M6	Butterfly Cluster
+dso.M60	Elliptical Galaxy M60
+dso.M61	Swelling Spiral Galaxy
+dso.M62	Flickering Globular
+dso.M63	Sunflower Galaxy
+dso.M64	Black Eye Galaxy
+dso.M65	Leo Triplet Galaxy M65
+dso.M66	Leo Triplet Galaxy M66
+dso.M67	King Cobra Cluster
+dso.M68	Globular Cluster M68
+dso.M69	Globular Cluster M69
+dso.M7	Ptolemy's Cluster
+dso.M70	Globular Cluster M70
+dso.M71	Angelfish Cluster
+dso.M72	Globular Cluster M72
+dso.M73	Y-Group Asterism
+dso.M74	Phantom Galaxy
+dso.M75	Globular Cluster M75
+dso.M76	Little Dumbbell Nebula
+dso.M77	Squid Galaxy / Cetus A
+dso.M78	Casper the Friendly Ghost
+dso.M79	Globular Cluster M79
+dso.M8	Lagoon Nebula
+dso.M80	Globular Cluster M80
+dso.M81	Bode's Galaxy
+dso.M82	Cigar Galaxy
+dso.M83	Southern Pinwheel Galaxy
+dso.M84	Elliptical Galaxy M84
+dso.M85	Lenticular Galaxy M85
+dso.M86	Elliptical Galaxy M86
+dso.M87	Virgo A / Smoking Gun
+dso.M88	Spiral Galaxy M88
+dso.M89	Elliptical Galaxy M89
+dso.M9	Globular Cluster M9
+dso.M90	Spiral Galaxy M90
+dso.M91	Barred Spiral M91
+dso.M92	Globular Cluster M92
+dso.M93	Butterfly / Starfish
+dso.M94	Cat's Eye / Croc's Eye
+dso.M95	Barred Spiral M95
+dso.M96	Spiral Galaxy M96
+dso.M97	Owl Nebula
+dso.M98	Spiral Galaxy M98
+dso.M99	Coma Pinwheel Galaxy
+met.1	Quadrantids
+met.10	Orionids
+met.11	Southern Taurids
+met.12	Northern Taurids
+met.13	Leonids
+met.14	Geminids
+met.15	Ursids
+met.16	Puppid-Velids
+met.17	Centaurids
+met.18	Gamma Normids
+met.19	Pi Puppids
+met.2	Lyrids
+met.20	Camelopardalids
+met.21	Daytime Arietids
+met.22	June Bootids
+met.23	Piscis Austrinids
+met.24	Kappa Cygnids
+met.25	Andromedids
+met.26	Phoenicids
+met.27	Monocerotids
+met.28	Sigma Hydrids
+met.3	Eta Aquariids
+met.4	Southern Delta Aquariids
+met.5	Alpha Capricornids
+met.6	Perseids
+met.7	Aurigids
+met.8	September Epsilon Perseids
+met.9	Draconids
+planet.Jupiter	Jupiter
+planet.Mars	Mars
+planet.Mercury	Mercury
+planet.Moon	Moon
+planet.Neptune	Neptune
+planet.Saturn	Saturn
+planet.Uranus	Uranus
+planet.Venus	Venus
+type.blue_giant	Blue Giant
+type.blue_supergiant	Blue Supergiant
+type.giant_star	Giant Star
+type.main_sequence	Main Sequence
+type.orange_red_star	Orange/Red Star
+type.red_dwarf	Red Dwarf
+type.red_giant	Red Giant
+type.red_supergiant	Red Supergiant
+type.star	Star
+type.subgiant	Subgiant
+type.supergiant	Supergiant
+term.meteor_shower	Meteor shower
+term.planet	Planet
+term.radiant	Radiant

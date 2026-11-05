@@ -1,0 +1,312 @@
+# Night sky names: <key> TAB <name>. Keys and format: domain/nightsky/SkyNames.kt
+ast.Arr	Strzała
+ast.BA1	Pies Davisa
+ast.BA2	Honores Friderici (Chwała Fryderyka)
+ast.BDr	Wielki Wóz
+ast.BPN	Byk Poniatowskiego
+ast.Bfl	Motyl
+ast.Bie	Mary
+ast.ChG	Świąteczna Gęś
+ast.Cir	Diadem
+ast.CoH	Wieszak
+ast.DCr	Diamentowy Krzyż
+ast.ECr	Krzyż Egipski
+ast.FCr	Fałszywy Krzyż
+ast.FHA	Haczyk na ryby
+ast.FMi	Latający Strzebel
+ast.GDi	Wielki Diament
+ast.GSP	Kwadrat Pegaza
+ast.GoP	Strażnicy Bieguna
+ast.Goa	Koźlęta
+ast.HCn	Głowa Centaura
+ast.HDr	Głowa Smoka
+ast.HHy	Głowa Hydry
+ast.HMG	Głowa Meduzy
+ast.HSr	Głowa Węża
+ast.HWl	Głowa Wieloryba
+ast.HeG	Niebiańskie G
+ast.Hr7	Harrington 7
+ast.JbC	Trumna Hioba
+ast.KSt	Zwornik
+ast.Kit	Latawiec
+ast.LDr	Mały Wóz
+ast.MCs	Mini-Kasjopeja
+ast.Mlk	Mleczny Wóz
+ast.NCr	Krzyż Północy
+ast.NFy	Północna Mucha
+ast.OBf	Motyl Oriona
+ast.OSh	Tarcza Oriona
+ast.OrB	Pas Oriona
+ast.OrC	Maczuga Oriona
+ast.OrS	Miecz Oriona
+ast.Ptr	Wskaźniki
+ast.SSR	Rząd Siedmiu Gwiazd
+ast.STr	Trójkąt Letni
+ast.Sal	Żagiel
+ast.Sic	Sierp
+ast.SoP	Łuk Perseusza
+ast.SpT	Trójkąt Wiosenny
+ast.SuO	Sudor Ophiuchi
+ast.TA10	Emu
+ast.TA7	Mini-Wóz
+ast.TAK	Łuk Króla
+ast.TPT	Trzej Patriarchowie
+ast.Tea	Czajniczek
+ast.Ter	Terebellum
+ast.TrB	Trapez
+ast.TrM	Mały Trójkąt
+ast.TrP	Trójkąt Ptolemeusza
+ast.Urn	Dzban Wodnika
+ast.VMr	Lusterko Wenus
+ast.VTa	V w Byku
+ast.WAs	W (Kasjopeja)
+ast.WHx	Sześciokąt Zimowy
+ast.WTr	Trójkąt Zimowy
+con.And	Andromeda
+con.Ant	Pompa
+con.Aps	Ptak Rajski
+con.Aql	Orzeł
+con.Aqr	Wodnik
+con.Ara	Ołtarz
+con.Ari	Baran
+con.Aur	Woźnica
+con.Boo	Wolarz
+con.CMa	Wielki Pies
+con.CMi	Mały Pies
+con.CVn	Psy Gończe
+con.Cae	Rylec
+con.Cam	Żyrafa
+con.Cap	Koziorożec
+con.Car	Kil
+con.Cas	Kasjopeja
+con.Cen	Centaur
+con.Cep	Cefeusz
+con.Cet	Wieloryb
+con.Cha	Kameleon
+con.Cir	Cyrkiel
+con.Cnc	Rak
+con.Col	Gołąb
+con.Com	Warkocz Bereniki
+con.CrA	Korona Południowa
+con.CrB	Korona Północna
+con.Crt	Puchar
+con.Cru	Krzyż Południa
+con.Crv	Kruk
+con.Cyg	Łabędź
+con.Del	Delfin
+con.Dor	Złota Ryba
+con.Dra	Smok
+con.Equ	Źrebię
+con.Eri	Erydan
+con.For	Piec
+con.Gem	Bliźnięta
+con.Gru	Żuraw
+con.Her	Herkules
+con.Hor	Zegar
+con.Hya	Hydra
+con.Hyi	Wąż Wodny
+con.Ind	Indianin
+con.LMi	Mały Lew
+con.Lac	Jaszczurka
+con.Leo	Lew
+con.Lep	Zając
+con.Lib	Waga
+con.Lup	Wilk
+con.Lyn	Ryś
+con.Lyr	Lutnia
+con.Men	Góra Stołowa
+con.Mic	Mikroskop
+con.Mon	Jednorożec
+con.Mus	Mucha
+con.Nor	Węgielnica
+con.Oct	Oktant
+con.Oph	Wężownik
+con.Ori	Orion
+con.Pav	Paw
+con.Peg	Pegaz
+con.Per	Perseusz
+con.Phe	Feniks
+con.Pic	Malarz
+con.PsA	Ryba Południowa
+con.Psc	Ryby
+con.Pup	Rufa
+con.Pyx	Kompas
+con.Ret	Sieć
+con.Scl	Rzeźbiarz
+con.Sco	Skorpion
+con.Sct	Tarcza
+con.Ser	Wąż
+con.Sex	Sekstant
+con.Sge	Strzała
+con.Sgr	Strzelec
+con.Tau	Byk
+con.Tel	Luneta
+con.TrA	Trójkąt Południowy
+con.Tri	Trójkąt
+con.Tuc	Tukan
+con.UMa	Wielka Niedźwiedzica
+con.UMi	Mała Niedźwiedzica
+con.Vel	Żagiel
+con.Vir	Panna
+con.Vol	Ryba Latająca
+con.Vul	Lisek
+dso.M1	Mgławica Krab
+dso.M10	Gromada kulista M10
+dso.M100	Galaktyka Lustro M100
+dso.M101	Galaktyka Wiatraczek
+dso.M102	Galaktyka Wrzeciono
+dso.M103	Gromada otwarta M103
+dso.M104	Galaktyka Sombrero
+dso.M105	Galaktyka eliptyczna M105
+dso.M106	Galaktyka spiralna M106
+dso.M107	Gromada kulista M107
+dso.M108	Galaktyka Deska surfingowa
+dso.M109	Galaktyka spiralna M109
+dso.M11	Gromada Dzika Kaczka
+dso.M110	Galaktyka satelitarna M110
+dso.M12	Gromada kulista M12
+dso.M13	Wielka Gromada w Herkulesie
+dso.M14	Gromada kulista M14
+dso.M15	Gromada kulista w Pegazie
+dso.M16	Mgławica Orzeł
+dso.M17	Mgławica Omega / Łabędź
+dso.M18	Gromada otwarta M18
+dso.M19	Gromada kulista M19
+dso.M2	Gromada kulista M2
+dso.M20	Mgławica Trójdzielna
+dso.M21	Gromada otwarta M21
+dso.M22	Wielka Gromada w Strzelcu
+dso.M23	Gromada otwarta M23
+dso.M24	Obłok gwiazd w Strzelcu
+dso.M25	Gromada otwarta M25
+dso.M26	Gromada otwarta M26
+dso.M27	Mgławica Hantle
+dso.M28	Gromada kulista M28
+dso.M29	Gromada otwarta M29
+dso.M3	Gromada kulista M3
+dso.M30	Gromada kulista M30
+dso.M31	Galaktyka Andromedy
+dso.M32	Galaktyka satelitarna M32
+dso.M33	Galaktyka Trójkąta
+dso.M34	Gromada otwarta M34
+dso.M35	Gromada w Bliźniętach
+dso.M36	Gromada otwarta M36
+dso.M37	Gromada otwarta M37
+dso.M38	Gromada Rozgwiazda
+dso.M39	Gromada otwarta M39
+dso.M4	Gromada kulista M4
+dso.M40	Gwiazda podwójna Winnecke 4
+dso.M41	Mały Żłóbek
+dso.M42	Wielka Mgławica Oriona
+dso.M43	Mgławica De Mairana
+dso.M44	Żłóbek / Praesepe
+dso.M45	Plejady / Siedem Sióstr
+dso.M46	Gromada otwarta M46
+dso.M47	Gromada otwarta M47
+dso.M48	Gromada otwarta M48
+dso.M49	Galaktyka eliptyczna M49
+dso.M5	Gromada kulista M5
+dso.M50	Gromada Serce
+dso.M51	Galaktyka Wir
+dso.M52	Gromada otwarta M52
+dso.M53	Gromada kulista M53
+dso.M54	Gromada kulista M54
+dso.M55	Gromada kulista M55
+dso.M56	Gromada kulista M56
+dso.M57	Mgławica Pierścień
+dso.M58	Galaktyka spiralna M58
+dso.M59	Galaktyka eliptyczna M59
+dso.M6	Gromada Motyl
+dso.M60	Galaktyka eliptyczna M60
+dso.M61	Galaktyka spiralna M61
+dso.M62	Gromada kulista M62
+dso.M63	Galaktyka Słonecznik
+dso.M64	Galaktyka Czarne Oko
+dso.M65	Galaktyka z Tryplety Lwa M65
+dso.M66	Galaktyka z Tryplety Lwa M66
+dso.M67	Gromada otwarta M67
+dso.M68	Gromada kulista M68
+dso.M69	Gromada kulista M69
+dso.M7	Gromada Ptolemeusza
+dso.M70	Gromada kulista M70
+dso.M71	Gromada kulista M71
+dso.M72	Gromada kulista M72
+dso.M73	Asteryzm M73
+dso.M74	Galaktyka Widmo
+dso.M75	Gromada kulista M75
+dso.M76	Mała Mgławica Hantle
+dso.M77	Galaktyka Kałamarnica
+dso.M78	Mgławica refleksyjna M78
+dso.M79	Gromada kulista M79
+dso.M8	Mgławica Laguna
+dso.M80	Gromada kulista M80
+dso.M81	Galaktyka Bodego
+dso.M82	Galaktyka Cygaro
+dso.M83	Południowy Wiatraczek
+dso.M84	Galaktyka eliptyczna M84
+dso.M85	Galaktyka soczewkowata M85
+dso.M86	Galaktyka eliptyczna M86
+dso.M87	Galaktyka Virgo A
+dso.M88	Galaktyka spiralna M88
+dso.M89	Galaktyka eliptyczna M89
+dso.M9	Gromada kulista M9
+dso.M90	Galaktyka spiralna M90
+dso.M91	Galaktyka spiralna M91
+dso.M92	Gromada kulista M92
+dso.M93	Gromada otwarta M93
+dso.M94	Galaktyka spiralna M94
+dso.M95	Galaktyka spiralna M95
+dso.M96	Galaktyka spiralna M96
+dso.M97	Mgławica Sowa
+dso.M98	Galaktyka spiralna M98
+dso.M99	Galaktyka spiralna M99
+met.1	Kwadrantydy
+met.10	Orionidy
+met.11	Południowe Taurydy
+met.12	Północne Taurydy
+met.13	Leonidy
+met.14	Geminidy
+met.15	Ursydy
+met.16	Puppidy-Velidy
+met.17	Centauridy
+met.18	Gamma Normidy
+met.19	Pi Puppidy
+met.2	Lirydy
+met.20	Kamelopardalidy
+met.21	Dzienne Arietydy
+met.22	Czerwcowe Bootydy
+met.23	Piscis Austrinidy
+met.24	Kappa Cygnidy
+met.25	Andromedydy
+met.26	Fenicydy
+met.27	Monocerotydy
+met.28	Sigma Hydrydy
+met.3	Eta Akwarydy
+met.4	Południowe Delta Akwarydy
+met.5	Alfa Kaprykornidy
+met.6	Perseidy
+met.7	Aurygidy
+met.8	Wrześniowe Epsilon Perseidy
+met.9	Drakonidy
+planet.Jupiter	Jowisz
+planet.Mars	Mars
+planet.Mercury	Merkury
+planet.Moon	Księżyc
+planet.Neptune	Neptun
+planet.Saturn	Saturn
+planet.Uranus	Uran
+planet.Venus	Wenus
+type.blue_giant	Niebieski olbrzym
+type.blue_supergiant	Niebieski nadolbrzym
+type.giant_star	Olbrzym
+type.main_sequence	Ciąg główny
+type.orange_red_star	Pomarańczowa/czerwona gwiazda
+type.red_dwarf	Czerwony karzeł
+type.red_giant	Czerwony olbrzym
+type.red_supergiant	Czerwony nadolbrzym
+type.star	Gwiazda
+type.subgiant	Podolbrzym
+type.supergiant	Nadolbrzym
+term.meteor_shower	Rój meteorów
+term.planet	Planeta
+term.radiant	Radiant

@@ -83,7 +83,7 @@ class CelestialSearchIndexTest {
             NightSkyCatalogLoader.loadFromStream(stream)
         }
 
-        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog)
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, names = skyNames("cs"))
         assertTrue("Search index should have at least 500 items, got ${searchIndex.size}", searchIndex.size >= 500)
 
         // Check for Sirius
@@ -124,7 +124,7 @@ class CelestialSearchIndexTest {
         val planets = PlanetaryEphemerisCalculator.computeAll(testInstant)
         assertEquals(8, planets.size)
 
-        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, planets)
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, planets, skyNames("cs"))
 
         // Verify Moon / Měsíc
         val moonResultsCs = CelestialSearchIndex.filter(searchIndex, "měsíc")
@@ -217,7 +217,7 @@ class CelestialSearchIndexTest {
             NightSkyCatalogLoader.loadFromStream(stream)
         }
 
-        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog)
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, names = skyNames("cs"))
         val dsoItems = searchIndex.filter { it.type == CelestialType.DSO }
         assertEquals("Must have 110 indexed DSOs", 110, dsoItems.size)
 
@@ -260,7 +260,7 @@ class CelestialSearchIndexTest {
             NightSkyCatalogLoader.loadFromStream(stream)
         }
 
-        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog)
+        val searchIndex = CelestialSearchIndex.buildSearchIndex(catalog, names = skyNames("cs"))
         val meteorItems = searchIndex.filter { it.type == CelestialType.METEOR_SHOWER }
         assertEquals("Must have 28 indexed Meteor Showers", 28, meteorItems.size)
 
@@ -279,5 +279,30 @@ class CelestialSearchIndexTest {
         // 4. Search "Quadrantidy" (English variant matches Kvadrantidy)
         val quadrantidsMatches = CelestialSearchIndex.filter(searchIndex, "quadrantid")
         assertTrue("Must find Quadrantids", quadrantidsMatches.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName.contains("Kvadrantid") })
+    }
+
+    @Test
+    fun `a language other than Czech shows its own names and still finds the English ones`() {
+        val binFile = File("src/main/res/raw/catalog.bin")
+        val targetFile = if (binFile.exists()) binFile else File("app/src/main/res/raw/catalog.bin")
+        val catalog = FileInputStream(targetFile).use { NightSkyCatalogLoader.loadFromStream(it) }
+        val planets = PlanetaryEphemerisCalculator.computeAll(java.time.Instant.parse("2026-08-25T20:00:00Z"))
+
+        val german = CelestialSearchIndex.buildSearchIndex(catalog, planets, skyNames("de"))
+        assertTrue(german.any { it.type == CelestialType.CONSTELLATION && it.primaryName == "Großer Bär" && it.secondaryName == "Ursa Major" })
+        assertTrue(german.any { it.type == CelestialType.PLANET && it.primaryName == "Mond" })
+        assertTrue(german.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName == "Perseiden" })
+        assertTrue(german.any { it.type == CelestialType.DSO && it.primaryName == "M31 (Andromedagalaxie)" })
+        // No Czech leaks into another language any more.
+        assertTrue(german.none { it.primaryName == "Velká medvědice" || it.primaryName == "Perseidy" || it.primaryName == "Měsíc" })
+        assertTrue(CelestialSearchIndex.filter(german, "andromeda galaxy").any { it.type == CelestialType.DSO && it.searchableText.contains("m31") })
+        assertTrue(CelestialSearchIndex.filter(german, "moon").any { it.planetId == "Moon" })
+
+        // Without names (the default file has the English ones anyway) the catalog's English is shown.
+        val english = CelestialSearchIndex.buildSearchIndex(catalog, planets)
+        assertTrue(english.any { it.type == CelestialType.METEOR_SHOWER && it.primaryName == "Perseids" })
+        assertTrue(english.any { it.type == CelestialType.CONSTELLATION && it.primaryName == "Ursa Major" })
+        // A star's secondary line names its constellation in the user's language, not the IAU code.
+        assertTrue(german.any { it.type == CelestialType.STAR && it.primaryName == "Sirius" && it.secondaryName == "Großer Hund" })
     }
 }
