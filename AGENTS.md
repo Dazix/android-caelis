@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection (361 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (697 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (381 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (703 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials (387 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1225 JVM tests (361 intervalometer, 697 solar, horizon & pose, 381 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 47
+`skipped`), not from the console. Current baseline: **1231 JVM tests (361 intervalometer, 703 solar, horizon & pose, 387 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 50
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -426,9 +426,16 @@ Each of these was found by review or on the device and is now covered by a test.
   read); the peak tiles in `cacheDir/landmarks/` are cache, like the elevation tiles. An offline region
   prefetches its peak tiles into that cache and names no profile, so names for a region are best effort:
   Android may reclaim the tiles, and the profile is then named from the network when the user is there.
-- **Peak labels are one atlas sprite each and cost nothing per frame.** `LandmarkMarks` bakes "Name · 1603 m"
-  and its tick into a `SpriteAtlas` sprite only when the list, the language, the colour (night vision tints
-  it in Night Sky), the density or the font scale change, and a frame only lists them. They yield to what
+- **Peak labels are atlas sprites and cost nothing per frame.** `LandmarkMarks` bakes each "Name · 1603 m"
+  and one shared tick into a `SpriteAtlas` only when the list, the language, the colour (night vision tints
+  it in Night Sky), the density or the font scale change, and a frame only lists them. Both stand on the
+  local vertical, not on the screen's up (`label.mat`'s align path, `LabelBatch.add(alignToHorizon)`): the
+  tick rises from the summit perpendicular to the horizon and the name starts at its top, 60° counter-clockwise
+  from the horizon, so a roll of the phone turns the label with the ridge; held screen-upright, it swung
+  against the skyline. The text is drawn level and turned on the GPU, never baked at an angle (several times
+  the atlas area per name). The clearance lays the turned box out with `TiltedLabel`, the shader's CPU twin,
+  from the same projector; peak names are compared with each other as parallel boxes, not by their
+  axis-aligned bounds, which would drop every other name. They yield to what
   has priority (`MarkClearance`): Sun AR reserves its badges and the bubbles it drew first. A badge's pill
   lies on its own arc, on the stretch below the horizon (before the dot at a rise, after it at a set,
   `BadgeOnArc`): that stretch is the faint one and nothing else needs it, and a pill searching for a free

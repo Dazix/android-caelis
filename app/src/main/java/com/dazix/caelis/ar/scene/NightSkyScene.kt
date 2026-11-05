@@ -84,7 +84,7 @@ class NightSkyScene(
 
     // Peak names are Earth-fixed like the grid's labels (no celestial transform): pinned to the
     // terrain skyline by azimuth and altitude.
-    val landmarkLabels = LabelBatch(surface, labelMaterial, markAtlas, LandmarkMarks.MAX_LANDMARKS, SkyPriority.GRID, 2)
+    val landmarkLabels = LabelBatch(surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, SkyPriority.GRID, 2)
 
     private var milkyWayTexture: Texture? = null
     private var landscapeTexture: Texture? = null
@@ -620,7 +620,7 @@ class NightSkyScene(
         const val MILKY_WAY_OPACITY = 0.8f
 
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
-        const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.MAX_LANDMARKS
+        const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.ATLAS_SPRITES
         const val HIGHLIGHT_SPRITES = 4
         private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
         /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
