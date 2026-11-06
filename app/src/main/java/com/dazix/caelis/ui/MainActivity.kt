@@ -45,11 +45,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dazix.caelis.R
 import com.dazix.caelis.data.AdvancedSettings
 import com.dazix.caelis.domain.SessionSnapshot
+import com.dazix.caelis.domain.SessionState
 import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.overlay.CalibrationOverlay
 import com.dazix.caelis.service.CameraProfile
 import com.dazix.caelis.service.CameraProfiles
 import com.dazix.caelis.ui.location.IncomingPlaceSheet
+import com.dazix.caelis.ui.playstore.PlayStorePrompts
+import com.dazix.caelis.ui.playstore.openPlayStoreListing
 
 /**
  * The whole UI: one activity, one view model, plain state hoisting instead of a navigation library.
@@ -261,6 +264,21 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
                 )
             }
 
+            // Play's update and review sheets. The "Restart" bar for a downloaded update stays off the
+            // AR screens, where the bottom of the screen belongs to the sky's own controls.
+            PlayStorePrompts(
+                viewModel = viewModel,
+                onHomeScreen = screen == Screen.HOME,
+                sessionActive = snapshot.state is SessionState.Running ||
+                    snapshot.state is SessionState.Paused ||
+                    snapshot.state is SessionState.WaitingToStart,
+                showRestartBar = screen == Screen.HOME || screen == Screen.SETTINGS,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp)
+                    .navigationBarsPadding(),
+            )
+
             AppToastHost(
                 hostState = toastHostState,
                 modifier = Modifier
@@ -468,6 +486,11 @@ private fun CaelisScreen(
             onNavigateToOfflineTerrain = { viewModel.navigate(Screen.OFFLINE_TERRAIN) },
             focusTerrainDownload = focusTerrainDownload,
             onTerrainDownloadFocused = viewModel::terrainDownloadFocused,
+            onRateApp = {
+                if (!openPlayStoreListing(context)) {
+                    Toast.makeText(context, R.string.common_unsupported, Toast.LENGTH_LONG).show()
+                }
+            },
             onBack = viewModel::back,
         )
 

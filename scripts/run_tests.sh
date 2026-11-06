@@ -35,6 +35,8 @@ case "$TARGET" in
             --tests "com.dazix.caelis.domain.IntervalScheduleTest" \
             --tests "com.dazix.caelis.domain.SessionPlannerTest" \
             --tests "com.dazix.caelis.domain.stability.*" \
+            --tests "com.dazix.caelis.domain.playstore.*" \
+            --tests "com.dazix.caelis.ui.playstore.*" \
             --tests "com.dazix.caelis.data.SettingsMappingTest" \
             --tests "com.dazix.caelis.res.*" \
             --tests "com.dazix.caelis.NetworkIsolationTest" \

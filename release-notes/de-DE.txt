@@ -5,3 +5,4 @@ Die App spricht jetzt Slowakisch, Polnisch und Deutsch
 Warnung, wenn ein Zeitraffer aus der Hand statt vom Stativ aufgenommen wird
 Läuft auch unter Android 11 und 12
 Nachthimmel: Sternbildnamen überlappen sich nicht mehr, Gipfelnamen stören die Zeichnungen nicht
+Neue Versionen bietet die App selbst an

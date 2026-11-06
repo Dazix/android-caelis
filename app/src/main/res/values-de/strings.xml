@@ -708,4 +708,10 @@
     <string name="incoming_place_prefetch">Gelände offline laden</string>
     <string name="incoming_place_prefetch_hint">Öffnet Offline-Gelände mit diesem Ort; den Radius wählen Sie dort.</string>
     <string name="incoming_place_saved">Ort %1$s gespeichert</string>
+    <string name="update_downloaded">Update heruntergeladen</string>
+    <string name="update_restart">Neu starten</string>
+    <string name="update_not_now">Nicht jetzt</string>
+    <string name="settings_rate_title">CAELIS bewerten</string>
+    <string name="settings_rate_body">Gefällt Ihnen die App? Eine Bewertung oder Rezension bei Google Play hilft anderen, sie zu finden.</string>
+    <string name="settings_rate_action">Bei Google Play bewerten</string>
 </resources>

@@ -141,6 +141,7 @@ fun SettingsScreen(
     /** Arrived from an AR screen's "data missing" chip: scroll to the download, then report it done. */
     focusTerrainDownload: Boolean = false,
     onTerrainDownloadFocused: () -> Unit = {},
+    onRateApp: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -638,6 +639,31 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.settings_storage_clear_profiles_button))
+            }
+        }
+
+        // ---- Rating ----
+        // The store listing, not the in-app review sheet: Play rations that sheet and may show
+        // nothing at all, which from a button reads as a broken button.
+        SectionCard(title = stringResource(R.string.settings_rate_title)) {
+            Text(
+                text = stringResource(R.string.settings_rate_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onRateApp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 4.dp),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Star,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.settings_rate_action))
             }
         }
 

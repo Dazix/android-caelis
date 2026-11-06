@@ -71,7 +71,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (373 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity, Play update & review prompts (394 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (729 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (421 tests)
 
@@ -89,11 +89,11 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1293 JVM tests (373 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1314 JVM tests (394 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
-to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `domain.location.*` and `data.location.*` are in both `solar` and `nightsky`; `domain.stability.*` is in `caelis`; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
+to one. `domain.horizon.*`, `data.horizon.*`, `ar.*` (so `ar.pose.*` and `ar.scene.*` too) and `domain.arframe.*` are in `solar`; `ar.scene.*` and `domain.arframe.*` are in `nightsky` as well; `domain.location.*` and `data.location.*` are in both `solar` and `nightsky`; `domain.stability.*`, `domain.playstore.*` and `ui.playstore.*` are in `caelis`; `NetworkIsolationTest`, `WorkflowHardeningTest`, `ExportedComponentsTest`, `LogPrivacyTest`, `ReleaseBuildTest` and `SettingsMappingTest` (the ARCore consent keys) are in `caelis`. `docs.*` is in none of them and only runs under `all`. `ar.pose.ArCoreSessionControllerTest` is where consent-off-means-zero-calls is proven on the JVM.
 
 `scripts/README.md` documents the whole harness: the snapshot keys, why the accessibility list has to be
 *cycled* rather than written, why the instrumented tests re-enable the service themselves, the debug
@@ -106,6 +106,7 @@ a session from the shell.
 | --- | --- |
 | `domain/` | Pure Kotlin, no Android imports. Everything here is unit-tested; keep it that way. |
 | `domain/stability/` | Pure Kotlin "phone in hand, not on a tripod" check: `HandheldDetector` (gyroscope over a 3 s window) and `HandheldPolicy` (when it runs and when Start asks first). |
+| `domain/playstore/` | Pure Kotlin decisions behind the Play Store's own sheets: `InAppUpdatePolicy` (a newer version offered once, never during a session; the restart into a downloaded update waits for the session too) and `ReviewPromptPolicy` (the review sheet after three days of use and five installed, at most every 120 days, home screen only). |
 | `domain/solar/` | Pure Kotlin astronomical & ephemeris calculations (PSA solar positioning, sunrise/sunset, golden hour, twilight, day trajectories, lunar position & ephemeris, terrain rise/set). |
 | `domain/horizon/` | Pure Kotlin terrain horizon: `.hgt` grid decoder, the peak model and `.peaks` tile codec (`HorizonLandmark`, `LandmarkTileCodec`) and which peaks stand on the skyline (`LandmarkVisibility`), ray-marched skyline with Earth curvature and refraction, the 1440-sample `HorizonProfile`, the automatic search-radius estimate (`HorizonRangeEstimator`), and the sky/terrain boundary finder and fitter behind automatic alignment (`SkylineExtractor`, `SkylineMatcher`). No Android imports, no network. |
 | `domain/arframe/` | Pure Kotlin geometry and decisions behind the Filament sky and the pose hand-over, no Android imports and no ARCore types: frames and projection (`SkyFrameMath`, `SkyProjector`, `SkyQuadMath`, `AltAzGridBuilder`, `HorizonMeshBuilder`, `HorizonMorph`), the camera picture's crop (`CameraBackgroundUv`), the instant the overlay is drawn at (`PoseTimestampPolicy`), heading (`HeadingLock`, `YawOffset`), and ARCore's side: `ArWorldAlignment`, `ArYawEstimator` + `HeadingFusion`, `RealignTrigger`, `ArCoreFov`, `LumaRotation`, `PoseArbiter` (which tracker draws) and `CameraOwnerPolicy` (which client owns the camera). Tested by both the `solar` and the `nightsky` suite. |
@@ -123,7 +124,7 @@ a session from the shell.
 | `notify/` | The ongoing session notification (`SessionNotifications`, re-arms its own tick, must never post while unattached) and the terrain download progress notification (`TerrainNotifications`, its own channel and id). |
 | `verify/` | The optional MediaStore check. It owns the question of *whose* row counts. |
 | `monitor/` | Battery percentage and available storage monitoring (`BatteryMonitor`, `StorageMonitor`), and the gyroscope behind the "phone in hand" warning (`MotionMonitor`, behind the `MotionSource` seam). |
-| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`); Settings holds the ARCore and Geospatial switches and their disclosure dialogs. `rememberSkyPoseRig` (`SkyPoseRigState.kt`) wires a `SkyPoseRig` to an AR screen's lifecycle and to the consent flow, and `PoseSourceChip` says which tracker is drawing (shown only once the user has consented to ARCore). |
+| `ui/` | One activity (`MainActivity`), Compose screens (Home, Setup, Ramp, Advanced, Permissions, Settings), Material 3 Expressive theme (`CaelisTheme`); Settings holds the ARCore and Geospatial switches and their disclosure dialogs. `ui/playstore/PlayStorePrompts` asks Play for the update and review sheets on every resume, draws the "Restart" bar for a downloaded update, and opens the store listing for Settings' "Rate" button. `rememberSkyPoseRig` (`SkyPoseRigState.kt`) wires a `SkyPoseRig` to an AR screen's lifecycle and to the consent flow, and `PoseSourceChip` says which tracker is drawing (shown only once the user has consented to ARCore). |
 | `ui/solar/` | Sun AR Compose screen (`SunArScreen`) and ViewModel (`SunArViewModel`). |
 | `ui/horizon/` | Offline terrain management screen (`OfflineTerrainScreen`) and the terrain metrics debug HUD (`TerrainDebugOverlay`). The standalone Terrain AR screen is gone: the terrain skyline is drawn by Sun AR and Night Sky. |
 | `ui/nightsky/` | Night Sky AR screen (`NightSkyArScreen`), ViewModel (`NightSkyArViewModel`), the GPU sky composable (`NightSkyGpuSky`), the CPU overlay and tap hit test over it (`NightSkyRenderer`), search bar, Virtual Clock, DSO legend, detail bottom sheets with local date override. |
@@ -620,6 +621,15 @@ Each of these was found by review or on the device and is now covered by a test.
   `POST_NOTIFICATIONS` is prompted once on first launch and remembered in DataStore
   (`notification_permission_prompted`). The app never nags the user again on subsequent opens
   regardless of whether they accepted or declined.
+- **Play's update and review sheets are rationed here, and never come up during a session.** A newer
+  version is offered once (`update_offered_version`), as a FLEXIBLE update: installing it restarts the
+  process the accessibility service runs the session in, so the "Restart" bar waits for the session to
+  end and is never on an AR screen. The review sheet cannot be opened on demand (Play rations it and
+  never says whether it showed), so it is asked for by `ReviewPromptPolicy` alone and Settings' "Rate"
+  button opens the store listing instead. A failed read of the history, no Play Store or a build not
+  installed from Play all mean "show nothing". Both libraries are IPC to the Play Store app and add no
+  permission; the merged manifest gains `<queries>` for `com.android.vending` from them. Testing needs a
+  Play-installed build (internal track or Internal App Sharing): a debug install never sees an update.
 - **Below Android 13 the newer permission names do not exist, and checking one answers "denied"
   forever.** `minSdk` is 30. Photos are `Permissions.photos()` (`READ_EXTERNAL_STORAGE`, capped at
   `maxSdkVersion="32"`, below 13), notifications below 13 are `areNotificationsEnabled()` and their

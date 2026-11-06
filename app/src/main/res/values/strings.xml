@@ -708,4 +708,10 @@
     <string name="incoming_place_prefetch">Download terrain for offline</string>
     <string name="incoming_place_prefetch_hint">Opens Offline terrain with this place filled in; choose the radius there.</string>
     <string name="incoming_place_saved">Place %1$s saved</string>
+    <string name="update_downloaded">Update downloaded</string>
+    <string name="update_restart">Restart</string>
+    <string name="update_not_now">Not now</string>
+    <string name="settings_rate_title">Rate CAELIS</string>
+    <string name="settings_rate_body">Enjoying the app? A rating or a review on Google Play helps others find it.</string>
+    <string name="settings_rate_action">Rate on Google Play</string>
 </resources>

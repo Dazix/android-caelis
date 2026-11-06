@@ -168,6 +168,10 @@ dependencies {
     implementation(libs.filament.android)
     // Consent-gated at runtime (ArCoreSessionController); `optional` in the manifest.
     implementation(libs.arcore)
+    // The Play Store's own update and review sheets (ui/update). Both are IPC to the Play Store app;
+    // a build installed from anywhere else simply never sees an update or a review prompt.
+    implementation(libs.play.app.update)
+    implementation(libs.play.review)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

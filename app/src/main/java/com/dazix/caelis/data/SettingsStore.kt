@@ -23,6 +23,7 @@ import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.SearchHistoryCodec
 import com.dazix.caelis.domain.nightsky.SearchResultItem
+import com.dazix.caelis.domain.playstore.ReviewHistory
 import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -316,6 +317,21 @@ class SettingsStore(context: Context) {
 
     suspend fun currentNotificationPermissionPrompted(): Boolean =
         SettingsMapping.readNotificationPermissionPrompted(currentPreferences())
+
+    /** The last version Play's update sheet was put up for; null before the first offer. */
+    suspend fun currentUpdateOfferedVersion(): Int? =
+        SettingsMapping.readUpdateOfferedVersion(currentPreferences())
+
+    suspend fun saveUpdateOfferedVersion(versionCode: Int) {
+        dataStore.edit { SettingsMapping.writeUpdateOfferedVersion(it, versionCode) }
+    }
+
+    suspend fun currentReviewHistory(): ReviewHistory =
+        SettingsMapping.readReviewHistory(currentPreferences())
+
+    suspend fun saveReviewHistory(history: ReviewHistory) {
+        dataStore.edit { SettingsMapping.writeReviewHistory(it, history) }
+    }
 
     suspend fun saveConfig(config: SessionConfig) {
         dataStore.edit { SettingsMapping.writeConfig(it, config) }
@@ -967,6 +983,29 @@ internal object SettingsMapping {
 
     fun writeNotificationPermissionPrompted(prefs: MutablePreferences, prompted: Boolean) {
         prefs[NOTIFICATION_PERMISSION_PROMPTED] = prompted
+    }
+
+    private val UPDATE_OFFERED_VERSION = intPreferencesKey("update_offered_version")
+    private val REVIEW_ENGAGED_DAYS = intPreferencesKey("review_engaged_days")
+    private val REVIEW_LAST_OPEN_DAY = longPreferencesKey("review_last_open_day")
+    private val REVIEW_LAST_REQUESTED_DAY = longPreferencesKey("review_last_requested_day")
+
+    fun readUpdateOfferedVersion(prefs: Preferences): Int? = prefs[UPDATE_OFFERED_VERSION]
+
+    fun writeUpdateOfferedVersion(prefs: MutablePreferences, versionCode: Int) {
+        prefs[UPDATE_OFFERED_VERSION] = versionCode
+    }
+
+    fun readReviewHistory(prefs: Preferences): ReviewHistory = ReviewHistory(
+        engagedDays = prefs[REVIEW_ENGAGED_DAYS] ?: 0,
+        lastOpenEpochDay = prefs[REVIEW_LAST_OPEN_DAY],
+        lastRequestedEpochDay = prefs[REVIEW_LAST_REQUESTED_DAY],
+    )
+
+    fun writeReviewHistory(prefs: MutablePreferences, history: ReviewHistory) {
+        prefs[REVIEW_ENGAGED_DAYS] = history.engagedDays
+        prefs.put(REVIEW_LAST_OPEN_DAY, history.lastOpenEpochDay)
+        prefs.put(REVIEW_LAST_REQUESTED_DAY, history.lastRequestedEpochDay)
     }
 
     private fun <T : Any> MutablePreferences.put(key: Preferences.Key<T>, value: T?) {

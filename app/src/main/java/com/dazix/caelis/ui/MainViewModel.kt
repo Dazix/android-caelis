@@ -63,6 +63,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.dazix.caelis.domain.solar.GeoLocation
+import com.dazix.caelis.domain.playstore.PlayPromptState
+import com.dazix.caelis.domain.playstore.ReviewPromptPolicy
 import kotlin.math.roundToLong
 
 /** The app is a single activity; this is the whole navigation model. */
@@ -366,6 +368,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markNotificationPermissionPrompted() {
         viewModelScope.launch { settings.saveNotificationPermissionPrompted(true) }
+    }
+
+    /**
+     * Counts [today] as a day of use and returns what the Play update and review sheets remember.
+     * A failed read is null, and null asks nothing: offering an update again or a review too early
+     * because the history could not be read is the nagging the history exists to prevent.
+     */
+    suspend fun recordOpenForPlayPrompts(today: Long): PlayPromptState? = runCatching {
+        val stored = settings.currentReviewHistory()
+        val review = ReviewPromptPolicy.recordOpen(stored, today)
+        if (review != stored) settings.saveReviewHistory(review)
+        PlayPromptState(settings.currentUpdateOfferedVersion(), review)
+    }.getOrNull()
+
+    fun markUpdateOffered(versionCode: Int) {
+        viewModelScope.launch { runCatching { settings.saveUpdateOfferedVersion(versionCode) } }
+    }
+
+    fun markReviewRequested(today: Long) {
+        viewModelScope.launch {
+            runCatching {
+                settings.saveReviewHistory(ReviewPromptPolicy.recordRequest(settings.currentReviewHistory(), today))
+            }
+        }
     }
 
     fun setNightVisionTheme(theme: NightVisionTheme) {

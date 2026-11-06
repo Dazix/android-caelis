@@ -40,6 +40,24 @@ class SettingsMappingTest {
     private val landscape = TapTarget(xFraction = 0.88f, yFraction = 0.5f, jitter = true)
 
     @Test
+    fun `the Play prompts' history survives a round trip and starts empty`() {
+        val prefs = mutablePreferencesOf()
+        assertEquals(null, SettingsMapping.readUpdateOfferedVersion(prefs))
+        assertEquals(com.dazix.caelis.domain.playstore.ReviewHistory(), SettingsMapping.readReviewHistory(prefs))
+
+        val history = com.dazix.caelis.domain.playstore.ReviewHistory(
+            engagedDays = 4,
+            lastOpenEpochDay = 20_400L,
+            lastRequestedEpochDay = 20_390L,
+        )
+        SettingsMapping.writeUpdateOfferedVersion(prefs, 57)
+        SettingsMapping.writeReviewHistory(prefs, history)
+
+        assertEquals(57, SettingsMapping.readUpdateOfferedVersion(prefs))
+        assertEquals(history, SettingsMapping.readReviewHistory(prefs))
+    }
+
+    @Test
     fun `the shared AR calibration survives a round trip`() {
         val prefs = mutablePreferencesOf()
 

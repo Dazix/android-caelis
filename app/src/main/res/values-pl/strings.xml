@@ -718,4 +718,10 @@
     <string name="incoming_place_prefetch">Pobierz teren offline</string>
     <string name="incoming_place_prefetch_hint">Otwiera Teren offline z wypełnionym miejscem; promień wybierzesz tam.</string>
     <string name="incoming_place_saved">Zapisano miejsce %1$s</string>
+    <string name="update_downloaded">Aktualizacja pobrana</string>
+    <string name="update_restart">Uruchom ponownie</string>
+    <string name="update_not_now">Nie teraz</string>
+    <string name="settings_rate_title">Oceń CAELIS</string>
+    <string name="settings_rate_body">Podoba się aplikacja? Ocena lub opinia w Google Play pomoże innym ją znaleźć.</string>
+    <string name="settings_rate_action">Oceń w Google Play</string>
 </resources>
