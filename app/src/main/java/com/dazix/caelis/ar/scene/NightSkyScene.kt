@@ -102,6 +102,9 @@ class NightSkyScene(
     private val artName = arrayOfNulls<String>(constellationCount)
     private val artCorners = FloatArray(constellationCount * 12)
     private val artQuads = arrayOfNulls<TexturedQuad>(constellationCount)
+
+    /** Each drawing's opacity in this frame, 0 where it is not shown. */
+    private val artOpacityShown = FloatArray(constellationCount)
     private val active = BooleanArray(constellationCount)
     private val starCel = starGeometry.celestial
 
@@ -551,6 +554,7 @@ class NightSkyScene(
     /** Artwork quads, created and textured only once a figure starts to appear (Canvas: p > 0). */
     private fun updateArtwork(frame: NightSkyFrame) {
         for (c in 0 until constellationCount) {
+            artOpacityShown[c] = 0f
             val name = artName[c] ?: continue
             val selected = c == frame.selectedConstellation
             val allowed = (frame.showConstellations && frame.showConstellationArt) || selected
@@ -567,9 +571,45 @@ class NightSkyScene(
             }
             q.setTexture(texture)
             q.setTransform(celestialToEnu)
-            q.setOpacity(ConstellationArtOpacity.quadOpacity(frame.constellationArtOpacity, p))
+            val opacity = ConstellationArtOpacity.quadOpacity(frame.constellationArtOpacity, p)
+            q.setOpacity(opacity)
             q.setVisible(true)
+            artOpacityShown[c] = opacity
         }
+    }
+
+    /**
+     * Writes the screen rectangle (centre x, centre y, half width, half height, pixels) around each
+     * constellation drawing shown in this frame into [out], four floats each, and returns how many.
+     * A drawing barely faded in (below [ART_FADE_MIN_OPACITY]) or with a corner behind the camera is
+     * left out. The rectangle bounds the drawing's quad, which a figure's picture roughly fills.
+     */
+    fun visibleArtBounds(out: FloatArray): Int {
+        var n = 0
+        val w = projector.viewportWidth
+        val h = projector.viewportHeight
+        for (c in 0 until constellationCount) {
+            if (artOpacityShown[c] < ART_FADE_MIN_OPACITY || (n + 1) * 4 > out.size) continue
+            var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
+            var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+            var behind = false
+            for (k in 0 until 4) {
+                val o = c * 12 + k * 3
+                if (!projector.projectCelestial(celestialToEnu, artCorners[o], artCorners[o + 1], artCorners[o + 2], scratchProjected)) {
+                    behind = true
+                    break
+                }
+                minX = minOf(minX, scratchProjected[0]); maxX = maxOf(maxX, scratchProjected[0])
+                minY = minOf(minY, scratchProjected[1]); maxY = maxOf(maxY, scratchProjected[1])
+            }
+            if (behind || maxX < 0f || minX > w || maxY < 0f || minY > h) continue
+            out[n * 4] = (minX + maxX) * 0.5f
+            out[n * 4 + 1] = (minY + maxY) * 0.5f
+            out[n * 4 + 2] = (maxX - minX) * 0.5f
+            out[n * 4 + 3] = (maxY - minY) * 0.5f
+            n++
+        }
+        return n
     }
 
     private fun artTexture(name: String): Texture? {
@@ -630,6 +670,9 @@ class NightSkyScene(
         const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.ATLAS_SPRITES
         const val HIGHLIGHT_SPRITES = 4
         const val MARK_ATLAS_HEIGHT = 1536
+
+        /** A drawing fainter than this does not fade the peak names under it. */
+        const val ART_FADE_MIN_OPACITY = 0.05f
 
         /** Peak names share the artwork's priority and are blended before it (lower blend order). */
         const val PEAK_LABEL_PRIORITY = SkyPriority.CELESTIAL

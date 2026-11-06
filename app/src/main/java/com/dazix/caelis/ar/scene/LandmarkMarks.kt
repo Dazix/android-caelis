@@ -65,6 +65,7 @@ class LandmarkMarks {
     private val acceptedHalfThickness = FloatArray(MAX_LANDMARKS)
 
     private val reservations = MarkReservations(MAX_RESERVED)
+    private val faders = MarkReservations(MAX_FADERS)
     private val box = TiltedLabel()
     private val projected = FloatArray(3)
     private val up = FloatArray(2)
@@ -175,9 +176,20 @@ class LandmarkMarks {
     /** How many sprites of the atlas the last [addSprites] took: the names and the one tick. */
     val atlasSpriteCount: Int get() = spriteCount + if (tickSprite >= 0) 1 else 0
 
-    /** Starts a frame's clearance: nothing is reserved yet. */
+    /** Starts a frame's clearance: nothing is reserved or faded yet. */
     fun beginClearance() {
         reservations.clear()
+        faders.clear()
+    }
+
+    /**
+     * Marks a screen rectangle (centre and half extents, pixels) under which a peak name is drawn
+     * faded to [FADED_ALPHA] rather than left out: Night Sky's constellation drawings. Drawn under a
+     * drawing at its 35 % default opacity a name still shone through at nearly full strength and read
+     * as lying on top of the figure.
+     */
+    fun fadeUnder(x: Float, y: Float, halfWidth: Float, halfHeight: Float) {
+        faders.reserve(x, y, halfWidth, halfHeight)
     }
 
     /** Marks a screen rectangle (centre and half extents, pixels) as taken by a mark that has priority. */
@@ -200,6 +212,7 @@ class LandmarkMarks {
         for (i in 0 until count) {
             val sprite = sprites[i]
             if (sprite < 0) continue
+            var alpha = 1f
             val inFront = projector.projectAltAz(azimuth[i], elevation[i], projected)
             if (inFront) {
                 val x = projected[0]
@@ -219,13 +232,14 @@ class LandmarkMarks {
                     acceptedHalfLength[acceptedCount] = box.halfLength
                     acceptedHalfThickness[acceptedCount] = box.halfThickness
                     acceptedCount++
+                    if (faders.isTaken(cx, cy, hw, hh)) alpha = FADED_ALPHA
                 }
             }
             val dx = direction[i * 3]
             val dy = direction[i * 3 + 1]
             val dz = direction[i * 3 + 2]
-            labels.add(tickSprite, dx, dy, dz, alignToHorizon = true)
-            labels.add(sprite, dx, dy, dz, alignToHorizon = true, liftPx = textLift, angleRad = TEXT_ANGLE_RAD)
+            labels.add(tickSprite, dx, dy, dz, alpha = alpha, alignToHorizon = true)
+            labels.add(sprite, dx, dy, dz, alpha = alpha, alignToHorizon = true, liftPx = textLift, angleRad = TEXT_ANGLE_RAD)
         }
     }
 
@@ -254,6 +268,12 @@ class LandmarkMarks {
 
         /** Two days of bubbles, four badges and the peaks, with room to spare. */
         private const val MAX_RESERVED = 256
+
+        /** Every constellation drawing on screen at once, with room to spare. */
+        private const val MAX_FADERS = 128
+
+        /** A peak name's opacity where it crosses a constellation drawing ([fadeUnder]). */
+        const val FADED_ALPHA = 0.3f
 
         private const val MAX_LABEL_ATLAS_FRACTION = 0.6f
         private const val MAX_LABEL_DP = 260f
