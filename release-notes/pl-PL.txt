@@ -4,3 +4,4 @@ Nazwy szczytów trzymają się linii horyzontu także po przechyleniu telefonu
 Aplikacja mówi teraz po słowacku, polsku i niemiecku
 Ostrzeżenie, gdy timelapse jest robiony z ręki zamiast ze statywu
 Działa także na Androidzie 11 i 12
+Nocne niebo: nazwy gwiazdozbiorów już się nie nakładają, a nazwy szczytów nie zasłaniają rysunków
