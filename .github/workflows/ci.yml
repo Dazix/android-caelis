@@ -88,3 +88,22 @@ jobs:
       - name: Check repository portability
         run: ./scripts/check_portability.sh
 
+  # The notes this pull request would put on Play once merged to main: every line added since the last
+  # release, in every listing language, within Play's 500 characters. Caught here, not in the deploy.
+  release-notes:
+    name: release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Test the release notes script
+        run: python3 -m unittest discover -s scripts -p 'test_release_notes.py'
+
+      - name: Check the notes against the last release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/release_notes.py check --base-latest-release "$REPOSITORY"
+

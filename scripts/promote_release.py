@@ -40,11 +40,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Optional custom release name for the target track (default: keep source release name)",
     )
     parser.add_argument(
-        "--release-notes",
-        default=os.environ.get("RELEASE_NOTES"),
-        help="Optional release notes / changelog string for the target track",
-    )
-    parser.add_argument(
         "--key-json",
         default=os.environ.get("PLAY_STORE_JSON_KEY"),
         help="Google Play Service Account JSON key content or file path (default: $PLAY_STORE_JSON_KEY)",
@@ -104,7 +99,6 @@ def promote_release(
     to_track: str,
     credentials: Any,
     release_name: Optional[str] = None,
-    release_notes: Optional[str] = None,
     dry_run: bool = False,
 ) -> None:
     try:
@@ -161,16 +155,10 @@ def promote_release(
 
         version_codes = source_release.get("versionCodes", [])
         final_release_name = release_name or source_release.get("name")
-        
-        # Prepare release notes
+
+        # The notes travel with the binary: per language, as scripts/release_notes.py computed them
+        # for the source track. One override text sent to every language put English in the Czech store.
         final_release_notes = source_release.get("releaseNotes", [])
-        if release_notes and release_notes.strip():
-            # Truncate notes if necessary and provide for standard locales
-            trimmed_notes = release_notes.strip()[:500]
-            final_release_notes = [
-                {"language": "en-US", "text": trimmed_notes},
-                {"language": "cs-CZ", "text": trimmed_notes},
-            ]
 
         print(
             f"Found source release: source_name='{source_release.get('name')}', versionCodes={version_codes}, status='{source_release.get('status')}'"
@@ -240,7 +228,6 @@ def main() -> None:
         to_track=args.to_track,
         credentials=credentials,
         release_name=args.release_name,
-        release_notes=args.release_notes,
         dry_run=args.dry_run,
     )
 
