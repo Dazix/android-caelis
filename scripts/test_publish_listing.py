@@ -61,6 +61,20 @@ class ValidateTest(unittest.TestCase):
         self.assertTrue(REPO_LISTING.is_dir(), "metadata/android is missing")
         self.assertEqual([], pl.problems(pl.load(REPO_LISTING)))
 
+    def test_a_language_code_play_does_not_take_is_refused_with_its_spelling(self):
+        self.tree.write("sk-SK/title.txt", "Caelis")
+        self.tree.write("xx-YY/title.txt", "Caelis")
+        found = self.problems()
+        self.assertEqual(2, len(found), found)
+        self.assertIn("sk-SK: not a language code Google Play accepts", found[0])
+        self.assertIn("Play spells it sk", found[0])
+        self.assertNotIn("spells", found[1])
+
+    def test_codes_with_and_without_a_region_both_pass(self):
+        for code in ("sk", "cs-CZ", "pl-PL", "de-DE", "en-US", "es-419"):
+            self.tree.write(f"{code}/title.txt", "Caelis")
+        self.assertEqual([], self.problems())
+
     def test_limits_are_play_limits(self):
         self.tree.write("en-US/title.txt", "x" * 31 + "\n")
         self.tree.write("en-US/short_description.txt", "x" * 81)

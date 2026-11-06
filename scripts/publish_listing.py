@@ -12,7 +12,7 @@ Layout (the fastlane `supply` layout, so fastlane can read the same tree):
 
 Commands:
 
-    validate   offline: lengths, image sizes and counts. Needs no key and no package.
+    validate   offline: language codes, lengths, image sizes and counts. Needs no key and no package.
     push       one edit with every difference against the store; nothing at all when nothing differs.
     pull       writes the store's current texts into the tree (images are not downloaded).
 
@@ -45,6 +45,29 @@ PHONE_SCREENSHOTS = "phoneScreenshots"
 SCREENSHOT_COUNT = (2, 8)
 SCREENSHOT_SIDE = (320, 3840)
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
+
+# The listing languages Play accepts, spelled as Play spells them: some carry a region (cs-CZ, pl-PL,
+# de-DE) and some do not (sk, sl, hr, uk). `sk-SK` looked right and passed every other check here,
+# then the API refused it ("The requested language is not currently supported") and the whole edit,
+# with the four other languages in it, was discarded. Source, read 2026-11-06:
+# https://support.google.com/googleplay/android-developer/answer/9844778
+PLAY_LOCALES = frozenset("""
+    af sq am ar hy-AM az-AZ bn-BD eu-ES be bg my-MM ca zh-HK zh-CN zh-TW hr cs-CZ da-DK nl-NL
+    en-AU en-CA en-US en-GB en-IN en-SG en-ZA et fil fi-FI fr-CA fr-FR gl-ES ka-GE de-DE el-GR gu
+    iw-IL hi-IN hu-HU is-IS id it-IT ja-JP kn-IN kk km-KH ko-KR ky-KG lo-LA lv lt mk-MK ms-MY ms
+    ml-IN mr-IN mn-MN ne-NP no-NO fa fa-AE fa-AF fa-IR pl-PL pt-BR pt-PT pa ro rm ru-RU sr si-LK sk
+    sl es-419 es-ES es-US sw sv-SE ta-IN te-IN th tr-TR uk ur vi
+""".split())
+
+
+def locale_problem(name: str) -> Optional[str]:
+    """Why Play would refuse [name] as a listing language, with the spelling it takes; None if it is one."""
+    if name in PLAY_LOCALES:
+        return None
+    language = name.split("-")[0]
+    same_language = sorted(code for code in PLAY_LOCALES if code.split("-")[0] == language)
+    hint = f"; Play spells it {' or '.join(same_language)}" if same_language else ""
+    return f"{name}: not a language code Google Play accepts for a listing{hint}"
 
 
 @dataclass
@@ -111,6 +134,9 @@ def problems(locales: List[Locale]) -> List[str]:
         found.append("no locale directories")
     for locale in locales:
         where = locale.language
+        unknown = locale_problem(where)
+        if unknown:
+            found.append(unknown)
         for name, (api_field, limit) in TEXTS.items():
             text = locale.texts.get(api_field)
             if text is None:
