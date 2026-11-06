@@ -242,6 +242,12 @@ class NightSkyRenderer {
         /** How clear a moved or hidden name's own spot must be before it goes back, dp. */
         private const val NAME_HYSTERESIS_DP = 4f
 
+        /** The most stars of one figure a name steers around (the largest figures have ~30). */
+        private const val MAX_FIGURE_STARS = 64
+
+        /** A star's reach on screen when a name is kept off it, dp: a bright star's glow, not its core. */
+        private const val FIGURE_STAR_RADIUS_DP = 4f
+
         /** Every constellation and asterism name on screen at once, with room to spare. */
         private const val MAX_NAME_RESERVATIONS = 256
 
@@ -1163,6 +1169,13 @@ class NightSkyRenderer {
     private val nameDeclutter = LabelDeclutter(MAX_NAME_RESERVATIONS)
     private var previousNameSlot = IntArray(0)
 
+    // Star indices of each figure, figure c's at [figureStarStart[c], figureStarStart[c + 1]), and
+    // their screen positions in this frame for the name being placed.
+    private var figureStarStart = IntArray(1)
+    private var figureStars = IntArray(0)
+    private val figureStarX = FloatArray(MAX_FIGURE_STARS)
+    private val figureStarY = FloatArray(MAX_FIGURE_STARS)
+
     // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
     private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
     private val highlightStyle = IntArray(8)
@@ -1195,6 +1208,21 @@ class NightSkyRenderer {
             labelIsAsterism[it] = reusableConstellation.isAsterism()
             skyNames.constellation(reusableConstellation.id(), labelIsAsterism[it], reusableConstellation.name())
         }
+        // Each figure's own stars (those its lines join, once each), for the names to steer around.
+        figureStarStart = IntArray(count + 1)
+        val stars = ArrayList<Int>()
+        val seen = HashSet<Int>()
+        for (c in 0 until count) {
+            figureStarStart[c] = stars.size
+            catalog.constellations(reusableConstellation, c)
+            seen.clear()
+            for (k in 0 until reusableConstellation.linesLength()) {
+                val s = reusableConstellation.lines(k)
+                if (s in 0 until MAX_STARS && seen.add(s) && seen.size <= MAX_FIGURE_STARS) stars.add(s)
+            }
+        }
+        figureStarStart[count] = stars.size
+        figureStars = stars.toIntArray()
         markAtlasScene = null
     }
 
@@ -1502,19 +1530,28 @@ class NightSkyRenderer {
             val onScreen = inFront && cx + hw >= 0f && cx - hw <= projector.viewportWidth &&
                 cy + hh >= 0f && cy - hh <= projector.viewportHeight
             if (onScreen) {
-                if (isSelected) {
-                    nameDeclutter.reserve(cx, cy, hw, hh)
-                } else {
-                    // The sprite's height already carries the text shadow's padding; a little more
-                    // keeps a moved name from touching the one it made way for.
-                    val step = h + NAME_LINE_GAP_DP * density
-                    val slot = nameDeclutter.place(
-                        cx, cy, hw, hh, step, previousNameSlot[c], NAME_HYSTERESIS_DP * density,
-                    )
-                    previousNameSlot[c] = slot
-                    if (slot == LabelDeclutter.HIDDEN) return
-                    offsetY += LabelDeclutter.offsetOf(slot, step)
+                // The figure's own stars on screen; a name on them was hard to read, so it steers
+                // around them (the selection too: it is placed first and never pushed by a name).
+                var starCount = 0
+                if (c + 1 < figureStarStart.size) {
+                    for (j in figureStarStart[c] until figureStarStart[c + 1]) {
+                        val s = figureStars[j]
+                        if (!projector.projectCelestial(c2e, starCelX[s], starCelY[s], starCelZ[s], overlayProjected)) continue
+                        figureStarX[starCount] = overlayProjected[0]
+                        figureStarY[starCount] = overlayProjected[1]
+                        starCount++
+                    }
                 }
+                // The sprite's height already carries the backdrop and shadow padding; a little more
+                // keeps a moved name from touching the one it made way for.
+                val step = h + NAME_LINE_GAP_DP * density
+                val slot = nameDeclutter.place(
+                    cx, cy, hw, hh, step, previousNameSlot[c], NAME_HYSTERESIS_DP * density,
+                    figureStarX, figureStarY, starCount, FIGURE_STAR_RADIUS_DP * density,
+                )
+                previousNameSlot[c] = slot
+                if (slot == LabelDeclutter.HIDDEN) return
+                offsetY += LabelDeclutter.offsetOf(slot, step)
             } else {
                 previousNameSlot[c] = LabelDeclutter.SLOT_BASE
             }

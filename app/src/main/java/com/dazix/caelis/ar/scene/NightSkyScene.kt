@@ -74,7 +74,9 @@ class NightSkyScene(
     // meteor names and the grid's labels are drawn once into [markAtlas]; the highlighted name of a
     // selection and the reticle's caption change with the selection and live in the small
     // [highlightAtlas], so selecting something does not redraw the catalogue's names.
-    val markAtlas = SpriteAtlas(surface.engine, 2048, 1024, MAX_MARK_SPRITES)
+    // 1536 rows: with the names' backdrop (SpriteAtlas.addText) 2048 x 1024 held 303 sprites and the
+    // peak names, packed last, were silently missing.
+    val markAtlas = SpriteAtlas(surface.engine, 2048, MARK_ATLAS_HEIGHT, MAX_MARK_SPRITES)
     val highlightAtlas = SpriteAtlas(surface.engine, 1024, 256, HIGHLIGHT_SPRITES)
     val celestialGlyphs = GlyphBatch(surface, glyphMaterial, MAX_CELESTIAL_GLYPHS, SkyPriority.GRID, 1)
     val celestialLabels = LabelBatch(surface, labelMaterial, markAtlas, MAX_CELESTIAL_LABELS, SkyPriority.GRID, 2)
@@ -627,6 +629,7 @@ class NightSkyScene(
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
         const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.ATLAS_SPRITES
         const val HIGHLIGHT_SPRITES = 4
+        const val MARK_ATLAS_HEIGHT = 1536
 
         /** Peak names share the artwork's priority and are blended before it (lower blend order). */
         const val PEAK_LABEL_PRIORITY = SkyPriority.CELESTIAL
