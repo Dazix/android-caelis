@@ -1635,8 +1635,11 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         manualPanAzimuth = newAz.toFloat()
         manualPanElevation = newEl.toFloat()
 
-        // In-place matrix update for zero-recomposition hardware vsync render loop
-        CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
+        // The render loop reads the matrix in place; the published orientation is what the top bar
+        // prints. Updating only the matrix left the bar on the pre-drag direction whenever the time
+        // was virtual, because the per-second tick that also republishes it is off then. The HUD
+        // recomposes only when a whole degree changes (WholeDegreesPolicy).
+        updateManualOrientation()
     }
 
     fun adjustPan(deltaAzimuthDeg: Float, deltaElevationDeg: Float) {
@@ -1654,8 +1657,8 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         manualPanAzimuth = newAz.toFloat()
         manualPanElevation = newEl.toFloat()
 
-        // In-place matrix update for zero-recomposition hardware vsync render loop
-        CelestialMatrixCalculator.computeManualRotationMatrix(newAz, newEl, manualMatrixBuffer)
+        // Matrix and top bar together, as in onPanGesture.
+        updateManualOrientation()
     }
 
     /**
