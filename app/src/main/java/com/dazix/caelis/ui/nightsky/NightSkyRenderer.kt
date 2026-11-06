@@ -233,6 +233,9 @@ class NightSkyRenderer {
          */
         const val CONSTELLATION_LABEL_SLIDE_DP = 10f
 
+        /** Backdrop behind constellation and asterism names: black at ~45 %, x the name's own alpha. */
+        private const val NAME_BACKDROP_ARGB = 0x73000000
+
         /** Extra space between a name and the one it moved a line away from, dp. */
         private const val NAME_LINE_GAP_DP = 2f
 
@@ -1225,11 +1228,14 @@ class NightSkyRenderer {
     /**
      * Draws a constellation name with the paint's colour at full alpha: the Canvas set the alpha per
      * draw (200 or 255 x progress), which is now the sprite's alpha in [LabelBatch].
+     *
+     * On a light dark backdrop: a name centred on its figure often lands on one of its bright stars
+     * ("Orion's Belt" sits right on the belt), and the thin italic letters were lost in the glare.
      */
     private fun addOpaqueText(atlas: com.dazix.caelis.ar.scene.SpriteAtlas, text: String, paint: Paint): Int {
         val alpha = paint.alpha
         paint.alpha = 255
-        val sprite = atlas.addText(text, paint)
+        val sprite = atlas.addText(text, paint, NAME_BACKDROP_ARGB)
         paint.alpha = alpha
         return sprite
     }

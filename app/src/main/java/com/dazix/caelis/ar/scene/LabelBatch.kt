@@ -25,6 +25,12 @@ class LabelBatch(
     val maxSprites: Int,
     priority: Int,
     blendOrder: Int,
+    /**
+     * Whether [blendOrder] orders this batch against other renderables of the same [priority].
+     * Filament's default is local: the order then applies only within this renderable, and against
+     * the others the depth sort decides.
+     */
+    globalBlendOrder: Boolean = false,
 ) {
     val entity: Int = EntityManager.get().create()
     val materialInstance: MaterialInstance = material.createInstance()
@@ -79,6 +85,7 @@ class LabelBatch(
             .receiveShadows(false)
             .priority(priority)
             .blendOrder(0, blendOrder)
+            .globalBlendOrderEnabled(0, globalBlendOrder)
             .build(engine, entity)
         engine.transformManager.create(entity)
         surface.scene.addEntity(entity)

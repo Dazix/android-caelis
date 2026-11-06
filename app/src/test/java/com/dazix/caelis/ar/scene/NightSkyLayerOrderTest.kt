@@ -22,6 +22,13 @@ class NightSkyLayerOrderTest {
     }
 
     @Test
+    fun `the blend orders apply across renderables`() {
+        // Filament's default blend order is local to one renderable; between the name batch and an
+        // artwork quad it would order nothing.
+        assertTrue(NightSkyScene.GLOBAL_BLEND_ORDER)
+    }
+
+    @Test
     fun `peak names are drawn after the sky background`() {
         assertTrue(NightSkyScene.PEAK_LABEL_PRIORITY > SkyPriority.ATMOSPHERE)
     }

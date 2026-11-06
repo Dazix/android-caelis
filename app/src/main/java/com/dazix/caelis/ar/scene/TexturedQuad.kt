@@ -18,8 +18,14 @@ class TexturedQuad(
     private val surface: SkySurface,
     material: Material,
     priority: Int,
-    /** Order among the transparent renderables of the same [priority]; higher draws later. */
+    /** Order of the blended primitives; higher draws later. */
     blendOrder: Int = 0,
+    /**
+     * Whether [blendOrder] orders this quad against other renderables of the same [priority].
+     * Filament's default is local: the order then applies only within this renderable, and against
+     * the others the depth sort decides.
+     */
+    globalBlendOrder: Boolean = false,
 ) {
     val entity: Int = EntityManager.get().create()
     val materialInstance: MaterialInstance = material.createInstance()
@@ -56,6 +62,7 @@ class TexturedQuad(
             .receiveShadows(false)
             .priority(priority)
             .blendOrder(0, blendOrder)
+            .globalBlendOrderEnabled(0, globalBlendOrder)
             .build(engine, entity)
         engine.transformManager.create(entity)
         surface.scene.addEntity(entity)

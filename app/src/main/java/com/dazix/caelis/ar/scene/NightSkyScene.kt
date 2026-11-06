@@ -88,7 +88,7 @@ class NightSkyScene(
     // there and drew the eye away from the sky. The terrain (LANDSCAPE) is drawn after them, but it
     // fills only below the ridge and the names rise above it, so it covers at most the tick's foot.
     val landmarkLabels = LabelBatch(
-        surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, PEAK_LABEL_PRIORITY, PEAK_LABEL_BLEND_ORDER,
+        surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, PEAK_LABEL_PRIORITY, PEAK_LABEL_BLEND_ORDER, GLOBAL_BLEND_ORDER,
     )
 
     private var milkyWayTexture: Texture? = null
@@ -533,7 +533,7 @@ class NightSkyScene(
                     reusableDso.positionAngleDeg().toDouble() + reusableDso.artRotationDeg().toDouble(),
                     scratchCorners,
                 )
-                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER).also {
+                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER, GLOBAL_BLEND_ORDER).also {
                     it.setCorners(scratchCorners)
                     it.setTexture(texture)
                     it.setOpacity(230f / 255f)
@@ -559,7 +559,7 @@ class NightSkyScene(
                 continue
             }
             val texture = artTexture(name) ?: continue
-            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER).also {
+            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER, GLOBAL_BLEND_ORDER).also {
                 it.setCorners(artCorners.copyOfRange(c * 12, c * 12 + 12))
                 artQuads[c] = it
             }
@@ -634,6 +634,12 @@ class NightSkyScene(
 
         /** Constellation artwork and DSO photographs, blended over the peak names. */
         const val ART_BLEND_ORDER = 1
+
+        /**
+         * The two blend orders above are global: Filament's default orders only the primitives of one
+         * renderable, and between the peak names and a figure the higher order then changed nothing.
+         */
+        const val GLOBAL_BLEND_ORDER = true
         private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
         /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
         private const val MAX_CELESTIAL_GLYPHS = 2 * MAX_DSOS + 32 + 1
