@@ -403,8 +403,11 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Release notes are computed from git, never committed by the pipeline.** `scripts/release_notes.py`
   sends the lines of `release-notes/<locale>.txt` added since the latest GitHub release (the API's
   `releases/latest`, which skips pre-releases); production promotes beta's notes and the release body is
-  not sent. A job that commits would need `contents: write` next to the Play key and a bypass of `main`'s
-  protection, and its commit would land after the tag it describes. Only a 404 means "no release yet":
+  not sent. A job that commits would need `contents: write` next to the Play key, letting a compromised
+  build dependency push to `main` or move a tag, and its commit would land after the tag it describes.
+  The repository is private on GitHub Free, so `main` has no branch protection and the `release notes`
+  check cannot be made required: a red check does not block a merge, the deploy stops before the upload
+  instead. Only a 404 means "no release yet":
   any other failure to read the latest release fails the run, because guessing would send every line ever
   written.
 - **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
