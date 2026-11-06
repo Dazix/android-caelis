@@ -400,6 +400,16 @@ Each of these was found by review or on the device and is now covered by a test.
   pinned to a commit and `pip install` to exact versions.** The jobs hold the Play key; a release body
   pasted into bash would run as a command next to it, and a moved tag or a fresh package release would
   run someone else's code there. `WorkflowHardeningTest` pins all three.
+- **Release notes are computed from git, never committed by the pipeline.** `scripts/release_notes.py`
+  sends the lines of `release-notes/<locale>.txt` added since the latest GitHub release (the API's
+  `releases/latest`, which skips pre-releases); production promotes beta's notes and the release body is
+  not sent. A job that commits would need `contents: write` next to the Play key, letting a compromised
+  build dependency push to `main` or move a tag, and its commit would land after the tag it describes.
+  The repository is private on GitHub Free, so `main` has no branch protection and the `release notes`
+  check cannot be made required: a red check does not block a merge, the deploy stops before the upload
+  instead. Only a 404 means "no release yet":
+  any other failure to read the latest release fails the run, because guessing would send every line ever
+  written.
 - **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
   `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles/N50/N50E015.peaks` — the public
   data repository (built by `data_pipeline/generate_peaks.py` from mapsforge POI extracts of OpenStreetMap),
@@ -639,6 +649,12 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Comments explain *why*, and especially why not.** Most comments in this codebase record a failure
   mode that was actually observed. If you change such code, update the comment to match; if you remove
   the guard, remove the comment and say what replaced it.
+- **Release notes**: a pull request with a change a user will notice adds one line to every
+  `release-notes/<locale>.txt` (one per store listing language, same line in the same place). Written for
+  the user, not the code: what they now see or can do, no class names, no "fix(...)". Only add lines; an
+  edited line that was already released goes out again as new, a deleted one is simply not sent. The
+  unreleased lines of each language must fit in Play's 500 characters with their bullets; when they do
+  not, merge them into fewer. The `release notes` CI job checks all of it.
 - **Strings**: every user-visible string is a resource in English (`values/`) and in every shipped
   language: Czech, Slovak, Polish, German (`values-cs/`, `-sk/`, `-pl/`, `-de/`; there is no `-de-rAT`,
   nothing in the strings differs for Austria). Countable nouns are `<plurals>` — cs/sk/pl need `one` /

@@ -83,6 +83,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # The release notes are the lines added since the last release's tag, so its history is needed.
+          fetch-depth: 0
+
+      # Before the build, so notes Play would refuse (a missing translation, over 500 characters) fail in
+      # seconds. No new line means no directory, and the upload then sends no notes.
+      - name: Compute release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          OUT_DIR: ${{ runner.temp }}/whatsnew
+        run: |
+          python3 scripts/release_notes.py build --base-latest-release "$REPOSITORY" --out "$OUT_DIR"
+          if [ -n "$(ls -A "$OUT_DIR")" ]; then echo "dir=$OUT_DIR" >> "$GITHUB_OUTPUT"; fi
 
       - name: Set up Android build environment
         uses: ./.github/actions/setup-android-env
@@ -131,6 +146,7 @@ jobs:
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ steps.vars.outputs.track }}
           releaseName: ${{ steps.vars.outputs.release_name }}
+          whatsNewDirectory: ${{ steps.notes.outputs.dir }}
           status: completed
 
   build_and_upload_beta:
@@ -142,6 +158,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          # The release notes are the lines added since the last release's tag, so its history is needed.
+          fetch-depth: 0
+
+      # Before the build, so notes Play would refuse (a missing translation, over 500 characters) fail in
+      # seconds. No new line means no directory, and the upload then sends no notes.
+      - name: Compute release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          OUT_DIR: ${{ runner.temp }}/whatsnew
+        run: |
+          python3 scripts/release_notes.py build --base-latest-release "$REPOSITORY" --out "$OUT_DIR"
+          if [ -n "$(ls -A "$OUT_DIR")" ]; then echo "dir=$OUT_DIR" >> "$GITHUB_OUTPUT"; fi
 
       - name: Set up Android build environment
         uses: ./.github/actions/setup-android-env
@@ -180,6 +211,7 @@ jobs:
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: beta
           releaseName: ${{ steps.vars.outputs.release_name }}
+          whatsNewDirectory: ${{ steps.notes.outputs.dir }}
           status: completed
 
   promote_beta_to_production:
@@ -208,15 +240,15 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: ./scripts/set_build_version_vars.sh --track production --sha "$SHA" --tag "$TAG"
 
+      # The release notes are beta's, computed from release-notes/ when the pre-release was built and
+      # promoted with it; the GitHub release body is not sent (it was one text for every language).
       - name: Promote Release (beta -> production)
         env:
           PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
           RELEASE_NAME: ${{ steps.vars.outputs.release_name }}
-          RELEASE_NOTES: ${{ github.event.release.body }}
         run: |
           python scripts/promote_release.py \
             --package-name com.dazix.caelis \
             --from-track beta \
             --to-track production \
-            --release-name "$RELEASE_NAME" \
-            --release-notes "$RELEASE_NOTES"
+            --release-name "$RELEASE_NAME"

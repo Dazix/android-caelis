@@ -228,6 +228,8 @@ The repository includes a GitHub Actions workflow [`.github/workflows/deploy.yml
 3. **GitHub pre-release** (`prereleased`): builds the tag and uploads it to **Open testing** (`track: beta`). Open testing stays unavailable until the account has production access.
 4. **GitHub release** (`released`, including a pre-release turned into a release): promotes the active `beta` release to `production` via `scripts/promote_release.py` without re-compilation.
 
+**Release notes ("What's new" on Play)** live in `release-notes/<locale>.txt`, one plain-language line per change, in every listing language. A pull request with a change users will notice adds a line to each file; nothing is ever renamed or reset for a release. `scripts/release_notes.py` sends the lines added since the latest GitHub release: a build of `main` carries everything not yet released, a pre-release everything merged since the last release, and production keeps beta's notes. The `release notes` CI job fails a pull request whose unreleased notes would exceed Play's 500 characters or miss a translation.
+
 
 ## First run
 
