@@ -44,25 +44,47 @@
 <script>
 // Each shot: source screenshot (1080 x ~2340) and which edge of it the 820 x 1480 window keeps.
 // AR screens keep the bottom: their top bar shows the user's coordinates and transient banners.
+// {lang} is the listing's language: every listing shows the app in its own language. raw/<lang>/
+// holds the night-sky captures from the phone (manual mode, 278°/+26° at 1x and 246°/+29° at 0.6x,
+// virtual time 22:00 on 2026-11-05) and the app screens rendered by StoreListingScreenshotsTest.
+// The Sun AR shot needs daylight and is still one Czech capture for every language.
 const SHOTS = [
-  { src: 'raw/night-sky-cygnus.png', pos: 'bottom',
+  { src: 'raw/{lang}/night-sky-cygnus.png', pos: 'bottom',
     cs: ['Hvězdy přesně tam,<br>kde <em>svítí</em>', '88 souhvězdí, planety a Messierovy objekty v rozšířené realitě'],
-    en: ['Stars right where<br>they <em>shine</em>', '88 constellations, planets and Messier objects in AR'] },
-  { src: 'raw/night-sky-pegasus.png', pos: 'bottom',
+    en: ['Stars right where<br>they <em>shine</em>', '88 constellations, planets and Messier objects in AR'],
+    sk: ['Hviezdy presne tam,<br>kde <em>svietia</em>', '88 súhvezdí, planéty a Messierove objekty v rozšírenej realite'],
+    pl: ['Gwiazdy dokładnie tam,<br>gdzie <em>świecą</em>', '88 gwiazdozbiorów, planety i obiekty Messiera w AR'],
+    de: ['Sterne genau dort,<br>wo sie <em>leuchten</em>', '88 Sternbilder, Planeten und Messier-Objekte in AR'] },
+  { src: 'raw/{lang}/night-sky-pegasus.png', pos: 'bottom',
     cs: ['<em>Skutečný</em> horizont<br>s názvy vrcholů', 'Terén z výškového modelu, funguje i bez signálu'],
-    en: ['The <em>real</em> horizon,<br>with peak names', 'Terrain from an elevation model, works with no signal'] },
+    en: ['The <em>real</em> horizon,<br>with peak names', 'Terrain from an elevation model, works with no signal'],
+    sk: ['<em>Skutočný</em> horizont<br>s názvami vrcholov', 'Terén z výškového modelu, funguje aj bez signálu'],
+    pl: ['<em>Prawdziwy</em> horyzont<br>z nazwami szczytów', 'Teren z modelu wysokości, działa też bez zasięgu'],
+    de: ['Der <em>echte</em> Horizont<br>mit Gipfelnamen', 'Gelände aus dem Höhenmodell, auch ohne Empfang'] },
   { src: '../../docs/screenshots/09_sun_ar_trajectory.png', pos: 'bottom',
     cs: ['Kudy půjde <em>Slunce</em><br>a kdy zapadne', 'Dráha Slunce a Měsíce přímo v obraze kamery'],
-    en: ['Where the <em>Sun</em> goes<br>and when it sets', 'Sun and Moon paths over the live camera view'] },
-  { src: '../../docs/screenshots/03_main_active_dark.png', pos: 'bottom',
+    en: ['Where the <em>Sun</em> goes<br>and when it sets', 'Sun and Moon paths over the live camera view'],
+    sk: ['Kadiaľ pôjde <em>Slnko</em><br>a kedy zapadne', 'Dráha Slnka a Mesiaca priamo v obraze kamery'],
+    pl: ['Którędy przejdzie <em>Słońce</em><br>i kiedy zajdzie', 'Trasa Słońca i Księżyca na żywym obrazie z kamery'],
+    de: ['Wohin die <em>Sonne</em> wandert<br>und wann sie untergeht', 'Sonnen- und Mondbahn live im Kamerabild'] },
+  { src: 'raw/{lang}/time-lapse.png', pos: 'bottom',
     cs: ['Časosběr ve vašem<br><em>fotoaparátu</em>', 'Každý snímek s HDR+, nočním i astro režimem'],
-    en: ['Time-lapse in your<br>own <em>camera app</em>', 'Every frame keeps HDR+, Night Sight and astro modes'] },
-  { src: '../../docs/screenshots/05_ramp_screen.png', pos: 'top',
+    en: ['Time-lapse in your<br>own <em>camera app</em>', 'Every frame keeps HDR+, Night Sight and astro modes'],
+    sk: ['Časozber vo vašom<br><em>fotoaparáte</em>', 'Každá snímka s HDR+, nočným aj astro režimom'],
+    pl: ['Timelapse w Twoim<br><em>aparacie</em>', 'Każda klatka z HDR+, trybem nocnym i astro'],
+    de: ['Zeitraffer in Ihrer<br><em>Kamera-App</em>', 'Jedes Bild mit HDR+, Nacht- und Astro-Modus'] },
+  { src: 'raw/{lang}/ramp.png', pos: 'top',
     cs: ['Plynulý <em>ramping</em><br>intervalu', 'Lineárně i exponenciálně – ideální na západ slunce'],
-    en: ['Smooth interval<br><em>ramping</em>', 'Linear or exponential – made for sunsets'] },
-  { src: '../../docs/screenshots/04_setup_screen.png', pos: 'top',
+    en: ['Smooth interval<br><em>ramping</em>', 'Linear or exponential – made for sunsets'],
+    sk: ['Plynulý <em>ramping</em><br>intervalu', 'Lineárne aj exponenciálne – ideálne na západ slnka'],
+    pl: ['Płynna <em>rampa</em><br>interwału', 'Liniowo i wykładniczo – idealne na zachód słońca'],
+    de: ['Sanfte <em>Rampen</em><br>fürs Intervall', 'Linear oder exponentiell – ideal für Sonnenuntergänge'] },
+  { src: 'raw/{lang}/setup.png', pos: 'top',
     cs: ['Časosběr i <em>klepání</em><br>v jakékoli aplikaci', 'Přesný rozvrh bez driftu, automatické zastavení'],
-    en: ['Time-lapse or <em>taps</em><br>in any app', 'Drift-free schedule and automatic stop'] },
+    en: ['Time-lapse or <em>taps</em><br>in any app', 'Drift-free schedule and automatic stop'],
+    sk: ['Časozber aj <em>klepanie</em><br>v akejkoľvek aplikácii', 'Presný rozvrh bez driftu, automatické zastavenie'],
+    pl: ['Timelapse i <em>stukanie</em><br>w dowolnej aplikacji', 'Dokładny harmonogram bez dryfu, automatyczne zatrzymanie'],
+    de: ['Zeitraffer oder <em>Tippen</em><br>in jeder App', 'Driftfreier Zeitplan, automatischer Stopp'] },
 ];
 const q = new URLSearchParams(location.search);
 const shot = SHOTS[+(q.get('i') || 0)];
@@ -70,7 +92,7 @@ const lang = q.get('lang') || 'cs';
 document.getElementById('head').innerHTML = shot[lang][0];
 document.getElementById('sub').textContent = shot[lang][1];
 const img = document.getElementById('img');
-img.src = shot.src;
+img.src = shot.src.replace('{lang}', lang);
 img.style.objectPosition = '50% ' + (shot.pos === 'top' ? '0%' : '100%');
 if (shot.pos === 'top') document.getElementById('shot').classList.add('cut');
 

@@ -15,7 +15,8 @@ import org.w3c.dom.Element
  * checklist: the same strings and plurals as `values/`, the plural forms the language needs, the
  * same format arguments in every string (a dropped `%1$d` is a crash or a wrong sentence on a
  * device nobody tests in that language), the debug strings, the night-sky names in
- * `raw-<language>/sky_names.tsv`, and no store listing in a language the app lacks. A regional
+ * `raw-<language>/sky_names.tsv`, and one store listing per language (none in a language the app
+ * lacks, and a shipped language without one only while it is in `listingPending`). A regional
  * directory such as `values-de-rAT` is an override and may hold only keys the default has.
  *
  * Lint's MissingTranslation sees a missing string, not a missing plural form or a changed argument,
@@ -114,15 +115,29 @@ class TranslationParityTest {
     }
 
     /**
-     * The listing goes live on merge, independently of a release, so a language reaches the store in a
-     * change of its own once the app speaks it. Until then the app may ship a language with no listing,
-     * never the other way round.
+     * Languages the app speaks whose store listing is still to come. The listing goes live on merge,
+     * independently of a release, so a new language reaches the store in a change of its own once a
+     * release speaks it: the change that adds `values-<language>` puts it here, the listing's change
+     * takes it out. Empty means every shipped language has its listing.
      */
+    private val listingPending = emptySet<String>()
+
     @Test
     fun `every store listing is in a language the app ships`() {
+        assertEquals("store listings in a language the app lacks (metadata/android/<language>-<REGION>)", emptySet<String>(), listedLanguages() - (languages() + "en"))
+    }
+
+    @Test
+    fun `every language the app ships has its store listing, unless it is pending`() {
+        val listed = listedLanguages()
+        assertEquals("shipped languages with no listing in metadata/android/ and not in listingPending", emptySet<String>(), languages() + "en" - listed - listingPending)
+        assertEquals("listingPending names a language that already has its listing", emptySet<String>(), listingPending intersect listed)
+    }
+
+    /** `cs` of `metadata/android/cs-CZ`: the languages the Play listing is in. */
+    private fun listedLanguages(): Set<String> {
         val metadata = listOf(File("../metadata/android"), File("metadata/android")).first { it.isDirectory }
-        val listed = metadata.listFiles { file -> file.isDirectory }.orEmpty().map { it.name.substringBefore('-') }.toSet()
-        assertEquals("store listings in a language the app lacks (metadata/android/<language>-<REGION>)", emptySet<String>(), listed - (languages() + "en"))
+        return metadata.listFiles { file -> file.isDirectory }.orEmpty().map { it.name.substringBefore('-') }.toSet()
     }
 
     /** `values-cs`, `values-de`, ... with strings in them: a language the app ships. */

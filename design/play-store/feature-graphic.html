@@ -66,7 +66,10 @@ const NS = 'http://www.w3.org/2000/svg';
 const lang = new URLSearchParams(location.search).get('lang') || 'cs';
 const T = {
   cs: { head: 'Časosběr ve vašem fotoaparátu.<br><em>Obloha</em> nad skutečnou krajinou.', sub: 'Slunce · Měsíc · hvězdy · horizont', set: 'západ 18:42', peak: 'Sněžka · 1603 m', con: 'Velký vůz' },
-  en: { head: 'Time-lapse in your own camera.<br><em>The sky</em> over the real landscape.', sub: 'Sun · Moon · stars · horizon', set: 'sets 18:42', peak: 'Sněžka · 1603 m', con: 'Big Dipper' }
+  en: { head: 'Time-lapse in your own camera.<br><em>The sky</em> over the real landscape.', sub: 'Sun · Moon · stars · horizon', set: 'sets 18:42', peak: 'Sněžka · 1603 m', con: 'Big Dipper' },
+  sk: { head: 'Časozber vo vašom fotoaparáte.<br><em>Obloha</em> nad skutočnou krajinou.', sub: 'Slnko · Mesiac · hviezdy · horizont', set: 'západ 18:42', peak: 'Gerlachovský štít · 2655 m', con: 'Veľký voz' },
+  pl: { head: 'Timelapse w Twoim aparacie.<br><em>Niebo</em> nad prawdziwym terenem.', sub: 'Słońce · Księżyc · gwiazdy · horyzont', set: 'zachód 18:42', peak: 'Śnieżka · 1603 m', con: 'Wielki Wóz' },
+  de: { head: 'Zeitraffer in Ihrer Kamera-App.<br><em>Himmel</em> über echtem Gelände.', sub: 'Sonne · Mond · Sterne · Horizont', set: 'Untergang 18:42', peak: 'Zugspitze · 2962 m', con: 'Großer Wagen' }
 }[lang];
 document.getElementById('headline').innerHTML = T.head;
 document.getElementById('sub').textContent = T.sub;
@@ -173,7 +176,7 @@ const [px, py] = arcPt(setT);
 el('marks', 'circle', { cx: px, cy: py, r: 5, fill: '#FFB547' });
 el('marks', 'circle', { cx: px, cy: py, r: 10, fill: 'none', stroke: '#FFB547', 'stroke-opacity': 0.5, 'stroke-width': 1.5 });
 const pill = el('marks', 'g', {});
-const pw = lang === 'cs' ? 96 : 86;
+const pw = { cs: 96, en: 86, sk: 96, pl: 108, de: 132 }[lang];
 pill.setAttribute('transform', `translate(${px - pw - 16} ${py + 14})`);
 const r1 = document.createElementNS(NS, 'rect');
 Object.entries({ width: pw, height: 24, rx: 12, fill: '#FFB547' }).forEach(([k, v]) => r1.setAttribute(k, v));

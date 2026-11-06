@@ -71,7 +71,7 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
-scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (372 tests)
+scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (373 tests)
 scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (729 tests)
 scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (421 tests)
 
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1277 JVM tests (372 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1293 JVM tests (373 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -674,10 +674,10 @@ Each of these was found by review or on the device and is now covered by a test.
   not the running count. Keep a translation about as long as the English or Czech one: the overlay
   panel and the navigation bar have no room (`OverlayPanelLayoutTest` lays the panel out in every
   language). `TranslationParityTest` pins keys, plural forms, format arguments, debug strings, sky
-  names for every language, and that no store listing is in a language the app lacks; adding one is
-  adding files, and that test lists what is still missing. The listing (`metadata/android/`) goes live
-  on merge to `main`, not with a release, so a new language's listing comes in a PR of its own once the
-  release that speaks it is out.
+  names for every language, and one store listing per language; adding one is adding files, and that
+  test lists what is still missing. The listing (`metadata/android/`) goes live on merge to `main`, not
+  with a release, so a new language's listing comes in a PR of its own once the release that speaks it
+  is out: the strings PR adds the language to the test's `listingPending`, the listing PR removes it.
 - **Night-sky names live in `res/raw/sky_names.tsv` (English) and `res/raw-<language>/`, never in the
   catalog or the code.** `catalog.bin` carries ids and English only (`Constellation.id`, Messier number,
   shower id, IAU code on a star, English body type; the old `localized_name` slots are deprecated and
