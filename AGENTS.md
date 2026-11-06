@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (372 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (723 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (415 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (729 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (421 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1271 JVM tests (372 intervalometer, 723 solar, horizon & pose, 415 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1277 JVM tests (372 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 16 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -454,8 +454,9 @@ Each of these was found by review or on the device and is now covered by a test.
   (`NightSkyScene.PEAK_LABEL_PRIORITY` = CELESTIAL, blended before the artwork's `ART_BLEND_ORDER`;
   `NightSkyLayerOrderTest`): on top, a name on the ridge drew the eye away from a figure standing there.
   The other marks print over them. Translucent drawings (35 % by default) still let a name through at
-  nearly full strength, so a name whose box crosses a shown drawing is also faded to 30 % (`LandmarkMarks.fadeUnder`,
-  fed by `NightSkyScene.visibleArtBounds`). Night Sky passes font scale 1f on purpose, as every other
+  nearly full strength, so a name lying on a shown drawing's paint is also faded to 30 % (`LandmarkMarks.cover`, asked at
+  9 points along the name, answered by `NightSkyScene.covers` from a 32x32 alpha mask of the picture through
+  `ArtCoverage`; the quad's rectangle faded names beside a figure, in its picture's empty corner). Night Sky passes font scale 1f on purpose, as every other
   name on that screen is a fixed pixel size; Sun AR scales all of its marks with the real one. A name
   longer than 260 dp (or 60 % of the atlas) is ellipsized, never dropped by a full page. The per-screen
   switches (`peakNamesInSunAr`, `peakNamesInNightSky`) work only while the terrain is on.

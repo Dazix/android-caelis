@@ -87,7 +87,7 @@ class LandmarkMarksDeviceTest {
             atlas.end()
             assertEquals("the name fitted in the atlas", 1, marks.spriteCount)
             marks.beginClearance()
-            if (fadeWholeScreen) marks.fadeUnder(width / 2f, height / 2f, width / 2f, height / 2f)
+            if (fadeWholeScreen) marks.cover = LandmarkMarks.Cover { _, _ -> true }
             labels.begin()
             marks.emit(labels, projector)
             labels.end()

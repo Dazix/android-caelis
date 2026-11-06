@@ -1176,8 +1176,6 @@ class NightSkyRenderer {
     private val figureStarX = FloatArray(MAX_FIGURE_STARS)
     private val figureStarY = FloatArray(MAX_FIGURE_STARS)
 
-    // Screen rectangles of this frame's constellation drawings, four floats each.
-    private val artBounds = FloatArray(4 * 128)
 
     // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
     private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
@@ -1485,12 +1483,10 @@ class NightSkyRenderer {
         // lands on the ridge, so a shared clearance has not been worth the cost.
         scene.landmarkLabels.begin()
         peakMarks.beginClearance()
-        // A name crossing a constellation drawing is faded: under a drawing at its default opacity it
-        // still read as lying on top of the figure.
-        val artCount = scene.visibleArtBounds(artBounds)
-        for (a in 0 until artCount) {
-            peakMarks.fadeUnder(artBounds[a * 4], artBounds[a * 4 + 1], artBounds[a * 4 + 2], artBounds[a * 4 + 3])
-        }
+        // A name crossing a constellation drawing's paint is faded: under a drawing at its default
+        // opacity it still read as lying on top of the figure.
+        scene.prepareArtCoverage()
+        peakMarks.cover = scene
         peakMarks.emit(scene.landmarkLabels, scene.projector)
         scene.landmarkLabels.end()
     }

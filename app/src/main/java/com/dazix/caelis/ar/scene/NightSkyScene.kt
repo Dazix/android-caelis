@@ -10,6 +10,7 @@ import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
+import com.dazix.caelis.domain.arframe.ArtCoverage
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.domain.arframe.SkyProjector
 import com.dazix.caelis.domain.arframe.SkyQuadMath
@@ -46,7 +47,7 @@ class NightSkyScene(
     private val surface: SkySurface,
     private val catalog: NightSkyCatalog,
     starGeometry: StarGeometry,
-) {
+) : LandmarkMarks.Cover {
     val projector = SkyProjector()
     val constellationCount: Int = catalog.constellationsLength().coerceAtMost(MAX_CONSTELLATIONS)
     val focus = ConstellationFocusState(constellationCount)
@@ -105,6 +106,17 @@ class NightSkyScene(
 
     /** Each drawing's opacity in this frame, 0 where it is not shown. */
     private val artOpacityShown = FloatArray(constellationCount)
+
+    // Where the drawings have paint (ArtCoverage masks by picture name) and this frame's screen
+    // rectangles of the drawings shown, for covers.
+    private val artMasks = HashMap<String, BooleanArray>()
+    private val artCoverage = ArtCoverage()
+    private val artBoundsCache = FloatArray(MAX_COVERED_ART * 4)
+    private val artBoundsOwner = IntArray(MAX_COVERED_ART)
+    private var artBoundsCount = 0
+    private val scratchEnu = FloatArray(3)
+    private val scratchCel = FloatArray(3)
+    private val scratchUv = FloatArray(2)
     private val active = BooleanArray(constellationCount)
     private val starCel = starGeometry.celestial
 
@@ -579,17 +591,18 @@ class NightSkyScene(
     }
 
     /**
-     * Writes the screen rectangle (centre x, centre y, half width, half height, pixels) around each
-     * constellation drawing shown in this frame into [out], four floats each, and returns how many.
-     * A drawing barely faded in (below [ART_FADE_MIN_OPACITY]) or with a corner behind the camera is
-     * left out. The rectangle bounds the drawing's quad, which a figure's picture roughly fills.
+     * Finds the screen rectangle (centre x, centre y, half width, half height, pixels) around each
+     * constellation drawing shown in this frame, for [covers] to test against. A drawing barely
+     * faded in (below [ART_FADE_MIN_OPACITY]) or with a corner behind the camera is left out. Call
+     * once per frame after [update]; returns how many drawings are on screen.
      */
-    fun visibleArtBounds(out: FloatArray): Int {
+    fun prepareArtCoverage(): Int {
         var n = 0
+        val out = artBoundsCache
         val w = projector.viewportWidth
         val h = projector.viewportHeight
         for (c in 0 until constellationCount) {
-            if (artOpacityShown[c] < ART_FADE_MIN_OPACITY || (n + 1) * 4 > out.size) continue
+            if (artOpacityShown[c] < ART_FADE_MIN_OPACITY || n >= artBoundsOwner.size) continue
             var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
             var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
             var behind = false
@@ -607,8 +620,10 @@ class NightSkyScene(
             out[n * 4 + 1] = (minY + maxY) * 0.5f
             out[n * 4 + 2] = (maxX - minX) * 0.5f
             out[n * 4 + 3] = (maxY - minY) * 0.5f
+            artBoundsOwner[n] = c
             n++
         }
+        artBoundsCount = n
         return n
     }
 
@@ -636,13 +651,71 @@ class NightSkyScene(
                     inScaled = false
                 },
             )
+            val mask = bitmap?.let { alphaMask(it) }
             mainHandler.post {
                 if (destroyed) return@post
                 decoding.remove(name)
                 // Not every body has a picture (no planet_sun); do not look it up again.
                 if (bitmap == null) missingArt.add(name) else artworkCache.put(name, bitmap)
+                // Kept apart from the bitmap: the LRU may drop the picture, the mask is tiny.
+                if (mask != null) artMasks[name] = mask
             }
         }
+    }
+
+    /**
+     * Which cells of an [ArtCoverage.MASK_SIZE] grid over the picture carry paint: any of a few
+     * sampled pixels above [ART_MASK_MIN_ALPHA]. On the decode thread, once per picture.
+     */
+    private fun alphaMask(bitmap: Bitmap): BooleanArray {
+        val size = ArtCoverage.MASK_SIZE
+        val mask = BooleanArray(size * size)
+        val w = bitmap.width
+        val h = bitmap.height
+        for (row in 0 until size) for (col in 0 until size) {
+            var painted = false
+            for (sy in 0 until MASK_SAMPLES) {
+                val y = ((row + (sy + 0.5f) / MASK_SAMPLES) * h / size).toInt().coerceIn(0, h - 1)
+                for (sx in 0 until MASK_SAMPLES) {
+                    val x = ((col + (sx + 0.5f) / MASK_SAMPLES) * w / size).toInt().coerceIn(0, w - 1)
+                    if ((bitmap.getPixel(x, y) ushr 24) > ART_MASK_MIN_ALPHA) {
+                        painted = true
+                        break
+                    }
+                }
+                if (painted) break
+            }
+            mask[row * size + col] = painted
+        }
+        return mask
+    }
+
+    /**
+     * Whether a constellation drawing shown in this frame has paint at screen pixel ([x], [y]).
+     * Call after [prepareArtCoverage], whose rectangles it uses to skip drawings far from the point.
+     */
+    override fun covers(x: Float, y: Float): Boolean {
+        var unprojected = false
+        for (a in 0 until artBoundsCount) {
+            val o = a * 4
+            if (kotlin.math.abs(x - artBoundsCache[o]) > artBoundsCache[o + 2] ||
+                kotlin.math.abs(y - artBoundsCache[o + 1]) > artBoundsCache[o + 3]
+            ) continue
+            val c = artBoundsOwner[a]
+            val mask = artName[c]?.let { artMasks[it] } ?: continue
+            if (!unprojected) {
+                projector.unproject(x, y, scratchEnu)
+                // ENU -> celestial is the transpose of celestialToEnu's rotation (column-major).
+                val m = celestialToEnu
+                scratchCel[0] = m[0] * scratchEnu[0] + m[1] * scratchEnu[1] + m[2] * scratchEnu[2]
+                scratchCel[1] = m[4] * scratchEnu[0] + m[5] * scratchEnu[1] + m[6] * scratchEnu[2]
+                scratchCel[2] = m[8] * scratchEnu[0] + m[9] * scratchEnu[1] + m[10] * scratchEnu[2]
+                unprojected = true
+            }
+            if (!artCoverage.uvOnQuad(scratchCel[0], scratchCel[1], scratchCel[2], artCorners, c * 12, scratchUv)) continue
+            if (ArtCoverage.covers(mask, scratchUv[0], scratchUv[1])) return true
+        }
+        return false
     }
 
     private fun celestialVector(raDeg: Double, decDeg: Double, out: FloatArray, offset: Int) {
@@ -673,6 +746,13 @@ class NightSkyScene(
 
         /** A drawing fainter than this does not fade the peak names under it. */
         const val ART_FADE_MIN_OPACITY = 0.05f
+
+        /** Drawings on screen at once that [covers] considers; far more than ever fit. */
+        private const val MAX_COVERED_ART = 64
+
+        /** Pixels sampled per mask cell side, and the alpha above which a sample counts as paint. */
+        private const val MASK_SAMPLES = 4
+        private const val ART_MASK_MIN_ALPHA = 48
 
         /** Peak names share the artwork's priority and are blended before it (lower blend order). */
         const val PEAK_LABEL_PRIORITY = SkyPriority.CELESTIAL
