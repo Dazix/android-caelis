@@ -58,7 +58,11 @@ class LandmarkMarksDeviceTest {
     }
 
     /** Renders [landmark] with the camera looking at (0, 0) and returns the pixels and the projector. */
-    private fun render(landmark: HorizonLandmark, rollDeg: Double = 0.0): Pair<ByteArray, SkyProjector> {
+    private fun render(
+        landmark: HorizonLandmark,
+        rollDeg: Double = 0.0,
+        fadeWholeScreen: Boolean = false,
+    ): Pair<ByteArray, SkyProjector> {
         val surface = SkySurface.offscreen(context, width, height)
         val material = surface.loadMaterial("label")
         val atlas = SpriteAtlas(surface.engine, 512, 128, LandmarkMarks.ATLAS_SPRITES)
@@ -83,6 +87,7 @@ class LandmarkMarksDeviceTest {
             atlas.end()
             assertEquals("the name fitted in the atlas", 1, marks.spriteCount)
             marks.beginClearance()
+            if (fadeWholeScreen) marks.cover = LandmarkMarks.Cover { _, _ -> true }
             labels.begin()
             marks.emit(labels, projector)
             labels.end()
@@ -93,6 +98,20 @@ class LandmarkMarksDeviceTest {
             surface.engine.destroyMaterial(material)
             surface.destroy()
         }
+    }
+
+    @Test
+    fun aNameUnderAConstellationDrawingIsFaded() {
+        val maxAlpha = { pixels: ByteArray ->
+            var m = 0
+            for (y in 0 until height) for (x in 0 until width) m = maxOf(m, alpha(pixels, x, y))
+            m
+        }
+        val clear = maxAlpha(render(landmark("Mt", 0.0, 0.0)).first)
+        val faded = maxAlpha(render(landmark("Mt", 0.0, 0.0), fadeWholeScreen = true).first)
+        assertTrue("the name is drawn at full strength on clear sky (alpha $clear)", clear > 230)
+        // FADED_ALPHA (0.3) of the strongest pixel, with a little room for filtering.
+        assertTrue("faded under a drawing to ~30 % (alpha $faded)", faded in 50..90)
     }
 
     @Test

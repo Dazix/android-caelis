@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.dazix.caelis.ar.scene.LandmarkMarks
 import com.dazix.caelis.ar.scene.NormalTerrain
 import com.dazix.caelis.ar.scene.paletteForTheme
+import com.dazix.caelis.domain.arframe.LabelDeclutter
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
@@ -231,6 +232,24 @@ class NightSkyRenderer {
          * of motion while the figure grows.
          */
         const val CONSTELLATION_LABEL_SLIDE_DP = 10f
+
+        /** Backdrop behind constellation and asterism names: black at ~45 %, x the name's own alpha. */
+        private const val NAME_BACKDROP_ARGB = 0x73000000
+
+        /** Extra space between a name and the one it moved a line away from, dp. */
+        private const val NAME_LINE_GAP_DP = 2f
+
+        /** How clear a moved or hidden name's own spot must be before it goes back, dp. */
+        private const val NAME_HYSTERESIS_DP = 4f
+
+        /** The most stars of one figure a name steers around (the largest figures have ~30). */
+        private const val MAX_FIGURE_STARS = 64
+
+        /** A star's reach on screen when a name is kept off it, dp: a bright star's glow, not its core. */
+        private const val FIGURE_STAR_RADIUS_DP = 4f
+
+        /** Every constellation and asterism name on screen at once, with room to spare. */
+        private const val MAX_NAME_RESERVATIONS = 256
 
         data class IndicatorTransform(
             val arrowX: Float,
@@ -1146,6 +1165,18 @@ class NightSkyRenderer {
     private val builtMarkStyle = IntArray(12)
     private val peakMarks = LandmarkMarks()
 
+    // Clearance between constellation and asterism names, and the spot each name got last frame.
+    private val nameDeclutter = LabelDeclutter(MAX_NAME_RESERVATIONS)
+    private var previousNameSlot = IntArray(0)
+
+    // Star indices of each figure, figure c's at [figureStarStart[c], figureStarStart[c + 1]), and
+    // their screen positions in this frame for the name being placed.
+    private var figureStarStart = IntArray(1)
+    private var figureStars = IntArray(0)
+    private val figureStarX = FloatArray(MAX_FIGURE_STARS)
+    private val figureStarY = FloatArray(MAX_FIGURE_STARS)
+
+
     // The highlight atlas: the selected constellation's, DSO's or shower's name and the reticle's caption.
     private var highlightScene: com.dazix.caelis.ar.scene.NightSkyScene? = null
     private val highlightStyle = IntArray(8)
@@ -1178,6 +1209,21 @@ class NightSkyRenderer {
             labelIsAsterism[it] = reusableConstellation.isAsterism()
             skyNames.constellation(reusableConstellation.id(), labelIsAsterism[it], reusableConstellation.name())
         }
+        // Each figure's own stars (those its lines join, once each), for the names to steer around.
+        figureStarStart = IntArray(count + 1)
+        val stars = ArrayList<Int>()
+        val seen = HashSet<Int>()
+        for (c in 0 until count) {
+            figureStarStart[c] = stars.size
+            catalog.constellations(reusableConstellation, c)
+            seen.clear()
+            for (k in 0 until reusableConstellation.linesLength()) {
+                val s = reusableConstellation.lines(k)
+                if (s in 0 until MAX_STARS && seen.add(s) && seen.size <= MAX_FIGURE_STARS) stars.add(s)
+            }
+        }
+        figureStarStart[count] = stars.size
+        figureStars = stars.toIntArray()
         markAtlasScene = null
     }
 
@@ -1211,11 +1257,14 @@ class NightSkyRenderer {
     /**
      * Draws a constellation name with the paint's colour at full alpha: the Canvas set the alpha per
      * draw (200 or 255 x progress), which is now the sprite's alpha in [LabelBatch].
+     *
+     * On a light dark backdrop: a name centred on its figure often lands on one of its bright stars
+     * ("Orion's Belt" sits right on the belt), and the thin italic letters were lost in the glare.
      */
     private fun addOpaqueText(atlas: com.dazix.caelis.ar.scene.SpriteAtlas, text: String, paint: Paint): Int {
         val alpha = paint.alpha
         paint.alpha = 255
-        val sprite = atlas.addText(text, paint)
+        val sprite = atlas.addText(text, paint, NAME_BACKDROP_ARGB)
         paint.alpha = alpha
         return sprite
     }
@@ -1339,7 +1388,6 @@ class NightSkyRenderer {
 
         val density = frame.density
         val c2e = scene.celestialToEnu
-        val focus = scene.focus
         val labels = scene.celestialLabels
         val highlight = scene.highlightLabels
         val glyphs = scene.celestialGlyphs
@@ -1347,27 +1395,21 @@ class NightSkyRenderer {
         highlight.begin()
         glyphs.begin()
 
-        // Constellation and asterism names, sliding up as the figure grows.
-        for (c in 0 until scene.constellationCount) {
-            val isSelected = c == frame.selectedConstellation
-            if (!isConstellationNameShown(labelIsAsterism.getOrElse(c) { false }, isSelected, showConstellations, frame.showAsterismNames)) continue
-            if (constellationLabels.getOrNull(c) == null) continue
-            val p = focus.progress[c]
-            if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) continue
-            val x = constellationCentroidCelX[c]
-            val y = constellationCentroidCelY[c]
-            val z = constellationCentroidCelZ[c]
-            if (celestialBelowGround(frame, c2e, x, y, z)) continue
-            val effectiveP = when {
-                isSelected -> 1f
-                debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
-                else -> p
-            }
-            val offsetY = -CONSTELLATION_LABEL_SLIDE_DP * density * (1f - effectiveP)
-            if (isSelected) {
-                highlight.add(highlightConstellationSprite, x, y, z, offsetYPx = offsetY, alpha = effectiveP)
-            } else {
-                labels.add(constellationSprites[c], x, y, z, offsetYPx = offsetY, alpha = 200f / 255f * effectiveP)
+        // Constellation and asterism names, sliding up as the figure grows, clear of each other: the
+        // selection first (it never moves), then constellations, then asterisms, each pass in
+        // catalogue order, so the more important name keeps its spot (LabelDeclutter).
+        nameDeclutter.clear()
+        if (previousNameSlot.size < scene.constellationCount) previousNameSlot = IntArray(scene.constellationCount)
+        for (pass in 0 until 3) {
+            for (c in 0 until scene.constellationCount) {
+                val isSelected = c == frame.selectedConstellation
+                val isAsterism = labelIsAsterism.getOrElse(c) { false }
+                val inPass = when (pass) {
+                    0 -> isSelected
+                    1 -> !isSelected && !isAsterism
+                    else -> !isSelected && isAsterism
+                }
+                if (inPass) listConstellationName(scene, frame, c, isSelected, showConstellations, debugFocusDisplayThreshold)
             }
         }
 
@@ -1436,13 +1478,94 @@ class NightSkyRenderer {
         scene.gridGlyphs.end()
         scene.gridLabels.end()
 
-        // Only the peak names clear each other here: the planet, DSO, constellation, meteor and grid
-        // labels are drawn above, unreserved, and a peak name may land on one. The names sit on the
-        // ridge and those marks mostly do not, so a shared clearance has not been worth the cost.
+        // The peak names clear only each other: they are drawn under the constellation artwork and
+        // lines (NightSkyScene.PEAK_LABEL_PRIORITY), and the other marks print over them where one
+        // lands on the ridge, so a shared clearance has not been worth the cost.
         scene.landmarkLabels.begin()
         peakMarks.beginClearance()
+        // A name crossing a constellation drawing's paint is faded: under a drawing at its default
+        // opacity it still read as lying on top of the figure.
+        scene.prepareArtCoverage()
+        peakMarks.cover = scene
         peakMarks.emit(scene.landmarkLabels, scene.projector)
         scene.landmarkLabels.end()
+    }
+
+    /**
+     * Lists constellation or asterism [c]'s name, moved a line down or up, or left out, when a name
+     * listed before it in this frame already stands there. A name that is off screen or behind the
+     * camera is listed at its own spot without asking: the GPU hides it, and the listing stays the
+     * same while the phone pans, so the batch uploads nothing.
+     */
+    private fun listConstellationName(
+        scene: com.dazix.caelis.ar.scene.NightSkyScene,
+        frame: com.dazix.caelis.ar.scene.NightSkyFrame,
+        c: Int,
+        isSelected: Boolean,
+        showConstellations: Boolean,
+        debugFocusDisplayThreshold: Float,
+    ) {
+        if (!isConstellationNameShown(labelIsAsterism.getOrElse(c) { false }, isSelected, showConstellations, frame.showAsterismNames)) return
+        if (constellationLabels.getOrNull(c) == null) return
+        val p = scene.focus.progress[c]
+        if (!(p > maxOf(0.05f, debugFocusDisplayThreshold) || isSelected)) return
+        val c2e = scene.celestialToEnu
+        val x = constellationCentroidCelX[c]
+        val y = constellationCentroidCelY[c]
+        val z = constellationCentroidCelZ[c]
+        if (celestialBelowGround(frame, c2e, x, y, z)) return
+        val effectiveP = when {
+            isSelected -> 1f
+            debugFocusDisplayThreshold > 0f -> ((p - debugFocusDisplayThreshold) / (1f - debugFocusDisplayThreshold)).coerceIn(0f, 1f)
+            else -> p
+        }
+        val density = frame.density
+        var offsetY = -CONSTELLATION_LABEL_SLIDE_DP * density * (1f - effectiveP)
+        val atlas = if (isSelected) scene.highlightAtlas else scene.markAtlas
+        val sprite = if (isSelected) highlightConstellationSprite else constellationSprites[c]
+        if (sprite in 0 until atlas.spriteCount) {
+            val projector = scene.projector
+            val inFront = projector.projectCelestial(c2e, x, y, z, overlayProjected)
+            val w = atlas.spriteWidth[sprite]
+            val h = atlas.spriteHeight[sprite]
+            val cx = overlayProjected[0] - atlas.anchorX[sprite] + w * 0.5f
+            val cy = overlayProjected[1] + offsetY - atlas.anchorY[sprite] + h * 0.5f
+            val hw = w * 0.5f
+            val hh = h * 0.5f
+            val onScreen = inFront && cx + hw >= 0f && cx - hw <= projector.viewportWidth &&
+                cy + hh >= 0f && cy - hh <= projector.viewportHeight
+            if (onScreen) {
+                // The figure's own stars on screen; a name on them was hard to read, so it steers
+                // around them (the selection too: it is placed first and never pushed by a name).
+                var starCount = 0
+                if (c + 1 < figureStarStart.size) {
+                    for (j in figureStarStart[c] until figureStarStart[c + 1]) {
+                        val s = figureStars[j]
+                        if (!projector.projectCelestial(c2e, starCelX[s], starCelY[s], starCelZ[s], overlayProjected)) continue
+                        figureStarX[starCount] = overlayProjected[0]
+                        figureStarY[starCount] = overlayProjected[1]
+                        starCount++
+                    }
+                }
+                // The sprite's height already carries the backdrop and shadow padding; a little more
+                // keeps a moved name from touching the one it made way for.
+                val step = h + NAME_LINE_GAP_DP * density
+                val slot = nameDeclutter.place(
+                    cx, cy, hw, hh, step, previousNameSlot[c], NAME_HYSTERESIS_DP * density,
+                    figureStarX, figureStarY, starCount, FIGURE_STAR_RADIUS_DP * density,
+                )
+                previousNameSlot[c] = slot
+                if (slot == LabelDeclutter.HIDDEN) return
+                offsetY += LabelDeclutter.offsetOf(slot, step)
+            } else {
+                previousNameSlot[c] = LabelDeclutter.SLOT_BASE
+            }
+        }
+        if (isSelected) {
+            scene.highlightLabels.add(highlightConstellationSprite, x, y, z, offsetYPx = offsetY, alpha = effectiveP)
+        } else {
+            scene.celestialLabels.add(constellationSprites[c], x, y, z, offsetYPx = offsetY, alpha = 200f / 255f * effectiveP)
+        }
     }
 
     /** The radiant paint's colour as drawn: in night vision its SRC_IN filter replaced it. */

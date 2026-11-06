@@ -462,6 +462,7 @@
     <string name="night_sky_layers_desc">Konfiguracja warstw AR nocnego nieba i przełączników wizualnych</string>
     <string name="night_sky_group_time">Podróż w czasie i zegar wirtualny</string>
     <string name="night_sky_time_live">NA ŻYWO</string>
+    <string name="night_sky_time_set_live">USTAW NA ŻYWO</string>
     <string name="night_sky_time_live_desc">Zegar urządzenia na żywo</string>
     <string name="night_sky_virtual_clock_active">Zegar wirtualny aktywny</string>
     <string name="night_sky_time_reset_live">Wróć do czasu rzeczywistego</string>

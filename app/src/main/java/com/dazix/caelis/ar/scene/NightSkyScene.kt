@@ -10,6 +10,7 @@ import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
+import com.dazix.caelis.domain.arframe.ArtCoverage
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.domain.arframe.SkyProjector
 import com.dazix.caelis.domain.arframe.SkyQuadMath
@@ -30,8 +31,8 @@ import kotlin.math.sin
  * Everything the Night Sky screen draws on the GPU, owned in one place and driven by one
  * [NightSkyFrame] per vsync.
  *
- * Layers, in draw order (see [SkyPriority]): Milky Way, atmosphere, stars, constellation artwork,
- * DSO photographs and planet glows, constellation lines and planet discs, the stylised landscape or
+ * Layers, in draw order (see [SkyPriority]): Milky Way, atmosphere, stars and the peak names,
+ * constellation artwork, DSO photographs and planet glows, constellation lines and planet discs, the stylised landscape or
  * the real terrain ring, the alt-az grid, and on top the marks: names, DSO and meteor glyphs, the
  * selection reticle and the grid's labels. The marks' batches and atlases are here, so they are in
  * the same Filament frame as the stars; what goes into them is listed by `NightSkyRenderer` each
@@ -46,7 +47,7 @@ class NightSkyScene(
     private val surface: SkySurface,
     private val catalog: NightSkyCatalog,
     starGeometry: StarGeometry,
-) {
+) : LandmarkMarks.Cover {
     val projector = SkyProjector()
     val constellationCount: Int = catalog.constellationsLength().coerceAtMost(MAX_CONSTELLATIONS)
     val focus = ConstellationFocusState(constellationCount)
@@ -74,7 +75,9 @@ class NightSkyScene(
     // meteor names and the grid's labels are drawn once into [markAtlas]; the highlighted name of a
     // selection and the reticle's caption change with the selection and live in the small
     // [highlightAtlas], so selecting something does not redraw the catalogue's names.
-    val markAtlas = SpriteAtlas(surface.engine, 2048, 1024, MAX_MARK_SPRITES)
+    // 1536 rows: with the names' backdrop (SpriteAtlas.addText) 2048 x 1024 held 303 sprites and the
+    // peak names, packed last, were silently missing.
+    val markAtlas = SpriteAtlas(surface.engine, 2048, MARK_ATLAS_HEIGHT, MAX_MARK_SPRITES)
     val highlightAtlas = SpriteAtlas(surface.engine, 1024, 256, HIGHLIGHT_SPRITES)
     val celestialGlyphs = GlyphBatch(surface, glyphMaterial, MAX_CELESTIAL_GLYPHS, SkyPriority.GRID, 1)
     val celestialLabels = LabelBatch(surface, labelMaterial, markAtlas, MAX_CELESTIAL_LABELS, SkyPriority.GRID, 2)
@@ -83,8 +86,13 @@ class NightSkyScene(
     val gridLabels = LabelBatch(surface, labelMaterial, markAtlas, SkyGridMarkers.LABEL_COUNT, SkyPriority.GRID, 2)
 
     // Peak names are Earth-fixed like the grid's labels (no celestial transform): pinned to the
-    // terrain skyline by azimuth and altitude.
-    val landmarkLabels = LabelBatch(surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, SkyPriority.GRID, 2)
+    // terrain skyline by azimuth and altitude. Unlike the other marks they are drawn under the
+    // constellation artwork and lines: on top, a name on the ridge competed with a figure standing
+    // there and drew the eye away from the sky. The terrain (LANDSCAPE) is drawn after them, but it
+    // fills only below the ridge and the names rise above it, so it covers at most the tick's foot.
+    val landmarkLabels = LabelBatch(
+        surface, labelMaterial, markAtlas, LandmarkMarks.LISTED_SPRITES, PEAK_LABEL_PRIORITY, PEAK_LABEL_BLEND_ORDER, GLOBAL_BLEND_ORDER,
+    )
 
     private var milkyWayTexture: Texture? = null
     private var landscapeTexture: Texture? = null
@@ -95,6 +103,20 @@ class NightSkyScene(
     private val artName = arrayOfNulls<String>(constellationCount)
     private val artCorners = FloatArray(constellationCount * 12)
     private val artQuads = arrayOfNulls<TexturedQuad>(constellationCount)
+
+    /** Each drawing's opacity in this frame, 0 where it is not shown. */
+    private val artOpacityShown = FloatArray(constellationCount)
+
+    // Where the drawings have paint (ArtCoverage masks by picture name) and this frame's screen
+    // rectangles of the drawings shown, for covers.
+    private val artMasks = HashMap<String, BooleanArray>()
+    private val artCoverage = ArtCoverage()
+    private val artBoundsCache = FloatArray(MAX_COVERED_ART * 4)
+    private val artBoundsOwner = IntArray(MAX_COVERED_ART)
+    private var artBoundsCount = 0
+    private val scratchEnu = FloatArray(3)
+    private val scratchCel = FloatArray(3)
+    private val scratchUv = FloatArray(2)
     private val active = BooleanArray(constellationCount)
     private val starCel = starGeometry.celestial
 
@@ -528,7 +550,7 @@ class NightSkyScene(
                     reusableDso.positionAngleDeg().toDouble() + reusableDso.artRotationDeg().toDouble(),
                     scratchCorners,
                 )
-                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL).also {
+                quad = TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER, GLOBAL_BLEND_ORDER).also {
                     it.setCorners(scratchCorners)
                     it.setTexture(texture)
                     it.setOpacity(230f / 255f)
@@ -544,6 +566,7 @@ class NightSkyScene(
     /** Artwork quads, created and textured only once a figure starts to appear (Canvas: p > 0). */
     private fun updateArtwork(frame: NightSkyFrame) {
         for (c in 0 until constellationCount) {
+            artOpacityShown[c] = 0f
             val name = artName[c] ?: continue
             val selected = c == frame.selectedConstellation
             val allowed = (frame.showConstellations && frame.showConstellationArt) || selected
@@ -554,15 +577,54 @@ class NightSkyScene(
                 continue
             }
             val texture = artTexture(name) ?: continue
-            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL).also {
+            val q = quad ?: TexturedQuad(surface, texturedMaterial, SkyPriority.CELESTIAL, ART_BLEND_ORDER, GLOBAL_BLEND_ORDER).also {
                 it.setCorners(artCorners.copyOfRange(c * 12, c * 12 + 12))
                 artQuads[c] = it
             }
             q.setTexture(texture)
             q.setTransform(celestialToEnu)
-            q.setOpacity(ConstellationArtOpacity.quadOpacity(frame.constellationArtOpacity, p))
+            val opacity = ConstellationArtOpacity.quadOpacity(frame.constellationArtOpacity, p)
+            q.setOpacity(opacity)
             q.setVisible(true)
+            artOpacityShown[c] = opacity
         }
+    }
+
+    /**
+     * Finds the screen rectangle (centre x, centre y, half width, half height, pixels) around each
+     * constellation drawing shown in this frame, for [covers] to test against. A drawing barely
+     * faded in (below [ART_FADE_MIN_OPACITY]) or with a corner behind the camera is left out. Call
+     * once per frame after [update]; returns how many drawings are on screen.
+     */
+    fun prepareArtCoverage(): Int {
+        var n = 0
+        val out = artBoundsCache
+        val w = projector.viewportWidth
+        val h = projector.viewportHeight
+        for (c in 0 until constellationCount) {
+            if (artOpacityShown[c] < ART_FADE_MIN_OPACITY || n >= artBoundsOwner.size) continue
+            var minX = Float.MAX_VALUE; var maxX = -Float.MAX_VALUE
+            var minY = Float.MAX_VALUE; var maxY = -Float.MAX_VALUE
+            var behind = false
+            for (k in 0 until 4) {
+                val o = c * 12 + k * 3
+                if (!projector.projectCelestial(celestialToEnu, artCorners[o], artCorners[o + 1], artCorners[o + 2], scratchProjected)) {
+                    behind = true
+                    break
+                }
+                minX = minOf(minX, scratchProjected[0]); maxX = maxOf(maxX, scratchProjected[0])
+                minY = minOf(minY, scratchProjected[1]); maxY = maxOf(maxY, scratchProjected[1])
+            }
+            if (behind || maxX < 0f || minX > w || maxY < 0f || minY > h) continue
+            out[n * 4] = (minX + maxX) * 0.5f
+            out[n * 4 + 1] = (minY + maxY) * 0.5f
+            out[n * 4 + 2] = (maxX - minX) * 0.5f
+            out[n * 4 + 3] = (maxY - minY) * 0.5f
+            artBoundsOwner[n] = c
+            n++
+        }
+        artBoundsCount = n
+        return n
     }
 
     private fun artTexture(name: String): Texture? {
@@ -589,13 +651,71 @@ class NightSkyScene(
                     inScaled = false
                 },
             )
+            val mask = bitmap?.let { alphaMask(it) }
             mainHandler.post {
                 if (destroyed) return@post
                 decoding.remove(name)
                 // Not every body has a picture (no planet_sun); do not look it up again.
                 if (bitmap == null) missingArt.add(name) else artworkCache.put(name, bitmap)
+                // Kept apart from the bitmap: the LRU may drop the picture, the mask is tiny.
+                if (mask != null) artMasks[name] = mask
             }
         }
+    }
+
+    /**
+     * Which cells of an [ArtCoverage.MASK_SIZE] grid over the picture carry paint: any of a few
+     * sampled pixels above [ART_MASK_MIN_ALPHA]. On the decode thread, once per picture.
+     */
+    private fun alphaMask(bitmap: Bitmap): BooleanArray {
+        val size = ArtCoverage.MASK_SIZE
+        val mask = BooleanArray(size * size)
+        val w = bitmap.width
+        val h = bitmap.height
+        for (row in 0 until size) for (col in 0 until size) {
+            var painted = false
+            for (sy in 0 until MASK_SAMPLES) {
+                val y = ((row + (sy + 0.5f) / MASK_SAMPLES) * h / size).toInt().coerceIn(0, h - 1)
+                for (sx in 0 until MASK_SAMPLES) {
+                    val x = ((col + (sx + 0.5f) / MASK_SAMPLES) * w / size).toInt().coerceIn(0, w - 1)
+                    if ((bitmap.getPixel(x, y) ushr 24) > ART_MASK_MIN_ALPHA) {
+                        painted = true
+                        break
+                    }
+                }
+                if (painted) break
+            }
+            mask[row * size + col] = painted
+        }
+        return mask
+    }
+
+    /**
+     * Whether a constellation drawing shown in this frame has paint at screen pixel ([x], [y]).
+     * Call after [prepareArtCoverage], whose rectangles it uses to skip drawings far from the point.
+     */
+    override fun covers(x: Float, y: Float): Boolean {
+        var unprojected = false
+        for (a in 0 until artBoundsCount) {
+            val o = a * 4
+            if (kotlin.math.abs(x - artBoundsCache[o]) > artBoundsCache[o + 2] ||
+                kotlin.math.abs(y - artBoundsCache[o + 1]) > artBoundsCache[o + 3]
+            ) continue
+            val c = artBoundsOwner[a]
+            val mask = artName[c]?.let { artMasks[it] } ?: continue
+            if (!unprojected) {
+                projector.unproject(x, y, scratchEnu)
+                // ENU -> celestial is the transpose of celestialToEnu's rotation (column-major).
+                val m = celestialToEnu
+                scratchCel[0] = m[0] * scratchEnu[0] + m[1] * scratchEnu[1] + m[2] * scratchEnu[2]
+                scratchCel[1] = m[4] * scratchEnu[0] + m[5] * scratchEnu[1] + m[6] * scratchEnu[2]
+                scratchCel[2] = m[8] * scratchEnu[0] + m[9] * scratchEnu[1] + m[10] * scratchEnu[2]
+                unprojected = true
+            }
+            if (!artCoverage.uvOnQuad(scratchCel[0], scratchCel[1], scratchCel[2], artCorners, c * 12, scratchUv)) continue
+            if (ArtCoverage.covers(mask, scratchUv[0], scratchUv[1])) return true
+        }
+        return false
     }
 
     private fun celestialVector(raDeg: Double, decDeg: Double, out: FloatArray, offset: Int) {
@@ -622,6 +742,30 @@ class NightSkyScene(
         /** Constellation, DSO and meteor names plus the grid's labels; far more than the catalogue has. */
         const val MAX_MARK_SPRITES = 1024 + LandmarkMarks.ATLAS_SPRITES
         const val HIGHLIGHT_SPRITES = 4
+        const val MARK_ATLAS_HEIGHT = 1536
+
+        /** A drawing fainter than this does not fade the peak names under it. */
+        const val ART_FADE_MIN_OPACITY = 0.05f
+
+        /** Drawings on screen at once that [covers] considers; far more than ever fit. */
+        private const val MAX_COVERED_ART = 64
+
+        /** Pixels sampled per mask cell side, and the alpha above which a sample counts as paint. */
+        private const val MASK_SAMPLES = 4
+        private const val ART_MASK_MIN_ALPHA = 48
+
+        /** Peak names share the artwork's priority and are blended before it (lower blend order). */
+        const val PEAK_LABEL_PRIORITY = SkyPriority.CELESTIAL
+        const val PEAK_LABEL_BLEND_ORDER = 0
+
+        /** Constellation artwork and DSO photographs, blended over the peak names. */
+        const val ART_BLEND_ORDER = 1
+
+        /**
+         * The two blend orders above are global: Filament's default orders only the primitives of one
+         * renderable, and between the peak names and a figure the higher order then changed nothing.
+         */
+        const val GLOBAL_BLEND_ORDER = true
         private const val MAX_CELESTIAL_LABELS = MAX_CONSTELLATIONS + MAX_DSOS + 32
         /** A DSO is up to a glyph and its core dot; plus radiants and the reticle. */
         private const val MAX_CELESTIAL_GLYPHS = 2 * MAX_DSOS + 32 + 1

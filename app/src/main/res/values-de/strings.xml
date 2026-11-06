@@ -456,6 +456,7 @@
     <string name="night_sky_layers_desc">Ebenen und visuelle Schalter von Nachthimmel AR konfigurieren</string>
     <string name="night_sky_group_time">Zeitreise &amp; virtuelle Uhr</string>
     <string name="night_sky_time_live">LIVE</string>
+    <string name="night_sky_time_set_live">AUF LIVE STELLEN</string>
     <string name="night_sky_time_live_desc">Live-Geräteuhr</string>
     <string name="night_sky_virtual_clock_active">Virtuelle Uhr aktiv</string>
     <string name="night_sky_time_reset_live">Zurück zur Live-Zeit</string>

@@ -88,20 +88,52 @@ class SpriteAtlas(
      * anchor is the baseline at the paint's alignment. Returns the sprite index, or -1 when the atlas
      * is full.
      */
-    fun addText(text: String, paint: Paint): Int {
+    fun addText(text: String, paint: Paint): Int = addText(text, paint, 0)
+
+    /**
+     * As [addText], on a rounded backdrop of [backdropArgb] (0 for none) that reaches a little past
+     * the letters, so a name stays readable where it lands on a bright star or artwork. The backdrop
+     * is part of the sprite and fades with it.
+     */
+    fun addText(text: String, paint: Paint, backdropArgb: Int): Int {
         paint.getFontMetrics(fontMetrics)
-        val pad = ceil(paint.shadowLayerRadius + maxOf(abs(paint.shadowLayerDx), abs(paint.shadowLayerDy))).toInt() + 1
+        val shadowPad = ceil(paint.shadowLayerRadius + maxOf(abs(paint.shadowLayerDx), abs(paint.shadowLayerDy))).toInt() + 1
+        val backdrop = backdropArgb != 0
+        val padX = shadowPad + if (backdrop) ceil(paint.textSize * BACKDROP_PAD_X).toInt() else 0
+        val padY = shadowPad + if (backdrop) ceil(paint.textSize * BACKDROP_PAD_Y).toInt() else 0
         val textWidth = paint.measureText(text)
-        val w = ceil(textWidth).toInt() + 2 * pad
-        val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * pad
-        val ax = pad + when (paint.textAlign) {
+        val w = ceil(textWidth).toInt() + 2 * padX
+        val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * padY
+        val ax = padX + when (paint.textAlign) {
             Paint.Align.CENTER -> textWidth * 0.5f
             Paint.Align.RIGHT -> textWidth
             else -> 0f
         }
-        val ay = pad - fontMetrics.top
-        return add(w, h, ax, ay) { c, left, top -> c.drawText(text, left + ax, top + ay, paint) }
+        val ay = padY - fontMetrics.top
+        if (!backdrop) return add(w, h, ax, ay) { c, left, top -> c.drawText(text, left + ax, top + ay, paint) }
+        // The pill hugs the letters (ascent to descent), not the font's whole line box, and stays
+        // inside the shadow's margin so its edge is not clipped by the sprite.
+        val ascent = fontMetrics.ascent
+        val descent = fontMetrics.descent
+        val textSize = paint.textSize
+        return add(w, h, ax, ay) { c, left, top ->
+            backdropPaint.color = backdropArgb
+            val bx = textSize * BACKDROP_PAD_X
+            val by = textSize * BACKDROP_PAD_Y
+            backdropRect.set(
+                left + shadowPad,
+                top + ay + ascent - by,
+                left + w - shadowPad,
+                top + ay + descent + by,
+            )
+            val radius = backdropRect.height() * 0.5f
+            c.drawRoundRect(backdropRect, radius, radius, backdropPaint)
+            c.drawText(text, left + ax, top + ay, paint)
+        }
     }
+
+    private val backdropPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val backdropRect = android.graphics.RectF()
 
     /**
      * A sprite of [w] x [h] pixels drawn by [drawer], anchored at ([anchorX], [anchorY]) inside it.
@@ -142,5 +174,9 @@ class SpriteAtlas(
     private companion object {
         /** Empty pixels around each sprite, so linear filtering never reaches a neighbour. */
         const val GUTTER = 2
+
+        /** A text backdrop's reach past the letters, as fractions of the text size. */
+        const val BACKDROP_PAD_X = 0.4f
+        const val BACKDROP_PAD_Y = 0.12f
     }
 }

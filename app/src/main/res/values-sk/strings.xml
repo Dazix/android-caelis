@@ -462,6 +462,7 @@
     <string name="night_sky_layers_desc">Nastavenie vrstiev nočnej oblohy a možností zobrazenia</string>
     <string name="night_sky_group_time">Časová os a virtuálny čas</string>
     <string name="night_sky_time_live">NAŽIVO</string>
+    <string name="night_sky_time_set_live">NASTAVIŤ NAŽIVO</string>
     <string name="night_sky_time_live_desc">Reálny čas zariadenia</string>
     <string name="night_sky_virtual_clock_active">Aktívny virtuálny čas</string>
     <string name="night_sky_time_reset_live">Návrat k reálnemu času</string>

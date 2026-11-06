@@ -68,6 +68,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -88,6 +89,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -722,11 +724,23 @@ fun NightSkyArScreen(
             }
 
             // Bottom Controls Layer: Absolute Centered HUD + Decoupled Contextual Reset View
+            var bottomRowWidthPx by remember { mutableIntStateOf(0) }
+            var bottomHudWidthPx by remember { mutableIntStateOf(0) }
+            var buttonColumnWidthPx by remember { mutableIntStateOf(0) }
+            val liftButtons = BottomControlsPolicy.liftButtons(
+                bottomRowWidthPx, bottomHudWidthPx, buttonColumnWidthPx,
+                with(density) { BOTTOM_BUTTONS_GAP.roundToPx() },
+            )
+            val buttonsLift by animateDpAsState(
+                targetValue = if (liftButtons) NIGHT_SKY_BOTTOM_HUD_HEIGHT + BOTTOM_BUTTONS_GAP else 0.dp,
+                label = "bottomButtonsLift",
+            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = animatedBottomPadding, start = 16.dp, end = 16.dp),
+                    .padding(bottom = animatedBottomPadding, start = 16.dp, end = 16.dp)
+                    .onSizeChanged { bottomRowWidthPx = it.width },
             ) {
                 // Main Bottom HUD (LST & Visible Stars) — Strictly centered on screen, never moves
                 NightSkyBottomHud(
@@ -736,15 +750,21 @@ fun NightSkyArScreen(
                     redVisionMode = uiState.redVisionMode,
                     nightVisionTheme = uiState.nightVisionState.theme,
                     zone = uiState.observer.zone,
-                    // Bottom-aligned: the button column beside it is taller than the HUD, and a
-                    // centred HUD would rise with it.
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    // Bottom-aligned, so it stays on the bottom line whatever the button column does.
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { bottomHudWidthPx = it.width },
                 )
 
                 // End-side buttons in a column: places on top, the contextual reset below. Anchored to
                 // the bottom so the places button keeps its spot while the reset fades in and out.
+                // It rises above the HUD only when the HUD would reach it (BottomControlsPolicy): with
+                // a time set the HUD grows by the clock and ran into the reset button.
                 Column(
-                    modifier = Modifier.align(Alignment.BottomEnd),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .onSizeChanged { buttonColumnWidthPx = it.width }
+                        .padding(bottom = buttonsLift),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.End,
                 ) {
@@ -802,8 +822,9 @@ fun NightSkyArScreen(
                 borderColor = toastBorderColor,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    // Above the end-side button column (places + reset, 96dp), which it would cover.
-                    .padding(bottom = animatedBottomPadding + 108.dp),
+                    // Above the end-side button column (places + reset, 96dp, raised by buttonsLift
+                    // when it stands on the HUD), which it would cover.
+                    .padding(bottom = animatedBottomPadding + buttonsLift + 108.dp),
             )
 
             // Disambiguation Floating Menu for Multiple Hits
@@ -1188,6 +1209,12 @@ internal fun NightSkyTopBar(
     )
 }
 
+/** Height of [NightSkyBottomHud]; the end-side button column stands on top of it. */
+internal val NIGHT_SKY_BOTTOM_HUD_HEIGHT = 44.dp
+
+/** Between the top of the bottom HUD and the end-side button column above it. */
+private val BOTTOM_BUTTONS_GAP = 8.dp
+
 @Composable
 internal fun NightSkyBottomHud(
     lstFormatted: String,
@@ -1207,7 +1234,7 @@ internal fun NightSkyBottomHud(
         shape = CircleShape,
         color = containerBg,
         border = androidx.compose.foundation.BorderStroke(1.dp, containerBorder),
-        modifier = modifier.height(44.dp),
+        modifier = modifier.height(NIGHT_SKY_BOTTOM_HUD_HEIGHT),
     ) {
         Row(
             modifier = Modifier

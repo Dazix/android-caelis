@@ -180,6 +180,19 @@ class LandmarkMarks {
         reservations.clear()
     }
 
+    /** Whether something a peak name should give way to (a constellation drawing) has paint at a screen pixel. */
+    fun interface Cover {
+        fun covers(x: Float, y: Float): Boolean
+    }
+
+    /**
+     * Where a peak name is drawn faded to [FADED_ALPHA] rather than at full strength: Night Sky's
+     * constellation drawings. Under a drawing at its 35 % default opacity a name still shone through
+     * at nearly full strength and read as lying on top of the figure. Asked at points along the name,
+     * so a name beside a figure, inside its picture's empty corner, is left alone. Null fades nothing.
+     */
+    var cover: Cover? = null
+
     /** Marks a screen rectangle (centre and half extents, pixels) as taken by a mark that has priority. */
     fun reserve(x: Float, y: Float, halfWidth: Float, halfHeight: Float) {
         reservations.reserve(x, y, halfWidth, halfHeight)
@@ -200,6 +213,7 @@ class LandmarkMarks {
         for (i in 0 until count) {
             val sprite = sprites[i]
             if (sprite < 0) continue
+            var alpha = 1f
             val inFront = projector.projectAltAz(azimuth[i], elevation[i], projected)
             if (inFront) {
                 val x = projected[0]
@@ -219,14 +233,31 @@ class LandmarkMarks {
                     acceptedHalfLength[acceptedCount] = box.halfLength
                     acceptedHalfThickness[acceptedCount] = box.halfThickness
                     acceptedCount++
+                    if (isCovered()) alpha = FADED_ALPHA
                 }
             }
             val dx = direction[i * 3]
             val dy = direction[i * 3 + 1]
             val dz = direction[i * 3 + 2]
-            labels.add(tickSprite, dx, dy, dz, alignToHorizon = true)
-            labels.add(sprite, dx, dy, dz, alignToHorizon = true, liftPx = textLift, angleRad = TEXT_ANGLE_RAD)
+            labels.add(tickSprite, dx, dy, dz, alpha = alpha, alignToHorizon = true)
+            labels.add(sprite, dx, dy, dz, alpha = alpha, alignToHorizon = true, liftPx = textLift, angleRad = TEXT_ANGLE_RAD)
         }
+    }
+
+    /**
+     * Whether [cover] has paint under at least [COVERED_SAMPLES] of [COVER_SAMPLES] points spread
+     * along the name's centre line ([box]): one stray brush stroke at an end does not fade it.
+     */
+    private fun isCovered(): Boolean {
+        val c = cover ?: return false
+        var hits = 0
+        for (s in 0 until COVER_SAMPLES) {
+            val t = (s.toFloat() / (COVER_SAMPLES - 1) * 2f - 1f) * box.halfLength
+            if (c.covers(box.centerX + box.axisX * t, box.centerY + box.axisY * t) && ++hits >= COVERED_SAMPLES) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun overlapsAccepted(): Boolean {
@@ -254,6 +285,13 @@ class LandmarkMarks {
 
         /** Two days of bubbles, four badges and the peaks, with room to spare. */
         private const val MAX_RESERVED = 256
+
+        /** A peak name's opacity where it crosses a constellation drawing ([cover]). */
+        const val FADED_ALPHA = 0.3f
+
+        /** Points along a name asked of [cover], and how many must be painted to fade it. */
+        private const val COVER_SAMPLES = 9
+        private const val COVERED_SAMPLES = 2
 
         private const val MAX_LABEL_ATLAS_FRACTION = 0.6f
         private const val MAX_LABEL_DP = 260f
