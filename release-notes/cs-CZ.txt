@@ -8,3 +8,4 @@ Noční obloha: názvy se nepřekrývají a snáz se vybírají, decentnější 
 Horní lišta mimo výřez fotoaparátu
 Varování kompasu se ukáže, jen když kompas opravdu ujíždí
 Slunce: obraz kamery naskočí rychleji, bez prázdné mřížky
+Noční obloha: asterismy v detailu hvězdy

@@ -430,6 +430,7 @@ fun NightSkyArScreen(
                     }
                 },
                 onRouteToTarget = { viewModel.routeCameraToSelection(displayRotation) },
+                onSelectFigure = { index -> viewModel.selectFigureFromDetail(index, displayRotation) },
                 onShowDsoLegend = if (uiState.selectedDsoIndex != -1) {
                     { showDsoLegendInAr = true }
                 } else null,

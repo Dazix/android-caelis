@@ -8,3 +8,4 @@ Nocne niebo: nazwy się nie nakładają i łatwiej je wybrać, subtelniejsze zaz
 Górny pasek omija wycięcie aparatu
 Ostrzeżenie kompasu tylko, gdy kompas się myli
 Słońce: obraz z aparatu szybciej, bez pustej siatki
+Nocne niebo: asteryzmy w detalach gwiazdy

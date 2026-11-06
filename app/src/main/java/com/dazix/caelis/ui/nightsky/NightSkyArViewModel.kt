@@ -21,6 +21,9 @@ import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
+import com.dazix.caelis.domain.nightsky.FigureLink
+import com.dazix.caelis.domain.nightsky.FigureLinkGroup
+import com.dazix.caelis.domain.nightsky.FigureMembership
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.RealHorizonPolicy
@@ -1192,10 +1195,27 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             "—"
         }
 
-        val prop1 = names.constellationOfCode(matchedConstellation)?.let {
-            Pair(app.getString(R.string.celestial_constellation), it)
+        val membership = figureMembership(cat)
+        val constellationIndex = membership.constellationForStar(starIndex, matchedConstellation)
+        // A constellation the catalog names but has no figure for stays a plain value.
+        val prop1 = if (constellationIndex == null) {
+            names.constellationOfCode(matchedConstellation)?.let {
+                Pair(app.getString(R.string.celestial_constellation), it)
+            }
+        } else {
+            null
         }
         val prop2 = Pair(app.getString(R.string.celestial_distance), distanceFormatted)
+
+        val figures = buildList {
+            if (constellationIndex != null) {
+                add(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_constellations_label, 1), listOf(constellationIndex)))
+            }
+            val asterisms = membership.asterismsOfStar(starIndex)
+            if (asterisms.isNotEmpty()) {
+                add(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_asterisms_label, asterisms.size), asterisms))
+            }
+        }
 
         selectedBodyState.value = CelestialBodyDetails(
             name = name,
@@ -1205,6 +1225,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             magnitude = star.mag(),
             raDegrees = star.ra().toDouble(),
             decDegrees = star.dec().toDouble(),
+            figures = figures,
         )
         fetchVisibilityForSelectedBody(star.ra().toDouble(), star.dec().toDouble(), isInitialSelection = true)
     }
@@ -1243,10 +1264,18 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val brightestStar = reusableConst.brightestStar() ?: "—"
         val family = reusableConst.family() ?: "—"
         val prop1 = Pair(app.getString(R.string.celestial_brightest_star), brightestStar)
-        val prop2 = if (isAsterism) {
-            Pair(app.getString(R.string.celestial_parent_constellation), family)
+        // An asterism's parents come from the lines it shares with them, translated and selectable;
+        // the catalog's English `family` text is the fallback for one that shares no line star.
+        val parents = if (isAsterism) figureMembership(cat).parentsOfAsterism(constellationIndex) else emptyList()
+        val prop2 = when {
+            isAsterism && parents.isNotEmpty() -> null
+            isAsterism -> Pair(app.getString(R.string.celestial_parent_constellation), family)
+            else -> Pair(app.getString(R.string.celestial_family), family)
+        }
+        val figures = if (parents.isEmpty()) {
+            emptyList()
         } else {
-            Pair(app.getString(R.string.celestial_family), family)
+            listOf(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_parent_constellations_label, parents.size), parents))
         }
 
         val ra = reusableConst.centroidRa().toDouble()
@@ -1260,6 +1289,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             magnitude = null,
             raDegrees = ra,
             decDegrees = dec,
+            figures = figures,
         )
         fetchVisibilityForSelectedBody(ra, dec, isInitialSelection = true)
     }
@@ -1374,11 +1404,17 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val zhrFormatted = String.format(locale, app.getString(R.string.celestial_zhr_format), zhr)
 
         val constCode = reusableMeteor.constellationId()
-        val constName = if (!constCode.isNullOrEmpty()) names.constellationOfCode(constCode) else null
+        val constIndex = figureMembership(cat).constellationOfCode(constCode)
+        val constName = if (!constCode.isNullOrEmpty() && constIndex == null) names.constellationOfCode(constCode) else null
 
         val prop1: Pair<String, String>? = Pair(app.getString(R.string.celestial_peak), peakFormatted)
         val prop2: Pair<String, String>? = Pair(app.getString(R.string.celestial_zhr), zhrFormatted)
         val prop3: Pair<String, String>? = if (constName != null) Pair(app.getString(R.string.celestial_constellation), constName) else null
+        val figures = if (constIndex == null) {
+            emptyList()
+        } else {
+            listOf(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_constellations_label, 1), listOf(constIndex)))
+        }
 
         val meteorRa = reusableMeteor.ra().toDouble()
         val meteorDec = reusableMeteor.dec().toDouble()
@@ -1392,6 +1428,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             magnitude = null,
             raDegrees = meteorRa,
             decDegrees = meteorDec,
+            figures = figures,
         )
         fetchVisibilityForSelectedBody(meteorRa, meteorDec, isInitialSelection = true)
     }
@@ -1415,6 +1452,44 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Night-sky names in the app's current language (reloaded after a language change). */
     private fun skyNames(): SkyNames = SkyNamesResource.forResources(getApplication<Application>().resources)
+
+    private var figureMembershipCache: Pair<NightSkyCatalog, FigureMembership>? = null
+
+    /** Built on the first selection after a catalog load (a couple of hundred figures). */
+    private fun figureMembership(cat: NightSkyCatalog): FigureMembership {
+        figureMembershipCache?.let { (cached, membership) -> if (cached === cat) return membership }
+        val reusable = com.dazix.caelis.data.nightsky.Constellation()
+        val figures = List(cat.constellationsLength()) { i ->
+            cat.constellations(reusable, i)
+            FigureMembership.Figure(
+                index = i,
+                code = reusable.id(),
+                isAsterism = reusable.isAsterism(),
+                stars = IntArray(reusable.linesLength()) { reusable.lines(it) },
+            )
+        }
+        return FigureMembership(figures).also { figureMembershipCache = cat to it }
+    }
+
+    private fun figureGroup(cat: NightSkyCatalog, label: String, indices: List<Int>): FigureLinkGroup {
+        val names = skyNames()
+        val reusable = com.dazix.caelis.data.nightsky.Constellation()
+        val links = indices.map { i ->
+            cat.constellations(reusable, i)
+            val name = names.constellation(reusable.id(), reusable.isAsterism(), reusable.name())
+            FigureLink(name = name ?: reusable.id().orEmpty(), constellationIndex = i)
+        }
+        return FigureLinkGroup(label, links)
+    }
+
+    /**
+     * Follows a constellation or asterism named in the detail sheet: selects it, as a tap on its
+     * figure would, and turns the view to it as a search result would.
+     */
+    fun selectFigureFromDetail(constellationIndex: Int, displayRotation: Int = Surface.ROTATION_0) {
+        selectConstellationByIndex(constellationIndex)
+        if (selectedConstellationIndex.value == constellationIndex) routeCameraToSelection(displayRotation)
+    }
 
     /**
      * Selects a celestial body from search results, updates selection state,

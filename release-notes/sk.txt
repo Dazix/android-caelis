@@ -8,3 +8,4 @@ Nočná obloha: názvy sa neprekrývajú a ľahšie sa vyberajú, decentnejší 
 Horná lišta mimo výrezu fotoaparátu
 Varovanie kompasu, len keď kompas naozaj uteká
 Slnko: obraz kamery naskočí rýchlejšie, bez prázdnej mriežky
+Nočná obloha: asterizmy v detaile hviezdy

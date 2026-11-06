@@ -11,3 +11,4 @@ Night sky: names no longer overlap and are easier to tap; subtler selection, rou
 Top bar clears the camera cutout
 Compass warning only when the compass is actually off
 Sun: camera picture appears sooner, no empty grid first
+Night sky: star details show asterisms

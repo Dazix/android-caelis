@@ -8,3 +8,4 @@ Nachthimmel: Namen ohne Überlappung, leichter antippbar, dezentere Auswahl, abg
 Obere Leiste weicht der Kameraaussparung aus
 Kompasswarnung nur bei echtem Kompassfehler
 Sonne: Kamerabild kommt schneller
+Nachthimmel: Asterismen im Sterndetail

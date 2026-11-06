@@ -510,6 +510,24 @@
     <string name="celestial_magnitude">Magnitúda</string>
     <string name="celestial_coordinates">Súradnice (RA / Dec)</string>
     <string name="celestial_parent_constellation">Materské súhvezdie</string>
+    <plurals name="celestial_constellations_label">
+        <item quantity="one">Súhvezdie</item>
+        <item quantity="few">Súhvezdia</item>
+        <item quantity="many">Súhvezdia</item>
+        <item quantity="other">Súhvezdia</item>
+    </plurals>
+    <plurals name="celestial_asterisms_label">
+        <item quantity="one">Asterizmus</item>
+        <item quantity="few">Asterizmy</item>
+        <item quantity="many">Asterizmy</item>
+        <item quantity="other">Asterizmy</item>
+    </plurals>
+    <plurals name="celestial_parent_constellations_label">
+        <item quantity="one">Materské súhvezdie</item>
+        <item quantity="few">Materské súhvezdia</item>
+        <item quantity="many">Materské súhvezdia</item>
+        <item quantity="other">Materské súhvezdia</item>
+    </plurals>
     <string name="celestial_catalog_id">Katalógové označenie</string>
     <string name="celestial_angular_size">Uhlová veľkosť</string>
     <string name="celestial_route_to_target">Vycentrovať v zornom poli</string>
