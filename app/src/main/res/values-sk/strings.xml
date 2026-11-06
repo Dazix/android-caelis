@@ -718,4 +718,10 @@
     <string name="incoming_place_prefetch">Stiahnuť terén na offline</string>
     <string name="incoming_place_prefetch_hint">Otvorí Offline terén s vyplneným miestom; polomer zvolíte tam.</string>
     <string name="incoming_place_saved">Miesto %1$s uložené</string>
+    <string name="update_downloaded">Aktualizácia stiahnutá</string>
+    <string name="update_restart">Reštartovať</string>
+    <string name="update_not_now">Teraz nie</string>
+    <string name="settings_rate_title">Ohodnoťte CAELIS</string>
+    <string name="settings_rate_body">Páči sa vám aplikácia? Hodnotenie alebo recenzia na Google Play pomôže ďalším ju nájsť.</string>
+    <string name="settings_rate_action">Ohodnotiť na Google Play</string>
 </resources>

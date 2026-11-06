@@ -62,6 +62,14 @@ What the network-isolation test now proves is therefore narrower, and worth sayi
 **this app's own code** (one file opens sockets; one file may start ARCore, and only behind consent; the
 permission set is pinned), not what a Google component does once you have allowed it to run.
 
+**The Play Store app is asked about updates and, now and then, for its review sheet.** At every return
+to the app, the Play libraries (`app-update`, `review`) ask the Play Store app on the phone whether a
+newer version exists, over Android's IPC rather than a connection of this app's own. The Play Store
+keeps track of updates for every installed app whether or not it is asked, but what it reports to
+Google is again Google's business, not covered by the test above. A newer version is offered once,
+in Play's own sheet, never during a session; a rating is asked for at most every 120 days, after
+the app has been used on three days. A build installed from anywhere but Play never sees either.
+
 ---
 
 ## What it does
