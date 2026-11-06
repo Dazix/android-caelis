@@ -7,3 +7,4 @@ Peak names follow the horizon when you tilt the phone
 The app now speaks Slovak, Polish and German
 A warning when a time-lapse is shot from the hand instead of a tripod
 Runs on Android 11 and 12 too
+Night sky: constellation names no longer overlap, and peak names stay out of the drawings' way

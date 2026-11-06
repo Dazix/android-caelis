@@ -4,3 +4,4 @@ Názvy vrcholů drží linii horizontu i při naklonění telefonu
 Aplikace nově mluví slovensky, polsky a německy
 Upozornění, když časosběr fotíte z ruky místo ze stativu
 Funguje i na Androidu 11 a 12
+Noční obloha: názvy souhvězdí se už nepřekrývají a názvy vrcholů nepřekážejí kresbám
