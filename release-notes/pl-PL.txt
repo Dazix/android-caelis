@@ -1,8 +1,8 @@
 # "What's new" on Google Play. See en-US.txt for the rules; the lines here translate it line by line.
-Wirtualne miejsca: Słońce i nocne niebo z dowolnego zapisanego miejsca, też udostępnionego z mapy
-Nazwy szczytów stoją dokładnie na wierzchołku i trzymają się przechylonego horyzontu
-Aplikacja mówi teraz po słowacku, polsku i niemiecku
-Ostrzeżenie, gdy timelapse jest robiony z ręki zamiast ze statywu
-Działa także na Androidzie 11 i 12
-Nocne niebo: nazwy gwiazdozbiorów się nie nakładają, a nazwy szczytów nie zasłaniają rysunków
-Górny pasek nie wchodzi już pod wycięcie aparatu
+Wirtualne miejsca: Słońce i nocne niebo z zapisanego miejsca
+Nazwy szczytów stoją na wierzchołku, trzymają horyzont, w dzień na ciemnym tle
+Teraz po słowacku, polsku i niemiecku
+Ostrzeżenie przy timelapsie z ręki
+Działa na Androidzie 11 i 12
+Nocne niebo: nazwy już się nie nakładają
+Górny pasek omija wycięcie aparatu
