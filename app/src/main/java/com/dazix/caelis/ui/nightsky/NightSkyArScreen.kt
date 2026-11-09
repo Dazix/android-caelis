@@ -649,7 +649,8 @@ fun NightSkyArScreen(
             }
 
             // Top Controls: Global Celestial Search Bar or Top Bar HUD. Everything anchored to the top
-            // moves by one shift, so the bar clears the camera cutout and the chips under it move with it.
+            // moves by one shift, so the bar clears the camera cutout and the chips under it move with it;
+            // the search field takes the bar's place.
             val hudTopShift = com.dazix.caelis.ui.rememberHudTopShift()
             if (uiState.isSearchActive) {
                 CelestialSearchBar(

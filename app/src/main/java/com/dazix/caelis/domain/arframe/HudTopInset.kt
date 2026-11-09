@@ -6,8 +6,9 @@ package com.dazix.caelis.domain.arframe
  *
  * The screens are immersive: the status bar is hidden, so `statusBarsPadding` is zero and the bar was
  * placed at a fixed [DESIGN_TOP_DP]. On a phone whose punch-hole or notch reaches lower than that, the
- * position in the middle of the bar was printed over the camera. The cutout inset is what stays, and
- * the whole HUD moves by one shift computed here, so the bar and the chips placed under it cannot end
+ * position in the middle of the bar was printed over the camera. The input is how deep the cutout
+ * itself reaches, not the cutout inset, which Android sizes to the hidden status bar (57 dp against a
+ * 42 dp punch-hole on a Pixel 10 Pro). The whole HUD moves by one shift computed here, so the bar and the chips placed under it cannot end
  * up overlapping each other. Wrapping the text around the hole was rejected: cutouts differ in shape
  * and place from phone to phone, and a split position line does not fit in every language.
  *
@@ -22,7 +23,7 @@ object HudTopInset {
 
     /**
      * The shift, in dp, to add to every top-anchored HUD element, for a cutout reaching [cutoutTopDp]
-     * from the top edge (the display cutout's top inset). Never negative: a HUD is never pulled up
+     * from the top edge (the bottom of the cutout's shape). Never negative: a HUD is never pulled up
      * above its designed place, and an unreadable inset (negative, NaN) moves nothing.
      */
     fun shiftDp(cutoutTopDp: Float): Float {
