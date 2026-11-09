@@ -3,6 +3,7 @@ package com.dazix.caelis.ui.nightsky
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -153,6 +154,10 @@ fun CelestialSearchBar(
         onExpandedChange = onActiveChange,
         colors = searchBarColors,
         shape = if (active) RoundedCornerShape(0.dp) else CircleShape,
+        // The caller places the field below the camera cutout (the AR HUD shift). SearchBar's own
+        // default pads by the status bar inset on top of that, which Android sizes to the hidden status
+        // bar, and put the field 57 dp lower than the top bar it replaces.
+        windowInsets = WindowInsets(0),
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = if (active) 0.dp else 16.dp),

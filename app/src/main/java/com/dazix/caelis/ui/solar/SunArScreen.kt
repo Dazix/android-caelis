@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -420,7 +419,9 @@ fun SunArScreen(
             )
         }
 
-        // Top App Bar Controls with HUD
+        // Top App Bar Controls with HUD. Everything anchored to the top moves by one shift, so the bar
+        // clears the camera cutout and the chips under it move with it.
+        val hudTopShift = com.dazix.caelis.ui.rememberHudTopShift()
         SunArTopBar(
             hasGpsFix = uiState.hasGpsFix,
             locationText = uiState.location.formatShort(approximate = isApproximateLocation),
@@ -443,13 +444,13 @@ fun SunArScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(top = 36.dp, start = 12.dp, end = 12.dp),
+                .padding(top = 36.dp + hudTopShift, start = 12.dp, end = 12.dp),
         )
         val headingState by viewModel.headingState.collectAsStateWithLifecycle()
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 100.dp, start = 24.dp, end = 24.dp),
+                .padding(top = 100.dp + hudTopShift, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -470,8 +471,7 @@ fun SunArScreen(
                 activeTileCount = uiState.activeTileCount,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(top = 92.dp, start = 12.dp),
+                    .padding(top = 92.dp + hudTopShift, start = 12.dp),
             )
         }
 
