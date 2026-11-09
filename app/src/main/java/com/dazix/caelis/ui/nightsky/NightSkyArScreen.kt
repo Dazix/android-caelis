@@ -648,7 +648,9 @@ fun NightSkyArScreen(
                 )
             }
 
-            // Top Controls: Global Celestial Search Bar or Top Bar HUD
+            // Top Controls: Global Celestial Search Bar or Top Bar HUD. Everything anchored to the top
+            // moves by one shift, so the bar clears the camera cutout and the chips under it move with it.
+            val hudTopShift = com.dazix.caelis.ui.rememberHudTopShift()
             if (uiState.isSearchActive) {
                 CelestialSearchBar(
                     query = uiState.searchQuery,
@@ -664,7 +666,7 @@ fun NightSkyArScreen(
                     nightVisionTheme = uiState.nightVisionState.theme,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 36.dp),
+                        .padding(top = 36.dp + hudTopShift),
                 )
             } else {
                 NightSkyTopBar(
@@ -691,13 +693,13 @@ fun NightSkyArScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                        .padding(top = 36.dp, start = 12.dp, end = 12.dp),
+                        .padding(top = 36.dp + hudTopShift, start = 12.dp, end = 12.dp),
                 )
                 val headingState by viewModel.headingState.collectAsStateWithLifecycle()
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 100.dp, start = 24.dp, end = 24.dp),
+                        .padding(top = 100.dp + hudTopShift, start = 24.dp, end = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
