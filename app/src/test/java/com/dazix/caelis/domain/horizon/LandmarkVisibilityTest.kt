@@ -276,4 +276,57 @@ class LandmarkVisibilityTest {
 
         assertEquals(1, result.size)
     }
+
+    private fun landmark(azimuth: Double, altitude: Double = 2.0) = HorizonLandmark(
+        name = "P", nameCs = "", nameEn = "", elevationMeters = 1000,
+        distanceMeters = 10_000.0, azimuthDegrees = azimuth, apparentElevationDegrees = altitude,
+    )
+
+    @Test
+    fun `a summit beside the drawn top is drawn on it`() {
+        // A broad tent, so a summit a few tenths of a degree off its top still passes the ridge test.
+        val skyline = profile(ridges = listOf(90.0 to tenKmApparent), halfWidthDegrees = 3.0)
+        val selected = LandmarkVisibility.select(listOf(peak(10_000.0, 90.4)), skyline, maxLabels = 10).single()
+        // The stored landmark keeps the summit's own bearing: what is pinned is only where it is drawn.
+        assertTrue(selected.azimuthDegrees > 90.2)
+
+        val drawn = skyline.withLandmarks(listOf(selected), resolved = true).drawnLandmarks.single()
+
+        assertEquals(90.0, drawn.azimuthDegrees, 0.0)
+        assertEquals(skyline.elevationsDegrees[360].toDouble(), drawn.apparentElevationDegrees, 0.0)
+        assertEquals(selected.name, drawn.name)
+        assertEquals(selected.distanceMeters, drawn.distanceMeters, 0.0)
+    }
+
+    @Test
+    fun `pinning lands on a sample, picks the nearest top and pins to itself`() {
+        val skyline = profile(ridges = listOf(90.0 to 3.0, 90.75 to 2.5), halfWidthDegrees = 0.5)
+
+        val nearFirst = LandmarkVisibility.pinToSkyline(landmark(90.3), skyline)
+        val nearSecond = LandmarkVisibility.pinToSkyline(landmark(90.5), skyline)
+
+        assertEquals(90.0, nearFirst.azimuthDegrees, 0.0)
+        assertEquals(3.0, nearFirst.apparentElevationDegrees, 1e-6)
+        assertEquals(90.75, nearSecond.azimuthDegrees, 0.0)
+        assertEquals(2.5, nearSecond.apparentElevationDegrees, 1e-6)
+        assertEquals(nearFirst, LandmarkVisibility.pinToSkyline(nearFirst, skyline))
+    }
+
+    @Test
+    fun `pinning wraps across north`() {
+        val skyline = profile(ridges = listOf(0.0 to 3.0))
+
+        val drawn = LandmarkVisibility.pinToSkyline(landmark(359.8), skyline)
+
+        assertEquals(0.0, drawn.azimuthDegrees, 0.0)
+        assertEquals(3.0, drawn.apparentElevationDegrees, 1e-6)
+    }
+
+    @Test
+    fun `a landmark with no top near it is drawn where it is`() {
+        val skyline = profile(ridges = listOf(90.0 to 3.0))
+        val far = landmark(120.0, altitude = 1.5)
+
+        assertEquals(far, LandmarkVisibility.pinToSkyline(far, skyline))
+    }
 }

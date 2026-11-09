@@ -149,15 +149,50 @@ object LandmarkVisibility {
      */
     private fun hasTopNear(profile: HorizonProfile, azimuth: Double): Boolean {
         val samples = profile.elevationsDegrees
-        val count = samples.size
         var found = false
-        forEachIndexNear(azimuth, TOP_REACH_DEGREES) {
-            val here = samples[it]
-            val before = samples[(it + count - 1) % count]
-            val after = samples[(it + 1) % count]
-            if (here >= before && here >= after && (here > before || here > after)) found = true
-        }
+        forEachIndexNear(azimuth, TOP_REACH_DEGREES) { if (isTop(samples, it)) found = true }
         return found
+    }
+
+    /**
+     * [landmark] moved onto the top of [profile]'s skyline it stands on: the azimuth and altitude of
+     * the sample within [TOP_REACH_DEGREES] of the summit's bearing that is a top, the nearest one
+     * (the higher on a tie). The skyline is drawn through its samples, so the tick then stands on the
+     * drawn top. At the summit's own bearing it stood up to half a degree beside it, and always
+     * between two samples, which on the device read as a tick a few pixels off the hill. Unchanged
+     * when no top is that close ([select] never keeps such a peak, but a stored list may predate it).
+     * A pinned landmark pins to itself.
+     */
+    fun pinToSkyline(landmark: HorizonLandmark, profile: HorizonProfile): HorizonLandmark {
+        val samples = profile.elevationsDegrees
+        val azimuth = landmark.azimuthDegrees
+        var best = -1
+        var bestDelta = Double.MAX_VALUE
+        forEachIndexNear(azimuth, TOP_REACH_DEGREES) {
+            if (isTop(samples, it)) {
+                val delta = azimuthDelta(HorizonProfile.azimuthForIndex(it), azimuth)
+                val closer = delta < bestDelta - 1e-9
+                val tiedHigher = delta <= bestDelta + 1e-9 && best >= 0 && samples[it] > samples[best]
+                if (best < 0 || closer || tiedHigher) {
+                    best = it
+                    bestDelta = delta
+                }
+            }
+        }
+        if (best < 0) return landmark
+        return landmark.copy(
+            azimuthDegrees = HorizonProfile.azimuthForIndex(best),
+            apparentElevationDegrees = samples[best].toDouble(),
+        )
+    }
+
+    /** A top of the skyline: at least as high as both neighbours and higher than one. */
+    private fun isTop(samples: FloatArray, index: Int): Boolean {
+        val count = samples.size
+        val here = samples[index]
+        val before = samples[(index + count - 1) % count]
+        val after = samples[(index + 1) % count]
+        return here >= before && here >= after && (here > before || here > after)
     }
 
     /** Calls [action] with every sample index within [reachDegrees] of [azimuth], wrapping across north. */

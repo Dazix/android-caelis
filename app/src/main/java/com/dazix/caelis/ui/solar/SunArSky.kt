@@ -168,7 +168,7 @@ internal fun SunArGpuSky(
     val currentSun by rememberUpdatedState(currentSunPos)
     val currentMoon by rememberUpdatedState(currentMoonPos)
     // Peak names exist only on a profile that is drawn, and only while the layer is switched on.
-    val peakNames = if (showPeakNames) horizonProfile?.landmarks.orEmpty() else emptyList()
+    val peakNames = if (showPeakNames) horizonProfile?.drawnLandmarks.orEmpty() else emptyList()
     val currentPeakNames by rememberUpdatedState(peakNames)
     val currentLanguageTag by rememberUpdatedState(languageTag)
     val fontScale = LocalDensity.current.fontScale
