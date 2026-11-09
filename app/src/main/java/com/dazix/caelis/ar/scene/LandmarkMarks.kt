@@ -1,11 +1,13 @@
 package com.dazix.caelis.ar.scene
 
 import android.graphics.Paint
+import android.graphics.RectF
 import android.text.TextPaint
 import android.text.TextUtils
 import com.dazix.caelis.domain.arframe.AltAzGridBuilder
 import com.dazix.caelis.domain.arframe.MarkReservations
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.dazix.caelis.domain.arframe.TiltedLabel
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import kotlin.math.ceil
@@ -22,7 +24,8 @@ import kotlin.math.ceil
  * every zoom; one tick sprite serves every peak. The text is drawn level and turned on the GPU: baked
  * at an angle it would take several times the atlas area per name and blur under a roll anyway. The
  * type is smaller than the time bubbles and in the terrain's own colour, so the names read as part of
- * the skyline rather than as a second layer of marks.
+ * the skyline rather than as a second layer of marks. In Sun AR each name sits on a faint dark pill
+ * ([TextBackdrop], the one under Night Sky's constellation names); see [update].
  *
  * Sprites are drawn when the list, the app language, the colour (night vision), the density or the
  * font scale change ([update] bumps [revision]; the owner of the atlas redraws it and calls
@@ -45,6 +48,7 @@ class LandmarkMarks {
     private var colorArgb = 0
     private var density = 0f
     private var fontScale = 0f
+    private var backdropArgb = 0
 
     private var tickSprite = -1
     private var textLift = 0f
@@ -84,10 +88,18 @@ class LandmarkMarks {
         strokeCap = Paint.Cap.ROUND
         color = CASING_ARGB
     }
+    private val backdropPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val backdropRect = RectF()
+    private val pillBounds = FloatArray(4)
 
     /**
      * Sets what is to be drawn. A change of anything bumps [revision]; the list is compared by
      * identity because a profile keeps the same list for as long as it is the one on screen.
+     *
+     * [backdropArgb] puts each name on a [TextBackdrop] pill of that colour (0 for none). Sun AR asks
+     * for one: by day the names stand against a bright sky over the ridge, where the shadow alone left
+     * pale letters on pale sky. Night Sky does not; its names are on a dark dome and under the
+     * constellation drawings. The tick never gets one: it is a stroke on the summit, not text.
      */
     fun update(
         landmarks: List<HorizonLandmark>,
@@ -95,15 +107,17 @@ class LandmarkMarks {
         colorArgb: Int,
         density: Float,
         fontScale: Float,
+        backdropArgb: Int = 0,
     ) {
         if (landmarks === this.landmarks && languageTag == this.languageTag && colorArgb == this.colorArgb &&
-            density == this.density && fontScale == this.fontScale
+            density == this.density && fontScale == this.fontScale && backdropArgb == this.backdropArgb
         ) return
         this.landmarks = landmarks
         this.languageTag = languageTag
         this.colorArgb = colorArgb
         this.density = density
         this.fontScale = fontScale
+        this.backdropArgb = backdropArgb
         revision++
     }
 
@@ -136,11 +150,21 @@ class LandmarkMarks {
         }
         if (tickSprite < 0) return
 
-        val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * pad
-        val baseline = pad - fontMetrics.top
+        // A pill widens the sprite, and with it the box the clearance keeps free, so names with one
+        // stand a little further apart. The anchor stays at the first letter: the pill reaches back
+        // into the gap above the tick rather than pushing the text away from the summit.
+        val backdrop = backdropArgb != 0
+        val textSize = textPaint.textSize
+        val padX = pad + TextBackdrop.marginX(textSize, backdrop)
+        val padY = pad + TextBackdrop.marginY(textSize, backdrop)
+        val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * padY
+        val baseline = padY - fontMetrics.top
+        val ascent = fontMetrics.ascent
+        val descent = fontMetrics.descent
         // The text's axis runs through the middle of its letters, between ascent and descent, so the
         // turned line starts squarely at the tick's top rather than with its baseline there.
-        val ay = baseline + (fontMetrics.ascent + fontMetrics.descent) * 0.5f
+        val ay = baseline + (ascent + descent) * 0.5f
+        backdropPaint.color = backdropArgb
         for (i in 0 until count) {
             val landmark = landmarks[i]
             // An OSM name has no length limit. A sprite wider than the atlas cannot be packed at all
@@ -152,9 +176,16 @@ class LandmarkMarks {
                 minOf(atlas.width * MAX_LABEL_ATLAS_FRACTION, MAX_LABEL_DP * density),
                 TextUtils.TruncateAt.END,
             ).toString()
-            val w = ceil(textPaint.measureText(text)).toInt() + 2 * pad
-            val ax = pad.toFloat()
+            val textWidth = textPaint.measureText(text)
+            val w = ceil(textWidth).toInt() + 2 * padX
+            val ax = padX.toFloat()
             val sprite = atlas.add(w, h, ax, ay) { canvas, left, top ->
+                if (backdrop) {
+                    TextBackdrop.pill(left + ax, left + ax + textWidth, top + baseline, ascent, descent, textSize, pillBounds)
+                    backdropRect.set(pillBounds[0], pillBounds[1], pillBounds[2], pillBounds[3])
+                    val radius = backdropRect.height() * 0.5f
+                    canvas.drawRoundRect(backdropRect, radius, radius, backdropPaint)
+                }
                 canvas.drawText(text, left + ax, top + baseline, textPaint)
             }
             sprites[i] = sprite

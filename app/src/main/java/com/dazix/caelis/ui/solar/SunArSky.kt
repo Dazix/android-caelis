@@ -54,6 +54,7 @@ import com.dazix.caelis.ar.scene.SkyGridMarkers
 import com.dazix.caelis.ar.scene.SkySurface
 import com.dazix.caelis.ar.scene.SunArScene
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.solar.LunarCoordinates
@@ -346,7 +347,7 @@ internal class SunArMarks {
         density: Float,
         fontScale: Float,
     ) {
-        peaks.update(peakNames, languageTag, NormalTerrain.toArgb(), density, fontScale)
+        peaks.update(peakNames, languageTag, NormalTerrain.toArgb(), density, fontScale, TextBackdrop.NAME_ARGB)
         ensureAtlas(scene, solar, lunar, badges, density, fontScale)
         val labels = scene.markLabels
         val glyphs = scene.markGlyphs
