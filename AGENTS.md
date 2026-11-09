@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (373 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (729 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (421 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (738 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (426 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1293 JVM tests (373 intervalometer, 729 solar, horizon & pose, 421 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1302 JVM tests (373 intervalometer, 738 solar, horizon & pose, 426 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -425,6 +425,13 @@ Each of these was found by review or on the device and is now covered by a test.
   degree. A peak behind a nearer hill, or a slope or saddle that happens to lie on the line, is not
   labelled: a label on a mountain the user cannot see is worse than none. Do not loosen it to get more
   names; thin the result instead.
+- **A peak's tick stands on the drawn top, not on the summit's own bearing.** The skyline is drawn
+  through its 0.25° samples, and an OSM summit node is not the elevation model's highest post: at its
+  own bearing and altitude the tick stood up to half a degree beside the drawn top, a few pixels off
+  the hill (Ještěd on a Pixel 10 Pro). The renderers draw `HorizonProfile.drawnLandmarks`, which
+  `LandmarkVisibility.pinToSkyline` moves onto the nearest top sample within the same half degree
+  `select` demands; the stored landmark keeps the summit's real bearing and altitude, and pinning at
+  draw time covers profiles stored before the rule.
 - **Landmark failure never fails a profile.** The skyline is stored and shown first; `ProfileNamer` adds
   names afterwards and rewrites the profile atomically. No network, no consent, a 404, a server error, a
   corrupt tile or a full disk all end as "not resolved yet" (`HorizonProfile.landmarksResolved`), never as

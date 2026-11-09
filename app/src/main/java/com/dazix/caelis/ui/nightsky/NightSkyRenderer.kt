@@ -1370,7 +1370,7 @@ class NightSkyRenderer {
         // Peak names stand on the real terrain skyline: with the stylised landscape or none there is
         // no ridge for them to stand on. The ridge's colour is the night vision primary when it is on.
         val peakNames = if (frame.showPeakNames && frame.useRealHorizon) {
-            currentHorizonProfile?.landmarks.orEmpty()
+            currentHorizonProfile?.drawnLandmarks.orEmpty()
         } else {
             emptyList()
         }

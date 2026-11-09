@@ -57,6 +57,17 @@ class HorizonProfile(
         }
     }
 
+    /**
+     * [landmarks] where they are drawn: each one moved onto the top of this skyline it names
+     * ([LandmarkVisibility.pinToSkyline]). The stored ones keep the summit's own bearing and altitude,
+     * which can lie a few pixels beside the drawn top (an OSM node is not the model's highest post, and
+     * the skyline is sampled every 0.25 degrees); pinned here, profiles stored before the rule get it too.
+     * Computed once per profile, so a renderer comparing the list by identity sees no change per frame.
+     */
+    val drawnLandmarks: List<HorizonLandmark> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        landmarks.map { LandmarkVisibility.pinToSkyline(it, this) }
+    }
+
     /** The same skyline with a (new) set of peak names. The samples array is shared, not copied. */
     fun withLandmarks(landmarks: List<HorizonLandmark>, resolved: Boolean) = HorizonProfile(
         elevationsDegrees = elevationsDegrees,

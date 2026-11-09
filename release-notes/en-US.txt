@@ -3,7 +3,7 @@
 # release (scripts/release_notes.py). Deleting an old line is fine; editing a released one makes it
 # new again. Every language gets the same lines. At most 500 characters of unreleased notes.
 Virtual places: see the Sun and the night sky from any saved place, also one shared from a map app
-Peak names follow the horizon when you tilt the phone
+Peak names sit exactly on the summit and follow the horizon when you tilt the phone
 The app now speaks Slovak, Polish and German
 A warning when a time-lapse is shot from the hand instead of a tripod
 Runs on Android 11 and 12 too
