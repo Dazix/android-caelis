@@ -1549,8 +1549,13 @@ class NightSkyRenderer {
         }
         val density = frame.density
         var offsetY = -CONSTELLATION_LABEL_SLIDE_DP * density * (1f - effectiveP)
-        val atlas = if (isSelected) scene.highlightAtlas else scene.markAtlas
-        val sprite = if (isSelected) highlightConstellationSprite else constellationSprites[c]
+        // The spot is worked out on the plain name even when it is selected: the selected sprite's
+        // backdrop pads it differently, and a box and line step of another size moved the name, and
+        // the names around it, as soon as it was tapped.
+        val plain = constellationSprites.getOrElse(c) { -1 }
+        val usePlain = plain in 0 until scene.markAtlas.spriteCount
+        val atlas = if (usePlain || !isSelected) scene.markAtlas else scene.highlightAtlas
+        val sprite = if (usePlain || !isSelected) plain else highlightConstellationSprite
         if (sprite in 0 until atlas.spriteCount) {
             val projector = scene.projector
             val inFront = projector.projectCelestial(c2e, x, y, z, overlayProjected)
@@ -1564,7 +1569,10 @@ class NightSkyRenderer {
                 cy + hh >= 0f && cy - hh <= projector.viewportHeight
             if (onScreen) {
                 // The figure's own stars on screen; a name on them was hard to read, so it steers
-                // around them (the selection too: it is placed first and never pushed by a name).
+                // around them. The selection is placed first and keeps the spot it had before it
+                // was tapped (pinned): sent home instead, it jumped a line and pushed the names that
+                // had made way for it, and one with no spot left vanished (Emu, Cygnus and the
+                // Northern Cross).
                 var starCount = 0
                 if (c + 1 < figureStarStart.size) {
                     for (j in figureStarStart[c] until figureStarStart[c + 1]) {
@@ -1581,6 +1589,7 @@ class NightSkyRenderer {
                 val slot = nameDeclutter.place(
                     cx, cy, hw, hh, step, previousNameSlot[c], NAME_HYSTERESIS_DP * density,
                     figureStarX, figureStarY, starCount, FIGURE_STAR_RADIUS_DP * density,
+                    pinned = isSelected,
                 )
                 previousNameSlot[c] = slot
                 if (slot == LabelDeclutter.HIDDEN) return

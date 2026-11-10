@@ -18,8 +18,8 @@ import kotlin.math.abs
  *
  * A name changes spot only with some margin ([place]'s `hysteresisPx`): two names whose boxes just
  * touch would otherwise swap between overlapping and not with every tremor of the hand, and the
- * name would jump a line up and down several times a second. For the same reason a spot keeps the
- * name while it covers no more stars than the best alternative.
+ * name would jump a line up and down several times a second. The stars are counted with the same
+ * margin: a spot the name would move to counts a star within it of its box as covered.
  *
  * Fixed capacity, no allocation after construction: it runs every frame of the AR render loop.
  */
@@ -43,6 +43,9 @@ class LabelDeclutter(capacity: Int) {
      *
      * The first [starCount] entries of [starX] / [starY] are the figure's own stars on screen; a star
      * counts as covered when its disc of [starRadiusPx] touches the box.
+     *
+     * A [pinned] name (the selection) keeps [previousSlot] whenever no earlier name stands on it,
+     * stars or not: it was chosen with the stars already, and the selection must not jump.
      */
     fun place(
         cx: Float,
@@ -56,7 +59,15 @@ class LabelDeclutter(capacity: Int) {
         starY: FloatArray = NO_STARS,
         starCount: Int = 0,
         starRadiusPx: Float = 0f,
+        pinned: Boolean = false,
     ): Int {
+        if (pinned && previousSlot in SLOT_BASE..SLOT_ABOVE) {
+            val y = cy + offsetOf(previousSlot, stepPx)
+            if (!book.isTaken(cx, y, hw, hh)) {
+                book.reserve(cx, y, hw, hh)
+                return previousSlot
+            }
+        }
         var slot = best(cx, cy, hw, hh, stepPx, previousSlot, hysteresisPx, starX, starY, starCount, starRadiusPx)
         // A name pushed off its spot takes any free one rather than vanish; one already hidden stays
         // hidden until a spot is clear by the margin, or it would blink at the boundary.
@@ -86,7 +97,10 @@ class LabelDeclutter(capacity: Int) {
             val y = cy + offsetOf(slot, stepPx)
             val margin = if (slot == previousSlot) 0f else marginPx
             if (book.isTaken(cx, y, hw + margin, hh + margin)) continue
-            val stars = coveredStars(cx, y, hw, hh, starX, starY, starCount, starRadiusPx)
+            // The same margin for the stars: a spot the name would move to counts a star near its
+            // edge as covered. Without it a star on the edge of the home spot, trembling with the
+            // hand, sent the name home and back a line every other frame.
+            val stars = coveredStars(cx, y, hw + margin, hh + margin, starX, starY, starCount, starRadiusPx)
             if (stars < bestStars) {
                 bestSlot = slot
                 bestStars = stars

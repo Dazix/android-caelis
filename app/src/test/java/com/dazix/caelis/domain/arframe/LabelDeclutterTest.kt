@@ -114,6 +114,59 @@ class LabelDeclutterTest {
     }
 
     @Test
+    fun `a star trembling on the edge of the name's own spot does not swap it every frame`() {
+        // A star right on the top edge of the home box (half height 10 + radius 4 = 14 px above the
+        // centre) shifts half a pixel back and forth with the hand. The line below is clear. Seen
+        // on the device with a selected Vulpecula: the name jumped a line up and down again and again.
+        val xs = floatArrayOf(100f)
+        val ys = FloatArray(1)
+        val d = LabelDeclutter(8)
+        var previous = SLOT_BASE
+        val slots = (0 until 10).map { frame ->
+            ys[0] = if (frame % 2 == 0) 86.5f else 85.5f
+            d.clear()
+            previous = d.place(100f, 100f, 60f, 10f, step, previous, margin, xs, ys, 1, 4f)
+            previous
+        }
+        assertEquals(List(10) { SLOT_BELOW }, slots)
+    }
+
+    @Test
+    fun `a name moved off a star goes home once the star is clear by the margin`() {
+        val xs = floatArrayOf(100f)
+        val ys = floatArrayOf(100f - 14f - margin - 0.5f)
+        val d = LabelDeclutter(8)
+        assertEquals(SLOT_BASE, d.place(100f, 100f, 60f, 10f, step, SLOT_BELOW, margin, xs, ys, 1, 4f))
+    }
+
+    @Test
+    fun `a selection keeps the spot it had and the names around it keep theirs`() {
+        // Cygnus at home, the Northern Cross a line below it, the Emu a line above: all three share
+        // one spot. Selected, the Emu is placed first; sent home it took Cygnus's spot, Cygnus took
+        // the line below and the Northern Cross had none left.
+        val d = LabelDeclutter(8)
+        fun frame(selected: Boolean): List<Int> {
+            d.clear()
+            val emu = if (selected) d.place(100f, 100f, 60f, 10f, step, SLOT_ABOVE, margin, pinned = true) else -9
+            val cygnus = d.placeAt(100f, 100f, previous = SLOT_BASE)
+            val cross = d.placeAt(100f, 100f, previous = SLOT_BELOW)
+            val emuLate = if (selected) emu else d.placeAt(100f, 100f, previous = SLOT_ABOVE)
+            return listOf(emuLate, cygnus, cross)
+        }
+        val expected = listOf(SLOT_ABOVE, SLOT_BASE, SLOT_BELOW)
+        assertEquals(expected, frame(selected = false))
+        repeat(3) { assertEquals(expected, frame(selected = true)) }
+        assertEquals(expected, frame(selected = false))
+    }
+
+    @Test
+    fun `a pinned name whose spot an earlier mark took is placed as any other`() {
+        val d = LabelDeclutter(8)
+        d.reserve(100f, 100f - step, 60f, 10f)
+        assertEquals(SLOT_BASE, d.place(100f, 100f, 60f, 10f, step, SLOT_ABOVE, margin, pinned = true))
+    }
+
+    @Test
     fun `stars never hide a name`() {
         // A star in each of the three spots: the name stays home, over one star.
         val xs = floatArrayOf(100f, 100f, 100f)
