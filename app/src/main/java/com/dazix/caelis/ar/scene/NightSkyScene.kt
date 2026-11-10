@@ -366,8 +366,10 @@ class NightSkyScene(
 
     /**
      * Constellation figures, in the celestial frame. Colours and widths are the Canvas paints':
-     * ordinary figures at alpha 48 (asterisms 32) x the art boost, the selected one as a halo
-     * (alpha 42) under a core (alpha 240). Progress scales both length and alpha in line.mat.
+     * ordinary figures at alpha 48 (asterisms 32) x the art boost, the selected one in its core
+     * colour at alpha 240 and the same width. It was a wide halo under a thicker core once, and the
+     * figure looked swollen against the ones around it; brightness alone tells it apart.
+     * Progress scales both length and alpha in line.mat, which rounds the ends at the stars.
      */
     private fun buildConstellationLines(frame: NightSkyFrame) {
         val density = frame.density.coerceAtLeast(0.5f)
@@ -385,24 +387,18 @@ class NightSkyScene(
             val asterism = isAsterism[c]
             catalog.constellations(reusableConstellation, c)
             val n = reusableConstellation.linesLength()
-            val passes = if (selected) 2 else 1
-            for (pass in 0 until passes) {
+            run {
                 // Colour roles as in NightSkyRenderer.applyTheme; alpha as the drawNightSky override.
-                val (rgb, alpha, width) = when {
-                    !selected -> Triple(
-                        if (nv) palette.primary else if (asterism) ASTERISM else CONSTELLATION,
-                        (if (asterism) 32f else 48f) * alphaBoost / 255f,
-                        (if (asterism) 1.15f else 1.45f) * density * lineScale,
-                    )
-                    pass == 0 -> Triple(
-                        if (nv) palette.primary else if (asterism) ASTERISM else CONSTELLATION_HALO,
-                        42f * alphaBoost / 255f,
-                        (if (asterism) 4.2f else 5.4f) * density * lineScale,
-                    )
-                    else -> Triple(
+                val width = (if (asterism) 1.15f else 1.45f) * density * lineScale
+                val (rgb, alpha) = if (selected) {
+                    Pair(
                         if (nv) palette.secondary else if (asterism) ASTERISM_CORE else CONSTELLATION_CORE,
                         (240f * alphaBoost).coerceAtMost(255f) / 255f,
-                        (if (asterism) 1.7f else 2.16f) * density * lineScale,
+                    )
+                } else {
+                    Pair(
+                        if (nv) palette.primary else if (asterism) ASTERISM else CONSTELLATION,
+                        (if (asterism) 32f else 48f) * alphaBoost / 255f,
                     )
                 }
                 var k = 0
@@ -772,7 +768,6 @@ class NightSkyScene(
 
         // Normal-mode colours of NightSkyRenderer.applyTheme (alpha is overridden per draw).
         private val CONSTELLATION = androidx.compose.ui.graphics.Color(77, 208, 225)
-        private val CONSTELLATION_HALO = androidx.compose.ui.graphics.Color(128, 222, 234)
         private val CONSTELLATION_CORE = androidx.compose.ui.graphics.Color(255, 255, 255)
         private val ASTERISM = androidx.compose.ui.graphics.Color(144, 202, 249)
         private val ASTERISM_CORE = androidx.compose.ui.graphics.Color(240, 248, 255)

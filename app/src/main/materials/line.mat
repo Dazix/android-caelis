@@ -14,8 +14,9 @@
 //   custom3  = (point beyond this end of a polyline, 1) for a mitred joint, or (0, 0, 0, 0)
 //
 // The fragment works in screen pixels along the segment, which is what the Canvas renderer did:
-// a gap of gapPx is left at each star, a partial progress p draws p/2 of the trimmed segment from
-// each end so the halves meet in the middle, and dashPx > 0 dashes the line. Screen-linear
+// a gap of gapPx is left at each star (and the end there is rounded), a partial progress p draws
+// p/2 of the trimmed segment from each end so the halves meet in the middle, and dashPx > 0 dashes
+// the line. Screen-linear
 // interpolation is recovered from the perspective-correct one by carrying (v * w, w).
 material {
     name : Line,
@@ -141,7 +142,19 @@ fragment {
         if (visible && dash > 0.0) {
             visible = mod(s, 2.0 * dash) <= dash;
         }
-        float coverage = visible ? clamp(across.y - abs(across.x) + 0.5, 0.0, 1.0) : 0.0;
+        // An end that leaves a gap at a star is rounded: the line is a capsule whose cap centres
+        // sit half a width inside the gap's edge, so it still stops where the gap begins. Ends
+        // without a gap (grid, arcs, glyphs, polyline joints, an end off screen) stay square.
+        float halfWidth = across.y;
+        float capA = gapA > 0.0 ? gapA + halfWidth : -1e9;
+        float capB = gapB > 0.0 ? len - gapB - halfWidth : 1e9;
+        if (capA > capB) {
+            float mid = 0.5 * (capA + capB);
+            capA = mid;
+            capB = mid;
+        }
+        float distance = length(float2(s - clamp(s, capA, capB), across.x));
+        float coverage = visible ? clamp(halfWidth - distance + 0.5, 0.0, 1.0) : 0.0;
 
         // The Canvas renderer faded a constellation in as it grew: alpha = base * progress.
         float4 c = getColor();

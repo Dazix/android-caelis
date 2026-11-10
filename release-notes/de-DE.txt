@@ -6,3 +6,4 @@ Warnung bei Zeitraffer aus der Hand
 Läuft auch unter Android 11 und 12
 Nachthimmel: Namen überlappen nicht mehr
 Obere Leiste weicht der Kameraaussparung aus
+Nachthimmel: dezentere Auswahl, abgerundete Linien

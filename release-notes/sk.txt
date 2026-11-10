@@ -6,3 +6,4 @@ Varovanie pri časozbere z ruky
 Funguje aj na Androide 11 a 12
 Nočná obloha: názvy sa už neprekrývajú
 Horná lišta mimo výrezu fotoaparátu
+Nočná obloha: decentnejší výber, zaoblené spojnice
