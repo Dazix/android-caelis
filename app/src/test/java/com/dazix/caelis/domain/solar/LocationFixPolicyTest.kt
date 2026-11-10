@@ -38,6 +38,30 @@ class LocationFixPolicyTest {
     }
 
     @Test
+    fun `a coarse update never replaces a fresh fix`() {
+        // Outdoors on a viewpoint: GPS every second, and now and then a network position a few hundred
+        // metres off. Taking it made the terrain line vanish for that second (foreign skyline).
+        assertFalse(LocationFixPolicy.replacesHeld(newQualifies = false, heldQualifies = true, heldAgeMs = 1_000L, satellites = true))
+        assertFalse(LocationFixPolicy.replacesHeld(newQualifies = false, heldQualifies = true, heldAgeMs = 59_999L, satellites = true))
+    }
+
+    @Test
+    fun `a qualifying update always replaces what is held`() {
+        assertTrue(LocationFixPolicy.replacesHeld(newQualifies = true, heldQualifies = true, heldAgeMs = 0L, satellites = true))
+        assertTrue(LocationFixPolicy.replacesHeld(newQualifies = true, heldQualifies = false, heldAgeMs = 0L, satellites = true))
+    }
+
+    @Test
+    fun `a coarse update is taken when nothing better is held or the fix went stale`() {
+        assertTrue("no fix yet", LocationFixPolicy.replacesHeld(newQualifies = false, heldQualifies = false, heldAgeMs = 0L, satellites = true))
+        assertTrue("fix a minute old", LocationFixPolicy.replacesHeld(newQualifies = false, heldQualifies = true, heldAgeMs = 60_000L, satellites = true))
+        assertFalse(
+            "without satellites a network fix stays good for ten minutes",
+            LocationFixPolicy.replacesHeld(newQualifies = false, heldQualifies = true, heldAgeMs = 5 * 60_000L, satellites = false),
+        )
+    }
+
+    @Test
     fun `a device without satellites waits seconds, not minutes`() {
         assertEquals(120_000L, LocationFixPolicy.timeoutMs(satellites = true))
         assertEquals(15_000L, LocationFixPolicy.timeoutMs(satellites = false))

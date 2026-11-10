@@ -47,5 +47,22 @@ object LocationFixPolicy {
         }
     }
 
+    /**
+     * Whether a live update should replace the position currently held.
+     *
+     * Updates come from GPS, fused and network at once, every second. Taking each one put a network
+     * position a few hundred metres off in place of a GPS fix every so often: the terrain profile no
+     * longer belonged to the observer for that second and the skyline blinked out (on a viewpoint,
+     * standing still). A coarse update is only taken while there is no fix it would displace — none
+     * yet, or one too old to [qualifies] any more.
+     *
+     * @param heldAgeMs how long ago the held fix was received.
+     */
+    fun replacesHeld(newQualifies: Boolean, heldQualifies: Boolean, heldAgeMs: Long, satellites: Boolean): Boolean {
+        if (newQualifies || !heldQualifies) return true
+        val maxAge = if (satellites) SATELLITE_MAX_AGE_MS else NETWORK_MAX_AGE_MS
+        return heldAgeMs >= maxAge
+    }
+
     fun timeoutMs(satellites: Boolean): Long = if (satellites) SATELLITE_TIMEOUT_MS else NETWORK_TIMEOUT_MS
 }

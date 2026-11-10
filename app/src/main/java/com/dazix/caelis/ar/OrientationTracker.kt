@@ -155,6 +155,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private var latestCompassTimestampNs = 0L
     private var hasCompassSample = false
     private var lastPairedTimestampNs = Long.MIN_VALUE
+
+    // Debug-only heading log; see logHeading.
+    private var lastHeadingLogNs = 0L
+    private var lastHeadingPairNs = Long.MIN_VALUE
+    private var lastGameAzDeg = 0f
+    private var peakGameRateDps = 0f
     private val sampleQuat = FloatArray(4)
 
     private val headingStateFlow = MutableStateFlow(HeadingState.OK)
@@ -607,8 +613,20 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         sensorManager.registerListener(this, rotationSensor, SAMPLING_PERIOD_US)
         // The field check needs a few readings a second, not the pose's 200.
         magnetometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+        if (BuildConfig.DEBUG && debugGyro != null) {
+            sensorManager.registerListener(this, debugGyro, 5_000) // 200 Hz; faster needs HIGH_SAMPLING_RATE_SENSORS
+            android.util.Log.d(
+                "CaelisHeading",
+                "gyro=${debugGyro.name} range=%.1fdps".format(Math.toDegrees(debugGyro.maximumRange.toDouble())),
+            )
+        }
         isListening = true
     }
+
+    // Debug-only: raw gyroscope peaks, to tell saturation from a fusion fault (logHeading).
+    private val debugGyro = if (BuildConfig.DEBUG) sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE) else null
+    private var gyroPeakDps = 0f
+    private var gyroNearRange = 0
 
     fun stop() {
         if (!isListening || sensorManager == null) return
@@ -627,6 +645,17 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             latestFieldUt = sqrt(bx * bx + by * by + bz * bz)
             compassConsistency.addField(event.timestamp, latestFieldUt)
             publishHeadingState()
+            return
+        }
+        if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+            if (BuildConfig.DEBUG) {
+                val v = event.values
+                val rate = kotlin.math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+                val dps = Math.toDegrees(rate.toDouble()).toFloat()
+                if (dps > gyroPeakDps) gyroPeakDps = dps
+                val range = event.sensor.maximumRange
+                if (maxOf(kotlin.math.abs(v[0]), kotlin.math.abs(v[1]), kotlin.math.abs(v[2])) >= 0.95f * range) gyroNearRange++
+            }
             return
         }
         if (dualMode && event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
@@ -764,8 +793,50 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
                 cameraElevationDeg = Math.toDegrees(asin(up).toDouble()).toFloat(),
                 psiDeg = psi,
             )
+            if (BuildConfig.DEBUG) logHeading(latestCompassTimestampNs)
         }
         publishHeadingState()
+    }
+
+    /**
+     * Debug builds only: what the gyro-held heading rests on, 4 times a second, as `CaelisHeading`.
+     *
+     * After a hand alignment the drawn heading is the game vector's plus a frozen ψ, and on a Pixel
+     * 10 Pro a fast swing left it degrees off the ridge afterwards. Pointing back at the same ridge,
+     * a changed `game` with an unchanged `rv` is gyro drift; a changed `corr` with an unchanged `game`
+     * is the lock. `peakRate` is the fastest game-vector yaw rate since the last line (saturation).
+     */
+    private fun logHeading(timestampNs: Long) {
+        val gameAz = cameraAzimuth(gameMatrix)
+        if (lastHeadingPairNs != Long.MIN_VALUE) {
+            val dt = (timestampNs - lastHeadingPairNs) / 1e9f
+            if (dt > 0f) {
+                val rate = kotlin.math.abs(signedAzimuth(gameAz - lastGameAzDeg)) / dt
+                if (rate > peakGameRateDps) peakGameRateDps = rate
+            }
+        }
+        lastHeadingPairNs = timestampNs
+        lastGameAzDeg = gameAz
+        if (timestampNs - lastHeadingLogNs < HEADING_LOG_INTERVAL_NS) return
+        lastHeadingLogNs = timestampNs
+        android.util.Log.d(
+            "CaelisHeading",
+            "t=${timestampNs / 1_000_000} hold=${headingLock.isHolding} rv=%.2f game=%.2f psi=%.2f corr=%.2f cal=%.2f coarse=%.2f drawn=%.2f acc=%d unc=%.1f peakRate=%.0f gyroPeak=%.0f sat=%d".format(
+                cameraAzimuth(compassMatrix), gameAz,
+                YawOffset.extractDegrees(compassMatrix, gameMatrix), headingOffsetDeg,
+                calibrationAzimuthOffsetDeg, coarseHeadingOffsetDeg, cameraAzimuth(liveTrueMatrix),
+                compassAccuracy, headingUncertaintyDeg, peakGameRateDps, gyroPeakDps, gyroNearRange,
+            ),
+        )
+        peakGameRateDps = 0f
+        gyroPeakDps = 0f
+        gyroNearRange = 0
+    }
+
+    /** Azimuth of the back camera's axis for a row-major device-to-ENU matrix, degrees 0..360. */
+    private fun cameraAzimuth(m: FloatArray): Float {
+        val az = Math.toDegrees(atan2(-m[2].toDouble(), -m[6].toDouble())).toFloat()
+        return if (az < 0f) az + 360f else az
     }
 
     private fun publishHeadingState() {
@@ -842,6 +913,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         /** How far apart a rotation vector and a game vector sample may be to count as one instant. */
         private const val MAX_GAME_SKEW_NS = 2_000_000L
+
+        private const val HEADING_LOG_INTERVAL_NS = 250_000_000L
 
         /**
          * How far the standing calibration may tilt the world frame.
