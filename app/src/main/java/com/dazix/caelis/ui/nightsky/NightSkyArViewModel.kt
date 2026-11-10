@@ -1269,13 +1269,13 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         val parents = if (isAsterism) figureMembership(cat).parentsOfAsterism(constellationIndex) else emptyList()
         val prop2 = when {
             isAsterism && parents.isNotEmpty() -> null
-            isAsterism -> Pair(app.getString(R.string.celestial_parent_constellation), family)
+            isAsterism -> Pair(app.resources.getQuantityString(R.plurals.celestial_constellations_label, family.split(',').size), family)
             else -> Pair(app.getString(R.string.celestial_family), family)
         }
         val figures = if (parents.isEmpty()) {
             emptyList()
         } else {
-            listOf(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_parent_constellations_label, parents.size), parents))
+            listOf(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_constellations_label, parents.size), parents))
         }
 
         val ra = reusableConst.centroidRa().toDouble()

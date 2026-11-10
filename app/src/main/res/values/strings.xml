@@ -503,7 +503,6 @@
     <string name="celestial_distance">Distance</string>
     <string name="celestial_magnitude">Magnitude</string>
     <string name="celestial_coordinates">Coordinates (RA / Dec)</string>
-    <string name="celestial_parent_constellation">Parent constellation</string>
     <plurals name="celestial_constellations_label">
         <item quantity="one">Constellation</item>
         <item quantity="other">Constellations</item>
@@ -511,10 +510,6 @@
     <plurals name="celestial_asterisms_label">
         <item quantity="one">Asterism</item>
         <item quantity="other">Asterisms</item>
-    </plurals>
-    <plurals name="celestial_parent_constellations_label">
-        <item quantity="one">Parent constellation</item>
-        <item quantity="other">Parent constellations</item>
     </plurals>
     <string name="celestial_catalog_id">Catalog ID</string>
     <string name="celestial_angular_size">Angular size</string>
