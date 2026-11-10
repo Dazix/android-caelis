@@ -29,6 +29,7 @@ import com.dazix.caelis.domain.nightsky.EquatorialCoordinates
 import com.dazix.caelis.domain.nightsky.SkyNames
 import com.dazix.caelis.domain.nightsky.StarHitTester
 import com.dazix.caelis.domain.nightsky.StarOptics
+import kotlin.math.abs
 import kotlin.math.tan
 
 /**
@@ -110,6 +111,16 @@ class NightSkyRenderer {
     // drawn at all. The tap hits the name the user sees, not the spot it would have had.
     val constellationNameShiftYPx = FloatArray(maxConstellations)
     val constellationNameHidden = BooleanArray(maxConstellations)
+
+    // The drawn name's box around the point the hit test puts the name at (centroid, slide and
+    // shift): offset of its centre and half extents, pixels; a half width of 0 means not drawn. A tap
+    // inside it is on the text itself and selects the name without asking.
+    val constellationNameBoxDx = FloatArray(maxConstellations)
+    val constellationNameBoxDy = FloatArray(maxConstellations)
+    val constellationNameBoxHalfW = FloatArray(maxConstellations)
+    val constellationNameBoxHalfH = FloatArray(maxConstellations)
+    private val nameHitIndices = IntArray(MAX_MENU_NAMES)
+    private val nameHitDistSq = FloatArray(MAX_MENU_NAMES)
     var currentHorizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null
 
     var selectedConstellationIndex: Int = -1
@@ -259,6 +270,15 @@ class NightSkyRenderer {
 
         /** A star's reach on screen when a name is kept off it, dp: a bright star's glow, not its core. */
         private const val FIGURE_STAR_RADIUS_DP = 4f
+
+        /** How far outside a drawn name's box a tap still counts as on its text, dp (a fingertip). */
+        private const val NAME_TEXT_SLOP_DP = 4f
+
+        /** Names a tap near several offers in the menu, nearest first. */
+        private const val MAX_MENU_NAMES = 3
+
+        /** Bodies offered in the menu beside names (5 without names, as before). */
+        private const val MAX_MENU_BODIES = 4
 
         /** Every constellation and asterism name on screen at once, with room to spare. */
         private const val MAX_NAME_RESERVATIONS = 256
@@ -649,6 +669,7 @@ class NightSkyRenderer {
             override val score: Float,
             override val magnitude: Float = 0f,
             override val subtitle: String? = null,
+            val isAsterism: Boolean = false,
         ) : CelestialCandidate {
             override val target: HitTarget get() = HitTarget.ConstellationHit(constellationIndex)
         }
@@ -870,10 +891,14 @@ class NightSkyRenderer {
             }
         }
 
-        // 3. Constellation text labels (priority when in focus, unless planet is hit)
+        // 5. Constellation and asterism names. A tap on a name's text selects it at once, unless a
+        // planet is there too; a tap only near names (inside their generous areas) is offered in the
+        // menu with the bodies under it, or with each other: the name used to win outright, and a
+        // star beside a name, or an asterism inside its constellation's area, could not be picked.
         val constCount = if (catalog != null) minOf(catalog.constellationsLength(), maxConstellations) else 0
-        val constHit = if (catalog != null && constCount > 0) {
-            StarHitTester.findConstellationTextHit(
+        if (catalog != null) ensureOverlayLabels(catalog)
+        val nameCount = if (catalog != null && constCount > 0) {
+            StarHitTester.findConstellationTextHits(
                 tapX = tapX,
                 tapY = tapY,
                 centroidScreenX = constellationCentroidScreenX,
@@ -895,36 +920,66 @@ class NightSkyRenderer {
                 alignElevationOffsetDeg = hitAlignElevationDeg,
                 labelShiftYPx = constellationNameShiftYPx,
                 labelHidden = constellationNameHidden,
+                outIndices = nameHitIndices,
+                outDistSq = nameHitDistSq,
             )
-        } else -1
+        } else 0
 
-        if (constHit >= 0 && bodyCandidates.none { it is CelestialCandidate.Planet }) {
-            return HitTarget.ConstellationHit(constHit)
-        }
-
-        if (bodyCandidates.isEmpty()) {
-            if (constHit >= 0) return HitTarget.ConstellationHit(constHit)
-            return HitTarget.Miss
+        val planetHit = bodyCandidates.any { it is CelestialCandidate.Planet }
+        if (!planetHit) {
+            val slideBase = CONSTELLATION_LABEL_SLIDE_DP * density
+            val slop = NAME_TEXT_SLOP_DP * density
+            for (k in 0 until nameCount) {
+                val c = nameHitIndices[k]
+                val halfW = constellationNameBoxHalfW[c]
+                if (halfW <= 0f) continue
+                val cx = constellationCentroidScreenX[c] + constellationNameBoxDx[c]
+                val cy = constellationCentroidScreenY[c] - slideBase * (1f - constellationProgress[c]) +
+                    constellationNameShiftYPx[c] + constellationNameBoxDy[c]
+                if (abs(tapX - cx) <= halfW + slop && abs(tapY - cy) <= constellationNameBoxHalfH[c] + slop) {
+                    return HitTarget.ConstellationHit(c)
+                }
+            }
         }
 
         // Sort all body candidates by score ascending (lowest/best score first)
         bodyCandidates.sortBy { it.score }
-
-        if (bodyCandidates.size == 1) {
-            return bodyCandidates[0].target
+        val competitiveCandidates = if (bodyCandidates.isEmpty()) {
+            bodyCandidates
+        } else {
+            val bestScore = bodyCandidates[0].score
+            bodyCandidates.filter { it.score <= maxOf(bestScore * 4.0f, bestScore + 50f) }
         }
 
-        val bestScore = bodyCandidates[0].score
-        val competitiveCandidates = bodyCandidates.filter { it.score <= maxOf(bestScore * 4.0f, bestScore + 50f) }
+        if (nameCount == 0) {
+            return when (competitiveCandidates.size) {
+                0 -> HitTarget.Miss
+                1 -> competitiveCandidates[0].target
+                else -> HitTarget.MultipleHits(tapX = tapX, tapY = tapY, candidates = competitiveCandidates.take(5))
+            }
+        }
+        if (competitiveCandidates.isEmpty() && nameCount == 1) {
+            return HitTarget.ConstellationHit(nameHitIndices[0])
+        }
 
-        return if (competitiveCandidates.size == 1) {
-            competitiveCandidates[0].target
-        } else {
-            HitTarget.MultipleHits(
-                tapX = tapX,
-                tapY = tapY,
-                candidates = competitiveCandidates.take(5),
+        val candidates = ArrayList<CelestialCandidate>(MAX_MENU_BODIES + nameHitIndices.size)
+        for (i in 0 until minOf(competitiveCandidates.size, MAX_MENU_BODIES)) candidates.add(competitiveCandidates[i])
+        for (k in 0 until nameCount) {
+            val c = nameHitIndices[k]
+            val name = constellationLabels.getOrNull(c) ?: continue
+            candidates.add(
+                CelestialCandidate.Constellation(
+                    constellationIndex = c,
+                    name = name,
+                    score = nameHitDistSq[k],
+                    isAsterism = labelIsAsterism.getOrElse(c) { false },
+                )
             )
+        }
+        return when (candidates.size) {
+            0 -> HitTarget.Miss
+            1 -> candidates[0].target
+            else -> HitTarget.MultipleHits(tapX = tapX, tapY = tapY, candidates = candidates)
         }
     }
 
@@ -1438,6 +1493,7 @@ class NightSkyRenderer {
         // A name is tappable once this frame lists it; until then it is not drawn.
         java.util.Arrays.fill(constellationNameHidden, true)
         java.util.Arrays.fill(constellationNameShiftYPx, 0f)
+        java.util.Arrays.fill(constellationNameBoxHalfW, 0f)
         for (pass in 0 until 3) {
             for (c in 0 until scene.constellationCount) {
                 val isSelected = c == frame.selectedConstellation
@@ -1575,6 +1631,12 @@ class NightSkyRenderer {
             val cy = overlayProjected[1] + offsetY - atlas.anchorY[sprite] + h * 0.5f
             val hw = w * 0.5f
             val hh = h * 0.5f
+            if (c < constellationNameBoxHalfW.size) {
+                constellationNameBoxDx[c] = hw - atlas.anchorX[sprite]
+                constellationNameBoxDy[c] = hh - atlas.anchorY[sprite]
+                constellationNameBoxHalfW[c] = hw
+                constellationNameBoxHalfH[c] = hh
+            }
             val onScreen = inFront && cx + hw >= 0f && cx - hw <= projector.viewportWidth &&
                 cy + hh >= 0f && cy - hh <= projector.viewportHeight
             if (onScreen) {

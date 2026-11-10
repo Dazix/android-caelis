@@ -8,3 +8,4 @@ Nachthimmel: Namen überlappen nicht mehr
 Obere Leiste weicht der Kameraaussparung aus
 Nachthimmel: dezentere Auswahl, abgerundete Linien
 Nachthimmel: Asterismus-Namen im Sternbild sind tippbar
+Nachthimmel: Tippen neben einen Namen bietet Sternbild und Sterne zur Auswahl

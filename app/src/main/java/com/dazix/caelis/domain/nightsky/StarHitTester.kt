@@ -305,7 +305,58 @@ object StarHitTester {
         labelShiftYPx: FloatArray? = null,
         labelHidden: BooleanArray? = null,
     ): Int {
-        if (totalConstellations <= 0 || halfWidthPx <= 0f || halfHeightPx <= 0f) return -1
+        val n = findConstellationTextHits(
+            tapX, tapY, centroidScreenX, centroidScreenY, centroidInFront, constellationProgress,
+            totalConstellations, textOffsetYPx, halfWidthPx, halfHeightPx, minProgress,
+            centroidWorldX, centroidWorldY, centroidWorldZ, isLandscapeVisible, useRealHorizon,
+            horizonProfile, alignAzimuthOffsetDeg, alignElevationOffsetDeg, labelShiftYPx, labelHidden,
+            outIndices = singleHit,
+            outDistSq = singleHitDistSq,
+            maxHits = 1,
+        )
+        return if (n > 0) singleHit[0] else -1
+    }
+
+    private val singleHit = IntArray(1)
+    private val singleHitDistSq = FloatArray(1)
+
+    /**
+     * Every name whose area takes the tap, nearest first (elliptical distance, 0 at the name's
+     * centre, 1 on the edge of its area): the indices go to [outIndices], their distances to
+     * [outDistSq], at most [maxHits] of them. Returns how many. The parameters are those of
+     * [findConstellationTextHit].
+     *
+     * Names overlap where an asterism sits inside its constellation (Cygnus, the Northern Cross and
+     * the Emu); the tap then offers all of them instead of guessing.
+     */
+    fun findConstellationTextHits(
+        tapX: Float,
+        tapY: Float,
+        centroidScreenX: FloatArray,
+        centroidScreenY: FloatArray,
+        centroidInFront: BooleanArray,
+        constellationProgress: FloatArray,
+        totalConstellations: Int,
+        textOffsetYPx: Float,
+        halfWidthPx: Float,
+        halfHeightPx: Float,
+        minProgress: Float = 0.3f,
+        centroidWorldX: FloatArray? = null,
+        centroidWorldY: FloatArray? = null,
+        centroidWorldZ: FloatArray? = null,
+        isLandscapeVisible: Boolean = false,
+        useRealHorizon: Boolean = false,
+        horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
+        alignAzimuthOffsetDeg: Float = 0f,
+        alignElevationOffsetDeg: Float = 0f,
+        labelShiftYPx: FloatArray? = null,
+        labelHidden: BooleanArray? = null,
+        outIndices: IntArray,
+        outDistSq: FloatArray,
+        maxHits: Int = outIndices.size,
+    ): Int {
+        val capacity = minOf(maxHits, outIndices.size, outDistSq.size)
+        if (capacity <= 0 || totalConstellations <= 0 || halfWidthPx <= 0f || halfHeightPx <= 0f) return 0
 
         val limit = minOf(
             totalConstellations,
@@ -321,8 +372,7 @@ object StarHitTester {
         val invRx2 = 1.0f / (halfWidthPx * halfWidthPx)
         val invRy2 = 1.0f / (halfHeightPx * halfHeightPx)
 
-        var best = -1
-        var bestDistSq = Float.MAX_VALUE
+        var count = 0
         for (i in 0 until limit) {
             val progress = constellationProgress[i]
             if (progress <= minProgress || !centroidInFront[i]) continue
@@ -350,13 +400,22 @@ object StarHitTester {
             val dy = tapY - cy
 
             val ellipticalDistSq = (dx * dx * invRx2) + (dy * dy * invRy2)
-            if (ellipticalDistSq <= 1.0f && ellipticalDistSq < bestDistSq) {
-                best = i
-                bestDistSq = ellipticalDistSq
+            if (ellipticalDistSq > 1.0f) continue
+            // Insertion into the sorted short list; the farthest falls off a full one.
+            var at = count
+            while (at > 0 && outDistSq[at - 1] > ellipticalDistSq) at--
+            if (at >= capacity) continue
+            val last = minOf(count, capacity - 1)
+            for (k in last downTo at + 1) {
+                outIndices[k] = outIndices[k - 1]
+                outDistSq[k] = outDistSq[k - 1]
             }
+            outIndices[at] = i
+            outDistSq[at] = ellipticalDistSq
+            if (count < capacity) count++
         }
 
-        return best
+        return count
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.dazix.caelis.domain.nightsky
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StarHitTesterTest {
@@ -115,6 +116,28 @@ class StarHitTesterTest {
         )
 
         assertEquals(0, hitIndex)
+    }
+
+    @Test
+    fun `every name taking the tap is listed nearest first, the farthest falling off a full list`() {
+        // Four names in a row 20 px apart; the tap is 2 px from the third, 18 from the fourth, 22
+        // from the second and 42 from the first. Room for three.
+        val cx = floatArrayOf(400f, 420f, 440f, 460f)
+        val cy = floatArrayOf(500f, 500f, 500f, 500f)
+        val inFront = booleanArrayOf(true, true, true, true)
+        val progress = floatArrayOf(1f, 1f, 1f, 1f)
+        val out = IntArray(3)
+        val dist = FloatArray(3)
+        val n = StarHitTester.findConstellationTextHits(
+            tapX = 442f, tapY = 500f,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 4,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+            outIndices = out, outDistSq = dist,
+        )
+        assertEquals(3, n)
+        assertEquals(listOf(2, 3, 1), out.toList())
+        assertTrue(dist[0] < dist[1] && dist[1] < dist[2])
     }
 
     @Test

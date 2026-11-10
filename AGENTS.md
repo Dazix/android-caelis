@@ -654,6 +654,10 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Celestial hit-testing scores both brightness and proximity.** In dense star fields, Euclidean distance
   alone selects faint background stars over prominent navigation stars. `StarHitTester` combines
   normalized distance and magnitude weights with a disambiguation popup for close candidate targets.
+  A constellation or asterism name is selected at once only when the tap is on its drawn text (the box
+  the last frame listed, no planet there); a tap merely inside a name's wide hit area puts every such
+  name in the popup beside the bodies. The name used to win outright, and a star beside it, or an
+  asterism inside its constellation's area, could not be picked.
 - **Local date override in celestial detail sheet must not alter global AR time or trigger render loop allocations.**
   `CelestialDetailBottomSheet` calculates visibility asynchronously for the chosen date via `CelestialVisibilityCalculator`
   using an isolated local `Instant`, leaving `NightSkyArViewModel.timeState` and the 60 FPS render loop untouched.

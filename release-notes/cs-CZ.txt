@@ -8,3 +8,4 @@ Noční obloha: názvy se už nepřekrývají
 Horní lišta mimo výřez fotoaparátu
 Noční obloha: decentnější výběr, zaoblené spojnice
 Noční obloha: název asterismu uvnitř souhvězdí jde vybrat klepnutím
+Noční obloha: klepnutí vedle názvu nabídne souhvězdí i hvězdy pod prstem

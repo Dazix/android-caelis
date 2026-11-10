@@ -1657,7 +1657,9 @@ private fun CelestialDisambiguationMenu(
                             val subtitleText = candidate.subtitle ?: when (candidate) {
                                 is NightSkyRenderer.CelestialCandidate.Planet -> stringResource(R.string.celestial_planet_subtitle)
                                 is NightSkyRenderer.CelestialCandidate.Star -> String.format(java.util.Locale.US, "mag %.1f", candidate.magnitude)
-                                is NightSkyRenderer.CelestialCandidate.Constellation -> stringResource(R.string.celestial_constellation_subtitle)
+                                is NightSkyRenderer.CelestialCandidate.Constellation -> stringResource(
+                                    if (candidate.isAsterism) R.string.celestial_asterism_subtitle else R.string.celestial_constellation_subtitle,
+                                )
                                 is NightSkyRenderer.CelestialCandidate.Dso -> stringResource(R.string.dso_type_generic)
                                 is NightSkyRenderer.CelestialCandidate.MeteorShower -> stringResource(R.string.celestial_meteor_shower_subtitle)
                             }
