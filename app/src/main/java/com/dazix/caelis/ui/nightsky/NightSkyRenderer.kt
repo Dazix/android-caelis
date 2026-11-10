@@ -359,7 +359,8 @@ class NightSkyRenderer {
     }
 
     /**
-     * The selection's colour (gold, or the night vision primary). A selected constellation or
+     * The selection's underlay colour: a muted blue-grey, or the night vision primary dimmed to
+     * 60 %; the gold of the other highlights was too loud as a fill. A selected constellation or
      * asterism name keeps its own size and weight and is only underlaid in this colour
      * ([selectedNamePaint]): a larger, bolder name jumped against the figure when it was tapped and
      * took the space the names around it had settled into.
@@ -506,7 +507,7 @@ class NightSkyRenderer {
             val primaryInt = AndroidColor.rgb(pr, pg, pb)
             constellationLabelPaint.color = AndroidColor.argb(210, pr, pg, pb)
             asterismLabelPaint.color = AndroidColor.argb(160, pr, pg, pb)
-            constellationHighlightLabelPaint.color = primaryInt
+            constellationHighlightLabelPaint.color = AndroidColor.rgb(pr * 3 / 5, pg * 3 / 5, pb * 3 / 5)
             dsoPaint.color = AndroidColor.argb(200, pr, pg, pb)
             dsoDashedPaint.color = AndroidColor.argb(200, pr, pg, pb)
             dsoHaloPaint.color = AndroidColor.argb(40, pr, pg, pb)
@@ -540,7 +541,7 @@ class NightSkyRenderer {
 
             constellationLabelPaint.color = AndroidColor.argb(220, 77, 208, 225)
             asterismLabelPaint.color = AndroidColor.argb(190, 144, 202, 249)
-            constellationHighlightLabelPaint.color = AndroidColor.rgb(255, 215, 64)
+            constellationHighlightLabelPaint.color = AndroidColor.rgb(176, 190, 197)
             dsoPaint.color = AndroidColor.argb(220, 255, 183, 77)
             dsoDashedPaint.color = AndroidColor.argb(220, 255, 183, 77)
             dsoHaloPaint.color = AndroidColor.argb(45, 255, 183, 77)
