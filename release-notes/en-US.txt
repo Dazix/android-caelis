@@ -10,5 +10,4 @@ Runs on Android 11 and 12
 Night sky: names no longer overlap
 Top bar clears the camera cutout
 Night sky: subtler selection, rounded figure lines
-Night sky: an asterism's name inside its constellation can be tapped
-Night sky: a tap beside a name offers the constellation and the stars there
+Night sky: easier tapping of constellation and asterism names
