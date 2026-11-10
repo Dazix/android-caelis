@@ -202,6 +202,59 @@ class StarHitTesterTest {
         assertEquals(-1, hitOutside)
     }
 
+    /**
+     * Delphinus and Job's Coffin, Cygnus and the Northern Cross: an asterism's centroid lies inside
+     * its constellation's 150 x 60 dp hit ellipse. The first index in catalogue order used to win, and
+     * constellations come before asterisms, so the asterism's name could not be tapped until a zoom
+     * pulled the two apart.
+     */
+    @Test
+    fun `overlapping names go to the nearest, not to the first in catalogue order`() {
+        val cx = floatArrayOf(500f, 520f)
+        val cy = floatArrayOf(500f, 540f)
+        val inFront = booleanArrayOf(true, true)
+        val progress = floatArrayOf(1f, 1f)
+
+        fun hit(x: Float, y: Float) = StarHitTester.findConstellationTextHit(
+            tapX = x, tapY = y,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 2,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+        )
+
+        assertEquals("on the asterism's name", 1, hit(520f, 540f))
+        assertEquals("on the constellation's name", 0, hit(500f, 500f))
+        assertEquals("closer to the asterism", 1, hit(510f, 525f))
+    }
+
+    @Test
+    fun `a name moved by the declutter is hit where it is drawn, and a name left out is not hit`() {
+        val cx = floatArrayOf(500f, 500f)
+        val cy = floatArrayOf(500f, 500f)
+        val inFront = booleanArrayOf(true, true)
+        val progress = floatArrayOf(1f, 1f)
+        // The constellation keeps its spot, the asterism on the same spot was moved a line (25 px) down.
+        val shift = floatArrayOf(0f, 25f)
+        val hidden = booleanArrayOf(false, false)
+
+        fun hit(x: Float, y: Float) = StarHitTester.findConstellationTextHit(
+            tapX = x, tapY = y,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 2,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+            labelShiftYPx = shift, labelHidden = hidden,
+        )
+
+        assertEquals(1, hit(500f, 525f))
+        assertEquals(0, hit(500f, 500f))
+        assertEquals("a tap above both lines is the constellation's", 0, hit(500f, 490f))
+
+        hidden[1] = true
+        assertEquals("a name not drawn yields to the one that is", 0, hit(500f, 525f))
+        hidden[0] = true
+        assertEquals(-1, hit(500f, 500f))
+    }
+
     @Test
     fun `computePlanetHitRadiusPx clamps to min radius for tiny planets and scales for large or zoomed bodies`() {
         val minRadiusPx = 48f

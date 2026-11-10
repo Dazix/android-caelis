@@ -271,7 +271,16 @@ object StarHitTester {
      * @param halfWidthPx Half-width radius of elliptical hit area in pixels (e.g. 75dp * density).
      * @param halfHeightPx Half-height radius of elliptical hit area in pixels (e.g. 30dp * density).
      * @param minProgress Minimum animation reveal progress required for interactive hit testing (default 0.3f).
+     * @param labelShiftYPx Where the last drawn frame moved each name from its own spot (a line down
+     *   or up, `LabelDeclutter`), in pixels, Y down; null when nothing was drawn yet.
+     * @param labelHidden Names the last drawn frame did not draw (switched off, or left out by the
+     *   declutter); null when nothing was drawn yet.
      * @return Constellation index [0, totalConstellations - 1], or -1 if no constellation text was hit.
+     *
+     * Of several names whose areas take the tap, the nearest wins. The first in catalogue order used
+     * to, and as constellations come before asterisms, an asterism inside its constellation (Job's
+     * Coffin in Delphinus, the Northern Cross in Cygnus) could not be tapped until a zoom pulled the
+     * two names apart.
      */
     fun findConstellationTextHit(
         tapX: Float,
@@ -293,6 +302,8 @@ object StarHitTester {
         horizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null,
         alignAzimuthOffsetDeg: Float = 0f,
         alignElevationOffsetDeg: Float = 0f,
+        labelShiftYPx: FloatArray? = null,
+        labelHidden: BooleanArray? = null,
     ): Int {
         if (totalConstellations <= 0 || halfWidthPx <= 0f || halfHeightPx <= 0f) return -1
 
@@ -310,9 +321,12 @@ object StarHitTester {
         val invRx2 = 1.0f / (halfWidthPx * halfWidthPx)
         val invRy2 = 1.0f / (halfHeightPx * halfHeightPx)
 
+        var best = -1
+        var bestDistSq = Float.MAX_VALUE
         for (i in 0 until limit) {
             val progress = constellationProgress[i]
             if (progress <= minProgress || !centroidInFront[i]) continue
+            if (labelHidden != null && i < labelHidden.size && labelHidden[i]) continue
 
             if (checkOcclusion && isOccludedByLandscape(
                     centroidWorldX[i],
@@ -329,18 +343,20 @@ object StarHitTester {
             }
 
             val cx = centroidScreenX[i]
-            val cy = centroidScreenY[i] - (textOffsetYPx * (1.0f - progress))
+            val shift = if (labelShiftYPx != null && i < labelShiftYPx.size) labelShiftYPx[i] else 0f
+            val cy = centroidScreenY[i] - (textOffsetYPx * (1.0f - progress)) + shift
 
             val dx = tapX - cx
             val dy = tapY - cy
 
             val ellipticalDistSq = (dx * dx * invRx2) + (dy * dy * invRy2)
-            if (ellipticalDistSq <= 1.0f) {
-                return i
+            if (ellipticalDistSq <= 1.0f && ellipticalDistSq < bestDistSq) {
+                best = i
+                bestDistSq = ellipticalDistSq
             }
         }
 
-        return -1
+        return best
     }
 
     /**

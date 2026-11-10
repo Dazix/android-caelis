@@ -105,6 +105,11 @@ class NightSkyRenderer {
     val constellationCentroidWorldX = FloatArray(maxConstellations)
     val constellationCentroidWorldY = FloatArray(maxConstellations)
     val constellationCentroidWorldZ = FloatArray(maxConstellations)
+
+    // Where the last drawn frame put each name: moved a line by the declutter (pixels, Y down), or not
+    // drawn at all. The tap hits the name the user sees, not the spot it would have had.
+    val constellationNameShiftYPx = FloatArray(maxConstellations)
+    val constellationNameHidden = BooleanArray(maxConstellations)
     var currentHorizonProfile: com.dazix.caelis.domain.horizon.HorizonProfile? = null
 
     var selectedConstellationIndex: Int = -1
@@ -888,6 +893,8 @@ class NightSkyRenderer {
                 horizonProfile = activeProfile,
                 alignAzimuthOffsetDeg = hitAlignAzimuthDeg,
                 alignElevationOffsetDeg = hitAlignElevationDeg,
+                labelShiftYPx = constellationNameShiftYPx,
+                labelHidden = constellationNameHidden,
             )
         } else -1
 
@@ -1428,6 +1435,9 @@ class NightSkyRenderer {
         // catalogue order, so the more important name keeps its spot (LabelDeclutter).
         nameDeclutter.clear()
         if (previousNameSlot.size < scene.constellationCount) previousNameSlot = IntArray(scene.constellationCount)
+        // A name is tappable once this frame lists it; until then it is not drawn.
+        java.util.Arrays.fill(constellationNameHidden, true)
+        java.util.Arrays.fill(constellationNameShiftYPx, 0f)
         for (pass in 0 until 3) {
             for (c in 0 until scene.constellationCount) {
                 val isSelected = c == frame.selectedConstellation
@@ -1593,11 +1603,14 @@ class NightSkyRenderer {
                 )
                 previousNameSlot[c] = slot
                 if (slot == LabelDeclutter.HIDDEN) return
-                offsetY += LabelDeclutter.offsetOf(slot, step)
+                val shift = LabelDeclutter.offsetOf(slot, step)
+                offsetY += shift
+                if (c < constellationNameShiftYPx.size) constellationNameShiftYPx[c] = shift
             } else {
                 previousNameSlot[c] = LabelDeclutter.SLOT_BASE
             }
         }
+        if (c < constellationNameHidden.size) constellationNameHidden[c] = false
         if (isSelected) {
             scene.highlightLabels.add(highlightConstellationSprite, x, y, z, offsetYPx = offsetY, alpha = effectiveP)
         } else {

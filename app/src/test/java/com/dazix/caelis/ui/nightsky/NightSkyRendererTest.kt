@@ -223,6 +223,40 @@ class NightSkyRendererTest {
     }
 
     @Test
+    fun `an asterism two degrees from its constellation's centre can be tapped without zooming`() {
+        // Job's Coffin in Delphinus, the Northern Cross in Cygnus: the asterism's name stands inside
+        // the constellation's hit area, and the constellation came first in the catalogue.
+        val catalog = catalog { fbb ->
+            val del = Constellation.createConstellation(
+                fbb, fbb.createString("Delphinus"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("Del"), 0, 0, false,
+            )
+            val jbc = Constellation.createConstellation(
+                fbb, fbb.createString("Job's Coffin"), 0f, 88f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("JbC"), 0, 0, true,
+            )
+            val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(del, jbc))
+            val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+            NightSkyCatalog.startStarsVector(fbb, 2)
+            Star.createStar(fbb, 0f, 88f, 3.8f)
+            Star.createStar(fbb, 0f, 90f, 3.8f)
+            NightSkyCatalog.createNightSkyCatalog(fbb, fbb.endVector(), meta, consts)
+        }
+        val sky = SkyFrame(catalog).also { it.settle() }
+        val renderer = NightSkyRenderer()
+        sky.prepare(renderer)
+        assertTrue(renderer.constellationProgress[0] > 0.3f)
+        assertTrue(renderer.constellationProgress[1] > 0.3f)
+
+        fun hitAt(c: Int) = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[c], renderer.constellationCentroidScreenY[c],
+            1f, 2.5f, catalog,
+        )
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(1), hitAt(1))
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(0), hitAt(0))
+    }
+
+    @Test
     fun `asterisms are named, smaller and apart from constellation names`() {
         val catalog = catalog { fbb ->
             val peg = Constellation.createConstellation(
