@@ -5,3 +5,4 @@ Aplikácia teraz hovorí po slovensky, poľsky a nemecky
 Upozornenie, keď časozber fotíte z ruky namiesto zo statívu
 Funguje aj na Androide 11 a 12
 Nočná obloha: názvy súhvezdí sa už neprekrývajú a názvy vrcholov neprekážajú kresbám
+Poloha slnka a mesiaca: obrys terénu už nebliká
