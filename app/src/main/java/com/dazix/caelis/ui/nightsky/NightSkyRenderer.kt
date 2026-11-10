@@ -17,6 +17,7 @@ import com.dazix.caelis.ar.scene.NormalTerrain
 import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.arframe.LabelDeclutter
 import com.dazix.caelis.domain.arframe.SkyFrameMath
+import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.dazix.caelis.data.nightsky.Constellation
 import com.dazix.caelis.data.nightsky.DeepSkyObject
 import com.dazix.caelis.data.nightsky.DsoType
@@ -234,7 +235,7 @@ class NightSkyRenderer {
         const val CONSTELLATION_LABEL_SLIDE_DP = 10f
 
         /** Backdrop behind constellation and asterism names: black at ~45 %, x the name's own alpha. */
-        private const val NAME_BACKDROP_ARGB = 0x73000000
+        private const val NAME_BACKDROP_ARGB = TextBackdrop.NAME_ARGB
 
         /** Extra space between a name and the one it moved a line away from, dp. */
         private const val NAME_LINE_GAP_DP = 2f

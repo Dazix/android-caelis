@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import com.dazix.caelis.domain.arframe.AtlasPacker
+import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.google.android.filament.Engine
 import com.google.android.filament.Texture
 import com.google.android.filament.android.TextureHelper
@@ -99,8 +100,8 @@ class SpriteAtlas(
         paint.getFontMetrics(fontMetrics)
         val shadowPad = ceil(paint.shadowLayerRadius + maxOf(abs(paint.shadowLayerDx), abs(paint.shadowLayerDy))).toInt() + 1
         val backdrop = backdropArgb != 0
-        val padX = shadowPad + if (backdrop) ceil(paint.textSize * BACKDROP_PAD_X).toInt() else 0
-        val padY = shadowPad + if (backdrop) ceil(paint.textSize * BACKDROP_PAD_Y).toInt() else 0
+        val padX = shadowPad + TextBackdrop.marginX(paint.textSize, backdrop)
+        val padY = shadowPad + TextBackdrop.marginY(paint.textSize, backdrop)
         val textWidth = paint.measureText(text)
         val w = ceil(textWidth).toInt() + 2 * padX
         val h = ceil(fontMetrics.bottom - fontMetrics.top).toInt() + 2 * padY
@@ -116,16 +117,15 @@ class SpriteAtlas(
         val ascent = fontMetrics.ascent
         val descent = fontMetrics.descent
         val textSize = paint.textSize
+        val textLeft = ax - when (paint.textAlign) {
+            Paint.Align.CENTER -> textWidth * 0.5f
+            Paint.Align.RIGHT -> textWidth
+            else -> 0f
+        }
         return add(w, h, ax, ay) { c, left, top ->
             backdropPaint.color = backdropArgb
-            val bx = textSize * BACKDROP_PAD_X
-            val by = textSize * BACKDROP_PAD_Y
-            backdropRect.set(
-                left + shadowPad,
-                top + ay + ascent - by,
-                left + w - shadowPad,
-                top + ay + descent + by,
-            )
+            TextBackdrop.pill(left + textLeft, left + textLeft + textWidth, top + ay, ascent, descent, textSize, pillBounds)
+            backdropRect.set(pillBounds[0], pillBounds[1], pillBounds[2], pillBounds[3])
             val radius = backdropRect.height() * 0.5f
             c.drawRoundRect(backdropRect, radius, radius, backdropPaint)
             c.drawText(text, left + ax, top + ay, paint)
@@ -134,6 +134,7 @@ class SpriteAtlas(
 
     private val backdropPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val backdropRect = android.graphics.RectF()
+    private val pillBounds = FloatArray(4)
 
     /**
      * A sprite of [w] x [h] pixels drawn by [drawer], anchored at ([anchorX], [anchorY]) inside it.
@@ -174,9 +175,5 @@ class SpriteAtlas(
     private companion object {
         /** Empty pixels around each sprite, so linear filtering never reaches a neighbour. */
         const val GUTTER = 2
-
-        /** A text backdrop's reach past the letters, as fractions of the text size. */
-        const val BACKDROP_PAD_X = 0.4f
-        const val BACKDROP_PAD_Y = 0.12f
     }
 }

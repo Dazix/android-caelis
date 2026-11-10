@@ -1,8 +1,8 @@
 # "What's new" on Google Play. See en-US.txt for the rules; the lines here translate it line by line.
-Virtuálne miesta: Slnko a nočná obloha z ľubovoľného uloženého miesta, aj zdieľaného z mapy
-Názvy vrcholov stoja presne na špičke kopca a držia líniu horizontu aj pri naklonení telefónu
-Aplikácia teraz hovorí po slovensky, poľsky a nemecky
-Upozornenie, keď časozber fotíte z ruky namiesto zo statívu
+Virtuálne miesta: Slnko a nočná obloha z uloženého miesta
+Názvy vrcholov stoja na špičke, držia horizont a cez deň majú tmavý podklad
+Novo po slovensky, poľsky a nemecky
+Varovanie pri časozbere z ruky
 Funguje aj na Androide 11 a 12
-Nočná obloha: názvy súhvezdí sa už neprekrývajú a názvy vrcholov neprekážajú kresbám
-Horná lišta už nezasahuje do výrezu fotoaparátu
+Nočná obloha: názvy sa už neprekrývajú
+Horná lišta mimo výrezu fotoaparátu

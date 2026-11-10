@@ -9,6 +9,7 @@ import com.dazix.caelis.ar.scene.SkySurface
 import com.dazix.caelis.ar.scene.SpriteAtlas
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.dazix.caelis.domain.arframe.TiltedLabel
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
@@ -62,6 +63,7 @@ class LandmarkMarksDeviceTest {
         landmark: HorizonLandmark,
         rollDeg: Double = 0.0,
         fadeWholeScreen: Boolean = false,
+        backdropArgb: Int = 0,
     ): Pair<ByteArray, SkyProjector> {
         val surface = SkySurface.offscreen(context, width, height)
         val material = surface.loadMaterial("label")
@@ -81,7 +83,7 @@ class LandmarkMarksDeviceTest {
             val projector = SkyProjector().also { it.update(model, width.toFloat(), height.toFloat(), fov) }
 
             val marks = LandmarkMarks()
-            marks.update(listOf(landmark), "en", 0xFFFFFFFF.toInt(), density, 1f)
+            marks.update(listOf(landmark), "en", 0xFFFFFFFF.toInt(), density, 1f, backdropArgb)
             atlas.begin()
             marks.addSprites(atlas)
             atlas.end()
@@ -206,6 +208,36 @@ class LandmarkMarksDeviceTest {
             assertTrue("the name runs away from the tick, not back over it ($alongAxis px), $where", alongAxis > 20.0)
             assertTrue("the centroid is on the name's side of the tick ($centroidAngle°), $where", abs(centroidAngle) < 30.0)
         }
+    }
+
+    /**
+     * Sun AR's names stand on a translucent dark pill ([TextBackdrop.NAME_ARGB]) so pale letters can
+     * be read against a bright daytime sky. The pill fills the gaps between and around the letters at
+     * about its own opacity; without it those pixels are clear. The tick is never on a pill.
+     */
+    @Test
+    fun aNameWithABackdropStandsOnATranslucentPill() {
+        val pillAlpha = TextBackdrop.NAME_ARGB ushr 24
+        val translucent = { pixels: ByteArray ->
+            var n = 0
+            for (y in 0 until height) for (x in 0 until width) {
+                if (abs(alpha(pixels, x, y) - pillAlpha) <= 12) n++
+            }
+            n
+        }
+        val name = landmark("Testovací vrch", 0.0, -6.0)
+        val plain = translucent(render(name).first)
+        val (pixels, projector) = render(name, backdropArgb = TextBackdrop.NAME_ARGB)
+        val onPill = translucent(pixels)
+        // A 14-letter name at 20 px type is a pill of ~170 x 33 px; most of it lies between letters.
+        assertTrue("the pill is drawn under the name ($onPill translucent px, $plain without)", onPill > plain + 1500)
+
+        // The tick's middle keeps its dark casing and white stroke, with no pill around it.
+        val anchor = FloatArray(3)
+        assertTrue(projector.projectAltAz(0.0, -6.0, anchor))
+        val midY = (anchor[1] - LandmarkMarks.TICK_DP * density * 0.5f).toInt()
+        val beside = alpha(pixels, (anchor[0] - 6f).toInt(), midY)
+        assertTrue("clear sky beside the tick (alpha $beside)", beside < 20)
     }
 
     @Test
