@@ -1,6 +1,7 @@
 package com.dazix.caelis.domain.nightsky
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StarHitTesterTest {
@@ -118,6 +119,28 @@ class StarHitTesterTest {
     }
 
     @Test
+    fun `every name taking the tap is listed nearest first, the farthest falling off a full list`() {
+        // Four names in a row 20 px apart; the tap is 2 px from the third, 18 from the fourth, 22
+        // from the second and 42 from the first. Room for three.
+        val cx = floatArrayOf(400f, 420f, 440f, 460f)
+        val cy = floatArrayOf(500f, 500f, 500f, 500f)
+        val inFront = booleanArrayOf(true, true, true, true)
+        val progress = floatArrayOf(1f, 1f, 1f, 1f)
+        val out = IntArray(3)
+        val dist = FloatArray(3)
+        val n = StarHitTester.findConstellationTextHits(
+            tapX = 442f, tapY = 500f,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 4,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+            outIndices = out, outDistSq = dist,
+        )
+        assertEquals(3, n)
+        assertEquals(listOf(2, 3, 1), out.toList())
+        assertTrue(dist[0] < dist[1] && dist[1] < dist[2])
+    }
+
+    @Test
     fun `ignores constellation text if progress is below threshold`() {
         val cx = floatArrayOf(400f)
         val cy = floatArrayOf(500f)
@@ -200,6 +223,59 @@ class StarHitTesterTest {
             halfHeightPx = 30f,
         )
         assertEquals(-1, hitOutside)
+    }
+
+    /**
+     * Delphinus and Job's Coffin, Cygnus and the Northern Cross: an asterism's centroid lies inside
+     * its constellation's 150 x 60 dp hit ellipse. The first index in catalogue order used to win, and
+     * constellations come before asterisms, so the asterism's name could not be tapped until a zoom
+     * pulled the two apart.
+     */
+    @Test
+    fun `overlapping names go to the nearest, not to the first in catalogue order`() {
+        val cx = floatArrayOf(500f, 520f)
+        val cy = floatArrayOf(500f, 540f)
+        val inFront = booleanArrayOf(true, true)
+        val progress = floatArrayOf(1f, 1f)
+
+        fun hit(x: Float, y: Float) = StarHitTester.findConstellationTextHit(
+            tapX = x, tapY = y,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 2,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+        )
+
+        assertEquals("on the asterism's name", 1, hit(520f, 540f))
+        assertEquals("on the constellation's name", 0, hit(500f, 500f))
+        assertEquals("closer to the asterism", 1, hit(510f, 525f))
+    }
+
+    @Test
+    fun `a name moved by the declutter is hit where it is drawn, and a name left out is not hit`() {
+        val cx = floatArrayOf(500f, 500f)
+        val cy = floatArrayOf(500f, 500f)
+        val inFront = booleanArrayOf(true, true)
+        val progress = floatArrayOf(1f, 1f)
+        // The constellation keeps its spot, the asterism on the same spot was moved a line (25 px) down.
+        val shift = floatArrayOf(0f, 25f)
+        val hidden = booleanArrayOf(false, false)
+
+        fun hit(x: Float, y: Float) = StarHitTester.findConstellationTextHit(
+            tapX = x, tapY = y,
+            centroidScreenX = cx, centroidScreenY = cy, centroidInFront = inFront,
+            constellationProgress = progress, totalConstellations = 2,
+            textOffsetYPx = 40f, halfWidthPx = 75f, halfHeightPx = 30f,
+            labelShiftYPx = shift, labelHidden = hidden,
+        )
+
+        assertEquals(1, hit(500f, 525f))
+        assertEquals(0, hit(500f, 500f))
+        assertEquals("a tap above both lines is the constellation's", 0, hit(500f, 490f))
+
+        hidden[1] = true
+        assertEquals("a name not drawn yields to the one that is", 0, hit(500f, 525f))
+        hidden[0] = true
+        assertEquals(-1, hit(500f, 500f))
     }
 
     @Test

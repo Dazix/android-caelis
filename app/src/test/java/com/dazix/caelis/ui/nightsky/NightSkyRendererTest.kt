@@ -109,6 +109,19 @@ class NightSkyRendererTest {
         }
     }
 
+    /**
+     * What listing the marks records for the hit test, which needs the GPU scene: each of the first
+     * [count] names drawn as a [halfW] x [halfH] box centred where the hit test puts the name.
+     */
+    private fun drawNames(renderer: NightSkyRenderer, count: Int, halfW: Float = 60f, halfH: Float = 12f) {
+        for (c in 0 until count) {
+            renderer.constellationNameBoxDx[c] = 0f
+            renderer.constellationNameBoxDy[c] = 0f
+            renderer.constellationNameBoxHalfW[c] = halfW
+            renderer.constellationNameBoxHalfH[c] = halfH
+        }
+    }
+
     private fun catalog(build: (FlatBufferBuilder) -> Int): NightSkyCatalog {
         val fbb = FlatBufferBuilder(1024)
         NightSkyCatalog.finishNightSkyCatalogBuffer(fbb, build(fbb))
@@ -211,6 +224,7 @@ class NightSkyRendererTest {
         val sky = SkyFrame(catalog).also { it.settle() }
         val renderer = NightSkyRenderer()
         sky.prepare(renderer)
+        drawNames(renderer, 2)
 
         assertTrue(renderer.constellationProgress[0] > 0.3f)
         assertTrue(renderer.constellationProgress[1] > 0.3f)
@@ -220,6 +234,124 @@ class NightSkyRendererTest {
         )
         assertTrue(hit is NightSkyRenderer.HitTarget.ConstellationHit)
         assertEquals(1, (hit as NightSkyRenderer.HitTarget.ConstellationHit).index)
+    }
+
+    @Test
+    fun `an asterism two degrees from its constellation's centre can be tapped without zooming`() {
+        // Job's Coffin in Delphinus, the Northern Cross in Cygnus: the asterism's name stands inside
+        // the constellation's hit area, and the constellation came first in the catalogue.
+        val catalog = catalog { fbb ->
+            val del = Constellation.createConstellation(
+                fbb, fbb.createString("Delphinus"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("Del"), 0, 0, false,
+            )
+            val jbc = Constellation.createConstellation(
+                fbb, fbb.createString("Job's Coffin"), 0f, 88f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("JbC"), 0, 0, true,
+            )
+            val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(del, jbc))
+            val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+            NightSkyCatalog.startStarsVector(fbb, 2)
+            Star.createStar(fbb, 0f, 88f, 3.8f)
+            Star.createStar(fbb, 0f, 90f, 3.8f)
+            NightSkyCatalog.createNightSkyCatalog(fbb, fbb.endVector(), meta, consts)
+        }
+        val sky = SkyFrame(catalog).also { it.settle() }
+        val renderer = NightSkyRenderer()
+        sky.prepare(renderer)
+        drawNames(renderer, 2)
+        assertTrue(renderer.constellationProgress[0] > 0.3f)
+        assertTrue(renderer.constellationProgress[1] > 0.3f)
+
+        fun hitAt(c: Int) = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[c], renderer.constellationCentroidScreenY[c],
+            1f, 2.5f, catalog,
+        )
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(1), hitAt(1))
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(0), hitAt(0))
+    }
+
+    /** Delphinus at the pole with its stars, Job's Coffin two degrees from it, both grown in. */
+    private fun delphinusSky(): Pair<NightSkyCatalog, NightSkyRenderer> {
+        val catalog = catalog { fbb ->
+            val del = Constellation.createConstellation(
+                fbb, fbb.createString("Delphinus"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("Del"), 0, 0, false,
+            )
+            val jbc = Constellation.createConstellation(
+                fbb, fbb.createString("Job's Coffin"), 0f, 88f, Constellation.createLinesVector(fbb, intArrayOf(0, 1)),
+                fbb.createString("JbC"), 0, 0, true,
+            )
+            val consts = NightSkyCatalog.createConstellationsVector(fbb, intArrayOf(del, jbc))
+            val meta = NightSkyCatalog.createMetadataVector(fbb, intArrayOf())
+            NightSkyCatalog.startStarsVector(fbb, 2)
+            Star.createStar(fbb, 0f, 88f, 3.8f)
+            Star.createStar(fbb, 0f, 90f, 3.8f)
+            NightSkyCatalog.createNightSkyCatalog(fbb, fbb.endVector(), meta, consts)
+        }
+        val sky = SkyFrame(catalog).also { it.settle() }
+        val renderer = NightSkyRenderer()
+        sky.prepare(renderer)
+        assertTrue(renderer.constellationProgress[0] > 0.3f)
+        assertTrue(renderer.constellationProgress[1] > 0.3f)
+        return catalog to renderer
+    }
+
+    private fun NightSkyRenderer.HitTarget.menuNames(): List<Pair<Int, Boolean>> =
+        (this as NightSkyRenderer.HitTarget.MultipleHits).candidates
+            .filterIsInstance<NightSkyRenderer.CelestialCandidate.Constellation>()
+            .map { it.constellationIndex to it.isAsterism }
+
+    @Test
+    fun `a tap near two names but on neither text offers both, nearest first`() {
+        val (catalog, renderer) = delphinusSky()
+        drawNames(renderer, 2, halfW = 2f, halfH = 2f)
+        val hit = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[1] + 30f, renderer.constellationCentroidScreenY[1],
+            1f, 2.5f, catalog,
+        )
+        assertTrue("was $hit", hit is NightSkyRenderer.HitTarget.MultipleHits)
+        assertEquals(listOf(1 to true, 0 to false), hit.menuNames())
+        assertEquals(2, (hit as NightSkyRenderer.HitTarget.MultipleHits).candidates.size)
+    }
+
+    @Test
+    fun `a tap on a star beside a name offers the star and the name`() {
+        val (catalog, renderer) = delphinusSky()
+        // The names are drawn well to the side, so the tap on the star is not on their text.
+        drawNames(renderer, 2)
+        for (c in 0 until 2) renderer.constellationNameBoxDx[c] = 300f
+        val hit = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[1], renderer.constellationCentroidScreenY[1],
+            1f, 2.5f, catalog,
+        )
+        assertTrue("was $hit", hit is NightSkyRenderer.HitTarget.MultipleHits)
+        val candidates = (hit as NightSkyRenderer.HitTarget.MultipleHits).candidates
+        // A FlatBuffers vector is built back to front: the star created first, at 88°, is index 1.
+        assertEquals(1, (candidates.first() as NightSkyRenderer.CelestialCandidate.Star).starIndex)
+        assertEquals(listOf(1 to true, 0 to false), hit.menuNames())
+    }
+
+    @Test
+    fun `a tap on a name's text selects it even with a star under it`() {
+        val (catalog, renderer) = delphinusSky()
+        drawNames(renderer, 2)
+        val hit = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[1], renderer.constellationCentroidScreenY[1],
+            48f * 2.5f, 2.5f, catalog,
+        )
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(1), hit)
+    }
+
+    @Test
+    fun `a name that was not drawn is not on its text, and a lone name near the tap is selected`() {
+        val (catalog, renderer) = delphinusSky()
+        renderer.constellationNameHidden[0] = true
+        val hit = renderer.findHitAt(
+            renderer.constellationCentroidScreenX[1] + 30f, renderer.constellationCentroidScreenY[1],
+            1f, 2.5f, catalog,
+        )
+        assertEquals(NightSkyRenderer.HitTarget.ConstellationHit(1), hit)
     }
 
     @Test
@@ -311,6 +443,7 @@ class NightSkyRendererTest {
         val sky = SkyFrame(catalog).also { it.settle() }
         val renderer = NightSkyRenderer()
         sky.prepare(renderer)
+        drawNames(renderer, 2)
         assertTrue(renderer.constellationProgress[0] > 0.3f)
         assertTrue(renderer.constellationProgress[1] > 0.3f)
 
@@ -447,7 +580,7 @@ class NightSkyRendererTest {
     }
 
     @Test
-    fun `hit priority is planet over constellation over star over miss`() {
+    fun `a planet on a name is offered with it, the name alone is selected, nothing is a miss`() {
         val catalog = catalog { fbb ->
             val c = Constellation.createConstellation(
                 fbb, fbb.createString("Ursa Minor"), 0f, 90f, Constellation.createLinesVector(fbb, intArrayOf(0, 0)),
@@ -472,8 +605,13 @@ class NightSkyRendererTest {
         renderer.constellationCentroidInFront[0] = true
         renderer.constellationProgress[0] = 1f
 
+        // Even on the name's text: a planet is never hidden behind a name.
+        drawNames(renderer, 1)
         val hitPlanet = renderer.findHitAt(540f, 1200f, 48f, 2.5f, catalog, planets = listOf(jupiter))
-        assertEquals("Jupiter", (hitPlanet as NightSkyRenderer.HitTarget.PlanetHit).planetId)
+        val menu = (hitPlanet as NightSkyRenderer.HitTarget.MultipleHits).candidates
+        assertEquals("Jupiter", (menu[0] as NightSkyRenderer.CelestialCandidate.Planet).planetId)
+        assertEquals(listOf(0 to false), hitPlanet.menuNames())
+        assertEquals(2, menu.size)
         val hitConst = renderer.findHitAt(540f, 1200f, 48f, 2.5f, catalog, planets = emptyList())
         assertEquals(0, (hitConst as NightSkyRenderer.HitTarget.ConstellationHit).index)
         renderer.constellationProgress[0] = 0f

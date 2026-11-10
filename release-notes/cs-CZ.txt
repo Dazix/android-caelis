@@ -7,3 +7,4 @@ Funguje i na Androidu 11 a 12
 Noční obloha: názvy se už nepřekrývají
 Horní lišta mimo výřez fotoaparátu
 Noční obloha: decentnější výběr, zaoblené spojnice
+Noční obloha: snazší výběr názvů souhvězdí a asterismů klepnutím
