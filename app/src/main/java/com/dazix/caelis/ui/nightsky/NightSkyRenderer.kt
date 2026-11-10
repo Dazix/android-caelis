@@ -237,6 +237,12 @@ class NightSkyRenderer {
         /** Backdrop behind constellation and asterism names: black at ~45 %, x the name's own alpha. */
         private const val NAME_BACKDROP_ARGB = TextBackdrop.NAME_ARGB
 
+        /** The selected name's underlay: the selection colour, nearly opaque so dark letters read on it. */
+        private const val SELECTED_NAME_BACKDROP_ALPHA = 230
+
+        /** Letters on the selected name's underlay. */
+        private const val SELECTED_NAME_TEXT_ARGB = 0xFF101014.toInt()
+
         /** Extra space between a name and the one it moved a line away from, dp. */
         private const val NAME_LINE_GAP_DP = 2f
 
@@ -352,12 +358,23 @@ class NightSkyRenderer {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
     }
 
+    /**
+     * The selection's colour (gold, or the night vision primary). A selected constellation or
+     * asterism name keeps its own size and weight and is only underlaid in this colour
+     * ([selectedNamePaint]): a larger, bolder name jumped against the figure when it was tapped and
+     * took the space the names around it had settled into.
+     */
     val constellationHighlightLabelPaint = Paint().apply {
         isAntiAlias = true
         textSize = 32f
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        setShadowLayer(10f, 0f, 0f, AndroidColor.BLACK)
+    }
+
+    /** The selected name's letters: the size and typeface of its own paint, dark on the highlight. */
+    private val selectedNamePaint = Paint().apply {
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+        color = SELECTED_NAME_TEXT_ARGB
     }
 
     // Zero-allocation broken-crosshair selection reticle & target text paints and buffers
@@ -1335,7 +1352,16 @@ class NightSkyRenderer {
         val atlas = scene.highlightAtlas
         atlas.begin()
         val constellationName = constellationLabels.getOrNull(c)
-        highlightConstellationSprite = if (constellationName == null) -1 else addOpaqueText(atlas, constellationName, constellationHighlightLabelPaint)
+        highlightConstellationSprite = if (constellationName == null) {
+            -1
+        } else {
+            val own = if (labelIsAsterism.getOrElse(c) { false }) asterismLabelPaint else constellationLabelPaint
+            selectedNamePaint.textSize = own.textSize
+            selectedNamePaint.typeface = own.typeface
+            val accent = constellationHighlightLabelPaint.color
+            val backdrop = AndroidColor.argb(SELECTED_NAME_BACKDROP_ALPHA, AndroidColor.red(accent), AndroidColor.green(accent), AndroidColor.blue(accent))
+            atlas.addText(constellationName, selectedNamePaint, backdrop)
+        }
         highlightDsoSprite = dsoLabels.getOrNull(d)?.let { atlas.addText(it, dsoHighlightLabelPaint) } ?: -1
         highlightMeteorSprite = meteorLabels.getOrNull(m)?.let { atlas.addText(it, radiantHighlightLabelPaint) } ?: -1
         reticleNameSprite = reticleName?.let { atlas.addText(it, reticleTextPaint) } ?: -1

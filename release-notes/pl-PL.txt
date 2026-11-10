@@ -6,3 +6,4 @@ Ostrzeżenie przy timelapsie z ręki
 Działa na Androidzie 11 i 12
 Nocne niebo: nazwy już się nie nakładają
 Górny pasek omija wycięcie aparatu
+Nocne niebo: subtelniejsze zaznaczenie, zaokrąglone linie
