@@ -1,5 +1,9 @@
 package com.dazix.caelis.domain.nightsky
 
+import com.dazix.caelis.data.nightsky.Constellation
+import com.dazix.caelis.data.nightsky.Star
+import com.dazix.caelis.data.nightsky.StarMetadata
+import java.io.FileInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -84,5 +88,53 @@ class FigureMembershipTest {
         assertTrue(membership.parentsOfAsterism(7).isEmpty())
         assertTrue(membership.parentsOfAsterism(0).isEmpty())
         assertTrue(membership.parentsOfAsterism(99).isEmpty())
+    }
+
+    @Test
+    fun `the brightest line star is the lowest magnitude, the first drawn on a tie`() {
+        val magnitudes = mapOf(1 to 0.5f, 2 to 0.13f, 3 to 1.6f, 4 to 0.13f, 5 to -1.46f, 6 to 0.34f, 7 to 0.85f)
+        val magnitude = { star: Int -> magnitudes.getValue(star) }
+        // Orion draws 1, 3, 4, 2: Rigel (2) and the belt star (4) tie, and 4 is drawn first.
+        assertEquals(4, membership.brightestStarOf(0, magnitude))
+        assertEquals(5, membership.brightestStarOf(5, magnitude))
+        assertEquals(6, membership.brightestStarOf(2, magnitude))
+        assertNull(membership.brightestStarOf(99, magnitude))
+    }
+
+    /**
+     * The detail sheet shows the catalog's brightest-star text and selects the star found here, so
+     * the two must be the same star in the shipped catalog, not only in the pipeline's intent.
+     */
+    @Test
+    fun `the brightest line star of every shipped figure is the one the catalog names`() {
+        val catalog = FileInputStream(resDir().resolve("raw/catalog.bin")).use { NightSkyCatalogLoader.loadFromStream(it) }
+        val c = Constellation()
+        val figures = List(catalog.constellationsLength()) { i ->
+            catalog.constellations(c, i)
+            FigureMembership.Figure(i, c.id(), c.isAsterism(), IntArray(c.linesLength()) { c.lines(it) })
+        }
+        val shipped = FigureMembership(figures)
+        val namesByStar = HashMap<Int, String>()
+        val meta = StarMetadata()
+        for (m in 0 until catalog.metadataLength()) {
+            catalog.metadata(meta, m)
+            meta.name()?.let { namesByStar[meta.starIndex()] = it }
+        }
+        val star = Star()
+        val wrong = mutableListOf<String>()
+        var checked = 0
+        for (i in 0 until catalog.constellationsLength()) {
+            catalog.constellations(c, i)
+            val expected = c.brightestStar()
+            if (expected.isNullOrEmpty()) continue
+            val found = shipped.brightestStarOf(i) { catalog.stars(star, it).mag() }
+            // A brightest star without a metadata record (fainter than 3.5 and unnamed) cannot be
+            // compared by name; the record covers every named or bright one.
+            val foundName = found?.let { namesByStar[it] } ?: continue
+            checked++
+            if (foundName != expected) wrong += "${c.id()}: catalog '$expected', lines '$foundName'"
+        }
+        assertTrue("compared only $checked figures", checked > 80)
+        assertTrue(wrong.joinToString("\n"), wrong.isEmpty())
     }
 }

@@ -521,6 +521,12 @@
         <item quantity="many">Asterizmy</item>
         <item quantity="other">Asterizmy</item>
     </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Súvisiace súhvezdie</item>
+        <item quantity="few">Súvisiace súhvezdia</item>
+        <item quantity="many">Súvisiace súhvezdia</item>
+        <item quantity="other">Súvisiace súhvezdia</item>
+    </plurals>
     <string name="celestial_catalog_id">Katalógové označenie</string>
     <string name="celestial_angular_size">Uhlová veľkosť</string>
     <string name="celestial_route_to_target">Vycentrovať v zornom poli</string>

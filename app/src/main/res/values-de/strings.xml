@@ -511,6 +511,10 @@
         <item quantity="one">Asterismus</item>
         <item quantity="other">Asterismen</item>
     </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Zugehöriges Sternbild</item>
+        <item quantity="other">Zugehörige Sternbilder</item>
+    </plurals>
     <string name="celestial_catalog_id">Katalog-ID</string>
     <string name="celestial_angular_size">Winkelgröße</string>
     <string name="celestial_route_to_target">Im Bild zentrieren</string>

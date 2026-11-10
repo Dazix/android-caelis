@@ -80,4 +80,23 @@ class FigureMembership(figures: List<Figure>) {
         }
         return order.filter { it in shared }.sortedByDescending { shared.getValue(it) }
     }
+
+    /**
+     * The brightest of a figure's line stars (lowest [magnitude]), the first one drawn on a tie, or
+     * null for a figure without lines. This is the star the catalog's `brightest_star` text names:
+     * `generate_catalog.py` takes the minimum over the same stars in the same order.
+     */
+    fun brightestStarOf(figureIndex: Int, magnitude: (Int) -> Float): Int? {
+        val stars = starsByFigure[figureIndex] ?: return null
+        var best: Int? = null
+        var bestMagnitude = Float.POSITIVE_INFINITY
+        for (star in stars) {
+            val m = magnitude(star)
+            if (best == null || m < bestMagnitude) {
+                best = star
+                bestMagnitude = m
+            }
+        }
+        return best
+    }
 }

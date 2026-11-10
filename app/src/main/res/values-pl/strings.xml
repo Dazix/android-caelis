@@ -521,6 +521,12 @@
         <item quantity="many">Asteryzmy</item>
         <item quantity="other">Asteryzmy</item>
     </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Powiązany gwiazdozbiór</item>
+        <item quantity="few">Powiązane gwiazdozbiory</item>
+        <item quantity="many">Powiązane gwiazdozbiory</item>
+        <item quantity="other">Powiązane gwiazdozbiory</item>
+    </plurals>
     <string name="celestial_catalog_id">ID katalogowe</string>
     <string name="celestial_angular_size">Rozmiar kątowy</string>
     <string name="celestial_route_to_target">Wyśrodkuj w kadrze</string>

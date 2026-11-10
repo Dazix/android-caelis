@@ -511,6 +511,10 @@
         <item quantity="one">Asterism</item>
         <item quantity="other">Asterisms</item>
     </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Related constellation</item>
+        <item quantity="other">Related constellations</item>
+    </plurals>
     <string name="celestial_catalog_id">Catalog ID</string>
     <string name="celestial_angular_size">Angular size</string>
     <string name="celestial_route_to_target">Center in viewport</string>

@@ -46,7 +46,8 @@ import com.dazix.caelis.R
 import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialVisibility
-import com.dazix.caelis.domain.nightsky.FigureLinkGroup
+import com.dazix.caelis.domain.nightsky.DetailLinkGroup
+import com.dazix.caelis.domain.nightsky.DetailLinkTarget
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.VisibilityState
 import com.dazix.caelis.ui.AppIcons
@@ -79,8 +80,8 @@ fun CelestialDetailSheetContent(
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
     onRouteToTarget: (() -> Unit)? = null,
-    /** A constellation or asterism named in [CelestialBodyDetails.figures] was pressed, by catalog index. */
-    onSelectFigure: ((Int) -> Unit)? = null,
+    /** A star, constellation or asterism named in [CelestialBodyDetails.figures] was pressed. */
+    onSelectLink: ((DetailLinkTarget) -> Unit)? = null,
     onShowDsoLegend: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
@@ -340,9 +341,9 @@ fun CelestialDetailSheetContent(
             }
 
             for (group in selectedBody.figures) {
-                FigureLinkRow(
+                DetailLinkRow(
                     group = group,
-                    onSelectFigure = onSelectFigure,
+                    onSelectLink = onSelectLink,
                     labelColor = labelColor,
                     valueColor = valueColor,
                     accentColor = accentColor,
@@ -817,14 +818,14 @@ fun CelestialDetailSheetContent(
 }
 
 /**
- * "Asterisms" over the names of the figures, each a bordered chip that selects its figure. The
+ * "Asterisms" over the names of the figures (or "Brightest star" over a star), each a bordered chip that selects it. The
  * border, not only the colour, is what tells a selectable name from a plain value.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FigureLinkRow(
-    group: FigureLinkGroup,
-    onSelectFigure: ((Int) -> Unit)?,
+private fun DetailLinkRow(
+    group: DetailLinkGroup,
+    onSelectLink: ((DetailLinkTarget) -> Unit)?,
     labelColor: Color,
     valueColor: Color,
     accentColor: Color,
@@ -836,7 +837,7 @@ private fun FigureLinkRow(
             fontSize = 11.sp,
             fontWeight = FontWeight.Normal,
         )
-        if (onSelectFigure == null) {
+        if (onSelectLink == null) {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = group.links.joinToString(", ") { it.name },
@@ -850,7 +851,7 @@ private fun FigureLinkRow(
             for (link in group.links) {
                 // Surface's onClick keeps the 48dp touch target around the smaller chip.
                 Surface(
-                    onClick = { onSelectFigure(link.constellationIndex) },
+                    onClick = { onSelectLink(link.target) },
                     shape = RoundedCornerShape(8.dp),
                     color = accentColor.copy(alpha = 0.12f),
                     border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.45f)),

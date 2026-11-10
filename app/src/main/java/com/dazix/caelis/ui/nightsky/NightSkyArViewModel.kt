@@ -21,8 +21,11 @@ import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
-import com.dazix.caelis.domain.nightsky.FigureLink
-import com.dazix.caelis.domain.nightsky.FigureLinkGroup
+import com.dazix.caelis.domain.nightsky.DetailLink
+import com.dazix.caelis.domain.nightsky.DetailLinkGroup
+import com.dazix.caelis.domain.nightsky.DetailLinkTarget
+import com.dazix.caelis.domain.nightsky.DetailHistory
+import com.dazix.caelis.domain.nightsky.SelectionRef
 import com.dazix.caelis.domain.nightsky.FigureMembership
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
@@ -1147,7 +1150,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves metadata for the tapped star from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectStarByIndex(starIndex: Int) {
-        dismissDisambiguation()
+        beginSelection()
         val cat = catalogState.value ?: return
         val totalStars = cat.starsLength()
         if (starIndex !in 0 until totalStars) {
@@ -1234,7 +1237,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves astronomical metadata for the tapped constellation from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectConstellationByIndex(constellationIndex: Int) {
-        dismissDisambiguation()
+        beginSelection()
         val cat = catalogState.value ?: return
         val totalConstellations = cat.constellationsLength()
         if (constellationIndex !in 0 until totalConstellations) {
@@ -1261,21 +1264,45 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         } else {
             app.getString(R.string.celestial_constellation_subtitle)
         }
-        val brightestStar = reusableConst.brightestStar() ?: "—"
+        val brightestStar = reusableConst.brightestStar()
         val family = reusableConst.family() ?: "—"
-        val prop1 = Pair(app.getString(R.string.celestial_brightest_star), brightestStar)
-        // An asterism's parents come from the lines it shares with them, translated and selectable;
-        // the catalog's English `family` text is the fallback for one that shares no line star.
-        val parents = if (isAsterism) figureMembership(cat).parentsOfAsterism(constellationIndex) else emptyList()
+        val membership = figureMembership(cat)
+        // The catalog names the brightest star in text only; the same star is found again among the
+        // figure's line stars, so the name can select it.
+        val brightestIndex = if (brightestStar.isNullOrEmpty()) {
+            null
+        } else {
+            val reusableStar = Star()
+            val starCount = cat.starsLength()
+            membership.brightestStarOf(constellationIndex) {
+                if (it in 0 until starCount) cat.stars(reusableStar, it)?.mag() ?: Float.POSITIVE_INFINITY else Float.POSITIVE_INFINITY
+            }?.takeIf { it in 0 until starCount }
+        }
+        val prop1 = if (brightestIndex == null) {
+            Pair(app.getString(R.string.celestial_brightest_star), brightestStar ?: "—")
+        } else {
+            null
+        }
+        // An asterism's constellations come from the lines it shares with them, translated and
+        // selectable; the catalog's English `family` text is the fallback for one that shares no line star.
+        val parents = if (isAsterism) membership.parentsOfAsterism(constellationIndex) else emptyList()
         val prop2 = when {
             isAsterism && parents.isNotEmpty() -> null
-            isAsterism -> Pair(app.resources.getQuantityString(R.plurals.celestial_constellations_label, family.split(',', '/').size), family)
+            isAsterism -> Pair(app.resources.getQuantityString(R.plurals.celestial_related_constellations_label, family.split(',', '/').size), family)
             else -> Pair(app.getString(R.string.celestial_family), family)
         }
-        val figures = if (parents.isEmpty()) {
-            emptyList()
-        } else {
-            listOf(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_constellations_label, parents.size), parents))
+        val figures = buildList {
+            if (brightestIndex != null && brightestStar != null) {
+                add(
+                    DetailLinkGroup(
+                        app.getString(R.string.celestial_brightest_star),
+                        listOf(DetailLink(brightestStar, DetailLinkTarget.Star(brightestIndex))),
+                    ),
+                )
+            }
+            if (parents.isNotEmpty()) {
+                add(figureGroup(cat, app.resources.getQuantityString(R.plurals.celestial_related_constellations_label, parents.size), parents))
+            }
         }
 
         val ra = reusableConst.centroidRa().toDouble()
@@ -1298,7 +1325,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves metadata for the tapped Deep Sky Object from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectDsoByIndex(dsoIndex: Int) {
-        dismissDisambiguation()
+        beginSelection()
         val cat = catalogState.value ?: return
         val totalDsos = cat.dsosLength()
         if (dsoIndex !in 0 until totalDsos) {
@@ -1361,7 +1388,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Resolves metadata for the tapped Meteor Shower Radiant from FlatBuffers catalog and updates [selectedBody].
      */
     fun selectMeteorByIndex(meteorIndex: Int) {
-        dismissDisambiguation()
+        beginSelection()
         val cat = catalogState.value ?: return
         val totalMeteors = cat.meteorShowersLength()
         if (meteorIndex !in 0 until totalMeteors) {
@@ -1471,24 +1498,83 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         return FigureMembership(figures).also { figureMembershipCache = cat to it }
     }
 
-    private fun figureGroup(cat: NightSkyCatalog, label: String, indices: List<Int>): FigureLinkGroup {
+    private fun figureGroup(cat: NightSkyCatalog, label: String, indices: List<Int>): DetailLinkGroup {
         val names = skyNames()
         val reusable = com.dazix.caelis.data.nightsky.Constellation()
         val links = indices.map { i ->
             cat.constellations(reusable, i)
             val name = names.constellation(reusable.id(), reusable.isAsterism(), reusable.name())
-            FigureLink(name = name ?: reusable.id().orEmpty(), constellationIndex = i)
+            DetailLink(name = name ?: reusable.id().orEmpty(), target = DetailLinkTarget.Figure(i))
         }
-        return FigureLinkGroup(label, links)
+        return DetailLinkGroup(label, links)
     }
 
     /**
-     * Follows a constellation or asterism named in the detail sheet: selects it, as a tap on its
-     * figure would, and turns the view to it as a search result would.
+     * Follows a name in the detail sheet: selects the star or figure, as a tap on it would, and
+     * turns the view to it as a search result would.
      */
-    fun selectFigureFromDetail(constellationIndex: Int, displayRotation: Int = Surface.ROTATION_0) {
-        selectConstellationByIndex(constellationIndex)
-        if (selectedConstellationIndex.value == constellationIndex) routeCameraToSelection(displayRotation)
+    fun selectLinkFromDetail(target: DetailLinkTarget, displayRotation: Int = Surface.ROTATION_0) {
+        val from = currentSelection()
+        val to = when (target) {
+            is DetailLinkTarget.Figure -> SelectionRef.Figure(target.constellationIndex)
+            is DetailLinkTarget.Star -> SelectionRef.Star(target.starIndex)
+        }
+        if (reselect(to)) {
+            detailHistory.follow(from, to)
+            routeCameraToSelection(displayRotation)
+        }
+    }
+
+    /**
+     * Back in the detail sheet: returns to the body whose sheet the current one was followed from,
+     * and turns the view to it. False when there is none, and the sheet should close instead.
+     */
+    fun backInDetail(displayRotation: Int = Surface.ROTATION_0): Boolean {
+        if (selectedBodyState.value == null) return false
+        while (true) {
+            val previous = detailHistory.back() ?: return false
+            // A body that is gone (a planet list rebuilt, a catalog reloaded) is skipped, not shown empty.
+            if (reselect(previous)) {
+                routeCameraToSelection(displayRotation)
+                return true
+            }
+        }
+    }
+
+    private val detailHistory = DetailHistory()
+
+    /** Set while a selection is made by following or going back, which must not reset [detailHistory]. */
+    private var followingDetailLink = false
+
+    /** The start of every selection: a body chosen any other way than from the sheet starts over. */
+    private fun beginSelection() {
+        dismissDisambiguation()
+        if (!followingDetailLink) detailHistory.clear()
+    }
+
+    private fun currentSelection(): SelectionRef? = when {
+        selectedStarIndex.value >= 0 -> SelectionRef.Star(selectedStarIndex.value)
+        selectedConstellationIndex.value >= 0 -> SelectionRef.Figure(selectedConstellationIndex.value)
+        selectedDsoIndex.value >= 0 -> SelectionRef.Dso(selectedDsoIndex.value)
+        selectedMeteorIndex.value >= 0 -> SelectionRef.Meteor(selectedMeteorIndex.value)
+        else -> selectedPlanetId.value?.let { SelectionRef.Planet(it) }
+    }
+
+    /** Selects [ref] without touching [detailHistory]; true when it is selected afterwards. */
+    private fun reselect(ref: SelectionRef): Boolean {
+        followingDetailLink = true
+        try {
+            when (ref) {
+                is SelectionRef.Star -> selectStarByIndex(ref.starIndex)
+                is SelectionRef.Figure -> selectConstellationByIndex(ref.constellationIndex)
+                is SelectionRef.Dso -> selectDsoByIndex(ref.dsoIndex)
+                is SelectionRef.Meteor -> selectMeteorByIndex(ref.showerIndex)
+                is SelectionRef.Planet -> selectPlanetById(ref.planetId)
+            }
+        } finally {
+            followingDetailLink = false
+        }
+        return currentSelection() == ref
     }
 
     /**
@@ -1658,7 +1744,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
      * Selects a dynamic planet or Moon by its ID string and populates [selectedBodyState].
      */
     fun selectPlanetById(planetId: String) {
-        dismissDisambiguation()
+        beginSelection()
         val planet = planetStates.value.firstOrNull { it.id.equals(planetId, ignoreCase = true) } ?: return
         selectedPlanetId.value = planet.id
         selectedStarIndex.value = -1
@@ -1679,6 +1765,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         _visibilityState.value = VisibilityState.Loading
         _localScheduleDate.value = null
         dismissDisambiguation()
+        detailHistory.clear()
         selectedStarIndex.value = -1
         selectedConstellationIndex.value = -1
         selectedDsoIndex.value = -1
