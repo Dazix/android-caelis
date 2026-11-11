@@ -4,7 +4,7 @@ Nazwy szczytów stoją na wierzchołku, trzymają horyzont, w dzień na ciemnym 
 Teraz po słowacku, polsku i niemiecku
 Ostrzeżenie przy timelapsie z ręki
 Działa na Androidzie 11 i 12
-Nocne niebo: nazwy się nie nakładają i łatwiej je stuknąć
+Nocne niebo: nazwy się nie nakładają i łatwiej je wybrać, subtelniejsze zaznaczenie, zaokrąglone linie
 Górny pasek omija wycięcie aparatu
-Nocne niebo: subtelniejsze zaznaczenie, zaokrąglone linie
-Ostrzeżenie kompasu pojawia się tylko, gdy kompas naprawdę się myli
+Ostrzeżenie kompasu tylko, gdy kompas się myli
+Słońce: obraz z aparatu szybciej, bez pustej siatki

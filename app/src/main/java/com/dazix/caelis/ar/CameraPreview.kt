@@ -22,6 +22,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +30,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -111,202 +114,219 @@ fun CameraPreview(
 
     val latestCameraEnabled by rememberUpdatedState(cameraEnabled)
 
-    LaunchedEffect(lifecycleOwner, isPortrait, cameraEnabled) {
-        if (!cameraEnabled) {
-            releaseCamera(bound, viewportView)
-            onFrameGrabber(null)
-            onCameraBound(null, 1f, 1f)
-            onCameraReleased()
-            return@LaunchedEffect
-        }
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-        cameraProviderFuture.addListener({
-            // The screen may be gone by the time the provider is ready; binding then would leave a
-            // camera running that nobody is looking at. The same goes for a camera that was handed
-            // to ARCore while the provider was still being fetched.
-            if (bound.disposed || !latestCameraEnabled) return@addListener
-            val cameraProvider = cameraProviderFuture.get()
-
-            // Sensor crop region, read from the capture results rather than guessed. It moves with
-            // digital zoom and with preview stabilisation, so it is re-read on every frame and the
-            // FOV is recomputed only when it actually changes.
-            var cropWidthPx = 0
-            var cropHeightPx = 0
-
-            val previewBuilder = Preview.Builder()
-            if (frameSource != null && latestDisplayRotation >= 0) previewBuilder.setTargetRotation(surfaceRotation(latestDisplayRotation))
-            val previewExtender = Camera2Interop.Extender(previewBuilder)
-            // Explicitly disable optical and digital stabilization to prevent IMU/viewfinder desynchronization
-            previewExtender.setCaptureRequestOption(
-                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-                CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF,
-            )
-            previewExtender.setCaptureRequestOption(
-                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
-            )
-
-            // Assigned once the camera is bound. The first capture results can arrive before that,
-            // so this stays nullable rather than lateinit: an early frame simply updates the crop
-            // and the binding below dispatches it.
-            var dispatchFov: (() -> Unit)? = null
-            // The stream resolution becomes known some frames after binding, and a crop that never
-            // changes afterwards never asks again: without this the geometry-only FOV from before the
-            // first frame could stay for the whole session.
-            val dispatchedMeasurable = java.util.concurrent.atomic.AtomicBoolean(false)
-
-            previewExtender.setSessionCaptureCallback(
-                object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
-                    override fun onCaptureCompleted(
-                        session: android.hardware.camera2.CameraCaptureSession,
-                        request: CaptureRequest,
-                        result: TotalCaptureResult,
-                    ) {
-                        frameClock?.onCaptureCompleted(result)
-                        val crop = result.get(CaptureResult.SCALER_CROP_REGION) ?: return
-                        val w = crop.width()
-                        val h = crop.height()
-                        if (w != cropWidthPx || h != cropHeightPx) {
-                            cropWidthPx = w
-                            cropHeightPx = h
-                            viewportView.post { dispatchFov?.invoke() }
-                        } else if (!dispatchedMeasurable.get()) {
-                            viewportView.post { dispatchFov?.invoke() }
-                        }
-                    }
-                },
-            )
-
-            val preview = previewBuilder.build().also {
-                it.surfaceProvider = frameSource ?: (viewportView as PreviewView).surfaceProvider
+    // An undispatched coroutine started by a DisposableEffect rather than a LaunchedEffect, and a
+    // provider that is already there used at once rather than through a listener: the camera is the
+    // slowest thing on an AR screen to deliver its first image, so binding it is the first thing the
+    // screen does. A LaunchedEffect only started after the sky's surface and scene had been built
+    // (~230 ms in) and the main-executor listener then queued behind the first sky frame (another
+    // 60-80 ms, 230 ms on a cold start); the grid stood on an empty sky for the whole wait.
+    val effectScope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner, isPortrait, cameraEnabled) {
+        val job = effectScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            if (!cameraEnabled) {
+                releaseCamera(bound, viewportView)
+                onFrameGrabber(null)
+                onCameraBound(null, 1f, 1f)
+                onCameraReleased()
+                return@launch
             }
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
-            // Bound with no analyzer attached. One is set only for the single frame the automatic
-            // alignment asks for and removed again immediately: this screen is a viewfinder, not a
-            // continuous vision pipeline, and an always-running analyzer costs battery for nothing.
-            val analysis = if (analyzeFrames) {
-                val analysisBuilder = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-                    // Delivered the way up the screen is, so a frame row is a screen row and the
-                    // skyline search can look for "sky above, ground below" without a rotation.
-                    .setOutputImageRotationEnabled(true)
+            fun bindCamera() {
+                // The screen may be gone by the time the provider is ready; binding then would leave a
+                // camera running that nobody is looking at. The same goes for a camera that was handed
+                // to ARCore while the provider was still being fetched.
+                if (bound.disposed || !latestCameraEnabled) return
+                val cameraProvider = cameraProviderFuture.get()
 
-                val analysisExtender = Camera2Interop.Extender(analysisBuilder)
-                analysisExtender.setCaptureRequestOption(
+                // Sensor crop region, read from the capture results rather than guessed. It moves with
+                // digital zoom and with preview stabilisation, so it is re-read on every frame and the
+                // FOV is recomputed only when it actually changes.
+                var cropWidthPx = 0
+                var cropHeightPx = 0
+
+                val previewBuilder = Preview.Builder()
+                if (frameSource != null && latestDisplayRotation >= 0) previewBuilder.setTargetRotation(surfaceRotation(latestDisplayRotation))
+                val previewExtender = Camera2Interop.Extender(previewBuilder)
+                // Explicitly disable optical and digital stabilization to prevent IMU/viewfinder desynchronization
+                previewExtender.setCaptureRequestOption(
                     CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
                     CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF,
                 )
-                analysisExtender.setCaptureRequestOption(
+                previewExtender.setCaptureRequestOption(
                     CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
                     CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
                 )
-                analysisBuilder.build()
-            } else {
-                null
-            }
 
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-            try {
-                cameraProvider.unbindAll()
-                bound.provider = cameraProvider
-                bound.preview = preview
-                bound.analysis = analysis
-                val camera = if (analysis != null) {
-                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
-                } else {
-                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
-                }
-                bound.camera = camera
-                onFrameGrabber(analysis?.let { frameGrabberFor(it, context) })
-                val zoomState = camera.cameraInfo.zoomState.value
-                onCameraBound(
-                    camera.cameraControl,
-                    zoomState?.minZoomRatio ?: 1f,
-                    zoomState?.maxZoomRatio ?: 1f,
+                // Assigned once the camera is bound. The first capture results can arrive before that,
+                // so this stays nullable rather than lateinit: an early frame simply updates the crop
+                // and the binding below dispatches it.
+                var dispatchFov: (() -> Unit)? = null
+                // The stream resolution becomes known some frames after binding, and a crop that never
+                // changes afterwards never asks again: without this the geometry-only FOV from before the
+                // first frame could stay for the whole session.
+                val dispatchedMeasurable = java.util.concurrent.atomic.AtomicBoolean(false)
+
+                previewExtender.setSessionCaptureCallback(
+                    object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
+                        override fun onCaptureCompleted(
+                            session: android.hardware.camera2.CameraCaptureSession,
+                            request: CaptureRequest,
+                            result: TotalCaptureResult,
+                        ) {
+                            frameClock?.onCaptureCompleted(result)
+                            val crop = result.get(CaptureResult.SCALER_CROP_REGION) ?: return
+                            val w = crop.width()
+                            val h = crop.height()
+                            if (w != cropWidthPx || h != cropHeightPx) {
+                                cropWidthPx = w
+                                cropHeightPx = h
+                                viewportView.post { dispatchFov?.invoke() }
+                            } else if (!dispatchedMeasurable.get()) {
+                                viewportView.post { dispatchFov?.invoke() }
+                            }
+                        }
+                    },
                 )
 
-                // Dynamically extract physical sensor dimensions, active pixel array, and primary focal length
-                val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
-                // Frame timestamps are comparable with sensor events only on the realtime clock; a
-                // camera on its own time base leaves the overlay on the live pose.
-                frameClock?.sharesSensorClock = camera2Info.getCameraCharacteristic(
-                    CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE,
-                ) == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
-                val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
-                val activeArraySize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
-                val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                val primaryFocalLength = CameraFovCalculator.primaryFocalLength(focalLengths)
+                val preview = previewBuilder.build().also {
+                    it.surfaceProvider = frameSource ?: (viewportView as PreviewView).surfaceProvider
+                }
 
-                // If physical size in mm is missing, fallback to active array pixel dimensions for aspect ratio
-                val effectiveSensorW = sensorSize?.width
-                    ?: activeArraySize?.let { if (it.width() > 0) it.width().toFloat() else null }
-                val effectiveSensorH = sensorSize?.height
-                    ?: activeArraySize?.let { if (it.height() > 0) it.height().toFloat() else null }
+                // Bound with no analyzer attached. One is set only for the single frame the automatic
+                // alignment asks for and removed again immediately: this screen is a viewfinder, not a
+                // continuous vision pipeline, and an always-running analyzer costs battery for nothing.
+                val analysis = if (analyzeFrames) {
+                    val analysisBuilder = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                        // Delivered the way up the screen is, so a frame row is a screen row and the
+                        // skyline search can look for "sky above, ground below" without a rotation.
+                        .setOutputImageRotationEnabled(true)
 
-                fun calculateAndDispatchFov(w: Float, h: Float) {
-                    if (w > 10f && h > 10f) {
-                        val resolution = preview.resolutionInfo?.resolution
-                        val dynamicFov = CameraFovCalculator.computeStreamHorizontalFov(
-                            sensorWidthMm = effectiveSensorW,
-                            sensorHeightMm = effectiveSensorH,
-                            focalLengthMm = primaryFocalLength,
-                            activeArrayWidthPx = activeArraySize?.width() ?: 0,
-                            activeArrayHeightPx = activeArraySize?.height() ?: 0,
-                            cropRegionWidthPx = cropWidthPx,
-                            cropRegionHeightPx = cropHeightPx,
-                            streamWidthPx = resolution?.width ?: 0,
-                            streamHeightPx = resolution?.height ?: 0,
-                            viewportWidth = w,
-                            viewportHeight = h,
-                            isPortrait = isPortrait,
-                        )
-                        if (com.dazix.caelis.BuildConfig.DEBUG) {
-                            android.util.Log.d(
-                                "CaelisFov",
-                                "active=${activeArraySize?.width()}x${activeArraySize?.height()} crop=${cropWidthPx}x$cropHeightPx" +
-                                    " preview=${resolution?.width}x${resolution?.height}" +
-                                    " analysis=${analysis?.resolutionInfo?.resolution}" +
-                                    " viewport=${w}x$h sensor=${effectiveSensorW}x$effectiveSensorH focal=$primaryFocalLength" +
-                                    " -> fov=${dynamicFov.horizontalDegrees} base=${dynamicFov.baseHorizontalDegrees}" +
-                                    " measured=${dynamicFov.isDynamicStreamCalculated}",
+                    val analysisExtender = Camera2Interop.Extender(analysisBuilder)
+                    analysisExtender.setCaptureRequestOption(
+                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+                        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF,
+                    )
+                    analysisExtender.setCaptureRequestOption(
+                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+                        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF,
+                    )
+                    analysisBuilder.build()
+                } else {
+                    null
+                }
+
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                try {
+                    cameraProvider.unbindAll()
+                    bound.provider = cameraProvider
+                    bound.preview = preview
+                    bound.analysis = analysis
+                    val camera = if (analysis != null) {
+                        cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, analysis)
+                    } else {
+                        cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
+                    }
+                    bound.camera = camera
+                    onFrameGrabber(analysis?.let { frameGrabberFor(it, context) })
+                    val zoomState = camera.cameraInfo.zoomState.value
+                    onCameraBound(
+                        camera.cameraControl,
+                        zoomState?.minZoomRatio ?: 1f,
+                        zoomState?.maxZoomRatio ?: 1f,
+                    )
+
+                    // Dynamically extract physical sensor dimensions, active pixel array, and primary focal length
+                    val camera2Info = Camera2CameraInfo.from(camera.cameraInfo)
+                    // Frame timestamps are comparable with sensor events only on the realtime clock; a
+                    // camera on its own time base leaves the overlay on the live pose.
+                    frameClock?.sharesSensorClock = camera2Info.getCameraCharacteristic(
+                        CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE,
+                    ) == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
+                    val sensorSize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE)
+                    val activeArraySize = camera2Info.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+                    val focalLengths = camera2Info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+                    val primaryFocalLength = CameraFovCalculator.primaryFocalLength(focalLengths)
+
+                    // If physical size in mm is missing, fallback to active array pixel dimensions for aspect ratio
+                    val effectiveSensorW = sensorSize?.width
+                        ?: activeArraySize?.let { if (it.width() > 0) it.width().toFloat() else null }
+                    val effectiveSensorH = sensorSize?.height
+                        ?: activeArraySize?.let { if (it.height() > 0) it.height().toFloat() else null }
+
+                    fun calculateAndDispatchFov(w: Float, h: Float) {
+                        if (w > 10f && h > 10f) {
+                            val resolution = preview.resolutionInfo?.resolution
+                            val dynamicFov = CameraFovCalculator.computeStreamHorizontalFov(
+                                sensorWidthMm = effectiveSensorW,
+                                sensorHeightMm = effectiveSensorH,
+                                focalLengthMm = primaryFocalLength,
+                                activeArrayWidthPx = activeArraySize?.width() ?: 0,
+                                activeArrayHeightPx = activeArraySize?.height() ?: 0,
+                                cropRegionWidthPx = cropWidthPx,
+                                cropRegionHeightPx = cropHeightPx,
+                                streamWidthPx = resolution?.width ?: 0,
+                                streamHeightPx = resolution?.height ?: 0,
+                                viewportWidth = w,
+                                viewportHeight = h,
+                                isPortrait = isPortrait,
                             )
+                            if (com.dazix.caelis.BuildConfig.DEBUG) {
+                                android.util.Log.d(
+                                    "CaelisFov",
+                                    "active=${activeArraySize?.width()}x${activeArraySize?.height()} crop=${cropWidthPx}x$cropHeightPx" +
+                                        " preview=${resolution?.width}x${resolution?.height}" +
+                                        " analysis=${analysis?.resolutionInfo?.resolution}" +
+                                        " viewport=${w}x$h sensor=${effectiveSensorW}x$effectiveSensorH focal=$primaryFocalLength" +
+                                        " -> fov=${dynamicFov.horizontalDegrees} base=${dynamicFov.baseHorizontalDegrees}" +
+                                        " measured=${dynamicFov.isDynamicStreamCalculated}",
+                                )
+                            }
+                            if (dynamicFov.isDynamicStreamCalculated) dispatchedMeasurable.set(true)
+                            onFovCalculated(dynamicFov)
                         }
-                        if (dynamicFov.isDynamicStreamCalculated) dispatchedMeasurable.set(true)
-                        onFovCalculated(dynamicFov)
                     }
-                }
 
-                val initialW = viewportView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
-                val initialH = viewportView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
-                dispatchFov = {
-                    val w = viewportView.width.toFloat().takeIf { it > 10f } ?: initialW
-                    val h = viewportView.height.toFloat().takeIf { it > 10f } ?: initialH
-                    calculateAndDispatchFov(w, h)
-                }
-                calculateAndDispatchFov(initialW, initialH)
-
-                // Listen for real layout dimensions to guarantee exact optical crop ratio matching screen geometry
-                // One listener per binding, removed with it: a camera that is unbound and bound again
-                // (ARCore takes it and gives it back) would otherwise leave the old listeners
-                // dispatching a field of view computed from a preview that no longer exists.
-                bound.layoutListener?.let { viewportView.removeOnLayoutChangeListener(it) }
-                val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-                    val newW = (right - left).toFloat()
-                    val newH = (bottom - top).toFloat()
-                    val oldW = (oldRight - oldLeft).toFloat()
-                    val oldH = (oldBottom - oldTop).toFloat()
-                    if (newW > 10f && newH > 10f && (newW != oldW || newH != oldH)) {
-                        calculateAndDispatchFov(newW, newH)
+                    val initialW = viewportView.width.toFloat().takeIf { it > 10f } ?: if (isPortrait) 1080f else 2340f
+                    val initialH = viewportView.height.toFloat().takeIf { it > 10f } ?: if (isPortrait) 2340f else 1080f
+                    dispatchFov = {
+                        val w = viewportView.width.toFloat().takeIf { it > 10f } ?: initialW
+                        val h = viewportView.height.toFloat().takeIf { it > 10f } ?: initialH
+                        calculateAndDispatchFov(w, h)
                     }
+                    calculateAndDispatchFov(initialW, initialH)
+
+                    // Listen for real layout dimensions to guarantee exact optical crop ratio matching screen geometry
+                    // One listener per binding, removed with it: a camera that is unbound and bound again
+                    // (ARCore takes it and gives it back) would otherwise leave the old listeners
+                    // dispatching a field of view computed from a preview that no longer exists.
+                    bound.layoutListener?.let { viewportView.removeOnLayoutChangeListener(it) }
+                    val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                        val newW = (right - left).toFloat()
+                        val newH = (bottom - top).toFloat()
+                        val oldW = (oldRight - oldLeft).toFloat()
+                        val oldH = (oldBottom - oldTop).toFloat()
+                        if (newW > 10f && newH > 10f && (newW != oldW || newH != oldH)) {
+                            calculateAndDispatchFov(newW, newH)
+                        }
+                    }
+                    bound.layoutListener = layoutListener
+                    viewportView.addOnLayoutChangeListener(layoutListener)
+                } catch (_: Exception) {
+                    onCameraBound(null, 1f, 1f)
+                    onFrameGrabber(null)
                 }
-                bound.layoutListener = layoutListener
-                viewportView.addOnLayoutChangeListener(layoutListener)
-            } catch (_: Exception) {
-                onCameraBound(null, 1f, 1f)
-                onFrameGrabber(null)
             }
-        }, ContextCompat.getMainExecutor(context))
+
+            if (cameraProviderFuture.isDone) {
+                bindCamera()
+            } else {
+                cameraProviderFuture.addListener({ bindCamera() }, ContextCompat.getMainExecutor(context))
+            }
+        }
+        onDispose { job.cancel() }
     }
 
     AndroidView(factory = { viewportView }, modifier = modifier)

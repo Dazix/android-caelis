@@ -160,8 +160,12 @@ class CameraBackground(surface: SkySurface) : CameraBackgroundSink {
         applyVisibility()
     }
 
+    /** Whether the frame rendered next shows a camera picture (on, an image submitted and fitted). */
+    val isPictureShown: Boolean
+        get() = enabled && hasImage && uvValid
+
     private fun applyVisibility() {
-        layer.setVisible(enabled && hasImage && uvValid)
+        layer.setVisible(isPictureShown)
     }
 
     fun destroy() {

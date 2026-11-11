@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
@@ -71,6 +72,11 @@ class MainActivity : ComponentActivity() {
                 CaelisApp(mainViewModel)
             }
         }
+        // CameraX initialises on its own threads (camera enumeration, no device opened, no
+        // permission needed). Started on the first AR entry instead, it was not ready until ~490 ms
+        // into the screen and the camera picture arrived ~1.1 s after the tap. Posted, so it does not
+        // compete with the first frame of the app itself.
+        window.decorView.post { ProcessCameraProvider.getInstance(applicationContext) }
     }
 
     override fun onNewIntent(intent: Intent) {
