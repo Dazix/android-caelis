@@ -3,8 +3,8 @@ package com.dazix.caelis.domain.arframe
 /** What the heading of the sensor path currently rests on, for the UI. */
 enum class HeadingState {
     /**
-     * The magnetometer reports itself unreliable or uncalibrated, or the fusion's own heading
-     * uncertainty is more than a calibration can correct.
+     * The magnetometer reports itself uncalibrated, or the compass was seen to bend with direction or
+     * a field that is not the Earth's ([CompassConsistency]).
      */
     UNRELIABLE,
 
@@ -100,12 +100,8 @@ class HeadingLock {
         gameSettled = false
     }
 
-    fun state(
-        compassAccuracy: Int,
-        headingUncertaintyDegrees: Float = Float.NaN,
-        correctableDegrees: Float = Float.POSITIVE_INFINITY,
-    ): HeadingState =
-        if (isLocked) HeadingState.LOCKED else compassState(compassAccuracy, headingUncertaintyDegrees, correctableDegrees)
+    fun state(compassAccuracy: Int, evidence: CompassEvidence = CompassEvidence.UNKNOWN): HeadingState =
+        if (isLocked) HeadingState.LOCKED else compassState(compassAccuracy, evidence)
 
     companion object {
         /** `SensorManager.SENSOR_STATUS_ACCURACY_*`, repeated to keep this file Android-free. */
@@ -115,26 +111,25 @@ class HeadingLock {
         /**
          * What the compass alone says, lock or no lock.
          *
-         * The accuracy is not enough: on a Pixel 10 Pro the overlay stood about 180° out on the first
-         * start and no warning showed, while the rotation vector's own heading estimate
-         * ([headingUncertaintyDegrees]) still said ±30° after the offset had settled. An uncertainty
-         * beyond [correctableDegrees] — what a calibration can reach — is unreliable whatever the
-         * accuracy says; NaN (not reported) leaves the accuracy to decide.
+         * The accuracy is not enough: it said MEDIUM or HIGH on a Pixel 10 Pro whose overlay stood
+         * tens of degrees out (and once 180°). What the compass is seen to do ([CompassConsistency])
+         * decides when there is evidence; only a compass reporting itself uncalibrated (0) is
+         * unreliable regardless. The rotation vector's `values[4]` used to decide here and is gone:
+         * it is a coarse step per session (30°, 60°, 120° on the Pixels) and kept the warning up on a
+         * Pixel 7 Pro whose compass was right, however often its owner drew a figure eight.
          */
-        fun compassState(
-            compassAccuracy: Int,
-            headingUncertaintyDegrees: Float,
-            correctableDegrees: Float,
-        ): HeadingState = when {
-            headingUncertaintyDegrees > correctableDegrees -> HeadingState.UNRELIABLE
+        fun compassState(compassAccuracy: Int, evidence: CompassEvidence): HeadingState = when {
+            compassAccuracy < SENSOR_STATUS_ACCURACY_LOW -> HeadingState.UNRELIABLE
+            evidence == CompassEvidence.INCONSISTENT -> HeadingState.UNRELIABLE
+            evidence == CompassEvidence.CONSISTENT -> HeadingState.OK
             compassAccuracy >= SENSOR_STATUS_ACCURACY_MEDIUM -> HeadingState.OK
-            compassAccuracy == SENSOR_STATUS_ACCURACY_LOW -> HeadingState.LOW
-            else -> HeadingState.UNRELIABLE
+            else -> HeadingState.LOW
         }
 
         /**
          * The rotation vector's estimated heading accuracy, `values[4]`, in degrees; NaN when the
-         * event does not carry it or reports it unavailable (-1).
+         * event does not carry it or reports it unavailable (-1). For the debug log only; see
+         * [compassState] for why it decides nothing.
          */
         fun headingUncertaintyDegrees(values: FloatArray): Float {
             if (values.size < 5) return Float.NaN

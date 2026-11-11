@@ -13,12 +13,18 @@ data class DebugPreferences(
     val starTapRadiusDp: Int = DEFAULT_STAR_TAP_RADIUS_DP,
     /** Visualize celestial hit-test radius circle upon tapping in Night Sky AR. */
     val showTapRadiusIndicator: Boolean = false,
+    /**
+     * Log what the compass warning is decided from (`CaelisCompass`), debug builds only: the switch
+     * is not shown in a release, whose log must not carry the position-dependent expected field.
+     */
+    val logCompass: Boolean = false,
 ) {
     /** True if any debug or diagnostic feature is currently turned on. */
     val anyEnabled: Boolean
         get() = enableNightSkyFocusRegion ||
             showTerrainMetrics ||
             showTapRadiusIndicator ||
+            logCompass ||
             starTapRadiusDp != DEFAULT_STAR_TAP_RADIUS_DP
 
     companion object {

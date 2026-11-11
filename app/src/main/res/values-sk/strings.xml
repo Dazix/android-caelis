@@ -604,6 +604,9 @@
     <string name="settings_debug_night_sky_focus_region_desc">Zobrazí aktívnu oblasť zamerania a prah zobrazenia súhvezdí v nočnej oblohe</string>
     <string name="settings_debug_terrain_metrics">Metriky terénneho horizontu</string>
     <string name="settings_debug_terrain_metrics_desc">Zobrazí v reálnom čase vzdialenosť Auto-Range a počet aktívnych DEM dlaždíc v AR</string>
+    <string name="settings_debug_group_compass">Kompas</string>
+    <string name="settings_debug_log_compass">Diagnostický log kompasu</string>
+    <string name="settings_debug_log_compass_desc">Raz za sekundu zapisuje do logcatu (CaelisCompass), z čoho sa rozhoduje varovanie kompasu</string>
     <string name="settings_debug_star_tap_radius">Dosah detekcie dotyku</string>
     <string name="settings_debug_star_tap_radius_desc">Polomer hľadania na výber nebeských telies. Telesá v tomto okruhu sa vyhodnocujú podľa vzdialenosti a jasnosti (predvolene 48 dp).</string>
     <string name="settings_debug_show_tap_indicator">Zobraziť dosah dotyku</string>

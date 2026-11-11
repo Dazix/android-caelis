@@ -85,33 +85,44 @@ class HeadingLockTest {
         assertEquals(HeadingState.OK, lock.state(3))
     }
 
-    // Pixel 10 Pro: the rotation vector reported HIGH accuracy while its own heading estimate in
-    // values[4] said ±30°, and on the first start the overlay stood about 180° out with no warning.
+    // Pixel 10 Pro: HIGH accuracy while ψ swung ±22° with direction and the overlay stood tens of
+    // degrees out. What the compass does outranks what it reports.
     @Test
-    fun `a heading uncertainty beyond what a calibration can reach is unreliable whatever the accuracy says`() {
+    fun `an inconsistent compass is unreliable whatever the accuracy says`() {
         val lock = HeadingLock()
-        assertEquals(HeadingState.UNRELIABLE, lock.state(3, headingUncertaintyDegrees = 30f, correctableDegrees = 20f))
-        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = 20f, correctableDegrees = 20f))
-        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = 5f, correctableDegrees = 20f))
+        assertEquals(HeadingState.UNRELIABLE, lock.state(3, CompassEvidence.INCONSISTENT))
+        assertEquals(HeadingState.UNRELIABLE, lock.state(1, CompassEvidence.INCONSISTENT))
+    }
+
+    // Pixel 7 Pro: values[4] said 30° all along and the chip never went away, while a full turn kept
+    // ψ within 1.8°. A compass seen to agree with itself is trusted even at LOW.
+    @Test
+    fun `a consistent compass is trusted even at low accuracy`() {
+        val lock = HeadingLock()
+        assertEquals(HeadingState.OK, lock.state(3, CompassEvidence.CONSISTENT))
+        assertEquals(HeadingState.OK, lock.state(1, CompassEvidence.CONSISTENT))
     }
 
     @Test
-    fun `an unreported uncertainty leaves the accuracy to decide`() {
-        val lock = HeadingLock()
-        assertEquals(HeadingState.OK, lock.state(3, headingUncertaintyDegrees = Float.NaN, correctableDegrees = 20f))
-        assertEquals(HeadingState.LOW, lock.state(1, headingUncertaintyDegrees = Float.NaN, correctableDegrees = 20f))
+    fun `a compass that reports itself uncalibrated stays unreliable however it behaved`() {
+        assertEquals(HeadingState.UNRELIABLE, HeadingLock().state(0, CompassEvidence.CONSISTENT))
     }
 
     @Test
-    fun `a lock outranks the uncertainty in the state, not in the compass's own state`() {
+    fun `without evidence the accuracy decides`() {
+        val lock = HeadingLock()
+        assertEquals(HeadingState.OK, lock.state(3, CompassEvidence.UNKNOWN))
+        assertEquals(HeadingState.LOW, lock.state(1, CompassEvidence.UNKNOWN))
+        assertEquals(HeadingState.UNRELIABLE, lock.state(0, CompassEvidence.UNKNOWN))
+    }
+
+    @Test
+    fun `a lock outranks the evidence in the state, not in the compass's own state`() {
         val lock = HeadingLock()
         lock.addCompass(0f)
         lock.lock()
-        assertEquals(HeadingState.LOCKED, lock.state(3, headingUncertaintyDegrees = 90f, correctableDegrees = 20f))
-        assertEquals(
-            HeadingState.UNRELIABLE,
-            HeadingLock.compassState(3, headingUncertaintyDegrees = 90f, correctableDegrees = 20f),
-        )
+        assertEquals(HeadingState.LOCKED, lock.state(3, CompassEvidence.INCONSISTENT))
+        assertEquals(HeadingState.UNRELIABLE, HeadingLock.compassState(3, CompassEvidence.INCONSISTENT))
     }
 
     @Test
