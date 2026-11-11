@@ -99,8 +99,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private var headingOffsetDeg = 0f
 
     /**
-     * The part of an alignment the ±[MAX_CALIBRATION_AZIMUTH] calibration cannot hold, while the
-     * compass is not trusted and the gyro holds the heading ([CoarseHeading]). Session-only: never
+     * The part of a hand alignment the ±[MAX_CALIBRATION_AZIMUTH] calibration cannot hold
+     * ([CoarseHeading]). Session-only: never
      * stored, cleared by [start] and [clearCalibration]. Folded into the world-Z term next to the
      * declination, so it is in [getReferenceMatrix] — the automatic alignment searches around the
      * coarsely corrected heading, and the calibration stays a fine correction on top. ARCore's north
@@ -429,18 +429,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     /**
      * Applies a hand alignment of [totalAzimuthDeg] in all: the calibration takes what its bound
-     * allows and, while [CoarseHeading.isAllowed], the coarse correction takes the rest.
+     * allows and the coarse correction ([CoarseHeading]) takes the rest.
      */
     private fun setAlignment(totalAzimuthDeg: Float, pitchDeg: Float) {
-        val allowed = CoarseHeading.isAllowed(
-            locked = headingLock.isLocked,
-            compassState = HeadingLock.compassState(compassAccuracy, compassConsistency.evidence),
-        )
         coarseHeadingOffsetDeg = CoarseHeading.coarseFor(
             totalAzimuthDegrees = totalAzimuthDeg,
-            currentCoarseDegrees = coarseHeadingOffsetDeg,
             boundDegrees = MAX_CALIBRATION_AZIMUTH,
-            allowed = allowed,
         )
         setCalibration(azimuthDeg = totalAzimuthDeg - coarseHeadingOffsetDeg, pitchDeg = pitchDeg)
     }

@@ -174,8 +174,9 @@ Each of these was found by review or on the device and is now covered by a test.
 - **A drag in Sun AR is a calibration, not a pan.** It moves `calibration*` through
   `nudgeCalibrationBy` and never pauses the sensors: the overlay keeps tracking while the finger
   walks it onto the ridge, and letting go snaps nothing back. The freezing pan stays for Night Sky's
-  manual mode. The calibration is clamped to ±20° in both axes — a compass is wrong by degrees, and
-  anything larger is a mis-drag that would be indistinguishable from a broken magnetometer next time.
+  manual mode. The *stored* calibration is clamped to ±20° in both axes — a compass is wrong by
+  degrees, and anything larger kept for the next launch would be indistinguishable from a broken
+  magnetometer. The drag itself is not bounded in azimuth (next invariant but one).
 - **A compass is judged by what it does, never by `values[4]`.** The rotation vector's heading accuracy
   is a coarse step per session on the Pixels (30° all along on a Pixel 7 Pro, 60° or 120° on a Pixel 10
   Pro, and 30° there too when the overlay stood 180° out), and the old "beyond ±20° is UNRELIABLE" rule
@@ -190,17 +191,21 @@ Each of these was found by review or on the device and is now covered by a test.
   magnet read 202 µT). `HeadingLock.compassState`: accuracy 0 is UNRELIABLE, then the evidence decides,
   and only without evidence the accuracy. `CaelisCompass` logs it in debug builds behind the Settings
   debug switch (off by default; the switch is not shown in a release, the log carries the expected field).
-- **A compass not trusted may be corrected past ±20°, for the session only.**
+- **A hand alignment past ±20° is never refused; the excess holds for the session only.**
   On a Pixel 10 Pro's first start the overlay stood ~180° out: the built-in magnets put a ~450 µT
   offset on the magnetometer (ten times the Earth's field) and until the fusion has estimated it the
-  rotation vector's north is anywhere. While the compass is not OK
-  *and* the gyro holds the heading (`CoarseHeading.isAllowed`), a hand alignment puts what the ±20°
-  calibration cannot hold into `OrientationTracker.coarseHeadingOffsetDeg`: in the world-Z term and
+  rotation vector's north is anywhere. It was once allowed only while the compass was not OK and the
+  gyro held the heading; that blocked real corrections, because steel nearby adds a field fixed in the
+  world, which shifts north equally in every direction and passes `CompassConsistency` as CONSISTENT.
+  A hand alignment (drag, nudge) puts what the ±20°
+  calibration cannot hold into `OrientationTracker.coarseHeadingOffsetDeg` (`CoarseHeading`): in the world-Z term and
   in `getReferenceMatrix` (the automatic alignment searches around it), but not in ARCore's north
   (`getCompassReferenceMatrix`; `SensorPoseSource` hands it over with the calibration, applied on top
   — inside the reference `HeadingFusion` would reject the jump as an outlier for 30 samples), never stored,
-  cleared by a new session and by a reset. Without the lock it is refused: the compass would turn the
-  overlay again once its offset converged. The automatic alignment's window stays ±20° around it.
+  cleared by a new session and by a reset. An azimuth alignment locks the heading, so the compass does
+  not turn the overlay away again; on a phone without a game rotation vector there is no lock, and a
+  compass that converges later moves it (drag again). A wrong drag costs only this session. The
+  automatic alignment's window stays ±20° around it, and the pitch stays clamped to ±20°.
 - **One compass correction per phone.** `ar_azimuth_offset` / `ar_elevation_offset` are shared by
   both AR screens; the old `sun_ar_*` and `night_sky_*` keys are read only to migrate from and never
   written again. Aligning against a ridge by day is what makes the stars line up at night.
