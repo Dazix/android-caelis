@@ -46,6 +46,11 @@ class HorizonProfile(
      * again about the first.
      */
     val landmarksResolved: Boolean = false,
+    /**
+     * The visible ridges along every azimuth, or null for a profile computed before ridges existed
+     * (codec v3 and older). Drawing only; every other reader keeps [elevationsDegrees].
+     */
+    val ridges: RidgeSamples? = null,
 ) {
 
     init {
@@ -79,6 +84,7 @@ class HorizonProfile(
         coveredSamples = coveredSamples,
         landmarks = landmarks,
         landmarksResolved = resolved,
+        ridges = ridges,
     )
 
     /** Fraction of the sky whose skyline came from real elevation data, in [0, 1]. */

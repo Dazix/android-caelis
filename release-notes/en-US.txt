@@ -9,5 +9,5 @@ Warns when a time-lapse is shot handheld
 Runs on Android 11 and 12
 Night sky: names no longer overlap
 Top bar clears the camera cutout
-Night sky: subtler selection, rounded figure lines
-Night sky: easier tapping of constellation and asterism names
+Night sky: subtler selection, rounded figure lines, easier name tapping
+Sun & Moon: optionally draw each mountain ridge as its own line

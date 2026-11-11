@@ -288,4 +288,119 @@ class HorizonProfileCalculatorTest {
         assertEquals("a 10 km range must not find a wall at 20 km", dip, short.elevationAt(0.0), 0.001)
         assertTrue("a 30 km range must find it", long.elevationAt(0.0) > 2.0)
     }
+
+    // ---- Ridges -------------------------------------------------------------------------------
+
+    /** Ground distance from the observer, flat-earth: good to a few metres inside 20 km. */
+    private fun groundDistance(lat: Double, lon: Double): Double {
+        val dLat = (lat - observer.latitude) * Math.PI / 180.0
+        val dLon = (lon - observer.longitude) * Math.PI / 180.0 * cos(observer.latitude * Math.PI / 180.0)
+        return kotlin.math.sqrt(dLat * dLat + dLon * dLon) * HorizonProfileCalculator.EARTH_RADIUS_METERS
+    }
+
+    /** Terrain that depends only on the distance from the observer: the same rings on every azimuth. */
+    private fun rings(elevationAtDistance: (Double) -> Double): HorizonProfile =
+        HorizonProfileCalculator.compute(
+            grid = FunctionGrid { lat, lon -> elevationAtDistance(groundDistance(lat, lon)) },
+            observer = observer,
+            eyeHeightMeters = eyeHeight,
+            maxRangeMeters = 30_000.0,
+        )
+
+    /** The terrain height that stands at [altitudeDegrees] seen from the eye at [distanceMetres]. */
+    private fun heightForAltitude(altitudeDegrees: Double, distanceMetres: Double): Double =
+        kotlin.math.tan(altitudeDegrees * Math.PI / 180.0) * distanceMetres + eyeElevation +
+            distanceMetres * distanceMetres / (2.0 * HorizonProfileCalculator.EFFECTIVE_EARTH_RADIUS_METERS)
+
+    private fun HorizonProfile.ridgePoints(azimuthIndex: Int): List<Pair<Float, Float>> {
+        val r = ridges!!
+        return (r.offsets[azimuthIndex] until r.offsets[azimuthIndex + 1]).map {
+            r.distancesMeters[it] to r.altitudesDegrees[it]
+        }
+    }
+
+    @Test
+    fun `two ridges at different distances give two points on every azimuth`() {
+        val profile = rings { d ->
+            when (d) {
+                in 2_000.0..2_200.0 -> 100.0
+                in 15_000.0..15_200.0 -> 2_000.0
+                else -> 0.0
+            }
+        }
+        for (i in 0 until HorizonProfile.SAMPLE_COUNT step 37) {
+            val points = profile.ridgePoints(i)
+            assertEquals("azimuth $i: $points", 2, points.size)
+            assertEquals(2_000.0, points[0].first.toDouble(), 200.0)
+            assertEquals(expectedAltitudeDegrees(100.0, 2_000.0), points[0].second.toDouble(), 0.1)
+            assertEquals(15_000.0, points[1].first.toDouble(), 1_500.0)
+            assertEquals(profile.elevationsDegrees[i], points[1].second)
+        }
+    }
+
+    @Test
+    fun `a single ridge is the skyline only`() {
+        val profile = rings { d -> if (d in 2_000.0..2_200.0) 100.0 else 0.0 }
+        assertEquals(1, profile.ridgePoints(0).size)
+        assertEquals(profile.elevationsDegrees[0], profile.ridgePoints(0)[0].second)
+    }
+
+    @Test
+    fun `a slope that keeps rising has no inner ridge`() {
+        val profile = rings { d -> 0.1 * d }
+        assertEquals(profile.ridgePoints(100).toString(), 1, profile.ridgePoints(100).size)
+    }
+
+    @Test
+    fun `a bump closer than three hundred metres is not a ridge`() {
+        val profile = rings { d ->
+            when (d) {
+                in 140.0..160.0 -> 10.0
+                in 15_000.0..15_200.0 -> 2_000.0
+                else -> 0.0
+            }
+        }
+        assertEquals(profile.ridgePoints(0).toString(), 1, profile.ridgePoints(0).size)
+        assertTrue(profile.ridgePoints(0)[0].first > 10_000f)
+    }
+
+    @Test
+    fun `flat sea gives no ridge points`() {
+        val profile = rings { 0.0 }
+        for (i in 0 until HorizonProfile.SAMPLE_COUNT) assertEquals(0, profile.ridges!!.count(i))
+    }
+
+    @Test
+    fun `a dip under the margin behind a crest makes no ridge`() {
+        // The crest at 2 km and the land behind it 0.4 degrees lower: a fold in one slope, not a
+        // ridge of its own. 0.2 degrees drew every fold of a hillside as a line.
+        val profile = rings { d ->
+            when {
+                d in 2_000.0..2_200.0 -> heightForAltitude(3.0, d)
+                d in 2_200.0..8_000.0 -> heightForAltitude(2.6, d)
+                d in 8_000.0..8_300.0 -> heightForAltitude(6.0, d)
+                else -> 0.0
+            }
+        }
+        assertEquals(profile.ridgePoints(0).toString(), 1, profile.ridgePoints(0).size)
+    }
+
+    @Test
+    fun `at most five inner ridges are kept, the most prominent ones`() {
+        // Eight crests at 1..8 km rising 1 degree each; behind crest k the land lies `dips[k]` lower.
+        val dips = doubleArrayOf(1.5, 0.7, 1.5, 1.5, 0.7, 1.5, 1.5, 1.5)
+        val profile = rings { d ->
+            val k = (d / 1_000.0).toInt() - 1
+            if (k !in 0..7) return@rings 0.0
+            val crest = (k + 1).toDouble()
+            val onCrest = d - (k + 1) * 1_000.0 < 300.0
+            heightForAltitude(if (onCrest) crest else crest - dips[k], d)
+        }
+        val points = profile.ridgePoints(0)
+        assertEquals(points.toString(), RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 1, points.size)
+        // The two shallow ones, at 2 and 5 km, are the ones left out; the order stays by distance.
+        val kept = points.dropLast(1).map { (it.first / 1_000f).toInt() }
+        assertEquals(listOf(1, 3, 4, 6, 7), kept)
+        assertTrue(points.last().first > 8_000f)
+    }
 }

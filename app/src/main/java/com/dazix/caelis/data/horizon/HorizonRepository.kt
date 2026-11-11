@@ -11,6 +11,7 @@ import com.dazix.caelis.domain.horizon.DemTileKey
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.horizon.HorizonProfileCalculator
 import com.dazix.caelis.domain.horizon.HorizonRangeEstimator
+import com.dazix.caelis.domain.horizon.RidgeRecompute
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.notify.TerrainNotifications
 import java.io.File
@@ -240,8 +241,9 @@ class HorizonRepository private constructor(
         val cached = withContext(Dispatchers.IO) { readStoredProfile(location, settings) }
         if (cached != null) {
             publish(cached)
+            val current = withRidges(cached, keys, settings) ?: cached
             // A profile from before peak names existed, or from a run with no connection, gets them now.
-            if (!cached.landmarksResolved) addLandmarks(cached, keys, settings)
+            if (!current.landmarksResolved) addLandmarks(current, keys, settings)
             return
         }
 
@@ -286,6 +288,36 @@ class HorizonRepository private constructor(
         withContext(Dispatchers.IO) { writeStoredProfile(profile, settings) }
         publish(profile)
         addLandmarks(profile, keys, settings)
+    }
+
+    /**
+     * A stored profile from before ridges existed, computed again from tiles that are all still on
+     * the device, stored and published; or null when it already has ridges or a tile is missing.
+     *
+     * Runs behind the stored profile already on screen and changes no state on the way: no download,
+     * no Computing progress over a horizon that is shown, and a failure simply leaves the old one.
+     * Computed for the stored observer, eye height and radius, so the skyline (and the peaks chosen
+     * on it, which are carried over) stays the same and only the ridges are added.
+     */
+    private suspend fun withRidges(stored: HorizonProfile, keys: List<DemTileKey>, settings: HorizonSettings): HorizonProfile? {
+        val missing = withContext(Dispatchers.IO) { cache.partition(keys).second }
+        if (!RidgeRecompute.needed(stored, missing.size)) return null
+        val tiles = withContext(Dispatchers.IO) { keys.mapNotNull { cache.open(it) } }
+        if (tiles.size < keys.size) return null
+        Log.i(TAG, "recomputing a stored profile from ${tiles.size} cached tile(s) for its ridges")
+        val fresh = withContext(Dispatchers.Default) {
+            HorizonProfileCalculator.compute(
+                grid = CompositeElevationGrid(tiles),
+                observer = stored.observer,
+                eyeHeightMeters = stored.eyeHeightMeters,
+                maxRangeMeters = stored.maxRangeMeters,
+            )
+        }
+        if (!fresh.isUsable) return null
+        val ridged = fresh.withLandmarks(stored.landmarks, stored.landmarksResolved)
+        withContext(Dispatchers.IO) { writeStoredProfile(ridged, settings) }
+        publish(ridged)
+        return ridged
     }
 
     private suspend fun addLandmarks(profile: HorizonProfile, keys: List<DemTileKey>, settings: HorizonSettings) {

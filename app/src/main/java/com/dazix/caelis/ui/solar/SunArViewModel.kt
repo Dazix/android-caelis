@@ -1046,6 +1046,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Each ridge its own line, or the skyline alone. Needs no download: the ridges are in the profile. */
+    fun toggleRidgeLines() {
+        viewModelScope.launch {
+            val current = settingsStore.currentHorizon()
+            settingsStore.saveHorizon(current.copy(ridgeLinesInSunAr = !current.ridgeLinesInSunAr))
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopSensors()

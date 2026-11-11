@@ -103,4 +103,21 @@ class HorizonProfileTest {
 
         assertTrue(error is IllegalArgumentException)
     }
+
+    @Test
+    fun `naming a profile keeps its ridges`() {
+        val offsets = IntArray(HorizonProfile.SAMPLE_COUNT + 1) { it }
+        val ridges = RidgeSamples(offsets, FloatArray(HorizonProfile.SAMPLE_COUNT) { 5_000f }, FloatArray(HorizonProfile.SAMPLE_COUNT))
+        val profile = HorizonProfile(
+            elevationsDegrees = FloatArray(HorizonProfile.SAMPLE_COUNT),
+            observer = GeoLocation(50.0755, 14.4378),
+            observerGroundElevationMeters = 200.0,
+            eyeHeightMeters = 1.6,
+            maxRangeMeters = 60_000.0,
+            generatedAtEpochMillis = 0L,
+            ridges = ridges,
+        )
+
+        assertTrue(profile.withLandmarks(emptyList(), resolved = true).ridges === ridges)
+    }
 }

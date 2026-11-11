@@ -2,6 +2,7 @@ package com.dazix.caelis.data.horizon
 
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.horizon.RidgeSamples
 import com.dazix.caelis.domain.solar.GeoLocation
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -54,8 +55,8 @@ class HorizonProfileCodecTest {
 
         assertTrue("expected under 8 kB, was ${bytes.size}", bytes.size < 8 * 1024)
         // magic + version + six doubles + timestamp + coverage + sample count + the samples
-        // + the resolved flag + the peak count (this profile names none)
-        assertEquals(4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4 + 1 + 4, bytes.size)
+        // + the resolved flag + the peak count (this profile names none) + the ridge flag (none)
+        assertEquals(4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4 + 1 + 4 + 1, bytes.size)
     }
 
     private val sneka = HorizonLandmark(
@@ -140,8 +141,8 @@ class HorizonProfileCodecTest {
     @Test
     fun `an absurd peak count reads as absent instead of allocating`() {
         val bytes = ByteArrayOutputStream().also { HorizonProfileCodec.write(it, profile) }.toByteArray()
-        // The peak count is the last four bytes of a profile with no peaks.
-        bytes[bytes.size - 4] = 0x7f
+        // The peak count is the four bytes before the ridge flag of a profile with no peaks or ridges.
+        bytes[bytes.size - 5] = 0x7f
 
         assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
     }
@@ -210,5 +211,102 @@ class HorizonProfileCodecTest {
 
         assertEquals(-33.45, restored.observer.latitude, 1e-9)
         assertEquals(-70.66, restored.observer.longitude, 1e-9)
+    }
+
+    // ---- Ridges (version 4) -------------------------------------------------------------------
+
+    /** Two points on even azimuths, one on odd ones: uneven counts catch an offset that drifts. */
+    private val ridges: RidgeSamples = run {
+        val offsets = IntArray(HorizonProfile.SAMPLE_COUNT + 1)
+        for (i in 0 until HorizonProfile.SAMPLE_COUNT) offsets[i + 1] = offsets[i] + if (i % 2 == 0) 2 else 1
+        val total = offsets.last()
+        RidgeSamples(offsets, FloatArray(total) { 400f + it * 3.5f }, FloatArray(total) { it * 0.01f - 2f })
+    }
+
+    private val ridged = HorizonProfile(
+        elevationsDegrees = profile.elevationsDegrees,
+        observer = profile.observer,
+        observerGroundElevationMeters = profile.observerGroundElevationMeters,
+        eyeHeightMeters = profile.eyeHeightMeters,
+        maxRangeMeters = profile.maxRangeMeters,
+        generatedAtEpochMillis = profile.generatedAtEpochMillis,
+        ridges = ridges,
+    )
+
+    private fun bytesOf(source: HorizonProfile): ByteArray =
+        ByteArrayOutputStream().also { HorizonProfileCodec.write(it, source) }.toByteArray()
+
+    @Test
+    fun `ridge samples survive a round trip exactly`() {
+        val restored = roundTrip(ridged.withLandmarks(listOf(sneka), resolved = true))!!.ridges!!
+
+        assertArrayEquals(ridges.offsets, restored.offsets)
+        assertArrayEquals(ridges.distancesMeters, restored.distancesMeters, 0f)
+        assertArrayEquals(ridges.altitudesDegrees, restored.altitudesDegrees, 0f)
+    }
+
+    @Test
+    fun `a profile without ridges reads back without ridges`() {
+        assertNull(roundTrip(profile)!!.ridges)
+    }
+
+    @Test
+    fun `a version 3 profile still reads, with its names and no ridges`() {
+        // Version 3 is version 4 without the trailing ridge flag.
+        val v4 = bytesOf(profile.withLandmarks(listOf(sneka), resolved = true))
+        val v3 = v4.copyOf(v4.size - 1).also { it[7] = 3 }
+
+        val restored = HorizonProfileCodec.read(ByteArrayInputStream(v3))
+
+        assertNotNull("a stored skyline must not be thrown away for lacking ridges", restored)
+        assertEquals(listOf(sneka), restored!!.landmarks)
+        assertTrue(restored.landmarksResolved)
+        assertNull(restored.ridges)
+    }
+
+    @Test
+    fun `a ridge count over the cap reads as absent`() {
+        val bytes = bytesOf(ridged)
+        // The first azimuth's count follows the peak count and the ridge flag.
+        val firstCount = 4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4 + 1 + 4 + 1
+        assertEquals(2, bytes[firstCount].toInt())
+        bytes[firstCount] = (RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 2).toByte()
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
+    }
+
+    @Test
+    fun `a negative ridge count reads as absent`() {
+        val bytes = bytesOf(ridged)
+        val firstCount = 4 + 4 + 8 * 6 + 8 + 4 + 4 + HorizonProfile.SAMPLE_COUNT * 4 + 1 + 4 + 1
+        bytes[firstCount] = -1
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
+    }
+
+    @Test
+    fun `a file cut short inside the ridges reads as absent`() {
+        val bytes = bytesOf(ridged)
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes.copyOf(bytes.size - 3))))
+    }
+
+    @Test
+    fun `a profile at the ridge cap on every azimuth stays under eighty kilobytes`() {
+        val cap = RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 1
+        val offsets = IntArray(HorizonProfile.SAMPLE_COUNT + 1) { it * cap }
+        val total = offsets.last()
+        val full = HorizonProfile(
+            elevationsDegrees = profile.elevationsDegrees,
+            observer = profile.observer,
+            observerGroundElevationMeters = 0.0,
+            eyeHeightMeters = 1.6,
+            maxRangeMeters = 60_000.0,
+            generatedAtEpochMillis = 0L,
+            ridges = RidgeSamples(offsets, FloatArray(total) { 1_000f }, FloatArray(total)),
+        )
+
+        val size = bytesOf(full).size
+        assertTrue("was $size", size < 80 * 1024)
     }
 }

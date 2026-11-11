@@ -295,6 +295,8 @@
     <string name="horizon_night_sky_real_desc">Nahradí štylizované stromoradie okolitým terénom a schová za neho hviezdy.</string>
     <string name="horizon_peak_names">Názvy vrcholov</string>
     <string name="horizon_peak_names_desc">Popíše vrcholy, ktoré stoja na skutočnom horizonte, menom a výškou. Vyžaduje skutočný horizont.</string>
+    <string name="horizon_ridge_lines">Hrebene hôr</string>
+    <string name="horizon_ridge_lines_desc">Každý hrebeň hôr ako samostatná čiara. Vypnuté ukáže len horizont.</string>
 
     <string name="horizon_consent_title">Stiahnuť výškopis terénu?</string>
     <string name="horizon_consent_body">Aby aplikácia mohla vykresliť skutočný obzor, potrebuje výškové dáta pre štvorec mapy, v ktorom práve stojíte. Po povolení sa dáta pre aktuálnu polohu budú podľa potreby sťahovať automaticky na pozadí a ukladať na offline použitie. Názvy vrcholov (niekoľko kB na dlaždicu) sa sťahujú rovnako z verejného repozitára na GitHube. Každá požiadavka nesie len názov tejto jednostupňovej dlaždice — žiadne súradnice, žiadne identifikátory, nič o vás — ale server, ako každý, ku ktorému sa pripojíte, vidí vašu IP adresu.\n\nSúbor môžete namiesto toho naimportovať ručne alebo si to neskôr rozmyslieť v Nastaveniach.</string>

@@ -6,5 +6,5 @@ Varovanie pri časozbere z ruky
 Funguje aj na Androide 11 a 12
 Nočná obloha: názvy sa už neprekrývajú
 Horná lišta mimo výrezu fotoaparátu
-Nočná obloha: decentnejší výber, zaoblené spojnice
-Nočná obloha: ľahší výber názvov súhvezdí a asterizmov ťuknutím
+Nočná obloha: decentnejší výber, zaoblené spojnice, ľahšie ťuknutie na názvy
+Slnko a mesiac: voliteľne každý horský hrebeň ako samostatná čiara

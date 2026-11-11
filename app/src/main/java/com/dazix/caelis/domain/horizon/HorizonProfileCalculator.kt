@@ -94,6 +94,15 @@ object HorizonProfileCalculator {
         val floorAltitude = geometricHorizonDipDegrees(eyeElevation)
         val elevations = FloatArray(HorizonProfile.SAMPLE_COUNT)
 
+        // Ridges: per ray, the crests the eye sees in front of further land. Scratch arrays sized
+        // to the ladder, allocated once per compute.
+        val ridgeOffsets = IntArray(HorizonProfile.SAMPLE_COUNT + 1)
+        val ridgeDistances = FloatArrayBuilder()
+        val ridgeAltitudes = FloatArrayBuilder()
+        val innerDistance = DoubleArray(distances.size)
+        val innerAltitude = DoubleArray(distances.size)
+        val innerProminence = DoubleArray(distances.size)
+
         var progressMark = 0
         var coveredSamples = 0
         for (azIndex in 0 until HorizonProfile.SAMPLE_COUNT) {
@@ -108,6 +117,12 @@ object HorizonProfileCalculator {
             // out of elevation data is the one ending that does not count, and it is exactly what
             // happens on every azimuth when the observer's own tile is missing.
             var ranOutOfData = false
+
+            // The sample that set `best` last, and how far the land behind it has fallen since.
+            var candidateDistance = -1.0
+            var candidateAltitude = 0.0
+            var candidateDrop = 0.0
+            var innerCount = 0
 
             for (step in distances.indices) {
                 // Once even a 9 km peak at this distance could not out-top what we already have,
@@ -133,8 +148,46 @@ object HorizonProfileCalculator {
                 gaps = 0
 
                 val altitude = atan2(terrain - eyeElevation - drop[step], distances[step]) * DEG
-                if (altitude > best) best = altitude
+                if (altitude > best) {
+                    // Something further now stands above the candidate. If the land behind the
+                    // candidate fell out of sight first, the candidate was a crest of its own, seen
+                    // in front of this one; otherwise it was the same slope still rising.
+                    if (candidateDistance >= MIN_RIDGE_DISTANCE_METERS && candidateDrop >= RIDGE_DROP_DEGREES) {
+                        innerDistance[innerCount] = candidateDistance
+                        innerAltitude[innerCount] = candidateAltitude
+                        innerProminence[innerCount] = candidateDrop
+                        innerCount++
+                    }
+                    best = altitude
+                    candidateDistance = distances[step]
+                    candidateAltitude = altitude
+                    candidateDrop = 0.0
+                } else if (candidateDistance >= 0.0 && best - altitude > candidateDrop) {
+                    candidateDrop = best - altitude
+                }
             }
+
+            // Keep the most prominent inner crests, in distance order, then the skyline point.
+            var kept = innerCount
+            while (kept > RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH) {
+                var weakest = -1
+                for (k in 0 until innerCount) {
+                    if (innerProminence[k] < 0.0) continue
+                    if (weakest < 0 || innerProminence[k] < innerProminence[weakest]) weakest = k
+                }
+                innerProminence[weakest] = -1.0
+                kept--
+            }
+            for (k in 0 until innerCount) {
+                if (innerProminence[k] < 0.0) continue
+                ridgeDistances.add(innerDistance[k].toFloat())
+                ridgeAltitudes.add(innerAltitude[k].toFloat())
+            }
+            if (candidateDistance >= 0.0) {
+                ridgeDistances.add(candidateDistance.toFloat())
+                ridgeAltitudes.add(best.toFloat())
+            }
+            ridgeOffsets[azIndex + 1] = ridgeDistances.size
 
             elevations[azIndex] = best.toFloat()
             if (!ranOutOfData) coveredSamples++
@@ -154,7 +207,36 @@ object HorizonProfileCalculator {
             maxRangeMeters = maxRangeMeters,
             generatedAtEpochMillis = nowEpochMillis,
             coveredSamples = coveredSamples,
+            ridges = RidgeSamples(ridgeOffsets, ridgeDistances.toArray(), ridgeAltitudes.toArray()),
         )
+    }
+
+    /**
+     * How far the land behind a crest must fall below it, in apparent altitude, before a further rise
+     * makes the crest a ridge of its own. Below this the eye reads one slope with a ripple in it, and
+     * drawing a line there is hatching. 0.5 degrees is about 9 m at 1 km, 44 m at 5 km; at 0.2 the
+     * device drew every fold of a hillside as a line of its own.
+     */
+    const val RIDGE_DROP_DEGREES: Double = 0.5
+
+    /**
+     * Crests nearer than this are the observer's own ground: a bank, a wall of the DEM's 30 m cell
+     * around the eye. They still form the skyline where nothing further rises above them.
+     */
+    const val MIN_RIDGE_DISTANCE_METERS: Double = 300.0
+
+    /** A growable float list, so the ray march collects ridge points without boxing. */
+    private class FloatArrayBuilder {
+        private var data = FloatArray(4096)
+        var size = 0
+            private set
+
+        fun add(value: Float) {
+            if (size == data.size) data = data.copyOf(size * 2)
+            data[size++] = value
+        }
+
+        fun toArray(): FloatArray = data.copyOf(size)
     }
 
     /**
