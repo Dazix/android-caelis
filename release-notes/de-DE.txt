@@ -4,8 +4,7 @@ Gipfelnamen sitzen auf dem Gipfel, folgen dem Horizont, tagsüber dunkel hinterl
 Jetzt auf Slowakisch, Polnisch und Deutsch
 Warnung bei Zeitraffer aus der Hand
 Läuft auch unter Android 11 und 12
-Nachthimmel: Namen ohne Überlappung, leichter antippbar, dezentere Auswahl, abgerundete Linien
+Nachthimmel: Namen überlappen nicht, leicht antippbar, Asterismen im Sterndetail, dezentere Auswahl
 Obere Leiste weicht der Kameraaussparung aus
 Kompasswarnung nur bei echtem Kompassfehler
 Sonne: Kamerabild kommt schneller
-Nachthimmel: Asterismen im Sterndetail
