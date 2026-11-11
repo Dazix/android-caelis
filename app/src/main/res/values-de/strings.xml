@@ -289,6 +289,8 @@
     <string name="horizon_night_sky_real_desc">Ersetzt die stilisierte Baumlinie durch das Gelände um Sie herum und verdeckt die Sterne dahinter.</string>
     <string name="horizon_peak_names">Gipfelnamen</string>
     <string name="horizon_peak_names_desc">Beschriftet die Gipfel auf der Silhouette mit Name und Höhe. Braucht den echten Horizont.</string>
+    <string name="horizon_ridge_lines">Bergkämme</string>
+    <string name="horizon_ridge_lines_desc">Zeichnet jeden Bergkamm als eigene Linie. Aus zeigt nur die Silhouette.</string>
 
     <string name="horizon_consent_title">Geländehöhen herunterladen?</string>
     <string name="horizon_consent_body">Um die echte Silhouette zu zeichnen, braucht die App Höhendaten für das Kartenquadrat, in dem Sie stehen. Nach Ihrer Erlaubnis werden die Daten für Ihren aktuellen Standort bei Bedarf automatisch im Hintergrund heruntergeladen und für die Offline-Nutzung zwischengespeichert. Gipfelnamen (einige kB pro Kachel) werden auf dieselbe Weise aus einem öffentlichen GitHub-Repository geladen. Jede Anfrage enthält nur den Namen dieser einen Ein-Grad-Kachel – keine Koordinaten, keine Kennungen, nichts über Sie –, aber der Host sieht, wie jeder Server, mit dem Sie sich verbinden, Ihre IP-Adresse.\n\nSie können die Datei auch von Hand importieren oder Ihre Meinung später in den Einstellungen ändern.</string>

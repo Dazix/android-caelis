@@ -289,6 +289,8 @@
     <string name="horizon_night_sky_real_desc">Replaces the stylised tree line with the terrain around you, and hides the stars behind it.</string>
     <string name="horizon_peak_names">Peak names</string>
     <string name="horizon_peak_names_desc">Labels the peaks that stand on the skyline with their name and height. Needs the real horizon.</string>
+    <string name="horizon_ridge_lines">Ridge lines</string>
+    <string name="horizon_ridge_lines_desc">Draws each mountain ridge as its own line. Off shows the skyline alone.</string>
 
     <string name="horizon_consent_title">Download terrain elevation?</string>
     <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. Once allowed, data for your current location will be downloaded automatically in the background as needed and cached for offline use. Peak names (a few kB per tile) are fetched the same way from a public GitHub repository. Each request carries only the name of that one-degree tile — no coordinates, no identifiers, nothing about you — but the host, like any server you connect to, sees your IP address.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>

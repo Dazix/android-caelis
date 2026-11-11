@@ -102,6 +102,7 @@ internal fun SunArGpuSky(
     shadeOccludedTrajectory: Boolean,
     terrainTimes: TerrainTimes,
     showPeakNames: Boolean,
+    showRidgeLines: Boolean = false,
     modifier: Modifier = Modifier,
     /**
      * A virtual place is shown: no camera picture (it shows where the phone is), a neutral backdrop
@@ -147,7 +148,7 @@ internal fun SunArGpuSky(
     }
     SideEffect {
         scene?.setVirtualBackdrop(virtualPlace)
-        scene?.setProfile(horizonProfile)
+        scene?.setProfile(horizonProfile, showRidgeLines)
         scene?.setTrajectories(
             solarTrajectory,
             lunarTrajectory,

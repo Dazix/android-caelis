@@ -2,6 +2,7 @@ package com.dazix.caelis.data.horizon
 
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.horizon.RidgeSamples
 import com.dazix.caelis.domain.solar.GeoLocation
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -11,7 +12,8 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * On-disk form of a [HorizonProfile]: about 5.8 kB of big-endian primitives, plus the few named peaks.
+ * On-disk form of a [HorizonProfile]: about 5.8 kB of big-endian primitives, plus the few named peaks
+ * and the ridge samples (some 20-40 kB in the mountains, at most ~70 kB).
  *
  * Deliberately hand-rolled rather than serialised through a library. This is the one artefact of the
  * terrain pipeline that is kept forever, it has to survive app updates, and a format that is eight
@@ -25,14 +27,17 @@ object HorizonProfileCodec {
     private const val MAGIC = 0x4341485A
 
     /**
-     * 2 added the coverage count. 3 appended the named peaks.
+     * 2 added the coverage count. 3 appended the named peaks. 4 appended the ridge samples.
      *
      * A version bump is how a v1 profile — which could be the flat, observer-tile-missing kind —
      * is discarded and recomputed rather than trusted. [read] returns null on any version it does not
      * know. Version 2 is still read, as a profile whose peaks are not resolved yet: its skyline is
      * as good as ever and throwing it away would cost a 26 MB download to learn the same ridge.
+     * Version 3 is read with no ridges for the same reason; the repository recomputes it when the
+     * tiles are still cached, and otherwise the skyline is drawn as one ring, as before.
      */
-    private const val VERSION = 3
+    private const val VERSION = 4
+    private const val VERSION_WITHOUT_RIDGES = 3
     private const val VERSION_WITHOUT_LANDMARKS = 2
 
     /** A sanity bound, not a limit anyone reaches: the selector keeps a dozen. */
@@ -63,6 +68,17 @@ object HorizonProfileCodec {
                 writeDouble(landmark.azimuthDegrees)
                 writeDouble(landmark.apparentElevationDegrees)
             }
+            val ridges = profile.ridges
+            writeBoolean(ridges != null)
+            if (ridges != null) {
+                for (i in 0 until HorizonProfile.SAMPLE_COUNT) {
+                    writeByte(ridges.count(i))
+                    for (k in ridges.offsets[i] until ridges.offsets[i + 1]) {
+                        writeFloat(ridges.distancesMeters[k])
+                        writeFloat(ridges.altitudesDegrees[k])
+                    }
+                }
+            }
             flush()
         }
     }
@@ -78,7 +94,7 @@ object HorizonProfileCodec {
         DataInputStream(input.buffered()).run {
             if (readInt() != MAGIC) return null
             val version = readInt()
-            if (version != VERSION && version != VERSION_WITHOUT_LANDMARKS) return null
+            if (version != VERSION && version != VERSION_WITHOUT_RIDGES && version != VERSION_WITHOUT_LANDMARKS) return null
 
             val latitude = readDouble()
             val longitude = readDouble()
@@ -97,7 +113,7 @@ object HorizonProfileCodec {
 
             var resolved = false
             val landmarks = ArrayList<HorizonLandmark>()
-            if (version == VERSION) {
+            if (version >= VERSION_WITHOUT_RIDGES) {
                 resolved = readBoolean()
                 val landmarkCount = readInt()
                 if (landmarkCount !in 0..MAX_LANDMARKS) return null
@@ -114,6 +130,9 @@ object HorizonProfileCodec {
                 }
             }
 
+            var ridges: RidgeSamples? = null
+            if (version == VERSION && readBoolean()) ridges = readRidges() ?: return null
+
             HorizonProfile(
                 elevationsDegrees = elevations,
                 observer = GeoLocation(latitude, longitude, altitude),
@@ -124,6 +143,7 @@ object HorizonProfileCodec {
                 coveredSamples = covered,
                 landmarks = landmarks,
                 landmarksResolved = resolved,
+                ridges = ridges,
             )
         }
     } catch (e: EOFException) {
@@ -133,6 +153,28 @@ object HorizonProfileCodec {
     } catch (e: IllegalArgumentException) {
         // GeoLocation rejects coordinates off the globe, and HorizonProfile a wrong sample count.
         null
+    }
+
+    /** The ridge block, or null when a count is out of range or a value is not a finite number. */
+    private fun DataInputStream.readRidges(): RidgeSamples? {
+        val offsets = IntArray(HorizonProfile.SAMPLE_COUNT + 1)
+        val distances = FloatArray(HorizonProfile.SAMPLE_COUNT * (RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 1))
+        val altitudes = FloatArray(distances.size)
+        var n = 0
+        for (i in 0 until HorizonProfile.SAMPLE_COUNT) {
+            val count = readByte().toInt()
+            if (count !in 0..RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 1) return null
+            repeat(count) {
+                val distance = readFloat()
+                val altitude = readFloat()
+                if (!distance.isFinite() || !altitude.isFinite()) return null
+                distances[n] = distance
+                altitudes[n] = altitude
+                n++
+            }
+            offsets[i + 1] = n
+        }
+        return RidgeSamples(offsets, distances.copyOf(n), altitudes.copyOf(n))
     }
 
     /**

@@ -407,6 +407,7 @@ fun SunArScreen(
                 shadeOccludedTrajectory = uiState.horizonSettings.shadeOccludedTrajectory,
                 terrainTimes = uiState.terrainTimes,
                 showPeakNames = uiState.horizonSettings.peakNamesInSunAr,
+                showRidgeLines = uiState.horizonSettings.ridgeLinesInSunAr,
                 modifier = Modifier.fillMaxSize(),
                 virtualPlace = isVirtual,
             )
@@ -508,6 +509,8 @@ fun SunArScreen(
                     onToggleHorizon = viewModel::requestToggleHorizon,
                     peakNamesOn = uiState.horizonSettings.peakNamesInSunAr,
                     onTogglePeakNames = viewModel::togglePeakNames,
+                    ridgeLinesOn = uiState.horizonSettings.ridgeLinesInSunAr,
+                    onToggleRidgeLines = viewModel::toggleRidgeLines,
                     alignAzimuthOffsetDeg = alignAzimuthOffset,
                     alignElevationOffsetDeg = alignElevationOffset,
                     compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
@@ -894,6 +897,8 @@ internal fun SunMoonTimesInfoCard(
     onToggleHorizon: () -> Unit = {},
     peakNamesOn: Boolean = true,
     onTogglePeakNames: () -> Unit = {},
+    ridgeLinesOn: Boolean = false,
+    onToggleRidgeLines: () -> Unit = {},
     alignAzimuthOffsetDeg: Float = 0f,
     alignElevationOffsetDeg: Float = 0f,
     compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_HIGH,
@@ -1093,6 +1098,37 @@ internal fun SunMoonTimesInfoCard(
                     checked = peakNamesOn && peakNamesAvailable,
                     onCheckedChange = { onTogglePeakNames() },
                     enabled = peakNamesAvailable,
+                )
+            }
+
+            // Ridge lines are drawn from the terrain profile too, so the same gate.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = horizonEnabled) { onToggleRidgeLines() }
+                    .alpha(if (horizonEnabled) 1f else 0.5f)
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.horizon_ridge_lines),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = titleColor,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        text = stringResource(R.string.horizon_ridge_lines_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subColor,
+                    )
+                }
+                Switch(
+                    checked = ridgeLinesOn && horizonEnabled,
+                    onCheckedChange = { onToggleRidgeLines() },
+                    enabled = horizonEnabled,
                 )
             }
 

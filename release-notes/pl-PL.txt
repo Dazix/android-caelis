@@ -6,5 +6,5 @@ Ostrzeżenie przy timelapsie z ręki
 Działa na Androidzie 11 i 12
 Nocne niebo: nazwy już się nie nakładają
 Górny pasek omija wycięcie aparatu
-Nocne niebo: subtelniejsze zaznaczenie, zaokrąglone linie
-Nocne niebo: łatwiejszy wybór nazw gwiazdozbiorów i asteryzmów
+Nocne niebo: subtelniejsze zaznaczenie, zaokrąglone linie, łatwiejszy wybór nazw
+Słońce i Księżyc: opcjonalnie każdy grzbiet górski osobną linią

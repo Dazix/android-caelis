@@ -295,6 +295,8 @@
     <string name="horizon_night_sky_real_desc">Zastępuje stylizowaną linię drzew terenem wokół Ciebie i ukrywa za nim gwiazdy.</string>
     <string name="horizon_peak_names">Nazwy szczytów</string>
     <string name="horizon_peak_names_desc">Podpisuje szczyty leżące na linii horyzontu nazwą i wysokością. Wymaga prawdziwego horyzontu.</string>
+    <string name="horizon_ridge_lines">Grzbiety gór</string>
+    <string name="horizon_ridge_lines_desc">Każdy grzbiet górski jako osobna linia. Wyłączone pokazuje tylko horyzont.</string>
 
     <string name="horizon_consent_title">Pobrać wysokości terenu?</string>
     <string name="horizon_consent_body">Aby narysować prawdziwą linię horyzontu, aplikacja potrzebuje danych wysokościowych dla kwadratu mapy, w którym stoisz. Po zezwoleniu dane dla Twojej bieżącej lokalizacji będą w razie potrzeby pobierane automatycznie w tle i zapisywane w pamięci podręcznej do użytku offline. Nazwy szczytów (kilka kB na kafelek) są pobierane w ten sam sposób z publicznego repozytorium GitHub. Każde żądanie zawiera tylko nazwę jednego kafelka o boku jednego stopnia – bez współrzędnych, bez identyfikatorów, nic o Tobie – ale host, jak każdy serwer, z którym się łączysz, widzi Twój adres IP.\n\nMożesz też zaimportować plik ręcznie albo zmienić zdanie później w Ustawieniach.</string>

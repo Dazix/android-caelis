@@ -5,6 +5,9 @@ import com.dazix.caelis.domain.arframe.AltAzGridBuilder
 import com.dazix.caelis.domain.arframe.SkyFrameMath
 import com.dazix.caelis.domain.arframe.SkyProjector
 import com.dazix.caelis.domain.horizon.HorizonProfile
+import com.dazix.caelis.domain.horizon.RidgeLine
+import com.dazix.caelis.domain.horizon.RidgeLinker
+import com.dazix.caelis.domain.horizon.RidgeSamples
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.solar.LunarTrajectory
 import com.dazix.caelis.domain.solar.SolarTrajectory
@@ -29,8 +32,10 @@ class SunArScene(private val surface: SkySurface) {
     // Each line over its own dark casing, as on the Canvas: a thin coloured stroke alone vanishes
     // against a bright sky or a pale field. Casing and line are separate batches so every casing is
     // under every line, rather than the next segment's casing nicking the joint of the previous one.
-    private val silhouetteCasing = LineBatch(surface, lineMaterial, HorizonProfile.SAMPLE_COUNT, 1, Priority.SILHOUETTE_CASING)
-    private val silhouette = LineBatch(surface, lineMaterial, HorizonProfile.SAMPLE_COUNT, 1, Priority.SILHOUETTE)
+    // The skyline and, with ridge lines on, every ridge below it, all in the same style. One segment
+    // per ridge point at most, so the cap on points per azimuth bounds the batches.
+    private val silhouetteCasing = LineBatch(surface, lineMaterial, MAX_TERRAIN_SEGMENTS, 1, Priority.SILHOUETTE_CASING)
+    private val silhouette = LineBatch(surface, lineMaterial, MAX_TERRAIN_SEGMENTS, 1, Priority.SILHOUETTE)
     private val arcCasing = LineBatch(surface, lineMaterial, MAX_ARC_SEGMENTS, 1, Priority.ARC_CASING)
     private val arcs = LineBatch(surface, lineMaterial, MAX_ARC_SEGMENTS, 1, Priority.ARC)
 
@@ -62,6 +67,7 @@ class SunArScene(private val surface: SkySurface) {
 
     private var builtProfile: HorizonProfile? = null
     private var profileBuilt = false
+    private var builtRidgeLines = true
     private var builtSolar: SolarTrajectory? = null
     private var builtLunar: LunarTrajectory? = null
     private var builtShadeProfile: HorizonProfile? = null
@@ -91,15 +97,26 @@ class SunArScene(private val surface: SkySurface) {
         terrainFill.setVisible(enabled)
     }
 
-    /** The terrain skyline, or null for none. */
-    fun setProfile(profile: HorizonProfile?) {
+    /**
+     * The terrain skyline, or null for none. With [ridgeLines] off, a profile that has ridges is drawn
+     * the way one without them is: the skyline alone, one closed ring.
+     */
+    fun setProfile(profile: HorizonProfile?, ridgeLines: Boolean = true) {
         terrainFill.setProfile(profile)
-        if (profileBuilt && profile === builtProfile) return
+        if (profileBuilt && profile === builtProfile && ridgeLines == builtRidgeLines) return
         profileBuilt = true
         builtProfile = profile
+        builtRidgeLines = ridgeLines
         silhouetteCasing.begin()
         silhouette.begin()
-        if (profile != null) {
+        val ridgeSamples = profile?.ridges?.takeIf { ridgeLines }
+        if (ridgeSamples != null) {
+            // Each ridge its own line, ending a gap before the ridge in front of it, all drawn as the
+            // skyline is: the gaps alone tell the ridges apart.
+            for (line in RidgeLinker.link(ridgeSamples)) addRidgeLine(line)
+        } else if (profile != null) {
+            // A profile from before ridges existed, or ridge lines switched off: the skyline as one
+            // closed ring.
             val n = HorizonProfile.SAMPLE_COUNT
             for (i in 0 until n) {
                 writePoint(i, HorizonProfile.azimuthForIndex(i), profile.elevationsDegrees[i].toDouble())
@@ -113,6 +130,24 @@ class SunArScene(private val surface: SkySurface) {
         }
         silhouetteCasing.end()
         silhouette.end()
+    }
+
+    private fun addRidgeLine(line: RidgeLine) {
+        val n = HorizonProfile.SAMPLE_COUNT
+        val size = line.size
+        for (k in 0 until size) {
+            writePoint(k, HorizonProfile.azimuthForIndex((line.startIndex + k) % n), line.altitudesDegrees[k].toDouble())
+        }
+        val segments = if (line.closed) size else size - 1
+        for (k in 0 until segments) {
+            val b = (k + 1) % size
+            val hasPrevious = line.closed || k > 0
+            val hasNext = line.closed || k + 2 < size
+            val p = if (hasPrevious) (k + size - 1) % size else k
+            val nx = if (hasNext) (k + 2) % size else b
+            addJoined(silhouetteCasing, p, k, b, nx, hasPrevious, hasNext, 3.4f, SilhouetteCasing, SilhouetteCasing.alpha)
+            addJoined(silhouette, p, k, b, nx, hasPrevious, hasNext, 2.2f, NormalTerrain, NormalTerrain.alpha)
+        }
     }
 
     /**
@@ -253,6 +288,8 @@ class SunArScene(private val surface: SkySurface) {
 
         /** The longest polyline: the terrain ring, larger than either day path. */
         private const val MAX_PATH_POINTS = HorizonProfile.SAMPLE_COUNT
+
+        private const val MAX_TERRAIN_SEGMENTS = HorizonProfile.SAMPLE_COUNT * (RidgeSamples.MAX_INNER_RIDGES_PER_AZIMUTH + 1)
         private const val MIN_ARC_ELEVATION = -15.0
 
         /** Two days of bubbles every 15 minutes, four badges, the grid's labels and the peak names. */

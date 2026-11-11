@@ -54,6 +54,12 @@ data class HorizonSettings(
      * is on and a profile carries names, so it adds nothing for anyone who has not opted in to terrain.
      */
     val peakNamesInSunAr: Boolean = true,
+    /**
+     * Draw each mountain ridge as its own line in Sun AR; off draws the skyline alone, as one
+     * unbroken line. Off by default until it has been tried in the field; gated by the terrain layer
+     * like the peak names.
+     */
+    val ridgeLinesInSunAr: Boolean = false,
     /** The same for Night Sky AR, where the skyline is the real one only if [realHorizonInNightSky]. */
     val peakNamesInNightSky: Boolean = true,
 ) {
