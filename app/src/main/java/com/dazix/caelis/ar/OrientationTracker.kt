@@ -7,7 +7,10 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.Surface
+import com.dazix.caelis.BuildConfig
 import com.dazix.caelis.domain.arframe.CoarseHeading
+import com.dazix.caelis.domain.arframe.CompassConsistency
+import com.dazix.caelis.domain.arframe.CompassEvidence
 import com.dazix.caelis.domain.arframe.GameVectorSettle
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
@@ -107,9 +110,38 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     var coarseHeadingOffsetDeg: Float = 0f
         private set
 
-    /** The rotation vector's own heading uncertainty (`values[4]`), degrees; NaN when not reported. */
+    /**
+     * The rotation vector's own heading uncertainty (`values[4]`), degrees; NaN when not reported.
+     * Logged only: it is a coarse step per session on the Pixels and decides nothing ([HeadingLock]).
+     */
     private var headingUncertaintyDeg = Float.NaN
     private var compassAccuracy = SensorManager.SENSOR_STATUS_ACCURACY_HIGH
+
+    /**
+     * The calibrated magnetometer, for [compassConsistency]'s field check alone. The rotation vector
+     * already fuses it; what it adds is the field strength, which says when a magnet or an
+     * unestimated bias is in the reading.
+     */
+    private val magnetometer = sensorManager?.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+
+    /** Whether the compass agrees with itself across directions; see [CompassConsistency]. */
+    private val compassConsistency = CompassConsistency()
+
+    /**
+     * Debug builds only, switched in Settings (debug options): logs what the compass chip is decided
+     * from as `CaelisCompass`, once a second and on every change. Off by default. The expected field
+     * comes from the position, so release builds never log it (a release log does not say where the
+     * user is).
+     */
+    @Volatile
+    var compassLogEnabled: Boolean = false
+    private var lastLoggedState: HeadingState? = null
+    private var lastLoggedEvidence: CompassEvidence? = null
+    private var lastCompassLogMs = 0L
+    private var latestFieldUt = Float.NaN
+    private var expectedFieldUt = Float.NaN
+    private var latestPsiDeg = Float.NaN
+    private var latestGameAzimuthDeg = Float.NaN
     private val compassMatrix = FloatArray(16)
     private val gameMatrix = FloatArray(16)
     private val latestGameQuat = FloatArray(4)
@@ -339,6 +371,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
                 System.currentTimeMillis(),
             )
             magneticDeclinationDeg = field.declination
+            expectedFieldUt = field.fieldStrength / 1000f
+            compassConsistency.setExpectedField(expectedFieldUt)
         } catch (_: Exception) {
         }
     }
@@ -400,7 +434,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     private fun setAlignment(totalAzimuthDeg: Float, pitchDeg: Float) {
         val allowed = CoarseHeading.isAllowed(
             locked = headingLock.isLocked,
-            compassState = HeadingLock.compassState(compassAccuracy, headingUncertaintyDeg, MAX_CALIBRATION_AZIMUTH),
+            compassState = HeadingLock.compassState(compassAccuracy, compassConsistency.evidence),
         )
         coarseHeadingOffsetDeg = CoarseHeading.coarseFor(
             totalAzimuthDegrees = totalAzimuthDeg,
@@ -547,11 +581,19 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         hasGameSample = false
         hasCompassSample = false
         lastPairedTimestampNs = Long.MIN_VALUE
+        compassConsistency.reset()
+        lastLoggedState = null
+        lastLoggedEvidence = null
+        latestFieldUt = Float.NaN
+        latestPsiDeg = Float.NaN
+        latestGameAzimuthDeg = Float.NaN
         publishHeadingState()
         if (dualMode) {
             sensorManager.registerListener(this, gameSensor, SAMPLING_PERIOD_US)
         }
         sensorManager.registerListener(this, rotationSensor, SAMPLING_PERIOD_US)
+        // The field check needs a few readings a second, not the pose's 200.
+        magnetometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
         isListening = true
     }
 
@@ -564,6 +606,16 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event == null || event.values.isEmpty()) return
+        if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+            if (event.values.size < 3) return
+            val bx = event.values[0]
+            val by = event.values[1]
+            val bz = event.values[2]
+            latestFieldUt = sqrt(bx * bx + by * by + bz * bz)
+            compassConsistency.addField(event.timestamp, latestFieldUt)
+            publishHeadingState()
+            return
+        }
         if (dualMode && event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
             readQuaternion(event.values, latestGameQuat)
             latestGameTimestampNs = event.timestamp
@@ -681,14 +733,54 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             SensorManager.getRotationMatrixFromVector(gameMatrix, latestGameQuat)
             // A lock taken while the game vector converges waits for it (GameVectorSettle).
             val settled = gameSettle.add(latestCompassTimestampNs, compassMatrix, gameMatrix)
-            headingLock.addCompass(YawOffset.extractDegrees(compassMatrix, gameMatrix), settled)
+            val psi = YawOffset.extractDegrees(compassMatrix, gameMatrix)
+            headingLock.addCompass(psi, settled)
             headingOffsetDeg = headingLock.correctionDegrees()
+            // The back camera's direction in the game vector's frame (-Z of the device): the phone's
+            // own turning, with no magnetometer in it, against which ψ is compared.
+            val east = -gameMatrix[2]
+            val north = -gameMatrix[6]
+            val up = (-gameMatrix[10]).coerceIn(-1f, 1f)
+            latestGameAzimuthDeg = Math.toDegrees(atan2(east, north).toDouble()).toFloat()
+            latestPsiDeg = psi
+            // While the game vector converges ψ moves on its own (5.8° in 12 s on the device), which
+            // a turn at the same time would read as a compass bending with direction.
+            if (settled) compassConsistency.addPair(
+                timestampNs = latestCompassTimestampNs,
+                cameraAzimuthDeg = latestGameAzimuthDeg,
+                cameraElevationDeg = Math.toDegrees(asin(up).toDouble()).toFloat(),
+                psiDeg = psi,
+            )
         }
         publishHeadingState()
     }
 
     private fun publishHeadingState() {
-        headingStateFlow.value = headingLock.state(compassAccuracy, headingUncertaintyDeg, MAX_CALIBRATION_AZIMUTH)
+        val evidence = compassConsistency.evidence
+        val state = headingLock.state(compassAccuracy, evidence)
+        headingStateFlow.value = state
+        if (BuildConfig.DEBUG && compassLogEnabled) logCompass(state, evidence)
+    }
+
+    /**
+     * Debug builds with the switch on: what the compass chip is decided from. `values[4]` is in it to
+     * show it never decides; the field and its expectation, ψ and the gyro's camera azimuth are what
+     * [CompassConsistency] works from.
+     */
+    private fun logCompass(state: HeadingState, evidence: CompassEvidence) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (state == lastLoggedState && evidence == lastLoggedEvidence && now - lastCompassLogMs < COMPASS_LOG_EVERY_MS) return
+        lastCompassLogMs = now
+        lastLoggedState = state
+        lastLoggedEvidence = evidence
+        android.util.Log.d(
+            COMPASS_LOG_TAG,
+            "state=$state evidence=$evidence accuracy=$compassAccuracy " +
+                "values4=${"%.1f".format(headingUncertaintyDeg)}deg " +
+                "field=${"%.1f".format(latestFieldUt)}uT expected=${"%.1f".format(expectedFieldUt)}uT " +
+                "psi=${"%.1f".format(latestPsiDeg)}deg gameAz=${"%.0f".format(latestGameAzimuthDeg)}deg " +
+                "locked=${headingLock.isLocked}",
+        )
     }
 
     /** Everything that turns the rotation vector's north into true north, except the calibration. */
@@ -749,6 +841,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         /** The same bound for the compass correction. See [MAX_CALIBRATION_PITCH]. */
         const val MAX_CALIBRATION_AZIMUTH = 20f
+
+        private const val COMPASS_LOG_TAG = "CaelisCompass"
+        private const val COMPASS_LOG_EVERY_MS = 1_000L
 
         /** An azimuth expressed in (-180, 180] — the short way round, which is what a bound needs. */
         fun signedAzimuth(azimuthDeg: Float): Float {
@@ -908,6 +1003,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // The raw magnetometer is only read for its field strength; the compass accuracy is the
+        // rotation vector's.
+        if (sensor?.type == Sensor.TYPE_MAGNETIC_FIELD) return
         if (dualMode) {
             // The game vector has no magnetometer; only the compass stream's accuracy means anything.
             if (sensor?.type == Sensor.TYPE_GAME_ROTATION_VECTOR) return

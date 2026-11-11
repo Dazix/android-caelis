@@ -238,6 +238,12 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         com.dazix.caelis.data.DebugPreferences(),
     )
 
+    init {
+        viewModelScope.launch {
+            debugPreferences.collect { orientationTracker.compassLogEnabled = it.logCompass }
+        }
+    }
+
     /** Whether this build declares `INTERNET` at all. Constant for the life of the process. */
     val canDownloadTerrain: Boolean = horizonRepository.canDownload
 

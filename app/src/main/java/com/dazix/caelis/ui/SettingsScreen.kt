@@ -763,6 +763,29 @@ fun SettingsScreen(
                         checked = debugPreferences.showTerrainMetrics,
                         onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(showTerrainMetrics = it)) },
                     )
+
+                    // Debug builds only: the log carries the field expected at the user's position.
+                    if (BuildConfig.DEBUG) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        )
+
+                        // ---- Group 4: Compass ----
+                        Text(
+                            text = stringResource(R.string.settings_debug_group_compass),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                        )
+                        SwitchRow(
+                            title = stringResource(R.string.settings_debug_log_compass),
+                            description = stringResource(R.string.settings_debug_log_compass_desc),
+                            checked = debugPreferences.logCompass,
+                            onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(logCompass = it)) },
+                        )
+                    }
                 }
             }
         }

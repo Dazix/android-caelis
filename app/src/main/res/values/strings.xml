@@ -598,6 +598,9 @@
     <string name="settings_debug_night_sky_focus_region_desc">Highlight active constellation focus area and threshold in Night Sky AR</string>
     <string name="settings_debug_terrain_metrics">Terrain horizon metrics</string>
     <string name="settings_debug_terrain_metrics_desc">Display real-time Auto-Range distance and active DEM tiles count in AR</string>
+    <string name="settings_debug_group_compass">Compass</string>
+    <string name="settings_debug_log_compass">Compass diagnostics log</string>
+    <string name="settings_debug_log_compass_desc">Writes what the compass warning is decided from to logcat (CaelisCompass), once a second</string>
     <string name="settings_debug_star_tap_radius">Touch hit-test radius</string>
     <string name="settings_debug_star_tap_radius_desc">Search radius for selecting celestial bodies. Objects within this radius are evaluated based on distance and brightness (default 48 dp).</string>
     <string name="settings_debug_show_tap_indicator">Show tap search radius</string>

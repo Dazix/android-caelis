@@ -7,7 +7,7 @@ Peak names sit on the summit and follow the horizon, with a dark backdrop by day
 Now in Slovak, Polish and German
 Warns when a time-lapse is shot handheld
 Runs on Android 11 and 12
-Night sky: names no longer overlap
+Night sky: names no longer overlap and are easier to tap
 Top bar clears the camera cutout
 Night sky: subtler selection, rounded figure lines
-Night sky: easier tapping of constellation and asterism names
+The compass warning only shows when the compass is actually off

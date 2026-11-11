@@ -598,6 +598,12 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         SharingStarted.Eagerly,
         com.dazix.caelis.data.DebugPreferences(),
     )
+
+    init {
+        viewModelScope.launch {
+            debugPreferences.collect { orientationTracker.compassLogEnabled = it.logCompass }
+        }
+    }
     val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugPreferences
         .map { it.enableNightSkyFocusRegion }
         .stateIn(

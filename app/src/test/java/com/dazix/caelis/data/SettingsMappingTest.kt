@@ -802,8 +802,22 @@ class SettingsMappingTest {
         assertFalse(defaults.enableNightSkyFocusRegion)
         assertFalse(defaults.showTerrainMetrics)
         assertFalse(defaults.showTapRadiusIndicator)
+        assertFalse("the compass log is off unless asked for", defaults.logCompass)
         assertEquals(DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP, defaults.starTapRadiusDp)
         assertFalse(defaults.anyEnabled)
+    }
+
+    @Test
+    fun `the compass log switch survives a round trip and counts as debug on`() {
+        val prefs = mutablePreferencesOf()
+        val custom = DebugPreferences(logCompass = true)
+        SettingsMapping.writeDebugPreferences(prefs, custom)
+        assertEquals(custom, SettingsMapping.readDebugPreferences(prefs))
+        assertTrue(custom.anyEnabled)
+        // The legacy debug flag never switched logging on.
+        val legacy = mutablePreferencesOf()
+        SettingsMapping.writeDebugModeEnabled(legacy, true)
+        assertFalse(SettingsMapping.readDebugPreferences(legacy).logCompass)
     }
 
     @Test
