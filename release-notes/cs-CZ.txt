@@ -4,7 +4,7 @@ Názvy vrcholů stojí na špičce, drží horizont a ve dne mají tmavý podkla
 Nově slovensky, polsky a německy
 Varování při časosběru z ruky
 Funguje i na Androidu 11 a 12
-Noční obloha: názvy se už nepřekrývají a snáz se na ně klepne
+Noční obloha: názvy se nepřekrývají a snáz se vybírají, decentnější výběr, zaoblené spojnice
 Horní lišta mimo výřez fotoaparátu
-Noční obloha: decentnější výběr, zaoblené spojnice
 Varování kompasu se ukáže, jen když kompas opravdu ujíždí
+Slunce: obraz kamery naskočí rychleji, bez prázdné mřížky

@@ -169,8 +169,12 @@ internal fun NightSkyGpuSky(
     val frame = handle.frame
 
     // The scene needs the GL surface, the catalogue and its star geometry; it is rebuilt if any changes.
-    DisposableEffect(surface, catalog, starGeometry) {
-        val s = surface
+    // Keyed by the values read in composition and built from exactly those. Reading the surface inside
+    // the effect picked up the one the AndroidView factory had set meanwhile under a null key, and the
+    // next recomposition, seeing the key change, built everything a second time (as in Sun AR).
+    val currentSurface = surface
+    DisposableEffect(currentSurface, catalog, starGeometry) {
+        val s = currentSurface
         val g = starGeometry
         val built = if (s != null && catalog != null && g != null) NightSkyScene(context, s, catalog, g) else null
         scene = built
@@ -181,8 +185,8 @@ internal fun NightSkyGpuSky(
         }
     }
     var background by remember { mutableStateOf<CameraBackground?>(null) }
-    DisposableEffect(surface) {
-        val built = surface?.let { CameraBackground(it) }
+    DisposableEffect(currentSurface) {
+        val built = currentSurface?.let { CameraBackground(it) }
         background = built
         onDispose { built?.destroy() }
     }

@@ -54,6 +54,7 @@ import com.dazix.caelis.ar.scene.SkyGridMarkers
 import com.dazix.caelis.ar.scene.SkySurface
 import com.dazix.caelis.ar.scene.SunArScene
 import com.dazix.caelis.domain.arframe.SkyProjector
+import com.dazix.caelis.domain.arframe.SkyRevealPolicy
 import com.dazix.caelis.domain.arframe.TextBackdrop
 import com.dazix.caelis.domain.horizon.HorizonLandmark
 import com.dazix.caelis.domain.horizon.HorizonProfile
@@ -126,22 +127,29 @@ internal fun SunArGpuSky(
     var viewportWidth by remember { mutableStateOf(1f) }
     var viewportHeight by remember { mutableStateOf(1f) }
 
-    // Hidden until the first frame is drawn (the first one compiles the line shader), then faded in.
+    // Hidden until the first frame is drawn (the first one compiles the line shader) and the camera
+    // picture is in it (SkyRevealPolicy), then faded in. Revealed earlier, the grid stood on an empty
+    // dark sky for 0.4-0.5 s on every entry while the camera was still opening.
     var revealed by remember { mutableStateOf(false) }
+    var firstFrameNs by remember { mutableLongStateOf(SkyRevealPolicy.NO_FRAME) }
     val skyAlpha by animateFloatAsState(
         targetValue = if (revealed) 1f else 0f,
         animationSpec = tween(durationMillis = 300),
         label = "sunArReveal",
     )
 
-    DisposableEffect(surface) {
-        val built = surface?.let { SunArScene(it) }
+    // Keyed by the value the effect builds from, read in composition. Reading the state inside the
+    // effect built from the surface the AndroidView factory had set in the meantime under a null key,
+    // and the next recomposition, seeing the key change, built the scene and the picture a second time.
+    val currentSurface = surface
+    DisposableEffect(currentSurface) {
+        val built = currentSurface?.let { SunArScene(it) }
         scene = built
         onDispose { built?.destroy() }
     }
     var background by remember { mutableStateOf<CameraBackground?>(null) }
-    DisposableEffect(surface) {
-        val built = surface?.let { CameraBackground(it) }
+    DisposableEffect(currentSurface) {
+        val built = currentSurface?.let { CameraBackground(it) }
         background = built
         onDispose { built?.destroy() }
     }
@@ -234,7 +242,16 @@ internal fun SunArGpuSky(
                         currentPeakNames, currentLanguageTag, density, currentFontScale,
                     )
                     sf.renderFrame(nanos)
-                    revealed = true
+                    if (firstFrameNs == SkyRevealPolicy.NO_FRAME) firstFrameNs = nanos
+                    if (!revealed && SkyRevealPolicy.shouldReveal(
+                            firstFrameNs = firstFrameNs,
+                            nowNs = nanos,
+                            pictureWanted = pictureWanted,
+                            pictureShown = bg?.isPictureShown == true,
+                        )
+                    ) {
+                        revealed = true
+                    }
                     frameTick = nanos
                 }
             }

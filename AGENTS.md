@@ -329,6 +329,15 @@ Each of these was found by review or on the device and is now covered by a test.
 - **Every camera image handed to Filament is closed in its release callback, from a fixed pool.**
   `CameraBackground` owns a few preallocated `Runnable`s (no lambda per frame); a lost callback
   leaks one of the reader's four images and, after enough of them, freezes the picture.
+- **The camera is bound first, and Sun AR's sky is shown with its picture.** Opening the camera is
+  the slowest part of entering an AR screen (~250-300 ms from open to first image on a Pixel 7 Pro),
+  so `CameraPreview` binds in the effect phase (`DisposableEffect` + undispatched coroutine, the
+  provider used at once when ready), before the sky's scene is built, and `MainActivity` starts CameraX
+  at launch. Sun AR's sky stays hidden until a frame contains the picture (`SkyRevealPolicy`; at most
+  700 ms after its first frame, at once without a wanted picture); revealed on its first frame, the grid
+  stood on an empty dark sky for ~0.4 s (~0.5 s cold) on every entry. Effects that build from the sky's
+  surface are keyed by the value read in composition: reading the state inside the effect built the
+  scene and the picture twice per entry.
 - **One matrix feeds the GPU and the CPU.** The tap hit test, the off-screen pointers and which marks
   are listed project through the scene's `SkyProjector`, updated in the same call that sets the
   Filament camera; the marks themselves are projected by the GPU from that camera.
