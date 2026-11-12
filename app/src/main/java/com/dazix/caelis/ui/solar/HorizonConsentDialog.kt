@@ -38,6 +38,10 @@ fun HorizonConsentDialog(
     onNever: () -> Unit,
 ) {
     var wifiOnly by remember { mutableStateOf(initialWifiOnly) }
+    // Held here, not inside the `text` slot: toggling the switch below threw a scrolled body back to
+    // the top, so the slot's own remembered state did not survive the recomposition. Hoisted with
+    // wifiOnly, the position lives as long as the dialog.
+    val scrollState = rememberScrollState()
 
     AlertDialog(
         onDismissRequest = { /* A deliberate answer is required; dismissing would re-ask forever. */ },
@@ -47,7 +51,7 @@ fun HorizonConsentDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(

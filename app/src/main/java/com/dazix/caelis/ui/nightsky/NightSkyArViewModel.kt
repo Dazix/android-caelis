@@ -417,6 +417,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
 
+    /** Shared with Sun AR for the process; see [HorizonRepository.heightAboveTerrainCm]. */
+    val heightAboveTerrainCm: StateFlow<Int> = horizonRepository.heightAboveTerrainCm
+
+    fun setHeightAboveTerrain(cm: Int) = horizonRepository.setHeightAboveTerrain(cm)
+
+    /** The user tapped Download on a terrain run waiting for confirmation. */
+    fun confirmTerrainDownload() = horizonRepository.confirmDownload()
+
     /**
      * The shared profile, only while it belongs to this screen's observer: the repository holds one
      * profile for the whole app, and Sun AR may have asked for another place a moment ago.

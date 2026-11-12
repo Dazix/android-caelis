@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1353 JVM tests (374 intervalometer, 766 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1363 JVM tests (376 intervalometer, 774 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -572,9 +572,21 @@ Each of these was found by review or on the device and is now covered by a test.
   same state; one instance per view model meant the same 26 MB download started twice and two
   coroutines drove one progress notification. Its scope outlives every view model on purpose — a
   download has to survive leaving the screen that started it.
-- **Shared horizon settings live in the app's Settings, not on an AR screen.** Radius, eye height,
-  download and cache describe where you are standing, not which screen is open; each AR screen keeps
-  only its own show/hide switch.
+- **Shared horizon settings live in the app's Settings, not on an AR screen.** Radius, download and
+  cache are shared by both AR screens; each AR screen keeps only its own show/hide switch. The one
+  exception is the **height above terrain**: it describes where the user stands right now (a roof, a
+  lookout tower), so it is set in either AR screen's sheet, shared by both, held by `HorizonRepository`
+  for the process and never stored (`horizon_eye_height_cm` is removed on the next save). A stored
+  tower height would skew the next day's horizon unseen; a chip shows it while it is not 1.6 m. The
+  sheet commits it on close, not per step, because each value is a profile computation.
+- **No terrain run starts unseen above the user's limit.** Before any tile is fetched,
+  `HorizonRepository` asks each missing tile's size with a HEAD request (`DemTileDownloader.contentLength`,
+  same file, same per-call consent, never on a metered network with Wi-Fi only on) and `DownloadGate`
+  decides: Never refuses, On demand always waits for a tap, Automatic proceeds only while the run's
+  bytes — including the observer's tile an automatic radius fetched first — stay within
+  `confirmAboveMb`; an unannounced size counts as over. Waiting is `HorizonState.AwaitingConfirmation`,
+  offered on the AR screens and in Settings, never in a notification; a repeated `ensureProfile` for the
+  same request does not probe again. `Downloading` counts the whole run, not one tile.
 - **The terrain profile is the artefact; the elevation tiles are cache.** Profiles live in
   `filesDir/horizons/` (5.8 kB each) and are what makes the layer work with no signal. Tiles live in
   `cacheDir/dem/` (up to 26 MB each) and Android may reclaim them at any time. Never move a tile into

@@ -230,6 +230,15 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         profile?.takeIf { ObserverPolicy.profileBelongsTo(it, loc) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val horizonState: StateFlow<HorizonState> = horizonRepository.state
+
+    /** Shared with Night Sky for the process; see [HorizonRepository.heightAboveTerrainCm]. */
+    val heightAboveTerrainCm: StateFlow<Int> = horizonRepository.heightAboveTerrainCm
+
+    fun setHeightAboveTerrain(cm: Int) = horizonRepository.setHeightAboveTerrain(cm)
+
+    /** The user tapped Download on a terrain run waiting for confirmation. */
+    fun confirmTerrainDownload() = horizonRepository.confirmDownload()
+
     val effectiveRangeKm: StateFlow<Int?> = horizonRepository.effectiveRangeKm
     val activeTileCount: StateFlow<Int> = horizonRepository.activeTileCount
     val debugPreferences: StateFlow<com.dazix.caelis.data.DebugPreferences> = settingsStore.debugPreferences.stateIn(

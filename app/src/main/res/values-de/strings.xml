@@ -279,8 +279,6 @@
     <string name="horizon_range_value">%1$d km</string>
     <string name="horizon_range_auto">Automatisch</string>
     <string name="horizon_range_auto_value">Automatisch · %1$d km</string>
-    <string name="horizon_eye_height">Augenhöhe</string>
-    <string name="horizon_eye_height_value">%1$d cm</string>
     <string name="horizon_shade_occluded">Verdeckten Teil der Bahn abdunkeln</string>
     <string name="horizon_shade_occluded_desc">Der Teil der Bahn hinter dem Gelände wird blass gezeichnet, sodass Sie sehen, wie viel der Goldenen Stunde die Hügel nehmen.</string>
     <string name="horizon_wifi_only">Nur über WLAN herunterladen</string>
@@ -291,7 +289,7 @@
     <string name="horizon_peak_names_desc">Beschriftet die Gipfel auf der Silhouette mit Name und Höhe. Braucht den echten Horizont.</string>
 
     <string name="horizon_consent_title">Geländehöhen herunterladen?</string>
-    <string name="horizon_consent_body">Um die echte Silhouette zu zeichnen, braucht die App Höhendaten für das Kartenquadrat, in dem Sie stehen. Nach Ihrer Erlaubnis werden die Daten für Ihren aktuellen Standort bei Bedarf automatisch im Hintergrund heruntergeladen und für die Offline-Nutzung zwischengespeichert. Gipfelnamen (einige kB pro Kachel) werden auf dieselbe Weise aus einem öffentlichen GitHub-Repository geladen. Jede Anfrage enthält nur den Namen dieser einen Ein-Grad-Kachel – keine Koordinaten, keine Kennungen, nichts über Sie –, aber der Host sieht, wie jeder Server, mit dem Sie sich verbinden, Ihre IP-Adresse.\n\nSie können die Datei auch von Hand importieren oder Ihre Meinung später in den Einstellungen ändern.</string>
+    <string name="horizon_consent_body">Um die echte Silhouette zu zeichnen, braucht die App Höhendaten für das Kartenquadrat, in dem Sie stehen. Nach Ihrer Erlaubnis werden die Daten für Ihren aktuellen Standort bei Bedarf im Hintergrund heruntergeladen und für die Offline-Nutzung zwischengespeichert; ein größerer Download (standardmäßig über 50 MB) wartet auf Ihre Bestätigung. In den Einstellungen können Sie auf Laden nur auf Anfrage umstellen. Gipfelnamen (einige kB pro Kachel) werden auf dieselbe Weise aus einem öffentlichen GitHub-Repository geladen. Jede Anfrage enthält nur den Namen dieser einen Ein-Grad-Kachel – keine Koordinaten, keine Kennungen, nichts über Sie –, aber der Host sieht, wie jeder Server, mit dem Sie sich verbinden, Ihre IP-Adresse.\n\nSie können die Datei auch von Hand importieren oder Ihre Meinung später in den Einstellungen ändern.</string>
     <string name="horizon_consent_allow">Erlauben</string>
     <string name="horizon_consent_never">Jetzt nicht</string>
 
@@ -417,6 +415,30 @@
     <string name="ar_heading_compass_unreliable">Kompass unzuverlässig. Bewegen Sie das Telefon in einer Acht oder richten Sie von Hand am Horizont aus.</string>
     <string name="ar_terrain_downloading">Lade Gelände %1$d von %2$d · %3$s</string>
     <string name="horizon_download_size_of">%1$s von %2$s</string>
+    <string name="horizon_height_above_terrain">Höhe über Gelände</string>
+    <string name="horizon_height_above_terrain_value">%1$s m</string>
+    <string name="horizon_height_above_terrain_desc">Bis die App geschlossen wird. Für ein Dach oder einen Aussichtsturm.</string>
+    <string name="horizon_height_chip">↑ %1$s m</string>
+    <string name="horizon_height_chip_desc">Höhe über Gelände %1$s m. Ändern</string>
+    <string name="horizon_height_decrease">Niedriger</string>
+    <string name="horizon_height_increase">Höher</string>
+    <string name="horizon_status_sizing">Downloadgröße wird ermittelt…</string>
+    <string name="horizon_size_unknown">Größe unbekannt</string>
+    <string name="horizon_size_at_least">mindestens %1$s</string>
+    <string name="horizon_offer_download">Laden</string>
+    <string name="horizon_download_mode">Geländedaten laden</string>
+    <string name="horizon_download_mode_auto">Automatisch</string>
+    <string name="horizon_download_mode_on_demand">Auf Anfrage</string>
+    <string name="horizon_download_mode_never">Nie</string>
+    <string name="horizon_download_mode_auto_desc">Lädt, was dieser Ort braucht. Ein größerer Download wartet auf Ihr Tippen.</string>
+    <string name="horizon_download_mode_on_demand_desc">Zeigt zuerst die Größe; nichts wird geladen, bevor Sie auf Laden tippen.</string>
+    <string name="horizon_download_mode_never_desc">Keine Verbindung. Höhendaten importieren Sie von Hand.</string>
+    <string name="horizon_confirm_limit">Nachfragen bei mehr als</string>
+    <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <plurals name="horizon_offer_tiles">
+        <item quantity="one">Gelände: %1$d Kachel, %2$s</item>
+        <item quantity="other">Gelände: %1$d Kacheln, %2$s</item>
+    </plurals>
     <string name="ar_terrain_computing">Silhouette wird berechnet · %1$d %%</string>
     <string name="ar_terrain_missing">Höhendaten für den echten Horizont fehlen. Laden oder importieren Sie sie in den Einstellungen.</string>
     <string name="ar_terrain_missing_action">Geländeeinstellungen öffnen</string>

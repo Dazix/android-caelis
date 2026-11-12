@@ -285,8 +285,6 @@
     <string name="horizon_range_value">%1$d km</string>
     <string name="horizon_range_auto">Automatycznie</string>
     <string name="horizon_range_auto_value">Automatycznie · %1$d km</string>
-    <string name="horizon_eye_height">Wysokość oczu</string>
-    <string name="horizon_eye_height_value">%1$d cm</string>
     <string name="horizon_shade_occluded">Przyciemnij ukrytą część trasy</string>
     <string name="horizon_shade_occluded_desc">Odcinek trajektorii za terenem jest rysowany blado, więc widać, ile złotej godziny zabierają wzgórza.</string>
     <string name="horizon_wifi_only">Pobieraj tylko przez Wi‑Fi</string>
@@ -297,7 +295,7 @@
     <string name="horizon_peak_names_desc">Podpisuje szczyty leżące na linii horyzontu nazwą i wysokością. Wymaga prawdziwego horyzontu.</string>
 
     <string name="horizon_consent_title">Pobrać wysokości terenu?</string>
-    <string name="horizon_consent_body">Aby narysować prawdziwą linię horyzontu, aplikacja potrzebuje danych wysokościowych dla kwadratu mapy, w którym stoisz. Po zezwoleniu dane dla Twojej bieżącej lokalizacji będą w razie potrzeby pobierane automatycznie w tle i zapisywane w pamięci podręcznej do użytku offline. Nazwy szczytów (kilka kB na kafelek) są pobierane w ten sam sposób z publicznego repozytorium GitHub. Każde żądanie zawiera tylko nazwę jednego kafelka o boku jednego stopnia – bez współrzędnych, bez identyfikatorów, nic o Tobie – ale host, jak każdy serwer, z którym się łączysz, widzi Twój adres IP.\n\nMożesz też zaimportować plik ręcznie albo zmienić zdanie później w Ustawieniach.</string>
+    <string name="horizon_consent_body">Aby narysować prawdziwą linię horyzontu, aplikacja potrzebuje danych wysokościowych dla kwadratu mapy, w którym stoisz. Po zezwoleniu dane dla Twojej bieżącej lokalizacji będą w razie potrzeby pobierane w tle i zapisywane w pamięci podręcznej do użytku offline; większe pobieranie (domyślnie ponad 50 MB) czeka na Twoje potwierdzenie. W Ustawieniach możesz przełączyć na pobieranie tylko na żądanie. Nazwy szczytów (kilka kB na kafelek) są pobierane w ten sam sposób z publicznego repozytorium GitHub. Każde żądanie zawiera tylko nazwę jednego kafelka o boku jednego stopnia – bez współrzędnych, bez identyfikatorów, nic o Tobie – ale host, jak każdy serwer, z którym się łączysz, widzi Twój adres IP.\n\nMożesz też zaimportować plik ręcznie albo zmienić zdanie później w Ustawieniach.</string>
     <string name="horizon_consent_allow">Zezwól</string>
     <string name="horizon_consent_never">Nie teraz</string>
 
@@ -423,6 +421,32 @@
     <string name="ar_heading_compass_unreliable">Kompas jest niewiarygodny. Poruszaj telefonem ósemką lub wyrównaj z horyzontem ręcznie.</string>
     <string name="ar_terrain_downloading">Pobieranie terenu %1$d z %2$d · %3$s</string>
     <string name="horizon_download_size_of">%1$s z %2$s</string>
+    <string name="horizon_height_above_terrain">Wysokość nad terenem</string>
+    <string name="horizon_height_above_terrain_value">%1$s m</string>
+    <string name="horizon_height_above_terrain_desc">Do zamknięcia aplikacji. Na dach lub wieżę widokową.</string>
+    <string name="horizon_height_chip">↑ %1$s m</string>
+    <string name="horizon_height_chip_desc">Wysokość nad terenem %1$s m. Zmień</string>
+    <string name="horizon_height_decrease">Niżej</string>
+    <string name="horizon_height_increase">Wyżej</string>
+    <string name="horizon_status_sizing">Sprawdzanie rozmiaru pobierania…</string>
+    <string name="horizon_size_unknown">rozmiar nieznany</string>
+    <string name="horizon_size_at_least">co najmniej %1$s</string>
+    <string name="horizon_offer_download">Pobierz</string>
+    <string name="horizon_download_mode">Pobieranie danych terenu</string>
+    <string name="horizon_download_mode_auto">Automatycznie</string>
+    <string name="horizon_download_mode_on_demand">Na żądanie</string>
+    <string name="horizon_download_mode_never">Nigdy</string>
+    <string name="horizon_download_mode_auto_desc">Pobiera to, czego potrzebuje to miejsce. Większe pobieranie czeka na Twoje potwierdzenie.</string>
+    <string name="horizon_download_mode_on_demand_desc">Najpierw pokazuje rozmiar; nic nie zostanie pobrane, dopóki nie stukniesz Pobierz.</string>
+    <string name="horizon_download_mode_never_desc">Bez połączenia. Dane wysokościowe zaimportujesz ręcznie.</string>
+    <string name="horizon_confirm_limit">Pytaj przed pobraniem więcej niż</string>
+    <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <plurals name="horizon_offer_tiles">
+        <item quantity="one">Teren: %1$d kafelek, %2$s</item>
+        <item quantity="few">Teren: %1$d kafelki, %2$s</item>
+        <item quantity="many">Teren: %1$d kafelków, %2$s</item>
+        <item quantity="other">Teren: %1$d kafelka, %2$s</item>
+    </plurals>
     <string name="ar_terrain_computing">Obliczanie linii horyzontu · %1$d %%</string>
     <string name="ar_terrain_missing">Brakuje danych wysokościowych dla prawdziwego horyzontu. Pobierz lub zaimportuj je w Ustawieniach.</string>
     <string name="ar_terrain_missing_action">Otwórz ustawienia terenu</string>

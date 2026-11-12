@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import com.dazix.caelis.domain.RampCurve
 import com.dazix.caelis.domain.RampDomain
@@ -12,6 +13,7 @@ import com.dazix.caelis.domain.SessionConfig
 import com.dazix.caelis.domain.StopConditions
 import com.dazix.caelis.domain.TapTarget
 import com.dazix.caelis.domain.TriggerMode
+import com.dazix.caelis.domain.horizon.DownloadMode
 import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.overlay.OverlayOptions
 import org.junit.Assert.assertEquals
@@ -106,8 +108,9 @@ class SettingsMappingTest {
         val settings = HorizonSettings(
             enabled = true,
             networkConsent = true,
+            autoDownload = false,
+            confirmAboveMb = 100,
             maxRangeKm = 100,
-            eyeHeightCm = 175,
             shadeOccludedTrajectory = false,
             wifiOnly = true,
             realHorizonInNightSky = true,
@@ -156,14 +159,41 @@ class SettingsMappingTest {
         assertEquals(60, defaults.maxRangeKm)
         assertEquals(60_000.0, defaults.maxRangeMeters, 1e-9)
         assertEquals(1.6, defaults.eyeHeightMeters, 1e-9)
+        assertEquals(DownloadMode.NEVER, defaults.downloadMode)
+        assertTrue("a later consent starts automatic, as it always did", defaults.autoDownload)
+        assertEquals(50, defaults.confirmAboveMb)
+        assertEquals(50_000_000L, defaults.confirmAboveBytes)
+    }
+
+    /**
+     * The height above terrain describes where the user stands right now; a stored one from a lookout
+     * tower would skew the next day's horizon unseen. It is written nowhere, and the key an older build
+     * wrote is removed on the next save.
+     */
+    @Test
+    fun `the height above terrain is never stored and an old stored one is dropped`() {
+        val prefs = mutablePreferencesOf()
+        prefs[intPreferencesKey("horizon_eye_height_cm")] = 3000
+        SettingsMapping.writeHorizon(prefs, HorizonSettings(eyeHeightCm = 5000))
+
+        assertNull(prefs[intPreferencesKey("horizon_eye_height_cm")])
+        assertEquals(HorizonSettings.DEFAULT_EYE_HEIGHT_CM, SettingsMapping.readHorizon(prefs).eyeHeightCm)
     }
 
     @Test
-    fun `an absurd stored eye height is clamped rather than trusted`() {
+    fun `a confirmation limit that is not offered reads as the default`() {
         val prefs = mutablePreferencesOf()
-        SettingsMapping.writeHorizon(prefs, HorizonSettings(eyeHeightCm = 900))
+        prefs[intPreferencesKey("horizon_confirm_above_mb")] = 7
 
-        assertEquals(HorizonSettings.MAX_EYE_HEIGHT_CM, SettingsMapping.readHorizon(prefs).eyeHeightCm)
+        assertEquals(HorizonSettings.DEFAULT_CONFIRM_ABOVE_MB, SettingsMapping.readHorizon(prefs).confirmAboveMb)
+    }
+
+    @Test
+    fun `the download mode follows consent and the automatic switch`() {
+        assertEquals(DownloadMode.NEVER, HorizonSettings(networkConsent = null).downloadMode)
+        assertEquals(DownloadMode.NEVER, HorizonSettings(networkConsent = false, autoDownload = true).downloadMode)
+        assertEquals(DownloadMode.AUTOMATIC, HorizonSettings(networkConsent = true, autoDownload = true).downloadMode)
+        assertEquals(DownloadMode.ON_DEMAND, HorizonSettings(networkConsent = true, autoDownload = false).downloadMode)
     }
 
     @Test

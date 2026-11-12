@@ -184,6 +184,19 @@ fun NightSkyArScreen(
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
     var isLayerSheetOpen by remember { mutableStateOf(false) }
+    val heightAboveTerrainCm by viewModel.heightAboveTerrainCm.collectAsStateWithLifecycle()
+    // The height being stepped in the open sheet, committed when it closes (as in Sun AR): each value
+    // is a profile computation, and the steps in between are not wanted.
+    var sheetHeightCm by remember { mutableStateOf<Int?>(null) }
+    val openLayerSheet = {
+        sheetHeightCm = heightAboveTerrainCm
+        isLayerSheetOpen = true
+    }
+    val closeLayerSheet = {
+        sheetHeightCm?.let { if (it != heightAboveTerrainCm) viewModel.setHeightAboveTerrain(it) }
+        sheetHeightCm = null
+        isLayerSheetOpen = false
+    }
     var isPlacesSheetOpen by remember { mutableStateOf(false) }
     var showDsoLegendInAr by remember { mutableStateOf(false) }
     val previewFrameClock = remember { PreviewFrameClock() }
@@ -301,7 +314,7 @@ fun NightSkyArScreen(
                 if (!viewModel.backInDetail(DisplayGeometry.currentRotation(context))) viewModel.clearSelectedBody()
             uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
             isPlacesSheetOpen -> isPlacesSheetOpen = false
-            isLayerSheetOpen -> isLayerSheetOpen = false
+            isLayerSheetOpen -> closeLayerSheet()
             uiState.isDebugOptionsEnabled && uiState.isDebugFocusRegionVisible -> viewModel.setDebugFocusRegionVisible(false)
             else -> onBack()
         }
@@ -689,7 +702,7 @@ fun NightSkyArScreen(
                     onOpenSearch = {
                         viewModel.setSearchActive(true)
                     },
-                    onOpenLayers = { isLayerSheetOpen = true },
+                    onOpenLayers = openLayerSheet,
                     onResetZoom = {
                         viewModel.resetZoom()
                     },
@@ -712,6 +725,23 @@ fun NightSkyArScreen(
                         state = uiState.horizonState,
                         layerOn = horizonSettings.enabled && horizonSettings.realHorizonInNightSky,
                         onOpenSettings = onOpenTerrainSettings,
+                        nightVisionColor = chipColor,
+                    )
+                    val offer = uiState.horizonState as? com.dazix.caelis.data.horizon.HorizonState.AwaitingConfirmation
+                    // Closed for this offer only: a different run (another spot, another size) offers again.
+                    var offerDismissed by remember(offer) { mutableStateOf(false) }
+                    if (offer != null && horizonSettings.enabled && horizonSettings.realHorizonInNightSky && !offerDismissed) {
+                        com.dazix.caelis.ui.horizon.TerrainDownloadOfferChip(
+                            state = offer,
+                            onDownload = viewModel::confirmTerrainDownload,
+                            onDismiss = { offerDismissed = true },
+                            contentColor = chipColor ?: Color.White,
+                            accentColor = chipColor ?: Color(0xFF4DD0E1),
+                        )
+                    }
+                    com.dazix.caelis.ui.HeightAboveTerrainChip(
+                        heightCm = heightAboveTerrainCm,
+                        onClick = openLayerSheet,
                         nightVisionColor = chipColor,
                     )
                     if (cameraPictureVisible && !hasCameraPermission) {
@@ -914,7 +944,7 @@ fun NightSkyArScreen(
     // Modal Bottom Sheet for Layer Controls
     if (isLayerSheetOpen) {
         ModalBottomSheet(
-            onDismissRequest = { isLayerSheetOpen = false },
+            onDismissRequest = closeLayerSheet,
             containerColor = if (uiState.redVisionMode) Color(0xFF000000) else Color(0xF0151820),
             contentColor = if (uiState.redVisionMode) activePalette.primary else Color.White,
             scrimColor = if (uiState.redVisionMode) Color.Black.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.5f),
@@ -930,6 +960,8 @@ fun NightSkyArScreen(
                 isRealHorizonEnabled = horizonSettings.realHorizonInNightSky,
                 isRealHorizonAvailable = horizonSettings.enabled,
                 isPeakNamesVisible = horizonSettings.peakNamesInNightSky,
+                heightAboveTerrainCm = sheetHeightCm ?: heightAboveTerrainCm,
+                onHeightAboveTerrainChange = { sheetHeightCm = it },
                 isAtmosphereVisible = uiState.isAtmosphereVisible,
                 isMilkyWayVisible = uiState.isMilkyWayVisible,
                 isPlanetsVisible = uiState.isPlanetsVisible,

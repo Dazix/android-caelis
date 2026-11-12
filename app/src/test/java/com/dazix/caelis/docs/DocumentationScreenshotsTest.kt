@@ -69,7 +69,7 @@ import com.dazix.caelis.ui.nightsky.NightSkyBottomHud
 import com.dazix.caelis.ui.nightsky.NightSkyLayerSettingsSheet
 import com.dazix.caelis.ui.nightsky.NightSkyTopBar
 import androidx.compose.runtime.remember
-import com.dazix.caelis.ui.solar.SunMoonTimesInfoCard
+import com.dazix.caelis.ui.solar.SunArSettingsSheet
 import com.github.takahirom.roborazzi.captureRoboImage
 import org.junit.Rule
 import org.junit.Test
@@ -389,14 +389,13 @@ class DocumentationScreenshotsTest {
                         .padding(16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    SunMoonTimesInfoCard(
+                    SunArSettingsSheet(
                         solarTrajectory = solarTrajectory,
                         lunarTrajectory = lunarTrajectory,
                         keepScreenOn = true,
                         isCalibrated = true,
                         onToggleKeepScreenOn = {},
                         onResetCalibration = {},
-                        onClose = {},
                     )
                 }
             }
@@ -526,7 +525,6 @@ class DocumentationScreenshotsTest {
                         nightVisionTheme = NightVisionTheme.AMBER,
                         onHeaderMeasured = {},
                         onRouteToTarget = {},
-                        onClose = {},
                     )
                 }
             }

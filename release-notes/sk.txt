@@ -1,10 +1,11 @@
 # "What's new" on Google Play. See en-US.txt for the rules; the lines here translate it line by line.
-Virtuálne miesta: Slnko a nočná obloha z uloženého miesta
-Názvy vrcholov stoja na špičke, držia horizont a cez deň majú tmavý podklad
+Virtuálne miesta pre Slnko a nočnú oblohu
+Názvy vrcholov stoja na špičke, cez deň na tmavom podklade
 Novo po slovensky, poľsky a nemecky
 Varovanie pri časozbere z ruky
 Funguje aj na Androide 11 a 12
-Nočná obloha: názvy sa neprekrývajú, ľahšie sa vyberajú, asterizmy v detaile hviezdy, decentnejší výber
-Horná lišta mimo výrezu fotoaparátu
-Varovanie kompasu, len keď kompas naozaj uteká
-Slnko: obraz kamery naskočí rýchlejšie, bez prázdnej mriežky
+Nočná obloha: názvy sa neprekrývajú, ľahšie sa vyberajú, asterizmy v detaile hviezdy
+Horná lišta mimo výrezu kamery
+Varovanie kompasu, len keď naozaj uteká
+Slnko: obraz kamery naskočí rýchlejšie
+Sťahovanie terénu: celková veľkosť, limit či na požiadanie; výška nad terénom

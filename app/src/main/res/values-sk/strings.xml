@@ -285,8 +285,6 @@
     <string name="horizon_range_value">%1$d km</string>
     <string name="horizon_range_auto">Automaticky</string>
     <string name="horizon_range_auto_value">Automaticky · %1$d km</string>
-    <string name="horizon_eye_height">Výška očí</string>
-    <string name="horizon_eye_height_value">%1$d cm</string>
     <string name="horizon_shade_occluded">Stlmiť skrytú časť dráhy</string>
     <string name="horizon_shade_occluded_desc">Úsek trajektórie za terénom sa kreslí slabo, takže je vidieť, koľko zo zlatej hodinky pohltia kopce.</string>
     <string name="horizon_wifi_only">Sťahovať len cez Wi‑Fi</string>
@@ -297,7 +295,7 @@
     <string name="horizon_peak_names_desc">Popíše vrcholy, ktoré stoja na skutočnom horizonte, menom a výškou. Vyžaduje skutočný horizont.</string>
 
     <string name="horizon_consent_title">Stiahnuť výškopis terénu?</string>
-    <string name="horizon_consent_body">Aby aplikácia mohla vykresliť skutočný obzor, potrebuje výškové dáta pre štvorec mapy, v ktorom práve stojíte. Po povolení sa dáta pre aktuálnu polohu budú podľa potreby sťahovať automaticky na pozadí a ukladať na offline použitie. Názvy vrcholov (niekoľko kB na dlaždicu) sa sťahujú rovnako z verejného repozitára na GitHube. Každá požiadavka nesie len názov tejto jednostupňovej dlaždice — žiadne súradnice, žiadne identifikátory, nič o vás — ale server, ako každý, ku ktorému sa pripojíte, vidí vašu IP adresu.\n\nSúbor môžete namiesto toho naimportovať ručne alebo si to neskôr rozmyslieť v Nastaveniach.</string>
+    <string name="horizon_consent_body">Aby aplikácia mohla vykresliť skutočný obzor, potrebuje výškové dáta pre štvorec mapy, v ktorom práve stojíte. Po povolení sa dáta pre aktuálnu polohu budú podľa potreby sťahovať na pozadí a ukladať na offline použitie; väčšie sťahovanie (predvolene nad 50 MB) počká na vaše potvrdenie. V Nastaveniach môžete prepnúť na sťahovanie len na požiadanie. Názvy vrcholov (niekoľko kB na dlaždicu) sa sťahujú rovnako z verejného repozitára na GitHube. Každá požiadavka nesie len názov tejto jednostupňovej dlaždice — žiadne súradnice, žiadne identifikátory, nič o vás — ale server, ako každý, ku ktorému sa pripojíte, vidí vašu IP adresu.\n\nSúbor môžete namiesto toho naimportovať ručne alebo si to neskôr rozmyslieť v Nastaveniach.</string>
     <string name="horizon_consent_allow">Povoliť</string>
     <string name="horizon_consent_never">Teraz nie</string>
 
@@ -423,6 +421,32 @@
     <string name="ar_heading_compass_unreliable">Kompas je nespoľahlivý. Opíšte telefónom osmičku, alebo manuálne zarovnajte podľa horizontu.</string>
     <string name="ar_terrain_downloading">Sťahujem terén %1$d z %2$d · %3$s</string>
     <string name="horizon_download_size_of">%1$s z %2$s</string>
+    <string name="horizon_height_above_terrain">Výška nad terénom</string>
+    <string name="horizon_height_above_terrain_value">%1$s m</string>
+    <string name="horizon_height_above_terrain_desc">Do zatvorenia aplikácie. Pre strechu alebo rozhľadňu.</string>
+    <string name="horizon_height_chip">↑ %1$s m</string>
+    <string name="horizon_height_chip_desc">Výška nad terénom %1$s m. Zmeniť</string>
+    <string name="horizon_height_decrease">Nižšie</string>
+    <string name="horizon_height_increase">Vyššie</string>
+    <string name="horizon_status_sizing">Zisťujem veľkosť sťahovania…</string>
+    <string name="horizon_size_unknown">veľkosť neznáma</string>
+    <string name="horizon_size_at_least">najmenej %1$s</string>
+    <string name="horizon_offer_download">Stiahnuť</string>
+    <string name="horizon_download_mode">Sťahovanie dát terénu</string>
+    <string name="horizon_download_mode_auto">Automaticky</string>
+    <string name="horizon_download_mode_on_demand">Na požiadanie</string>
+    <string name="horizon_download_mode_never">Nikdy</string>
+    <string name="horizon_download_mode_auto_desc">Stiahne, čo toto miesto potrebuje. Väčšie sťahovanie počká na vaše potvrdenie.</string>
+    <string name="horizon_download_mode_on_demand_desc">Najprv ukáže veľkosť; nič sa nestiahne, kým neťuknete na Stiahnuť.</string>
+    <string name="horizon_download_mode_never_desc">Žiadne pripojenie. Výškové dáta naimportujete ručne.</string>
+    <string name="horizon_confirm_limit">Pýtať sa pred stiahnutím viac ako</string>
+    <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <plurals name="horizon_offer_tiles">
+        <item quantity="one">Terén: %1$d dlaždica, %2$s</item>
+        <item quantity="few">Terén: %1$d dlaždice, %2$s</item>
+        <item quantity="many">Terén: %1$d dlaždice, %2$s</item>
+        <item quantity="other">Terén: %1$d dlaždíc, %2$s</item>
+    </plurals>
     <string name="ar_terrain_computing">Počítam líniu obzoru · %1$d %%</string>
     <string name="ar_terrain_missing">Chýbajú výškové dáta pre skutočný horizont. Stiahnite ich alebo importujte v Nastaveniach.</string>
     <string name="ar_terrain_missing_action">Otvoriť nastavenia terénu</string>
