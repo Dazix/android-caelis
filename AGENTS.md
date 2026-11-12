@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1363 JVM tests (376 intervalometer, 774 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1365 JVM tests (377 intervalometer, 775 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -584,7 +584,7 @@ Each of these was found by review or on the device and is now covered by a test.
   same file, same per-call consent, never on a metered network with Wi-Fi only on) and `DownloadGate`
   decides: Never refuses, On demand always waits for a tap, Automatic proceeds only while the run's
   bytes — including the observer's tile an automatic radius fetched first — stay within
-  `confirmAboveMb`; an unannounced size counts as over. Waiting is `HorizonState.AwaitingConfirmation`,
+  `confirmAboveMb`; an unannounced size counts as over, unless the user set the limit to unlimited. Waiting is `HorizonState.AwaitingConfirmation`,
   offered on the AR screens and in Settings, never in a notification; a repeated `ensureProfile` for the
   same request does not probe again. `Downloading` counts the whole run, not one tile.
 - **The terrain profile is the artefact; the elevation tiles are cache.** Profiles live in

@@ -441,6 +441,7 @@
     <string name="horizon_download_mode_never_desc">Bez połączenia. Dane wysokościowe zaimportujesz ręcznie.</string>
     <string name="horizon_confirm_limit">Pytaj przed pobraniem więcej niż</string>
     <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <string name="horizon_confirm_limit_unlimited">Bez limitu</string>
     <plurals name="horizon_offer_tiles">
         <item quantity="one">Teren: %1$d kafelek, %2$s</item>
         <item quantity="few">Teren: %1$d kafelki, %2$s</item>

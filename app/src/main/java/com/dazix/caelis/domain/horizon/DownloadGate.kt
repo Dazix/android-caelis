@@ -37,6 +37,8 @@ object DownloadGate {
     }
 
     /**
+     * @param limitBytes the automatic mode's limit; null is "unlimited", which proceeds without asking
+     *   even for unannounced sizes, because the user chose not to be asked.
      * @param alreadyBytes what this run has already downloaded (the observer's tile, before the ring
      *   an automatic radius asks for), so the limit holds for the run and not per stage.
      * @param remainingSizes the announced size of every tile still to fetch, [UNKNOWN] where none was.
@@ -44,7 +46,7 @@ object DownloadGate {
      */
     fun decide(
         mode: DownloadMode,
-        limitBytes: Long,
+        limitBytes: Long?,
         alreadyBytes: Long,
         remainingSizes: List<Long>,
         confirmed: Boolean,
@@ -59,6 +61,7 @@ object DownloadGate {
             unknownTiles = remainingSizes.size - known.size,
         )
         if (mode == DownloadMode.ON_DEMAND) return ask
+        if (limitBytes == null) return Decision.Proceed
         // An unannounced size could be anything up to a whole mountain tile; counting it as small is
         // exactly the silent large download the limit exists to stop.
         if (ask.unknownTiles > 0) return ask

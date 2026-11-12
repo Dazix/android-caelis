@@ -37,6 +37,7 @@ data class HorizonSettings(
      * Above this many megabytes a run waits for a tap even in automatic mode. One of
      * [CONFIRM_LIMIT_CHOICES_MB]. Tiles weigh 1–19 MB each and a run can need nine of them, so an
      * unattended 100+ MB download on a mobile plan was possible before this existed.
+     * [CONFIRM_UNLIMITED] turns the limit off.
      */
     val confirmAboveMb: Int = DEFAULT_CONFIRM_ABOVE_MB,
     /**
@@ -102,7 +103,8 @@ data class HorizonSettings(
      * [confirmAboveMb] in bytes. Decimal megabytes, as Android's `Formatter.formatShortFileSize`
      * prints them, so "50 MB" in Settings and "50 MB" on the offer are the same amount.
      */
-    val confirmAboveBytes: Long get() = confirmAboveMb * 1_000_000L
+    val confirmAboveBytes: Long?
+        get() = if (confirmAboveMb == CONFIRM_UNLIMITED) null else confirmAboveMb * 1_000_000L
 
     companion object {
         const val DEFAULT_MAX_RANGE_KM: Int = 60
@@ -123,7 +125,15 @@ data class HorizonSettings(
 
         const val DEFAULT_CONFIRM_ABOVE_MB: Int = 50
 
-        /** Confirmation limits offered in Settings, in megabytes. */
-        val CONFIRM_LIMIT_CHOICES_MB: List<Int> = listOf(10, 25, 50, 100, 250)
+        /** [confirmAboveMb] for "never ask": automatic mode then downloads whatever a run needs. */
+        const val CONFIRM_UNLIMITED: Int = 0
+
+        /**
+         * Confirmation limits offered in Settings, in megabytes, slider order: 10 MB steps up to 190,
+         * then [CONFIRM_UNLIMITED] in 200's place, which is past the largest run anyway (nine tiles
+         * of at most 19 MB). Even steps, because the choice that matters is "about one tile" or "a
+         * few", and a doubling scale jumped over both.
+         */
+        val CONFIRM_LIMIT_CHOICES_MB: List<Int> = (10..190 step 10).toList() + CONFIRM_UNLIMITED
     }
 }

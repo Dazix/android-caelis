@@ -441,6 +441,7 @@
     <string name="horizon_download_mode_never_desc">Žiadne pripojenie. Výškové dáta naimportujete ručne.</string>
     <string name="horizon_confirm_limit">Pýtať sa pred stiahnutím viac ako</string>
     <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <string name="horizon_confirm_limit_unlimited">Neobmedzene</string>
     <plurals name="horizon_offer_tiles">
         <item quantity="one">Terén: %1$d dlaždica, %2$s</item>
         <item quantity="few">Terén: %1$d dlaždice, %2$s</item>

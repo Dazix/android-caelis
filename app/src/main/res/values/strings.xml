@@ -435,6 +435,7 @@
     <string name="horizon_download_mode_never_desc">No connection at all. Import the elevation files by hand.</string>
     <string name="horizon_confirm_limit">Ask before downloading more than</string>
     <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <string name="horizon_confirm_limit_unlimited">Unlimited</string>
     <plurals name="horizon_offer_tiles">
         <item quantity="one">Terrain: %1$d tile, %2$s</item>
         <item quantity="other">Terrain: %1$d tiles, %2$s</item>

@@ -183,9 +183,27 @@ class SettingsMappingTest {
     @Test
     fun `a confirmation limit that is not offered reads as the default`() {
         val prefs = mutablePreferencesOf()
-        prefs[intPreferencesKey("horizon_confirm_above_mb")] = 7
+        // Below the range, between two steps, above it (200 is now "unlimited"), and the old scale's 25 and 250.
+        for (stored in listOf(7, 15, 25, 200, 250)) {
+            prefs[intPreferencesKey("horizon_confirm_above_mb")] = stored
 
-        assertEquals(HorizonSettings.DEFAULT_CONFIRM_ABOVE_MB, SettingsMapping.readHorizon(prefs).confirmAboveMb)
+            assertEquals(
+                "stored $stored",
+                HorizonSettings.DEFAULT_CONFIRM_ABOVE_MB,
+                SettingsMapping.readHorizon(prefs).confirmAboveMb,
+            )
+        }
+    }
+
+    @Test
+    fun `the slider's ends, unlimited and a step between them are kept`() {
+        val prefs = mutablePreferencesOf()
+        for (stored in listOf(10, 70, 190, HorizonSettings.CONFIRM_UNLIMITED)) {
+            prefs[intPreferencesKey("horizon_confirm_above_mb")] = stored
+
+            assertEquals(stored, SettingsMapping.readHorizon(prefs).confirmAboveMb)
+        }
+        assertNull(HorizonSettings(confirmAboveMb = HorizonSettings.CONFIRM_UNLIMITED).confirmAboveBytes)
     }
 
     @Test

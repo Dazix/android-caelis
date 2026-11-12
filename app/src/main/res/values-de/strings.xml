@@ -435,6 +435,7 @@
     <string name="horizon_download_mode_never_desc">Keine Verbindung. Höhendaten importieren Sie von Hand.</string>
     <string name="horizon_confirm_limit">Nachfragen bei mehr als</string>
     <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <string name="horizon_confirm_limit_unlimited">Unbegrenzt</string>
     <plurals name="horizon_offer_tiles">
         <item quantity="one">Gelände: %1$d Kachel, %2$s</item>
         <item quantity="other">Gelände: %1$d Kacheln, %2$s</item>

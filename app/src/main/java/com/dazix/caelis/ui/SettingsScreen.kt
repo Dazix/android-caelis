@@ -42,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -94,6 +96,7 @@ import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlin.math.roundToInt
 
 private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
@@ -418,20 +421,10 @@ fun SettingsScreen(
                     )
 
                     if (horizonSettings.downloadMode == DownloadMode.AUTOMATIC) {
-                        Text(
-                            text = stringResource(R.string.horizon_confirm_limit),
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(top = 4.dp),
+                        ConfirmLimitSlider(
+                            limitMb = horizonSettings.confirmAboveMb,
+                            onLimitChange = onHorizonConfirmLimitChange,
                         )
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HorizonSettings.CONFIRM_LIMIT_CHOICES_MB.forEach { mb ->
-                                FilterChip(
-                                    selected = horizonSettings.confirmAboveMb == mb,
-                                    onClick = { onHorizonConfirmLimitChange(mb) },
-                                    label = { Text(stringResource(R.string.horizon_confirm_limit_value, mb)) },
-                                )
-                            }
-                        }
                     }
 
                     SwitchRow(
@@ -1295,6 +1288,57 @@ private fun StepperRow(
         IconButton(onClick = onIncrease, enabled = canIncrease, modifier = Modifier.size(48.dp)) {
             Icon(AppIcons.Forward, contentDescription = stringResource(R.string.horizon_step_up, title))
         }
+    }
+}
+
+/**
+ * The automatic mode's confirmation limit on a slider through [HorizonSettings.CONFIRM_LIMIT_CHOICES_MB].
+ * The value follows the thumb while dragging and is saved once on release, not per step. The released
+ * value stays shown until the store has it: the save comes back a few frames later, and letting go
+ * of it at once put the thumb back on the old value for those frames.
+ */
+@Composable
+private fun ConfirmLimitSlider(limitMb: Int, onLimitChange: (Int) -> Unit) {
+    val choices = HorizonSettings.CONFIRM_LIMIT_CHOICES_MB
+    val storedIndex = choices.indexOf(limitMb).takeIf { it >= 0 } ?: choices.lastIndex
+    var dragIndex by remember { mutableStateOf<Int?>(null) }
+    var savingIndex by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(storedIndex) { if (savingIndex == storedIndex) savingIndex = null }
+    val index = dragIndex ?: savingIndex ?: storedIndex
+    val label = stringResource(R.string.horizon_confirm_limit)
+    Column(modifier = Modifier.padding(top = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(
+                text = if (choices[index] == HorizonSettings.CONFIRM_UNLIMITED) {
+                    stringResource(R.string.horizon_confirm_limit_unlimited)
+                } else {
+                    stringResource(R.string.horizon_confirm_limit_value, choices[index])
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Slider(
+            value = index.toFloat(),
+            onValueChange = { dragIndex = it.roundToInt().coerceIn(0, choices.lastIndex) },
+            onValueChangeFinished = {
+                dragIndex?.takeIf { it != storedIndex }?.let {
+                    savingIndex = it
+                    onLimitChange(choices[it])
+                }
+                dragIndex = null
+            },
+            valueRange = 0f..choices.lastIndex.toFloat(),
+            steps = choices.size - 2,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = label },
+        )
     }
 }
 

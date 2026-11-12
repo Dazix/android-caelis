@@ -18,6 +18,17 @@ class DownloadGateTest {
     ) = DownloadGate.decide(mode, limit, already, sizes, confirmed)
 
     @Test
+    fun `unlimited automatic proceeds with any size, announced or not, but on demand still asks`() {
+        val sizes = listOf(190 * mb, UNKNOWN)
+        assertEquals(Decision.Proceed, DownloadGate.decide(DownloadMode.AUTOMATIC, null, 25 * mb, sizes, false))
+        assertEquals(
+            Decision.Ask(tiles = 2, knownBytes = 190 * mb, unknownTiles = 1),
+            DownloadGate.decide(DownloadMode.ON_DEMAND, null, 0L, sizes, false),
+        )
+        assertEquals(Decision.Refuse, DownloadGate.decide(DownloadMode.NEVER, null, 0L, sizes, false))
+    }
+
+    @Test
     fun `never refuses even a confirmed run`() {
         assertEquals(Decision.Refuse, decide(DownloadMode.NEVER, sizes = listOf(mb)))
         assertEquals(Decision.Refuse, decide(DownloadMode.NEVER, sizes = listOf(mb), confirmed = true))
