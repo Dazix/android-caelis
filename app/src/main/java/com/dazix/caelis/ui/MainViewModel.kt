@@ -565,7 +565,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val updated = transform(current)
             settings.saveHorizon(updated)
             if (recompute || (updated.enabled && !current.enabled)) {
-                // Range and eye height both change the skyline, so a stored profile computed with the
+                // The range changes the skyline, so a stored profile computed with the
                 // old values is not a cache hit — it is the wrong answer under the right file name.
                 horizonLocationProvider.refreshLocation()
                 if (horizonLocationProvider.hasGpsFix.value) {
@@ -584,14 +584,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setHorizonRangeKm(rangeKm: Int) = editHorizon(recompute = true) { it.copy(maxRangeKm = rangeKm) }
 
-    fun setHorizonEyeHeightCm(eyeHeightCm: Int) = editHorizon(recompute = true) {
-        it.copy(
-            eyeHeightCm = eyeHeightCm.coerceIn(
-                HorizonSettings.MIN_EYE_HEIGHT_CM,
-                HorizonSettings.MAX_EYE_HEIGHT_CM,
-            ),
-        )
+    /**
+     * Automatic or on demand, for a user who has already consented; Never goes through
+     * [setHorizonNetworkConsent]. Changing it starts nothing: the next position or screen entry runs
+     * through the gate with the new mode.
+     */
+    fun setHorizonAutoDownload(automatic: Boolean) = editHorizon { it.copy(autoDownload = automatic) }
+
+    fun setHorizonConfirmLimitMb(megabytes: Int) = editHorizon {
+        it.copy(confirmAboveMb = megabytes.takeIf { mb -> mb in HorizonSettings.CONFIRM_LIMIT_CHOICES_MB } ?: it.confirmAboveMb)
     }
+
+    /** The user tapped Download on a run waiting for confirmation. */
+    fun confirmTerrainDownload() = horizonRepository.confirmDownload()
 
     fun setHorizonShadeOccluded(enabled: Boolean) = editHorizon { it.copy(shadeOccludedTrajectory = enabled) }
 
@@ -599,13 +604,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setHorizonNetworkConsent(granted: Boolean) = editHorizon { it.copy(networkConsent = granted) }
 
-    fun answerHorizonConsent(granted: Boolean, wifiOnly: Boolean? = null) {
+    /**
+     * @param autoDownload the mode the user picked before the consent dialog (Automatic or On demand
+     *   in Settings), applied in the same write; null keeps the stored one.
+     */
+    fun answerHorizonConsent(granted: Boolean, wifiOnly: Boolean? = null, autoDownload: Boolean? = null) {
         viewModelScope.launch {
             val current = settings.currentHorizon()
             val updated = current.copy(
                 networkConsent = granted,
                 enabled = true,
                 wifiOnly = if (wifiOnly != null) wifiOnly else current.wifiOnly,
+                autoDownload = autoDownload ?: current.autoDownload,
             )
             settings.saveHorizon(updated)
             if (granted) {
@@ -616,8 +626,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setRealHorizonInNightSky(enabled: Boolean) = editHorizon { it.copy(realHorizonInNightSky = enabled) }
 
-    /** Fetch or recompute for wherever the phone currently thinks it is. */
-    fun downloadTerrainForCurrentLocation(explicitSettings: HorizonSettings? = null) {
+    /**
+     * Fetch or recompute for wherever the phone currently thinks it is.
+     *
+     * @param userConfirmed the call is the Download button itself, so the run is confirmed whatever its
+     *   size; from a consent answer it is not, and goes through the mode and the limit.
+     */
+    fun downloadTerrainForCurrentLocation(explicitSettings: HorizonSettings? = null, userConfirmed: Boolean = false) {
         horizonLocationProvider.refreshLocation()
         viewModelScope.launch {
             val current = explicitSettings ?: settings.currentHorizon()
@@ -625,7 +640,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settings.saveHorizon(updated)
             horizonRepository.invalidate()
             if (horizonLocationProvider.hasGpsFix.value) {
-                horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated)
+                horizonRepository.ensureProfile(horizonLocationProvider.location.value, updated, userConfirmed)
             } else {
                 horizonRepository.setLocating(horizonLocationProvider.satellitesAvailable())
                 val hasFix = horizonLocationProvider.awaitGpsFix()
@@ -633,6 +648,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     horizonRepository.ensureProfile(
                         horizonLocationProvider.location.value,
                         updated,
+                        userConfirmed,
                     )
                 } else {
                     horizonRepository.setLocationFailed()

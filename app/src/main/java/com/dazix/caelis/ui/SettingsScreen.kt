@@ -42,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -78,6 +80,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dazix.caelis.R
+import com.dazix.caelis.domain.horizon.DownloadMode
+import com.dazix.caelis.ui.horizon.TerrainDownloadOfferRow
 import com.dazix.caelis.domain.nightsky.NightVisionActivationMode
 import com.dazix.caelis.data.DebugPreferences
 import com.dazix.caelis.ar.pose.ArCorePresence
@@ -92,6 +96,7 @@ import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlin.math.roundToInt
 
 private val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
@@ -114,11 +119,16 @@ fun SettingsScreen(
     onHorizonEnabledChange: (Boolean) -> Unit = {},
     onHorizonAutoRangeChange: (Boolean) -> Unit = {},
     onHorizonRangeChange: (Int) -> Unit = {},
-    onHorizonEyeHeightChange: (Int) -> Unit = {},
+    /** Automatic or on demand, for a user who has consented. Never is a refused consent. */
+    onHorizonAutoDownloadChange: (Boolean) -> Unit = {},
+    onHorizonConfirmLimitChange: (Int) -> Unit = {},
+    /** Tap on Download for a run waiting for confirmation. */
+    onConfirmTerrainDownload: () -> Unit = {},
     onHorizonShadeOccludedChange: (Boolean) -> Unit = {},
     onHorizonWifiOnlyChange: (Boolean) -> Unit = {},
     onHorizonRealInNightSkyChange: (Boolean) -> Unit = {},
-    onHorizonNetworkConsent: (Boolean, Boolean?) -> Unit = { _, _ -> },
+    /** granted, Wi-Fi only (null: unchanged), automatic download (null: unchanged). */
+    onHorizonNetworkConsent: (Boolean, Boolean?, Boolean?) -> Unit = { _, _, _ -> },
     onDownloadTerrain: () -> Unit = {},
     onImportTerrain: () -> Unit = {},
     onClearTerrainCache: () -> Unit = {},
@@ -153,6 +163,8 @@ fun SettingsScreen(
     var showArCoreConsentDialog by remember { mutableStateOf(false) }
     var showGeospatialConsentDialog by remember { mutableStateOf(false) }
     var pendingActionAfterConsent by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // The mode picked while consent was not given yet; applied by the dialog's Allow, not before it.
+    var pendingAutoDownload by remember { mutableStateOf<Boolean?>(null) }
     var pendingLocationAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var manualImportExpanded by remember { mutableStateOf(false) }
     val terrainDownloadRequester = remember { BringIntoViewRequester() }
@@ -328,7 +340,7 @@ fun SettingsScreen(
                 onCheckedChange = handleHorizonToggle,
             )
 
-            HorizonStatusRow(state = horizonState)
+            HorizonStatusRow(state = horizonState, onConfirmDownload = onConfirmTerrainDownload)
 
             if (!canDownloadTerrain) {
                 Text(
@@ -372,15 +384,6 @@ fun SettingsScreen(
                 }
             }
 
-            StepperRow(
-                title = stringResource(R.string.horizon_eye_height),
-                value = stringResource(R.string.horizon_eye_height_value, horizonSettings.eyeHeightCm),
-                canDecrease = horizonSettings.eyeHeightCm > HorizonSettings.MIN_EYE_HEIGHT_CM,
-                canIncrease = horizonSettings.eyeHeightCm < HorizonSettings.MAX_EYE_HEIGHT_CM,
-                onDecrease = { onHorizonEyeHeightChange(horizonSettings.eyeHeightCm - EYE_HEIGHT_STEP_CM) },
-                onIncrease = { onHorizonEyeHeightChange(horizonSettings.eyeHeightCm + EYE_HEIGHT_STEP_CM) },
-            )
-
             SwitchRow(
                 title = stringResource(R.string.horizon_shade_occluded),
                 description = stringResource(R.string.horizon_shade_occluded_desc),
@@ -401,6 +404,29 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (canDownloadTerrain) {
+                    DownloadModeRow(
+                        mode = horizonSettings.downloadMode,
+                        onModeChange = { mode ->
+                            when {
+                                mode == DownloadMode.NEVER -> onHorizonNetworkConsent(false, null, null)
+                                horizonSettings.networkDownloadAllowed ->
+                                    onHorizonAutoDownloadChange(mode == DownloadMode.AUTOMATIC)
+                                else -> {
+                                    // Leaving Never is consenting again, so the dialog says what that means first.
+                                    pendingAutoDownload = mode == DownloadMode.AUTOMATIC
+                                    showConsentDialog = true
+                                }
+                            }
+                        },
+                    )
+
+                    if (horizonSettings.downloadMode == DownloadMode.AUTOMATIC) {
+                        ConfirmLimitSlider(
+                            limitMb = horizonSettings.confirmAboveMb,
+                            onLimitChange = onHorizonConfirmLimitChange,
+                        )
+                    }
+
                     SwitchRow(
                         title = stringResource(R.string.horizon_wifi_only),
                         description = stringResource(R.string.horizon_wifi_only_desc),
@@ -447,56 +473,11 @@ fun SettingsScreen(
                 }
             }
 
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
             // Attribution is a licence condition of the elevation data, not a nicety.
             TextButton(onClick = { showAttribution = true }) {
                 Text(stringResource(R.string.horizon_attribution_title))
-            }
-        }
-
-        // ---- ARCore (Google Play Services for AR) ----
-        //
-        // Nothing here touches ARCore: asking Play Services whether this phone is supported is
-        // already contact with Google, so that check waits for consent. Whether the package is
-        // installed comes from the local package list (ArCorePresence), which contacts no one.
-        // Turning a switch ON goes through a dialog that says what Google's component sends;
-        // turning it OFF is immediate and needs no dialog.
-        SectionHeader(
-            text = stringResource(R.string.arcore_section_title),
-            modifier = Modifier.padding(top = 8.dp),
-        )
-
-        SectionCard {
-            // Re-read on every return to the screen: the user may have installed, updated or
-            // disabled the component in the meantime.
-            var arCorePresence by remember { mutableStateOf<ArCorePresence?>(null) }
-            LifecycleResumeEffect(Unit) {
-                arCorePresence = ArCorePresence.read(context.packageManager)
-                onPauseOrDispose { }
-            }
-            arCorePresence?.let { ArCorePresenceRow(it) }
-
-            SwitchRow(
-                title = stringResource(R.string.arcore_enabled),
-                description = stringResource(R.string.arcore_enabled_desc),
-                checked = arCoreSettings.arCoreConsent,
-                onCheckedChange = { checked ->
-                    if (checked) showArCoreConsentDialog = true else onArCoreConsentChange(false)
-                },
-            )
-
-            // The switch is not offered at all in a build without a key, rather than shown dead:
-            // there is nothing the user could do to make it work.
-            if (geospatialAvailable) {
-                SwitchRow(
-                    title = stringResource(R.string.arcore_geospatial_enabled),
-                    description = stringResource(R.string.arcore_geospatial_desc),
-                    checked = arCoreSettings.geospatialConsent,
-                    enabled = arCoreSettings.arCoreConsent,
-                    disabledReason = stringResource(R.string.arcore_geospatial_needs_arcore),
-                    onCheckedChange = { checked ->
-                        if (checked) showGeospatialConsentDialog = true else onGeospatialConsentChange(false)
-                    },
-                )
             }
         }
 
@@ -638,6 +619,53 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.settings_storage_clear_profiles_button))
+            }
+        }
+
+        // ---- ARCore (Google Play Services for AR) ----
+        //
+        // Nothing here touches ARCore: asking Play Services whether this phone is supported is
+        // already contact with Google, so that check waits for consent. Whether the package is
+        // installed comes from the local package list (ArCorePresence), which contacts no one.
+        // Turning a switch ON goes through a dialog that says what Google's component sends;
+        // turning it OFF is immediate and needs no dialog.
+        SectionHeader(
+            text = stringResource(R.string.arcore_section_title),
+            modifier = Modifier.padding(top = 8.dp),
+        )
+
+        SectionCard {
+            // Re-read on every return to the screen: the user may have installed, updated or
+            // disabled the component in the meantime.
+            var arCorePresence by remember { mutableStateOf<ArCorePresence?>(null) }
+            LifecycleResumeEffect(Unit) {
+                arCorePresence = ArCorePresence.read(context.packageManager)
+                onPauseOrDispose { }
+            }
+            arCorePresence?.let { ArCorePresenceRow(it) }
+
+            SwitchRow(
+                title = stringResource(R.string.arcore_enabled),
+                description = stringResource(R.string.arcore_enabled_desc),
+                checked = arCoreSettings.arCoreConsent,
+                onCheckedChange = { checked ->
+                    if (checked) showArCoreConsentDialog = true else onArCoreConsentChange(false)
+                },
+            )
+
+            // The switch is not offered at all in a build without a key, rather than shown dead:
+            // there is nothing the user could do to make it work.
+            if (geospatialAvailable) {
+                SwitchRow(
+                    title = stringResource(R.string.arcore_geospatial_enabled),
+                    description = stringResource(R.string.arcore_geospatial_desc),
+                    checked = arCoreSettings.geospatialConsent,
+                    enabled = arCoreSettings.arCoreConsent,
+                    disabledReason = stringResource(R.string.arcore_geospatial_needs_arcore),
+                    onCheckedChange = { checked ->
+                        if (checked) showGeospatialConsentDialog = true else onGeospatialConsentChange(false)
+                    },
+                )
             }
         }
 
@@ -896,13 +924,15 @@ fun SettingsScreen(
             initialWifiOnly = horizonSettings.wifiOnly,
             onAllow = { wifiOnly ->
                 showConsentDialog = false
-                onHorizonNetworkConsent(true, wifiOnly)
+                onHorizonNetworkConsent(true, wifiOnly, pendingAutoDownload)
+                pendingAutoDownload = null
                 pendingActionAfterConsent?.invoke()
                 pendingActionAfterConsent = null
             },
             onNever = {
                 showConsentDialog = false
-                onHorizonNetworkConsent(false, null)
+                onHorizonNetworkConsent(false, null, null)
+                pendingAutoDownload = null
                 pendingActionAfterConsent?.invoke()
                 pendingActionAfterConsent = null
             },
@@ -1149,9 +1179,15 @@ private fun ArCorePresenceRow(presence: ArCorePresence) {
 
 /** One line saying what the terrain layer is doing, including when it is stuck and why. */
 @Composable
-private fun HorizonStatusRow(state: HorizonState) {
+private fun HorizonStatusRow(state: HorizonState, onConfirmDownload: () -> Unit) {
+    if (state is HorizonState.AwaitingConfirmation) {
+        TerrainDownloadOfferRow(state = state, onDownload = onConfirmDownload)
+        return
+    }
     val text = when (state) {
         is HorizonState.Idle -> null
+        is HorizonState.AwaitingConfirmation -> null
+        is HorizonState.Sizing -> stringResource(R.string.horizon_status_sizing)
         is HorizonState.Locating -> stringResource(
             if (state.satellites) R.string.horizon_status_locating else R.string.horizon_status_locating_network,
         )
@@ -1173,7 +1209,8 @@ private fun HorizonStatusRow(state: HorizonState) {
         }
     } ?: return
 
-    val busy = state is HorizonState.Locating || state is HorizonState.Downloading || state is HorizonState.Computing
+    val busy = state is HorizonState.Locating || state is HorizonState.Sizing ||
+        state is HorizonState.Downloading || state is HorizonState.Computing
 
     Row(
         modifier = Modifier
@@ -1183,7 +1220,7 @@ private fun HorizonStatusRow(state: HorizonState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (busy) {
-            if (state is HorizonState.Locating) {
+            if (state is HorizonState.Locating || state is HorizonState.Sizing) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
@@ -1192,6 +1229,7 @@ private fun HorizonStatusRow(state: HorizonState) {
                 val progress = when (state) {
                     is HorizonState.Downloading -> state.progress
                     is HorizonState.Computing -> state.progress
+                    else -> 0f
                 }
                 CircularProgressIndicator(
                     progress = { progress },
@@ -1253,7 +1291,90 @@ private fun StepperRow(
     }
 }
 
-private const val EYE_HEIGHT_STEP_CM = 5
+/**
+ * The automatic mode's confirmation limit on a slider through [HorizonSettings.CONFIRM_LIMIT_CHOICES_MB].
+ * The value follows the thumb while dragging and is saved once on release, not per step. The released
+ * value stays shown until the store has it: the save comes back a few frames later, and letting go
+ * of it at once put the thumb back on the old value for those frames.
+ */
+@Composable
+private fun ConfirmLimitSlider(limitMb: Int, onLimitChange: (Int) -> Unit) {
+    val choices = HorizonSettings.CONFIRM_LIMIT_CHOICES_MB
+    val storedIndex = choices.indexOf(limitMb).takeIf { it >= 0 } ?: choices.lastIndex
+    var dragIndex by remember { mutableStateOf<Int?>(null) }
+    var savingIndex by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(storedIndex) { if (savingIndex == storedIndex) savingIndex = null }
+    val index = dragIndex ?: savingIndex ?: storedIndex
+    val label = stringResource(R.string.horizon_confirm_limit)
+    Column(modifier = Modifier.padding(top = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(
+                text = if (choices[index] == HorizonSettings.CONFIRM_UNLIMITED) {
+                    stringResource(R.string.horizon_confirm_limit_unlimited)
+                } else {
+                    stringResource(R.string.horizon_confirm_limit_value, choices[index])
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Slider(
+            value = index.toFloat(),
+            onValueChange = { dragIndex = it.roundToInt().coerceIn(0, choices.lastIndex) },
+            onValueChangeFinished = {
+                dragIndex?.takeIf { it != storedIndex }?.let {
+                    savingIndex = it
+                    onLimitChange(choices[it])
+                }
+                dragIndex = null
+            },
+            valueRange = 0f..choices.lastIndex.toFloat(),
+            steps = choices.size - 2,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = label },
+        )
+    }
+}
+
+/** Automatic / On demand / Never, with what the chosen one does in a sentence under the chips. */
+@Composable
+private fun DownloadModeRow(mode: DownloadMode, onModeChange: (DownloadMode) -> Unit) {
+    Text(
+        text = stringResource(R.string.horizon_download_mode),
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(
+            DownloadMode.AUTOMATIC to R.string.horizon_download_mode_auto,
+            DownloadMode.ON_DEMAND to R.string.horizon_download_mode_on_demand,
+            DownloadMode.NEVER to R.string.horizon_download_mode_never,
+        ).forEach { (choice, label) ->
+            FilterChip(
+                selected = mode == choice,
+                onClick = { if (mode != choice) onModeChange(choice) },
+                label = { Text(stringResource(label)) },
+            )
+        }
+    }
+    Text(
+        text = stringResource(
+            when (mode) {
+                DownloadMode.AUTOMATIC -> R.string.horizon_download_mode_auto_desc
+                DownloadMode.ON_DEMAND -> R.string.horizon_download_mode_on_demand_desc
+                DownloadMode.NEVER -> R.string.horizon_download_mode_never_desc
+            },
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
 
 private fun formatBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L -> "${bytes / (1024L * 1024L)} MB"

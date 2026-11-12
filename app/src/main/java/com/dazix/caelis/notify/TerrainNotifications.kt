@@ -124,9 +124,12 @@ class TerrainNotifications(context: Context) {
                 )
             }
 
-            // Nothing is happening, or the app is waiting on the user to import a file. Neither is
-            // progress, and a notification that cannot be acted on from the shade is just noise.
-            is HorizonState.Idle, is HorizonState.NeedsTiles -> cancel()
+            // Nothing is happening, or the app is waiting on the user to import a file or to tap
+            // Download. None of it is progress, and a notification that cannot be acted on from the
+            // shade is just noise; the offer is on the screen the user is looking at. Sizing is a few
+            // HEAD requests, over before a notification would show.
+            is HorizonState.Idle, is HorizonState.NeedsTiles,
+            is HorizonState.AwaitingConfirmation, is HorizonState.Sizing -> cancel()
         }
     }
 

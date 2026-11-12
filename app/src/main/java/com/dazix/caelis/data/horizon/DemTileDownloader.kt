@@ -92,6 +92,30 @@ open class DemTileDownloader(
     }
 
     /**
+     * The compressed size of [key], from a `HEAD` request, without fetching the tile.
+     *
+     * This is how a run knows its total before it starts, so the user sees "4 tiles, 62 MB" and can
+     * decide, instead of a size that only appears tile by tile while it is already being spent. It is
+     * network contact all the same: [consent] is asked on this call exactly as for [download], and the
+     * request carries the same URL and nothing more.
+     *
+     * @return the announced length, or [UNKNOWN_LENGTH] when the server gives none.
+     * @throws ServerException when the server answers but not with the tile, as [download] would.
+     */
+    open suspend fun contentLength(key: DemTileKey): Long {
+        if (!consent()) throw NotPermittedException()
+
+        val connection = connect("$baseUrl/${key.remotePath}", method = "HEAD")
+        try {
+            val status = connection.responseCode
+            if (status != HttpURLConnection.HTTP_OK) throw ServerException(status)
+            return connection.contentLengthLong.takeIf { it > 0 } ?: UNKNOWN_LENGTH
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
      * Downloads the `.peaks` file of [key] — the named summits in that 1° square — into [out], as is.
      *
      * Same rules as [download]: [consent] is asked on this call, and the URL carries the tile number
@@ -131,8 +155,8 @@ open class DemTileDownloader(
         }
     }
 
-    private fun connect(url: String): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
-        requestMethod = "GET"
+    private fun connect(url: String, method: String = "GET"): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+        requestMethod = method
         connectTimeout = CONNECT_TIMEOUT_MS
         readTimeout = READ_TIMEOUT_MS
         instanceFollowRedirects = true

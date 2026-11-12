@@ -15,11 +15,6 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +22,15 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.HorizontalDivider
+import com.dazix.caelis.data.HorizonSettings
+import com.dazix.caelis.ui.HeightAboveTerrainRow
+import com.dazix.caelis.ui.LayerGroupCard
+import com.dazix.caelis.ui.LayerToggleRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,8 +45,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,7 +56,6 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,7 +72,6 @@ import com.dazix.caelis.ui.AppToastHost
 import com.dazix.caelis.ui.AppToastHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
@@ -172,6 +172,19 @@ fun SunArScreen(
     }
     var showDatePicker by remember { mutableStateOf(false) }
     var showInfoSheet by remember { mutableStateOf(false) }
+    val heightAboveTerrainCm by viewModel.heightAboveTerrainCm.collectAsStateWithLifecycle()
+    // The height being stepped in the open sheet. Committed when the sheet closes, not per tap: each
+    // value is a profile computation (and maybe a download), and the steps in between are not wanted.
+    var sheetHeightCm by remember { mutableStateOf<Int?>(null) }
+    val openInfoSheet = {
+        sheetHeightCm = heightAboveTerrainCm
+        showInfoSheet = true
+    }
+    val closeInfoSheet = {
+        sheetHeightCm?.let { if (it != heightAboveTerrainCm) viewModel.setHeightAboveTerrain(it) }
+        sheetHeightCm = null
+        showInfoSheet = false
+    }
     var showPlacesSheet by remember { mutableStateOf(false) }
     // A virtual place: no camera, no alignment, the place's own skyline on a neutral backdrop.
     val isVirtual = uiState.observer.isVirtual
@@ -218,7 +231,7 @@ fun SunArScreen(
         when {
             showPlacesSheet -> showPlacesSheet = false
             showDatePicker -> showDatePicker = false
-            showInfoSheet -> showInfoSheet = false
+            showInfoSheet -> closeInfoSheet()
             else -> onBack()
         }
     }
@@ -433,7 +446,7 @@ fun SunArScreen(
             isCalibrated = uiState.isCalibrated,
             horizonState = uiState.horizonState,
             onBack = onBack,
-            onToggleInfo = { showInfoSheet = !showInfoSheet },
+            onToggleInfo = { if (showInfoSheet) closeInfoSheet() else openInfoSheet() },
             onResetCalibration = {
                 toastHostState.showToast(
                     resId = R.string.calib_reset_toast,
@@ -459,6 +472,21 @@ fun SunArScreen(
                 layerOn = uiState.horizonSettings.enabled,
                 onOpenSettings = onOpenTerrainSettings,
             )
+            val offer = uiState.horizonState as? com.dazix.caelis.data.horizon.HorizonState.AwaitingConfirmation
+            // Closed for this offer only: a different run (another spot, another size) offers again.
+            var offerDismissed by remember(offer) { mutableStateOf(false) }
+            if (offer != null && uiState.horizonSettings.enabled && !offerDismissed) {
+                com.dazix.caelis.ui.horizon.TerrainDownloadOfferChip(
+                    state = offer,
+                    onDownload = viewModel::confirmTerrainDownload,
+                    onDismiss = { offerDismissed = true },
+                    accentColor = NormalTerrain,
+                )
+            }
+            com.dazix.caelis.ui.HeightAboveTerrainChip(
+                heightCm = heightAboveTerrainCm,
+                onClick = openInfoSheet,
+            )
             if (isSearchingForSkyline) SkylineSearchChip()
             com.dazix.caelis.ui.HeadingStatusChip(state = headingState)
             com.dazix.caelis.ui.PoseSourceChip(indicator = poseIndicator, arCoreConsented = arCoreConsented)
@@ -483,47 +511,6 @@ fun SunArScreen(
                 .padding(bottom = 28.dp, start = 12.dp, end = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // Expandable Day Summary Info Card
-            AnimatedVisibility(
-                visible = showInfoSheet,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            ) {
-                SunMoonTimesInfoCard(
-                    solarTrajectory = uiState.trajectory,
-                    lunarTrajectory = uiState.lunarTrajectory,
-                    keepScreenOn = uiState.keepScreenOn,
-                    isCalibrated = uiState.isCalibrated,
-                    onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
-                    onResetCalibration = {
-                        toastHostState.showToast(
-                            resId = R.string.calib_reset_toast,
-                            icon = AppIcons.Compass,
-                        )
-                        viewModel.resetCalibration()
-                    },
-                    onClose = { showInfoSheet = false },
-                    terrainTimes = uiState.terrainTimes,
-                    horizonEnabled = uiState.horizonSettings.enabled,
-                    onToggleHorizon = viewModel::requestToggleHorizon,
-                    peakNamesOn = uiState.horizonSettings.peakNamesInSunAr,
-                    onTogglePeakNames = viewModel::togglePeakNames,
-                    alignAzimuthOffsetDeg = alignAzimuthOffset,
-                    alignElevationOffsetDeg = alignElevationOffset,
-                    compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
-                    onNudgeAlignment = viewModel::nudgeCalibration,
-                    isAutoAligning = autoAlignResult is AutoAlignResult.Working,
-                    onAutoAlign = {
-                        viewModel.autoAlign(
-                            viewportWidth = viewportSize.width.toFloat(),
-                            viewportHeight = viewportSize.height.toFloat(),
-                            displayRotation = displayRotation,
-                        )
-                    },
-                    alignmentAvailable = !isVirtual,
-                )
-            }
-
             // Date Navigator Bar
             DateNavigatorBar(
                 selectedDate = uiState.selectedDate,
@@ -544,6 +531,56 @@ fun SunArScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { interval ->
                 interval.formatLabel()
+            }
+        }
+
+        if (showInfoSheet) {
+            ModalBottomSheet(
+                onDismissRequest = closeInfoSheet,
+                containerColor = Color(0xF2181818),
+                contentColor = Color.White,
+                scrimColor = Color.Black.copy(alpha = 0.5f),
+                dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFF718096)) },
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            ) {
+                SunArSettingsSheet(
+                    solarTrajectory = uiState.trajectory,
+                    lunarTrajectory = uiState.lunarTrajectory,
+                    keepScreenOn = uiState.keepScreenOn,
+                    isCalibrated = uiState.isCalibrated,
+                    onToggleKeepScreenOn = viewModel::toggleKeepScreenOn,
+                    onResetCalibration = {
+                        toastHostState.showToast(
+                            resId = R.string.calib_reset_toast,
+                            icon = AppIcons.Compass,
+                        )
+                        viewModel.resetCalibration()
+                    },
+                    terrainTimes = uiState.terrainTimes,
+                    horizonEnabled = uiState.horizonSettings.enabled,
+                    onToggleHorizon = viewModel::requestToggleHorizon,
+                    peakNamesOn = uiState.horizonSettings.peakNamesInSunAr,
+                    onTogglePeakNames = viewModel::togglePeakNames,
+                    heightAboveTerrainCm = sheetHeightCm ?: heightAboveTerrainCm,
+                    onHeightAboveTerrainChange = { sheetHeightCm = it },
+                    alignAzimuthOffsetDeg = alignAzimuthOffset,
+                    alignElevationOffsetDeg = alignElevationOffset,
+                    compassAccuracy = orientation?.accuracy ?: SensorManager.SENSOR_STATUS_UNRELIABLE,
+                    onNudgeAlignment = viewModel::nudgeCalibration,
+                    isAutoAligning = autoAlignResult is AutoAlignResult.Working,
+                    onAutoAlign = {
+                        viewModel.autoAlign(
+                            viewportWidth = viewportSize.width.toFloat(),
+                            viewportHeight = viewportSize.height.toFloat(),
+                            displayRotation = displayRotation,
+                        )
+                    },
+                    alignmentAvailable = !isVirtual,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                )
             }
         }
 
@@ -880,20 +917,29 @@ internal fun DateNavigatorBar(
     }
 }
 
+/**
+ * Sun AR's settings, the content of its bottom sheet: the day's times, the terrain layer with the
+ * height above terrain, the alignment and the display. Built from the same parts as Night Sky's sheet
+ * ([LayerGroupCard] and its rows), so the two screens' menus look and work alike. The sheet scrolls;
+ * a card anchored to the bottom of the screen used to grow past its top.
+ */
 @Composable
-internal fun SunMoonTimesInfoCard(
+internal fun SunArSettingsSheet(
     solarTrajectory: SolarTrajectory,
     lunarTrajectory: LunarTrajectory,
     keepScreenOn: Boolean,
     isCalibrated: Boolean,
     onToggleKeepScreenOn: () -> Unit,
     onResetCalibration: () -> Unit,
-    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
     terrainTimes: TerrainTimes = TerrainTimes(),
     horizonEnabled: Boolean = false,
     onToggleHorizon: () -> Unit = {},
     peakNamesOn: Boolean = true,
     onTogglePeakNames: () -> Unit = {},
+    /** The height the sheet shows; committed by the screen when the sheet closes. */
+    heightAboveTerrainCm: Int = HorizonSettings.DEFAULT_EYE_HEIGHT_CM,
+    onHeightAboveTerrainChange: (Int) -> Unit = {},
     alignAzimuthOffsetDeg: Float = 0f,
     alignElevationOffsetDeg: Float = 0f,
     compassAccuracy: Int = SensorManager.SENSOR_STATUS_ACCURACY_HIGH,
@@ -905,105 +951,88 @@ internal fun SunMoonTimesInfoCard(
 ) {
     val dayTimes = solarTrajectory.dayTimes
     val lTimes = lunarTrajectory.dayTimes
-    val containerBg = Color(0xF2181818)
-    val cardBorder = Color(0x33FFFFFF)
     val titleColor = Color.White
     val subColor = Color.White.copy(alpha = 0.6f)
+    val groupTitleColor = NormalGoldSolar
+    val cardContainerColor = Color(0x14FFFFFF)
+    val cardBorderColor = Color(0x22FFFFFF)
+    val dividerColor = Color(0x1AFFFFFF)
+    val switchColors = SwitchDefaults.colors()
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerBg),
-        shape = RoundedCornerShape(24.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder),
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Text(
+            text = stringResource(R.string.sun_ar_title),
+            color = titleColor,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+        )
+
+        // 1. Sun
+        LayerGroupCard(
+            title = "☀️ ${stringResource(R.string.sun_ar_section_sun)}",
+            titleColor = groupTitleColor,
+            containerColor = cardContainerColor,
+            borderColor = cardBorderColor,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = stringResource(R.string.sun_ar_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = titleColor,
-                    fontWeight = FontWeight.Bold,
-                )
-                IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = AppIcons.Clear,
-                        contentDescription = stringResource(R.string.action_dismiss),
-                        tint = subColor,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    InfoItem(
+                        label = stringResource(R.string.sun_ar_sunrise),
+                        value = solarTrajectory.sunriseMarker?.formattedTime ?: "—",
+                        sub = solarTrajectory.sunriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
+                        color = NormalSunrise,
+                        subColor = subColor,
+                    )
+                    InfoItem(
+                        label = stringResource(R.string.sun_ar_solar_noon),
+                        value = solarTrajectory.solarNoonMarker.formattedTime,
+                        sub = "${dayTimes.maxElevationDegrees.toInt()}° max",
+                        color = NormalGoldSolar,
+                        subColor = subColor,
+                    )
+                    InfoItem(
+                        label = stringResource(R.string.sun_ar_sunset),
+                        value = solarTrajectory.sunsetMarker?.formattedTime ?: "—",
+                        sub = solarTrajectory.sunsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
+                        color = NormalSunset,
+                        subColor = subColor,
                     )
                 }
+                val hours = dayTimes.dayLengthSeconds / 3600
+                val minutes = (dayTimes.dayLengthSeconds % 3600) / 60
+                Text(
+                    text = "${stringResource(R.string.sun_ar_day_length)}: $hours h $minutes min",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subColor,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
             }
+        }
 
-            // 1. SOLAR SECTION
-            Text(
-                text = "☀️ ${stringResource(R.string.sun_ar_section_sun)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = NormalGoldSolar,
-                fontWeight = FontWeight.Bold,
-            )
+        // 2. Moon
+        LayerGroupCard(
+            title = "🌙 ${stringResource(R.string.sun_ar_section_moon)} (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${stringResource(lTimes.phase.nameRes())})",
+            titleColor = MoonSilverCyan,
+            containerColor = cardContainerColor,
+            borderColor = cardBorderColor,
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                InfoItem(
-                    label = stringResource(R.string.sun_ar_sunrise),
-                    value = solarTrajectory.sunriseMarker?.formattedTime ?: "—",
-                    sub = solarTrajectory.sunriseMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
-                    color = NormalSunrise,
-                    subColor = subColor,
-                )
-                InfoItem(
-                    label = stringResource(R.string.sun_ar_solar_noon),
-                    value = solarTrajectory.solarNoonMarker.formattedTime,
-                    sub = "${dayTimes.maxElevationDegrees.toInt()}° max",
-                    color = NormalGoldSolar,
-                    subColor = subColor,
-                )
-                InfoItem(
-                    label = stringResource(R.string.sun_ar_sunset),
-                    value = solarTrajectory.sunsetMarker?.formattedTime ?: "—",
-                    sub = solarTrajectory.sunsetMarker?.let { "${it.coordinates.azimuthDegrees.toInt()}° ${cardinalName(it.coordinates.cardinalDirection())}" } ?: "",
-                    color = NormalSunset,
-                    subColor = subColor,
-                )
-            }
-
-            val hours = dayTimes.dayLengthSeconds / 3600
-            val minutes = (dayTimes.dayLengthSeconds % 3600) / 60
-            Text(
-                text = "${stringResource(R.string.sun_ar_day_length)}: $hours h $minutes min",
-                style = MaterialTheme.typography.bodySmall,
-                color = subColor,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
-
-            // 1b. TERRAIN SECTION — shown beside the almanac times, never instead of them. Both
-            // numbers are true; which one matters depends on whether you are shooting the sky or
-            // the ridge, and the difference between them is the thing worth seeing.
-            if (terrainTimes.hasAny) {
-                TerrainTimesRow(terrainTimes = terrainTimes, subColor = subColor)
-            }
-
-            Spacer(Modifier.height(2.dp))
-
-            // 2. LUNAR SECTION
-            Text(
-                text = "🌙 ${stringResource(R.string.sun_ar_section_moon)} (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${stringResource(lTimes.phase.nameRes())})",
-                style = MaterialTheme.typography.labelMedium,
-                color = MoonSilverCyan,
-                fontWeight = FontWeight.Bold,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 InfoItem(
@@ -1028,117 +1057,102 @@ internal fun SunMoonTimesInfoCard(
                     subColor = subColor,
                 )
             }
+        }
 
-            Spacer(Modifier.height(2.dp))
-
-            // 3. SETTINGS & CONTROLS
-            //
-            // Only the show/hide switch lives here. Everything else about the terrain horizon — the
-            // search radius, the eye height, the download — is shared with Night Sky AR and belongs
-            // in the app's own Settings, not on one of the two screens that happen to draw it.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onToggleHorizon() }
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.horizon_enabled),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = stringResource(R.string.horizon_enabled_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                    )
-                }
-                Switch(
-                    checked = horizonEnabled,
-                    onCheckedChange = { onToggleHorizon() },
+        // 3. Terrain horizon. The times stand beside the almanac's, never instead of them: both are
+        // true, and which one matters depends on whether you are shooting the sky or the ridge.
+        // The search radius and the download are shared with Night Sky and live in Settings; the
+        // height above terrain is here because it describes where the user is standing right now.
+        LayerGroupCard(
+            title = "⛰ ${stringResource(R.string.horizon_section_title)}",
+            titleColor = NormalTerrain,
+            containerColor = cardContainerColor,
+            borderColor = cardBorderColor,
+        ) {
+            if (terrainTimes.hasAny) {
+                TerrainTimesRow(
+                    terrainTimes = terrainTimes,
+                    subColor = subColor,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
             }
-
-            // Peak names stand on the terrain skyline, so the switch is there only while that is drawn.
-            val peakNamesAvailable = horizonEnabled
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(enabled = peakNamesAvailable) { onTogglePeakNames() }
-                    .alpha(if (peakNamesAvailable) 1f else 0.5f)
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.horizon_peak_names),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = stringResource(R.string.horizon_peak_names_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                    )
-                }
-                Switch(
-                    checked = peakNamesOn && peakNamesAvailable,
-                    onCheckedChange = { onTogglePeakNames() },
-                    enabled = peakNamesAvailable,
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onToggleKeepScreenOn() }
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.sun_ar_keep_screen_on),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = titleColor,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = stringResource(R.string.sun_ar_keep_screen_on_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                    )
-                }
-                Switch(
-                    checked = keepScreenOn,
-                    onCheckedChange = { onToggleKeepScreenOn() },
-                    colors = SwitchDefaults.colors(),
-                )
-            }
-
-            HorizonAlignRow(
-                azimuthOffsetDeg = alignAzimuthOffsetDeg,
-                elevationOffsetDeg = alignElevationOffsetDeg,
-                compassAccuracy = compassAccuracy,
-                isCalibrated = isCalibrated,
-                isAutoAligning = isAutoAligning,
-                onNudge = onNudgeAlignment,
-                onAutoAlign = onAutoAlign,
-                onReset = onResetCalibration,
-                titleColor = titleColor,
-                subColor = subColor,
-                enabled = alignmentAvailable,
+            LayerToggleRow(
+                label = stringResource(R.string.horizon_enabled),
+                supportingText = stringResource(R.string.horizon_enabled_desc),
+                icon = AppIcons.TerrainHorizon,
+                isChecked = horizonEnabled,
+                headlineColor = titleColor,
+                iconColor = NormalTerrain,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleHorizon() },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            // Peak names stand on the terrain skyline, so the switch works only while that is drawn.
+            LayerToggleRow(
+                label = stringResource(R.string.horizon_peak_names),
+                supportingText = stringResource(R.string.horizon_peak_names_desc),
+                icon = AppIcons.Landscape,
+                isChecked = peakNamesOn && horizonEnabled,
+                headlineColor = titleColor,
+                iconColor = NormalTerrain,
+                switchColors = switchColors,
+                enabled = horizonEnabled,
+                onCheckedChange = { onTogglePeakNames() },
+            )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            HeightAboveTerrainRow(
+                heightCm = heightAboveTerrainCm,
+                onChange = onHeightAboveTerrainChange,
+                headlineColor = titleColor,
+                iconColor = NormalTerrain,
             )
         }
+
+        // 4. Alignment
+        LayerGroupCard(
+            title = stringResource(R.string.ar_align_title),
+            titleColor = groupTitleColor,
+            containerColor = cardContainerColor,
+            borderColor = cardBorderColor,
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                HorizonAlignRow(
+                    azimuthOffsetDeg = alignAzimuthOffsetDeg,
+                    elevationOffsetDeg = alignElevationOffsetDeg,
+                    compassAccuracy = compassAccuracy,
+                    isCalibrated = isCalibrated,
+                    isAutoAligning = isAutoAligning,
+                    onNudge = onNudgeAlignment,
+                    onAutoAlign = onAutoAlign,
+                    onReset = onResetCalibration,
+                    titleColor = titleColor,
+                    subColor = subColor,
+                    enabled = alignmentAvailable,
+                )
+            }
+        }
+
+        // 5. Device
+        LayerGroupCard(
+            title = stringResource(R.string.night_sky_group_tracking),
+            titleColor = groupTitleColor,
+            containerColor = cardContainerColor,
+            borderColor = cardBorderColor,
+        ) {
+            LayerToggleRow(
+                label = stringResource(R.string.sun_ar_keep_screen_on),
+                supportingText = stringResource(R.string.sun_ar_keep_screen_on_desc),
+                icon = AppIcons.ScreenAwake,
+                isChecked = keepScreenOn,
+                headlineColor = titleColor,
+                iconColor = groupTitleColor,
+                switchColors = switchColors,
+                onCheckedChange = { onToggleKeepScreenOn() },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -1327,20 +1341,13 @@ private fun NudgeButton(glyph: String, description: String, onClick: () -> Unit,
  * "18:42" on its own, but "25 minutes earlier than the app used to tell you".
  */
 @Composable
-private fun TerrainTimesRow(terrainTimes: TerrainTimes, subColor: Color) {
+private fun TerrainTimesRow(terrainTimes: TerrainTimes, subColor: Color, modifier: Modifier = Modifier) {
     val formatter = remember { java.time.format.DateTimeFormatter.ofPattern("HH:mm") }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = "⛰ ${stringResource(R.string.horizon_section_title)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = NormalTerrain,
-            fontWeight = FontWeight.Bold,
-        )
-
         if (terrainTimes.hiddenAllDay) {
             Text(
                 text = stringResource(R.string.horizon_hidden_all_day),

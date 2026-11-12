@@ -72,6 +72,11 @@ import com.dazix.caelis.domain.nightsky.ConstellationArtOpacity
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.TimeState
 import com.dazix.caelis.ui.AppIcons
+import com.dazix.caelis.ui.HeightAboveTerrainRow
+import com.dazix.caelis.ui.LayerGroupCard
+import com.dazix.caelis.ui.LayerSliderRow
+import com.dazix.caelis.ui.LayerToggleRow
+import com.dazix.caelis.ui.NudgeRow
 import com.dazix.caelis.ui.formatOffsetDegrees
 import java.time.Duration
 import java.time.Instant
@@ -95,6 +100,9 @@ fun NightSkyLayerSettingsSheet(
     isRealHorizonEnabled: Boolean = false,
     isRealHorizonAvailable: Boolean = false,
     isPeakNamesVisible: Boolean = true,
+    /** The height the sheet shows; the screen commits it when the sheet closes. Shared with Sun AR. */
+    heightAboveTerrainCm: Int = com.dazix.caelis.data.HorizonSettings.DEFAULT_EYE_HEIGHT_CM,
+    onHeightAboveTerrainChange: (Int) -> Unit = {},
     isAtmosphereVisible: Boolean,
     isMilkyWayVisible: Boolean,
     isPlanetsVisible: Boolean,
@@ -393,6 +401,13 @@ fun NightSkyLayerSettingsSheet(
                 enabled = isRealHorizonEnabled && isRealHorizonAvailable,
                 onCheckedChange = { onTogglePeakNames() },
             )
+            HorizontalDivider(color = dividerColor, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 12.dp))
+            HeightAboveTerrainRow(
+                heightCm = heightAboveTerrainCm,
+                onChange = onHeightAboveTerrainChange,
+                headlineColor = headlineColor,
+                iconColor = iconColor,
+            )
         }
 
         // 3. Display & Helpers
@@ -526,45 +541,6 @@ fun NightSkyLayerSettingsSheet(
     }
 }
 
-/** Container card for a logical group of layer settings. */
-@Composable
-private fun LayerGroupCard(
-    title: String,
-    titleColor: Color,
-    containerColor: Color,
-    borderColor: Color,
-    modifier: Modifier = Modifier,
-    trailingHeader: (@Composable () -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(containerColor)
-            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-            .padding(vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 36.dp)
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                color = titleColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            trailingHeader?.invoke()
-        }
-        content()
-    }
-}
-
 /** Azimuth and elevation nudges with a live readout inside the alignment group card. */
 @Composable
 private fun AlignmentSectionContent(
@@ -620,170 +596,6 @@ private fun AlignmentSectionContent(
             onFineDecrease = { onNudge(0f, -fine) },
             onFineIncrease = { onNudge(0f, fine) },
             onCoarseIncrease = { onNudge(0f, coarse) },
-        )
-    }
-}
-
-@Composable
-private fun NudgeRow(
-    label: String,
-    valueText: String,
-    decreaseDescription: String,
-    increaseDescription: String,
-    accentColor: Color,
-    headlineColor: Color,
-    onCoarseDecrease: () -> Unit,
-    onFineDecrease: () -> Unit,
-    onFineIncrease: () -> Unit,
-    onCoarseIncrease: () -> Unit,
-    enabled: Boolean = true,
-) {
-    @Composable
-    fun NudgeButton(glyph: String, description: String, onClick: () -> Unit) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.size(44.dp).semantics { contentDescription = description },
-        ) {
-            Text(text = glyph, style = MaterialTheme.typography.labelLarge, color = if (enabled) accentColor else accentColor.copy(alpha = 0.38f))
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = headlineColor,
-            modifier = Modifier.weight(1f),
-        )
-        NudgeButton("⏪", decreaseDescription, onCoarseDecrease)
-        NudgeButton("◀", decreaseDescription, onFineDecrease)
-        Text(
-            text = valueText,
-            style = MaterialTheme.typography.labelMedium,
-            color = accentColor,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(56.dp),
-        )
-        NudgeButton("▶", increaseDescription, onFineIncrease)
-        NudgeButton("⏩", increaseDescription, onCoarseIncrease)
-    }
-}
-
-@Composable
-private fun LayerToggleRow(
-    label: String,
-    icon: ImageVector,
-    isChecked: Boolean,
-    headlineColor: Color,
-    iconColor: Color,
-    switchColors: androidx.compose.material3.SwitchColors,
-    onCheckedChange: (Boolean) -> Unit,
-    onInfoClick: (() -> Unit)? = null,
-    enabled: Boolean = true,
-) {
-    ListItem(
-        leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(24.dp),
-            )
-        },
-        trailingContent = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                if (onInfoClick != null) {
-                    IconButton(
-                        onClick = onInfoClick,
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Info,
-                            contentDescription = stringResource(R.string.dso_legend_button),
-                            tint = iconColor,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-                Switch(
-                    checked = isChecked,
-                    onCheckedChange = onCheckedChange,
-                    enabled = enabled,
-                    colors = switchColors,
-                )
-            }
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = Color.Transparent,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onCheckedChange(!isChecked) }
-            .padding(horizontal = 4.dp),
-    ) {
-        Text(
-            text = label,
-            color = if (enabled) headlineColor else headlineColor.copy(alpha = 0.5f),
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-}
-
-/** A labelled slider with its value read out, indented to line up with the toggle rows' text. */
-@Composable
-private fun LayerSliderRow(
-    label: String,
-    valueText: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    headlineColor: Color,
-    accentColor: Color,
-    sliderColors: SliderColors,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 60.dp, end = 20.dp, bottom = 6.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = label,
-                color = headlineColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                text = valueText,
-                color = accentColor,
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-            valueRange = valueRange,
-            colors = sliderColors,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .semantics { contentDescription = label },
         )
     }
 }

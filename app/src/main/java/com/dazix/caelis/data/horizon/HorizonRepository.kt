@@ -8,6 +8,7 @@ import com.dazix.caelis.data.HorizonSettings
 import com.dazix.caelis.data.SettingsStore
 import com.dazix.caelis.domain.horizon.CompositeElevationGrid
 import com.dazix.caelis.domain.horizon.DemTileKey
+import com.dazix.caelis.domain.horizon.DownloadGate
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.horizon.HorizonProfileCalculator
 import com.dazix.caelis.domain.horizon.HorizonRangeEstimator
@@ -43,10 +44,27 @@ sealed interface HorizonState {
     /** Tiles are needed and the app cannot fetch them itself — the user has to import them. */
     data class NeedsTiles(val keys: List<DemTileKey>) : HorizonState
 
+    /** Asking the server how large the missing tiles are, before any of them is fetched. */
+    data object Sizing : HorizonState
+
     /**
-     * Tile [index] of [total] is on its way; [progress] and the byte counts are of that tile alone.
-     * The bytes are compressed, as they cross the network; [totalBytes] is
-     * [DemTileDownloader.UNKNOWN_LENGTH] until, or unless, the server announces a length.
+     * The run waits for a tap: [tiles] tiles of [knownBytes] (compressed), plus [unknownTiles] whose
+     * size the server did not announce. [moreMayFollow] while an automatic radius is not yet known:
+     * the observer's tile decides whether its neighbours are needed, so the run may grow after it.
+     */
+    data class AwaitingConfirmation(
+        val tiles: Int,
+        val knownBytes: Long,
+        val unknownTiles: Int = 0,
+        val moreMayFollow: Boolean = false,
+    ) : HorizonState
+
+    /**
+     * Tile [index] of [total] of the whole run is on its way, [key] being the one in flight.
+     * [receivedBytes] and [totalBytes] count the **whole run** (finished tiles plus this one), so three
+     * tiles read as one download and not as three. The bytes are compressed, as they cross the
+     * network; [totalBytes] is [DemTileDownloader.UNKNOWN_LENGTH] when a size was not announced.
+     * [total] can grow once, when an automatic radius adds the observer's neighbours.
      */
     data class Downloading(
         val key: DemTileKey,
@@ -142,17 +160,72 @@ class HorizonRepository private constructor(
 
     private data class Request(val latitude: Double, val longitude: Double, val rangeKm: Int, val eyeCm: Int)
 
+    /** The request the user tapped Download for; it fetches whatever the gate would have asked about. */
+    private var confirmedRequest: Request? = null
+
+    /** What the last [ensureProfile] was for, so a new height can ask again for the same spot. */
+    private var lastLocation: GeoLocation? = null
+    private var lastSettings: HorizonSettings? = null
+
+    /**
+     * Announced tile sizes, so a location fix every few seconds does not send another round of HEAD
+     * requests for a run that is waiting for a tap. A tile's size does not change within a process.
+     */
+    private val probedSizes = java.util.concurrent.ConcurrentHashMap<DemTileKey, Long>()
+
+    private val _heightAboveTerrainCm = MutableStateFlow(HorizonSettings.DEFAULT_EYE_HEIGHT_CM)
+
+    /**
+     * How high above the terrain the observer's eye is, for this process only, shared by both AR
+     * screens: there is one profile, and two heights would recompute it on every switch of screen.
+     * Never stored — a height left from yesterday's lookout tower would skew today's horizon unseen.
+     */
+    val heightAboveTerrainCm: StateFlow<Int> = _heightAboveTerrainCm.asStateFlow()
+
     /** True when this build can download at all. False in a source build with `INTERNET` removed. */
     val canDownload: Boolean get() = NetworkAvailability.hasInternetPermission(appContext)
+
+    /**
+     * Sets the height above terrain and asks again for the last spot. A height computed before comes
+     * back from disk at once (it is part of the stored profile's name); a new one is computed, and
+     * fetches tiles through the same gate as any other run if Android has reclaimed them.
+     */
+    fun setHeightAboveTerrain(cm: Int) {
+        if (cm == _heightAboveTerrainCm.value) return
+        _heightAboveTerrainCm.value = cm
+        val location = lastLocation ?: return
+        val settings = lastSettings ?: return
+        ensureProfile(location, settings)
+    }
+
+    /**
+     * The user tapped Download for the run that is waiting: fetch it, whatever its size, including
+     * the neighbours an automatic radius adds after the first tile.
+     */
+    fun confirmDownload() {
+        val request = lastRequest ?: return
+        val location = lastLocation ?: return
+        val settings = lastSettings ?: return
+        confirmedRequest = request
+        ensureProfile(location, settings, userConfirmed = true)
+    }
 
     /**
      * Makes sure a profile exists for [location], computing or fetching one if needed.
      *
      * Repeated calls for the same rounded position and the same settings are ignored while one is
-     * already running: the location provider emits every few seconds, and each emission must not
-     * start another 26 MB download.
+     * already running, or while one waits for a tap: the location provider emits every few seconds,
+     * and each emission must start neither another 26 MB download nor another round of HEAD requests.
+     *
+     * @param userConfirmed the call comes from a tap on a download button, so the run needs no
+     *   further confirmation whatever its size.
      */
-    fun ensureProfile(location: GeoLocation, settings: HorizonSettings) {
+    fun ensureProfile(location: GeoLocation, requested: HorizonSettings, userConfirmed: Boolean = false) {
+        // The height belongs to this process, not to the stored settings; whatever a caller passed is
+        // replaced, so a screen can never ask for a profile at a height the other screen does not see.
+        val settings = requested.copy(eyeHeightCm = _heightAboveTerrainCm.value)
+        lastLocation = location
+        lastSettings = settings
         if (!settings.enabled) {
             inFlight?.cancel()
             _state.value = HorizonState.Idle
@@ -168,8 +241,12 @@ class HorizonRepository private constructor(
             rangeKm = if (settings.autoRange) AUTO_RANGE_REQUEST else settings.maxRangeKm,
             eyeCm = settings.eyeHeightCm,
         )
+        if (userConfirmed) confirmedRequest = request
         if (request == lastRequest && inFlight?.isActive == true) return
-        if (request == lastRequest && _profile.value != null) {
+        if (request == lastRequest && !userConfirmed && _state.value is HorizonState.AwaitingConfirmation) return
+        // A profile still on screen while this request waits for a tap is the previous one (another
+        // height, the last spot), kept drawn meanwhile; it is not this request's answer.
+        if (request == lastRequest && _profile.value != null && _state.value !is HorizonState.AwaitingConfirmation) {
             // Same spot, same settings, a profile on screen: nothing to compute, but one shown without
             // names (offline at the time, consent since given) is named now, from its stored form.
             retryNames(location, settings)
@@ -227,11 +304,12 @@ class HorizonRepository private constructor(
         // back to the geometric dip — a flat ring that draws exactly like a real skyline. Everything
         // below treats it as mandatory and the outer ring as best-effort.
         val observerKey = DemTileKey.containing(location.latitude, location.longitude)
+        val run = RunProgress()
 
         // Resolve the search radius before anything else is fetched. With an automatic radius the
         // answer comes out of the observer's own tile, which has to be downloaded either way, so a
         // valley floor never pulls down eight neighbours to discover they change nothing.
-        val settings = withEffectiveRange(location, requested, observerKey) ?: return
+        val settings = withEffectiveRange(location, requested, observerKey, run) ?: return
         _effectiveRangeKm.value = settings.maxRangeKm
 
         val keys = tilesFor(location, settings)
@@ -247,7 +325,7 @@ class HorizonRepository private constructor(
 
         val (present, missing) = cache.partition(keys)
         if (missing.isNotEmpty()) {
-            val fetched = fetchMissing(missing, settings)
+            val fetched = fetchMissing(missing, settings, run, moreMayFollow = false)
             if (!fetched) return
         }
 
@@ -309,6 +387,7 @@ class HorizonRepository private constructor(
         location: GeoLocation,
         requested: HorizonSettings,
         observerKey: DemTileKey,
+        run: RunProgress,
     ): HorizonSettings? {
         if (!requested.autoRange) return requested
 
@@ -323,7 +402,7 @@ class HorizonRepository private constructor(
         }
 
         if (cache.partition(listOf(observerKey)).second.isNotEmpty()) {
-            if (!fetchMissing(listOf(observerKey), requested)) return null
+            if (!fetchMissing(listOf(observerKey), requested, run, moreMayFollow = true)) return null
         }
         val observerTile = withContext(Dispatchers.IO) { cache.open(observerKey) }
         if (observerTile == null) {
@@ -371,30 +450,106 @@ class HorizonRepository private constructor(
         }
     }
 
-    /** @return true when every missing tile is now on disk. */
-    private suspend fun fetchMissing(missing: List<DemTileKey>, settings: HorizonSettings): Boolean {
+    /**
+     * One resolve's downloads, which may come in two stages (the observer's tile, then the ring an
+     * automatic radius asks for): counted together so the limit and the progress are of the run.
+     */
+    private class RunProgress {
+        var doneTiles = 0
+        var plannedTiles = 0
+        var doneBytes = 0L
+        var plannedBytes = 0L
+        var anyUnknown = false
+
+        val totalBytes: Long get() = if (anyUnknown) DemTileDownloader.UNKNOWN_LENGTH else plannedBytes
+    }
+
+    /**
+     * Fetches [missing], after the gate has let it: sizes first (HEAD), then the mode and limit decide
+     * whether it starts now, waits for a tap ([HorizonState.AwaitingConfirmation]) or not at all.
+     *
+     * @param moreMayFollow this is the first stage of an automatic radius, so a run waiting for a tap
+     *   says that its size is a lower bound.
+     * @return true when every missing tile is now on disk.
+     */
+    private suspend fun fetchMissing(
+        missing: List<DemTileKey>,
+        settings: HorizonSettings,
+        run: RunProgress,
+        moreMayFollow: Boolean,
+    ): Boolean {
         if (!canDownload || !settings.networkDownloadAllowed) {
             _state.value = HorizonState.NeedsTiles(missing)
             return false
         }
+        // Before the HEAD requests too: they are network contact on the metered connection the user
+        // asked to keep the app off.
         if (settings.wifiOnly && NetworkAvailability.isMetered(appContext)) {
             _state.value = HorizonState.Failed(HorizonState.Failed.Reason.METERED)
             return false
         }
 
-        missing.forEachIndexed { index, key ->
-            _state.value = HorizonState.Downloading(key, index + 1, missing.size, 0f)
+        val sizes = try {
+            probeSizes(missing)
+        } catch (e: DemTileDownloader.NotPermittedException) {
+            _state.value = HorizonState.NeedsTiles(missing)
+            return false
+        } catch (e: IOException) {
+            Log.w(TAG, "sizing ${missing.size} tile(s) failed: ${e.logClass}", e.inDebug())
+            _state.value = HorizonState.Failed(HorizonState.Failed.Reason.NETWORK, e)
+            return false
+        }
+
+        val confirmed = confirmedRequest != null && confirmedRequest == lastRequest
+        when (
+            val decision = DownloadGate.decide(
+                mode = settings.downloadMode,
+                limitBytes = settings.confirmAboveBytes,
+                alreadyBytes = run.doneBytes,
+                remainingSizes = sizes,
+                confirmed = confirmed,
+            )
+        ) {
+            DownloadGate.Decision.Refuse -> {
+                _state.value = HorizonState.NeedsTiles(missing)
+                return false
+            }
+            is DownloadGate.Decision.Ask -> {
+                _state.value = HorizonState.AwaitingConfirmation(
+                    tiles = decision.tiles,
+                    knownBytes = decision.knownBytes,
+                    unknownTiles = decision.unknownTiles,
+                    moreMayFollow = moreMayFollow,
+                )
+                return false
+            }
+            DownloadGate.Decision.Proceed -> Unit
+        }
+
+        run.plannedTiles += missing.size
+        sizes.forEach { if (it >= 0) run.plannedBytes += it else run.anyUnknown = true }
+
+        missing.forEach { key ->
+            val index = run.doneTiles + 1
+            fun publishProgress(received: Long) {
+                val totalBytes = run.totalBytes
+                val sofar = run.doneBytes + received
+                _state.value = HorizonState.Downloading(
+                    key = key,
+                    index = index,
+                    total = run.plannedTiles,
+                    progress = DemTileDownloader.fraction(sofar, totalBytes),
+                    receivedBytes = sofar,
+                    totalBytes = totalBytes,
+                )
+            }
+            publishProgress(0L)
+            var tileBytes = 0L
             try {
                 cache.store(key) { out ->
-                    downloader.download(key, out) { received, totalBytes ->
-                        _state.value = HorizonState.Downloading(
-                            key = key,
-                            index = index + 1,
-                            total = missing.size,
-                            progress = DemTileDownloader.fraction(received, totalBytes),
-                            receivedBytes = received,
-                            totalBytes = totalBytes,
-                        )
+                    downloader.download(key, out) { received, _ ->
+                        tileBytes = received
+                        publishProgress(received)
                     }
                 }
             } catch (e: DemTileDownloader.NotPermittedException) {
@@ -405,8 +560,22 @@ class HorizonRepository private constructor(
                 _state.value = HorizonState.Failed(HorizonState.Failed.Reason.NETWORK, e)
                 return false
             }
+            run.doneTiles += 1
+            run.doneBytes += tileBytes
         }
         return true
+    }
+
+    /** The announced size of each of [keys], [DownloadGate.UNKNOWN] where none was; cached per tile. */
+    private suspend fun probeSizes(keys: List<DemTileKey>): List<Long> {
+        if (keys.any { !probedSizes.containsKey(it) }) _state.value = HorizonState.Sizing
+        return withContext(Dispatchers.IO) {
+            keys.map { key ->
+                probedSizes.getOrPut(key) {
+                    downloader.contentLength(key).takeIf { it >= 0 } ?: DownloadGate.UNKNOWN
+                }
+            }
+        }
     }
 
     private fun publish(profile: HorizonProfile) {

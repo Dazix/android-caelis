@@ -279,8 +279,6 @@
     <string name="horizon_range_value">%1$d km</string>
     <string name="horizon_range_auto">Automatic</string>
     <string name="horizon_range_auto_value">Automatic · %1$d km</string>
-    <string name="horizon_eye_height">Eye height</string>
-    <string name="horizon_eye_height_value">%1$d cm</string>
     <string name="horizon_shade_occluded">Dim the hidden part of the path</string>
     <string name="horizon_shade_occluded_desc">The stretch of the trajectory behind the terrain is drawn faint, so you can see how much of the golden hour the hills take.</string>
     <string name="horizon_wifi_only">Download over Wi‑Fi only</string>
@@ -291,7 +289,7 @@
     <string name="horizon_peak_names_desc">Labels the peaks that stand on the skyline with their name and height. Needs the real horizon.</string>
 
     <string name="horizon_consent_title">Download terrain elevation?</string>
-    <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. Once allowed, data for your current location will be downloaded automatically in the background as needed and cached for offline use. Peak names (a few kB per tile) are fetched the same way from a public GitHub repository. Each request carries only the name of that one-degree tile — no coordinates, no identifiers, nothing about you — but the host, like any server you connect to, sees your IP address.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
+    <string name="horizon_consent_body">To draw the real skyline, the app needs elevation data for the square of the map you are standing in. Once allowed, data for your current location will be downloaded in the background as needed and cached for offline use; a larger download (over 50 MB by default) waits for your tap. In Settings you can switch to downloading on demand only. Peak names (a few kB per tile) are fetched the same way from a public GitHub repository. Each request carries only the name of that one-degree tile — no coordinates, no identifiers, nothing about you — but the host, like any server you connect to, sees your IP address.\n\nYou can also import the file by hand instead, or change your mind later in Settings.</string>
     <string name="horizon_consent_allow">Allow</string>
     <string name="horizon_consent_never">Not now</string>
 
@@ -417,6 +415,31 @@
     <string name="ar_heading_compass_unreliable">Compass unreliable. Wave the phone in a figure 8 or align with the horizon by hand.</string>
     <string name="ar_terrain_downloading">Downloading terrain %1$d of %2$d · %3$s</string>
     <string name="horizon_download_size_of">%1$s of %2$s</string>
+    <string name="horizon_height_above_terrain">Height above terrain</string>
+    <string name="horizon_height_above_terrain_value">%1$s m</string>
+    <string name="horizon_height_above_terrain_desc">Until the app closes. For a roof or a lookout tower.</string>
+    <string name="horizon_height_chip">↑ %1$s m</string>
+    <string name="horizon_height_chip_desc">Height above terrain %1$s m. Change</string>
+    <string name="horizon_height_decrease">Lower</string>
+    <string name="horizon_height_increase">Higher</string>
+    <string name="horizon_status_sizing">Checking download size…</string>
+    <string name="horizon_size_unknown">size unknown</string>
+    <string name="horizon_size_at_least">at least %1$s</string>
+    <string name="horizon_offer_download">Download</string>
+    <string name="horizon_download_mode">Download terrain data</string>
+    <string name="horizon_download_mode_auto">Automatically</string>
+    <string name="horizon_download_mode_on_demand">On demand</string>
+    <string name="horizon_download_mode_never">Never</string>
+    <string name="horizon_download_mode_auto_desc">Downloads what this place needs. A larger download waits for your tap.</string>
+    <string name="horizon_download_mode_on_demand_desc">Shows the size first; nothing is downloaded until you tap Download.</string>
+    <string name="horizon_download_mode_never_desc">No connection at all. Import the elevation files by hand.</string>
+    <string name="horizon_confirm_limit">Ask before downloading more than</string>
+    <string name="horizon_confirm_limit_value">%1$d MB</string>
+    <string name="horizon_confirm_limit_unlimited">Unlimited</string>
+    <plurals name="horizon_offer_tiles">
+        <item quantity="one">Terrain: %1$d tile, %2$s</item>
+        <item quantity="other">Terrain: %1$d tiles, %2$s</item>
+    </plurals>
     <string name="ar_terrain_computing">Computing the skyline · %1$d %%</string>
     <string name="ar_terrain_missing">Elevation data for the real horizon is missing. Download or import it in Settings.</string>
     <string name="ar_terrain_missing_action">Open terrain settings</string>

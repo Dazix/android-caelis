@@ -446,7 +446,10 @@ internal object SettingsMapping {
     private val HORIZON_NETWORK_CONSENT = booleanPreferencesKey("horizon_network_consent")
     private val HORIZON_AUTO_RANGE = booleanPreferencesKey("horizon_auto_range")
     private val HORIZON_MAX_RANGE_KM = intPreferencesKey("horizon_max_range_km")
+    // Read by no one since the height above terrain became per process; only removed, see writeHorizon.
     private val HORIZON_EYE_HEIGHT_CM = intPreferencesKey("horizon_eye_height_cm")
+    private val HORIZON_AUTO_DOWNLOAD = booleanPreferencesKey("horizon_auto_download")
+    private val HORIZON_CONFIRM_ABOVE_MB = intPreferencesKey("horizon_confirm_above_mb")
     private val HORIZON_SHADE_OCCLUDED = booleanPreferencesKey("horizon_shade_occluded")
     private val HORIZON_WIFI_ONLY = booleanPreferencesKey("horizon_wifi_only")
     private val HORIZON_NIGHT_SKY_REAL = booleanPreferencesKey("horizon_night_sky_real")
@@ -941,8 +944,12 @@ internal object SettingsMapping {
         networkConsent = prefs[HORIZON_NETWORK_CONSENT],
         autoRange = prefs[HORIZON_AUTO_RANGE] ?: true,
         maxRangeKm = prefs[HORIZON_MAX_RANGE_KM] ?: HorizonSettings.DEFAULT_MAX_RANGE_KM,
-        eyeHeightCm = (prefs[HORIZON_EYE_HEIGHT_CM] ?: HorizonSettings.DEFAULT_EYE_HEIGHT_CM)
-            .coerceIn(HorizonSettings.MIN_EYE_HEIGHT_CM, HorizonSettings.MAX_EYE_HEIGHT_CM),
+        autoDownload = prefs[HORIZON_AUTO_DOWNLOAD] ?: true,
+        // A value that is not one of the offered limits (an older build's, a hand-edited file) falls
+        // back to the default rather than to a limit nobody can see or pick in the UI.
+        confirmAboveMb = prefs[HORIZON_CONFIRM_ABOVE_MB]
+            ?.takeIf { it in HorizonSettings.CONFIRM_LIMIT_CHOICES_MB }
+            ?: HorizonSettings.DEFAULT_CONFIRM_ABOVE_MB,
         shadeOccludedTrajectory = prefs[HORIZON_SHADE_OCCLUDED] ?: true,
         wifiOnly = prefs[HORIZON_WIFI_ONLY] ?: false,
         realHorizonInNightSky = prefs[HORIZON_NIGHT_SKY_REAL] ?: false,
@@ -955,7 +962,10 @@ internal object SettingsMapping {
         prefs.put(HORIZON_NETWORK_CONSENT, settings.networkConsent)
         prefs[HORIZON_AUTO_RANGE] = settings.autoRange
         prefs[HORIZON_MAX_RANGE_KM] = settings.maxRangeKm
-        prefs[HORIZON_EYE_HEIGHT_CM] = settings.eyeHeightCm
+        prefs[HORIZON_AUTO_DOWNLOAD] = settings.autoDownload
+        prefs[HORIZON_CONFIRM_ABOVE_MB] = settings.confirmAboveMb
+        // The height above terrain is never stored; a value from before it was is dropped here.
+        prefs.remove(HORIZON_EYE_HEIGHT_CM)
         prefs[HORIZON_SHADE_OCCLUDED] = settings.shadeOccludedTrajectory
         prefs[HORIZON_WIFI_ONLY] = settings.wifiOnly
         prefs[HORIZON_NIGHT_SKY_REAL] = settings.realHorizonInNightSky
