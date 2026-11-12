@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +46,8 @@ import com.dazix.caelis.R
 import com.dazix.caelis.ar.scene.paletteForTheme
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.CelestialVisibility
+import com.dazix.caelis.domain.nightsky.DetailLinkGroup
+import com.dazix.caelis.domain.nightsky.DetailLinkTarget
 import com.dazix.caelis.domain.nightsky.NightVisionTheme
 import com.dazix.caelis.domain.nightsky.VisibilityState
 import com.dazix.caelis.ui.AppIcons
@@ -76,6 +80,8 @@ fun CelestialDetailSheetContent(
     onHeaderMeasured: (Int) -> Unit,
     onFullHeightMeasured: ((Int) -> Unit)? = null,
     onRouteToTarget: (() -> Unit)? = null,
+    /** A star, constellation or asterism named in [CelestialBodyDetails.figures] was pressed. */
+    onSelectLink: ((DetailLinkTarget) -> Unit)? = null,
     onShowDsoLegend: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
     nightVisionTheme: NightVisionTheme = NightVisionTheme.AMBER,
@@ -332,6 +338,16 @@ fun CelestialDetailSheetContent(
                         }
                     }
                 }
+            }
+
+            for (group in selectedBody.figures) {
+                DetailLinkRow(
+                    group = group,
+                    onSelectLink = onSelectLink,
+                    labelColor = labelColor,
+                    valueColor = valueColor,
+                    accentColor = accentColor,
+                )
             }
 
             // Divider before Visibility section
@@ -795,6 +811,59 @@ fun CelestialDetailSheetContent(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * "Asterisms" over the names of the figures (or "Brightest star" over a star), each a bordered chip that selects it. The
+ * border, not only the colour, is what tells a selectable name from a plain value.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailLinkRow(
+    group: DetailLinkGroup,
+    onSelectLink: ((DetailLinkTarget) -> Unit)?,
+    labelColor: Color,
+    valueColor: Color,
+    accentColor: Color,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = group.label,
+            color = labelColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Normal,
+        )
+        if (onSelectLink == null) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = group.links.joinToString(", ") { it.name },
+                color = valueColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            return@Column
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (link in group.links) {
+                // Surface's onClick keeps the 48dp touch target around the smaller chip.
+                Surface(
+                    onClick = { onSelectLink(link.target) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = accentColor.copy(alpha = 0.12f),
+                    border = BorderStroke(0.8.dp, accentColor.copy(alpha = 0.45f)),
+                ) {
+                    Text(
+                        text = link.name,
+                        color = accentColor,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
                 }
             }
         }

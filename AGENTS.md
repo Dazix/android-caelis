@@ -72,8 +72,8 @@ To keep iteration fast (6-7s), unit test suites are partitioned by functional do
 ```bash
 # 1. Scoped domain test runners (fast JVM execution):
 scripts/run_tests.sh caelis # Intervalometer core, service, overlay, session planner, calibration, network isolation, workflow hardening, exported components, log privacy, release build, permissions per platform level, handheld detection, translation parity (373 tests)
-scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (738 tests)
-scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (426 tests)
+scripts/run_tests.sh solar          # Sun & Moon trajectory, ephemeris, AR projection, terrain horizon, skyline matching, tile cache and download (747 tests)
+scripts/run_tests.sh nightsky       # Night sky AR, Meeus celestial math, FlatBuffers catalog, overlay & hit test, sky materials, sky names (457 tests)
 
 # 2. Full gate before final commit (all suites + assemble + Android Lint):
 scripts/run_tests.sh all
@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1302 JVM tests (373 intervalometer, 738 solar, horizon & pose, 426 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1353 JVM tests (374 intervalometer, 766 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -672,7 +672,9 @@ Each of these was found by review or on the device and is now covered by a test.
   (−2.4/−11.1° to −5.6/−6.7° to 3.0/−6.5°).
 - **Contextual back handler in AR screens prioritizes dismissing active overlays.** Pressing back must
   dismiss open bottom sheets (layer settings, object details), search bar, or disambiguation dialogs
-  before navigating out of the AR screen.
+  before navigating out of the AR screen. A Night Sky detail reached by tapping a name in another
+  one goes back to that one first (`DetailHistory`); a body chosen any other way starts the history
+  over, so back never returns to something from before the user picked a new body.
 - **Planetarium mode memorizes and restores prior Milky Way state.** Turning planetarium mode on (the
   camera picture behind the sky, opaque fill until the first image) turns off the Milky Way, which
   would cover the picture, and turning it off restores the Milky Way to its previous state unless

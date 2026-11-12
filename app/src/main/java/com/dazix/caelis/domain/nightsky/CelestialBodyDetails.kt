@@ -11,6 +11,9 @@ package com.dazix.caelis.domain.nightsky
  * @param magnitude Apparent astronomical visual magnitude (V band), null for constellations.
  * @param raDegrees Right Ascension in degrees J2000.0 [0.0, 360.0).
  * @param decDegrees Declination in degrees J2000.0 [-90.0, +90.0].
+ * @param figures The constellation and asterisms the body belongs to (or, for a figure, its
+ *   brightest star and, for an asterism, the constellations it is drawn across), each name
+ *   selectable from the sheet.
  */
 data class CelestialBodyDetails(
     val name: String,
@@ -21,4 +24,20 @@ data class CelestialBodyDetails(
     val magnitude: Float? = null,
     val raDegrees: Double? = null,
     val decDegrees: Double? = null,
+    val figures: List<DetailLinkGroup> = emptyList(),
 )
+
+/** One labelled row of selectable names in the detail sheet ("Asterisms: Winter Hexagon, …"). */
+data class DetailLinkGroup(val label: String, val links: List<DetailLink>)
+
+/** A name in the detail sheet that selects what it names. */
+data class DetailLink(val name: String, val target: DetailLinkTarget)
+
+/** What a [DetailLink] selects, by catalog index. */
+sealed interface DetailLinkTarget {
+    /** A constellation or asterism. */
+    data class Figure(val constellationIndex: Int) : DetailLinkTarget
+
+    /** A star. */
+    data class Star(val starIndex: Int) : DetailLinkTarget
+}

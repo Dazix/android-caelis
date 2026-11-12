@@ -296,7 +296,9 @@ fun NightSkyArScreen(
         when {
             showDsoLegendInAr -> showDsoLegendInAr = false
             uiState.isSearchActive -> viewModel.setSearchActive(false)
-            uiState.selectedBody != null -> viewModel.clearSelectedBody()
+            // A sheet followed from another one goes back to it first; only the first one closes.
+            uiState.selectedBody != null ->
+                if (!viewModel.backInDetail(DisplayGeometry.currentRotation(context))) viewModel.clearSelectedBody()
             uiState.multipleHitsTarget != null -> viewModel.dismissDisambiguation()
             isPlacesSheetOpen -> isPlacesSheetOpen = false
             isLayerSheetOpen -> isLayerSheetOpen = false
@@ -430,6 +432,7 @@ fun NightSkyArScreen(
                     }
                 },
                 onRouteToTarget = { viewModel.routeCameraToSelection(displayRotation) },
+                onSelectLink = { target -> viewModel.selectLinkFromDetail(target, displayRotation) },
                 onShowDsoLegend = if (uiState.selectedDsoIndex != -1) {
                     { showDsoLegendInAr = true }
                 } else null,

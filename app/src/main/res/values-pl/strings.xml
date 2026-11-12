@@ -509,7 +509,24 @@
     <string name="celestial_distance">Odległość</string>
     <string name="celestial_magnitude">Jasność</string>
     <string name="celestial_coordinates">Współrzędne (rekt. / deklin.)</string>
-    <string name="celestial_parent_constellation">Gwiazdozbiór nadrzędny</string>
+    <plurals name="celestial_constellations_label">
+        <item quantity="one">Gwiazdozbiór</item>
+        <item quantity="few">Gwiazdozbiory</item>
+        <item quantity="many">Gwiazdozbiory</item>
+        <item quantity="other">Gwiazdozbiory</item>
+    </plurals>
+    <plurals name="celestial_asterisms_label">
+        <item quantity="one">Asteryzm</item>
+        <item quantity="few">Asteryzmy</item>
+        <item quantity="many">Asteryzmy</item>
+        <item quantity="other">Asteryzmy</item>
+    </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Powiązany gwiazdozbiór</item>
+        <item quantity="few">Powiązane gwiazdozbiory</item>
+        <item quantity="many">Powiązane gwiazdozbiory</item>
+        <item quantity="other">Powiązane gwiazdozbiory</item>
+    </plurals>
     <string name="celestial_catalog_id">ID katalogowe</string>
     <string name="celestial_angular_size">Rozmiar kątowy</string>
     <string name="celestial_route_to_target">Wyśrodkuj w kadrze</string>

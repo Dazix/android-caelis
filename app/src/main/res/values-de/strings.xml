@@ -503,7 +503,18 @@
     <string name="celestial_distance">Entfernung</string>
     <string name="celestial_magnitude">Helligkeit</string>
     <string name="celestial_coordinates">Koordinaten (RA / Dek)</string>
-    <string name="celestial_parent_constellation">Übergeordnetes Sternbild</string>
+    <plurals name="celestial_constellations_label">
+        <item quantity="one">Sternbild</item>
+        <item quantity="other">Sternbilder</item>
+    </plurals>
+    <plurals name="celestial_asterisms_label">
+        <item quantity="one">Asterismus</item>
+        <item quantity="other">Asterismen</item>
+    </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Zugehöriges Sternbild</item>
+        <item quantity="other">Zugehörige Sternbilder</item>
+    </plurals>
     <string name="celestial_catalog_id">Katalog-ID</string>
     <string name="celestial_angular_size">Winkelgröße</string>
     <string name="celestial_route_to_target">Im Bild zentrieren</string>

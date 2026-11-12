@@ -509,7 +509,24 @@
     <string name="celestial_distance">Vzdálenost</string>
     <string name="celestial_magnitude">Magnituda</string>
     <string name="celestial_coordinates">Souřadnice (RA / Dec)</string>
-    <string name="celestial_parent_constellation">Mateřské souhvězdí</string>
+    <plurals name="celestial_constellations_label">
+        <item quantity="one">Souhvězdí</item>
+        <item quantity="few">Souhvězdí</item>
+        <item quantity="many">Souhvězdí</item>
+        <item quantity="other">Souhvězdí</item>
+    </plurals>
+    <plurals name="celestial_asterisms_label">
+        <item quantity="one">Asterismus</item>
+        <item quantity="few">Asterismy</item>
+        <item quantity="many">Asterismy</item>
+        <item quantity="other">Asterismy</item>
+    </plurals>
+    <plurals name="celestial_related_constellations_label">
+        <item quantity="one">Související souhvězdí</item>
+        <item quantity="few">Související souhvězdí</item>
+        <item quantity="many">Související souhvězdí</item>
+        <item quantity="other">Související souhvězdí</item>
+    </plurals>
     <string name="celestial_catalog_id">Katalogové označení</string>
     <string name="celestial_angular_size">Úhlová velikost</string>
     <string name="celestial_route_to_target">Vycentrovat v zorném poli</string>
