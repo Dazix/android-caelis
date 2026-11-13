@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
+import com.dazix.caelis.domain.solar.RiseSetGlyph
 
 /**
  * The app's own icon set, drawn in code.
@@ -341,44 +342,49 @@ object AppIcons {
         }
     }
 
-    /** Sunrise: rising sun over the horizon line with an upward arrow. */
-    val Sunrise: ImageVector by lazy {
-        icon("Sunrise") {
-            strokePath {
-                // Horizon
-                moveTo(2.4f, 17.5f)
-                lineTo(21.6f, 17.5f)
-                // Rising sun arc
-                moveTo(7.2f, 17.5f)
-                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 17.5f)
-                // Up arrow
-                moveTo(12f, 10.5f)
-                lineTo(12f, 3.2f)
-                moveTo(9f, 6.2f)
-                lineTo(12f, 3.2f)
-                lineTo(15f, 6.2f)
-            }
-        }
-    }
+    /**
+     * Sunrise: half a sun with rays on the horizon, an arrow above it pointing up. The same drawing
+     * as Sun AR's rise pill ([RiseSetGlyph]), so a rise looks the same everywhere in the app.
+     */
+    val Sunrise: ImageVector by lazy { riseSetIcon("Sunrise", RiseSetGlyph.Body.SUN, rising = true) }
 
-    /** Sunset: setting sun over the horizon line with a downward arrow. */
-    val Sunset: ImageVector by lazy {
-        icon("Sunset") {
-            strokePath {
-                // Horizon
-                moveTo(2.4f, 17.5f)
-                lineTo(21.6f, 17.5f)
-                // Setting sun arc
-                moveTo(7.2f, 17.5f)
-                arcTo(4.8f, 4.8f, 0f, false, true, 16.8f, 17.5f)
-                // Down arrow
-                moveTo(12f, 3.2f)
-                lineTo(12f, 10.5f)
-                moveTo(9f, 7.5f)
-                lineTo(12f, 10.5f)
-                lineTo(15f, 7.5f)
+    /** Sunset: as [Sunrise], with the arrow pointing down. */
+    val Sunset: ImageVector by lazy { riseSetIcon("Sunset", RiseSetGlyph.Body.SUN, rising = false) }
+
+    /** The sun alone, disc and eight rays, drawn like the rise/set icons. Heads the Sun section of Sun AR's sheet. */
+    val SunBody: ImageVector by lazy { glyphIcon("SunBody", RiseSetGlyph.body(RiseSetGlyph.Body.SUN)) }
+
+    /** The moon alone, the filled crescent of the rise/set pills. Heads the Moon section of Sun AR's sheet. */
+    val MoonBody: ImageVector by lazy { glyphIcon("MoonBody", RiseSetGlyph.body(RiseSetGlyph.Body.MOON)) }
+
+    private fun riseSetIcon(name: String, body: RiseSetGlyph.Body, rising: Boolean): ImageVector =
+        glyphIcon(name, RiseSetGlyph.drawing(body, rising))
+
+    private fun glyphIcon(name: String, drawing: RiseSetGlyph.Drawing): ImageVector =
+        icon(name) {
+            if (drawing.strokes.isNotEmpty()) {
+                path(
+                    stroke = SolidColor(Color.Black),
+                    strokeLineWidth = RiseSetGlyph.STROKE,
+                    strokeLineCap = StrokeCap.Round,
+                    strokeLineJoin = StrokeJoin.Round,
+                ) {
+                    for (stroke in drawing.strokes) polyline(stroke)
+                }
+            }
+            if (drawing.fills.isNotEmpty()) {
+                fillPath {
+                    for (outline in drawing.fills) {
+                        polyline(outline)
+                        close()
+                    }
+                }
             }
         }
+
+    private fun androidx.compose.ui.graphics.vector.PathBuilder.polyline(points: FloatArray) {
+        moveTo(points[0], points[1])
+        for (i in 2 until points.size step 2) lineTo(points[i], points[i + 1])
     }
 
     /** Explore / Compass: Material Design 3 Explore (Filled) icon. */

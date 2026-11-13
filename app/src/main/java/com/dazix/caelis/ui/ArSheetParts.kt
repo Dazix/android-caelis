@@ -119,6 +119,8 @@ internal fun LayerGroupCard(
     containerColor: Color,
     borderColor: Color,
     modifier: Modifier = Modifier,
+    /** Drawn before the title in its colour; decorative, the title says what the group is. */
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     trailingHeader: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -138,12 +140,26 @@ internal fun LayerGroupCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = title,
-                color = titleColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false),
+            ) {
+                if (leadingIcon != null) {
+                    androidx.compose.material3.Icon(
+                        imageVector = leadingIcon,
+                        contentDescription = null,
+                        tint = titleColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    text = title,
+                    color = titleColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
             trailingHeader?.invoke()
         }
         content()

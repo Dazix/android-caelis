@@ -66,8 +66,11 @@ import com.dazix.caelis.domain.arframe.MarkClearance
 import com.dazix.caelis.domain.solar.RiseSetBadge
 import com.dazix.caelis.domain.solar.RiseSetBadgePolicy
 import com.dazix.caelis.domain.solar.RiseSetBadges
+import com.dazix.caelis.domain.solar.RiseSetGlyph
 import kotlinx.coroutines.isActive
+import com.dazix.caelis.ui.OffscreenChevron
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -75,6 +78,12 @@ private val MoonDisk = Color(0xFFE0F7FA)
 private val MoonRise = Color(0xFF4FC3F7)
 private val MoonSet = Color(0xFF26A69A)
 private val Casing = Color(0x99000000)
+
+/** What the off-screen pointer's arrow and tag keep clear of the body (the sun's rays, the moon). */
+private const val POINTER_GAP_DP = 6f
+
+/** The off-screen moon's crescent radius; a crescent at the sun disc's 6.5 dp looked lighter than it. */
+private const val MOON_POINTER_RADIUS_DP = 8.5f
 
 /**
  * The Sun AR sky drawn by Filament ([SunArScene]: grid, terrain silhouette, day arcs and the marks
@@ -315,6 +324,12 @@ internal class SunArMarks {
     private val markerText = textPaint(android.graphics.Color.WHITE)
     private val markerBg = fillPaint(android.graphics.Color.argb(230, 20, 20, 20))
     private val markerBorder = strokePaint(android.graphics.Color.argb(255, 255, 179, 0))
+    private val glyphPath = android.graphics.Path()
+    private val glyphPaint = strokePaint(android.graphics.Color.WHITE).apply {
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val glyphFill = fillPaint(android.graphics.Color.WHITE)
 
     private var builtScene: SunArScene? = null
     private var builtSolar: SolarTrajectory? = null
@@ -552,10 +567,10 @@ internal class SunArMarks {
         badgeHalfHeight = BADGE_HEIGHT_DP * density * 0.5f
         val solarPath = solar.pathPoints
         val lunarPath = lunar.pathPoints
-        setBadge(atlas, 0, badges.sunrise, "🌅", NormalSunrise, density, beforeDot = true, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
-        setBadge(atlas, 1, badges.sunset, "🌇", NormalSunset, density, beforeDot = false, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
-        setBadge(atlas, 2, badges.moonrise, "🌙", MoonRise, density, beforeDot = true, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
-        setBadge(atlas, 3, badges.moonset, "🌘", MoonSet, density, beforeDot = false, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 0, badges.sunrise, RiseSetGlyph.Body.SUN, NormalSunrise, density, beforeDot = true, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 1, badges.sunset, RiseSetGlyph.Body.SUN, NormalSunset, density, beforeDot = false, solarPath.size, { solarPath[it].coordinates.azimuthDegrees }, { solarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 2, badges.moonrise, RiseSetGlyph.Body.MOON, MoonRise, density, beforeDot = true, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
+        setBadge(atlas, 3, badges.moonset, RiseSetGlyph.Body.MOON, MoonSet, density, beforeDot = false, lunarPath.size, { lunarPath[it].coordinates.azimuthDegrees }, { lunarPath[it].coordinates.apparentElevationDegrees })
         atlas.end()
     }
 
@@ -563,9 +578,10 @@ internal class SunArMarks {
         atlas: SpriteAtlas,
         slot: Int,
         badge: RiseSetBadge?,
-        emoji: String,
+        body: RiseSetGlyph.Body,
         accent: Color,
         density: Float,
+        // A rise's pill stands before its dot on the arc, a set's after it: the same flag picks the arrow.
         beforeDot: Boolean,
         pathSize: Int,
         pathAzimuth: (Int) -> Double,
@@ -576,11 +592,11 @@ internal class SunArMarks {
             markerSprites[slot] = -1
             return
         }
-        val label = markerLabel(emoji, badge.formattedTime, badge.azimuthDegrees)
-        markerSprites[slot] = addBadge(atlas, label, accent, density)
+        val label = markerLabel(badge.formattedTime, badge.azimuthDegrees)
+        markerSprites[slot] = addBadge(atlas, label, body, rising = beforeDot, accent, density)
         markerAzimuth[slot] = badge.azimuthDegrees
         markerElevation[slot] = badge.apparentElevationDegrees
-        markerHalfWidth[slot] = (markerText.measureText(label) + 16f * density) * 0.5f
+        markerHalfWidth[slot] = badgeWidth(label, density) * 0.5f
         findBelowPoint(slot, badge, beforeDot, pathSize, pathAzimuth, pathElevation)
     }
 
@@ -650,10 +666,29 @@ internal class SunArMarks {
         }
     }
 
-    /** A badge pill, 26 dp tall, centred 16 dp above its dot (the anchor). */
-    private fun addBadge(atlas: SpriteAtlas, label: String, accent: Color, density: Float): Int {
-        val pw = markerText.measureText(label) + 16f * density
+    /** The rise/set icon's side in pixels: a little taller than the text's cap, so the arrow reads at pill size. */
+    private fun badgeIconSize(): Float = markerText.textSize * BADGE_ICON_SCALE
+
+    /** A badge pill's width: padding, the rise/set icon, a gap and the label. The pill and its clearance box both use it. */
+    private fun badgeWidth(label: String, density: Float): Float =
+        BADGE_PADDING_DP * 2f * density + badgeIconSize() + BADGE_ICON_GAP_DP * density + markerText.measureText(label)
+
+    /**
+     * A badge pill, 26 dp tall, centred 16 dp above its dot (the anchor): the rise/set icon
+     * ([RiseSetGlyph]) in the accent colour, then the time and azimuth.
+     */
+    private fun addBadge(
+        atlas: SpriteAtlas,
+        label: String,
+        body: RiseSetGlyph.Body,
+        rising: Boolean,
+        accent: Color,
+        density: Float,
+    ): Int {
+        val pw = badgeWidth(label, density)
         val ph = BADGE_HEIGHT_DP * density
+        val icon = badgeIconSize()
+        val textWidth = markerText.measureText(label)
         val lift = BADGE_LIFT_DP * density
         val border = markerBorder.strokeWidth
         val w = ceil(pw + border).toInt() + 2
@@ -667,8 +702,43 @@ internal class SunArMarks {
             markerBorder.color = accent.toArgb()
             canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, markerBg)
             canvas.drawRoundRect(rect, ph * 0.5f, ph * 0.5f, markerBorder)
-            canvas.drawText(label, cx, cy + markerText.textSize * 0.35f, markerText)
+            val iconLeft = cx - pw * 0.5f + BADGE_PADDING_DP * density
+            drawRiseSetGlyph(canvas, body, rising, iconLeft, cy - icon * 0.5f, icon, accent.toArgb())
+            val textCentre = iconLeft + icon + BADGE_ICON_GAP_DP * density + textWidth * 0.5f
+            canvas.drawText(label, textCentre, cy + markerText.textSize * 0.35f, markerText)
         }
+    }
+
+    /** Draws [RiseSetGlyph] into the [size] square at ([left], [top]). Only while the atlas is drawn. */
+    private fun drawRiseSetGlyph(
+        canvas: android.graphics.Canvas,
+        body: RiseSetGlyph.Body,
+        rising: Boolean,
+        left: Float,
+        top: Float,
+        size: Float,
+        argb: Int,
+    ) {
+        val scale = size / RiseSetGlyph.SIZE
+        val drawing = RiseSetGlyph.drawing(body, rising)
+        glyphPath.reset()
+        for (stroke in drawing.strokes) addPolyline(stroke, left, top, scale)
+        glyphPaint.color = argb
+        glyphPaint.strokeWidth = RiseSetGlyph.STROKE * scale
+        canvas.drawPath(glyphPath, glyphPaint)
+        if (drawing.fills.isEmpty()) return
+        glyphPath.reset()
+        for (outline in drawing.fills) {
+            addPolyline(outline, left, top, scale)
+            glyphPath.close()
+        }
+        glyphFill.color = argb
+        canvas.drawPath(glyphPath, glyphFill)
+    }
+
+    private fun addPolyline(points: FloatArray, left: Float, top: Float, scale: Float) {
+        glyphPath.moveTo(left + points[0] * scale, top + points[1] * scale)
+        for (i in 2 until points.size step 2) glyphPath.lineTo(left + points[i] * scale, top + points[i + 1] * scale)
     }
 
     private fun textPaint(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -694,6 +764,11 @@ internal class SunArMarks {
         const val BADGE_HEIGHT_DP = 26f
         const val BADGE_LIFT_DP = 16f
         const val BADGE_DOT_DP = 4f
+        const val BADGE_PADDING_DP = 8f
+        const val BADGE_ICON_GAP_DP = 4f
+
+        /** The rise/set icon against the label's text size; the icon's 24-unit box holds the body and the arrow. */
+        const val BADGE_ICON_SCALE = 1.8f
 
         /** What the rectangle placement left between the dot and the pill's bounding box; [BadgeOnArc.offset] keeps 0.75 of what that meant to the outline. */
         const val BADGE_GAP_DP = 6f
@@ -727,6 +802,23 @@ internal class SunArPointerPaints {
         color = android.graphics.Color.argb(255, 255, 179, 0)
     }
 
+    /** The moon's crescent around a unit disc at the origin; scaled and moved onto the edge per frame. */
+    val moonCrescent = android.graphics.Path().apply {
+        val outline = RiseSetGlyph.crescentOutline(0f, 0f, 1f)
+        moveTo(outline[0], outline[1])
+        for (i in 2 until outline.size step 2) lineTo(outline[i], outline[i + 1])
+        close()
+    }
+    val moonFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+    /** Night Sky's off-screen chevron; its colour is set per body. */
+    val chevron = OffscreenChevron.path()
+    val chevronPaint = OffscreenChevron.paint(android.graphics.Color.WHITE)
+    val moonCasing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+    }
+
     companion object {
         val MOON_BORDER_ARGB = android.graphics.Color.argb(180, 128, 222, 234)
     }
@@ -749,7 +841,8 @@ internal fun SunArOverlay(
     val paints = remember { SunArPointerPaints() }
     // Strings built when the data changes, not on every frame.
     val sunPointerLabel = remember(currentSunPos) { currentSunPos?.let { signedDegrees(it.elevationDegrees) } }
-    val moonPointerLabel = remember(currentMoonPos) { currentMoonPos?.let { "${it.phaseGlyph} ${signedDegrees(it.elevationDegrees)}" } }
+    // The pointer itself is drawn as a crescent, so the tag carries only the elevation, as the sun's does.
+    val moonPointerLabel = remember(currentMoonPos) { currentMoonPos?.let { signedDegrees(it.elevationDegrees) } }
 
     Canvas(modifier = modifier) {
         @Suppress("UNUSED_VARIABLE")
@@ -778,13 +871,18 @@ internal fun SunArOverlay(
     }
 }
 
-private fun markerLabel(emoji: String, time: String, azimuthDegrees: Double) = "$emoji $time (${azimuthDegrees.toInt()}°)"
+private fun markerLabel(time: String, azimuthDegrees: Double) = "$time (${azimuthDegrees.toInt()}°)"
 
 private fun signedDegrees(elevation: Double) = "${if (elevation >= 0) "+" else ""}${elevation.toInt()}°"
 
 /**
  * The sun or moon pinned to the screen edge in the direction to turn, with an arrow outwards and
  * its elevation on a tag inwards. The edge keeps clear of the top bar and the bottom controls.
+ *
+ * The sun is a disc with rays, the moon the crescent of the rise/set pills ([RiseSetGlyph]); a plain
+ * disc for the moon needed the phase emoji on its tag to say which body it was. The arrow and the tag
+ * stand [POINTER_GAP_DP] clear of the body's outermost part (the sun's rays), measured along the
+ * direction: the arrow used to start inside the rays and a wide tag lay over the disc.
  */
 private fun DrawScope.drawOffscreenPointer(
     projector: SkyProjector,
@@ -819,18 +917,31 @@ private fun DrawScope.drawOffscreenPointer(
     val edge = Offset(edgeX, edgeY)
 
     val accent = if (isMoon) SunArScene.MoonArc else NormalGoldSolar
-    val bodyRadius = 6.5.dp.toPx()
+    val canvas = drawContext.canvas.nativeCanvas
+    // How far the body reaches from its centre: the sun's rays, the moon's disc.
+    val bodyExtent: Float
     if (isMoon) {
-        drawCircle(color = accent, radius = bodyRadius, center = edge)
-        drawCircle(color = MoonDisk, radius = bodyRadius - 1.5.dp.toPx(), center = edge)
+        // A crescent has less ink than a disc of the same radius; a little larger reads as the same weight.
+        val moonRadius = MOON_POINTER_RADIUS_DP.dp.toPx()
+        bodyExtent = moonRadius
+        paints.moonFill.color = accent.toArgb()
+        paints.moonCasing.color = Casing.toArgb()
+        // The path is the unit crescent: the casing's width is given in its scaled units.
+        paints.moonCasing.strokeWidth = 2.0.dp.toPx() / moonRadius
+        canvas.save()
+        canvas.translate(edgeX, edgeY)
+        canvas.scale(moonRadius, moonRadius)
+        canvas.drawPath(paints.moonCrescent, paints.moonCasing)
+        canvas.drawPath(paints.moonCrescent, paints.moonFill)
+        canvas.restore()
     } else {
+        val bodyRadius = 6.5.dp.toPx()
         drawCircle(color = accent, radius = bodyRadius, center = edge)
         drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = edge)
-    }
-    drawCircle(color = Casing, radius = bodyRadius + 0.5.dp.toPx(), center = edge, style = Stroke(width = 1.0.dp.toPx()))
-    if (!isMoon) {
+        drawCircle(color = Casing, radius = bodyRadius + 0.5.dp.toPx(), center = edge, style = Stroke(width = 1.0.dp.toPx()))
         val rayInner = bodyRadius + 2.0.dp.toPx()
         val rayOuter = rayInner + 3.0.dp.toPx()
+        bodyExtent = rayOuter
         for (i in 0 until 8) {
             val angle = (i * Math.PI / 4.0).toFloat()
             val cosA = cos(angle)
@@ -844,29 +955,28 @@ private fun DrawScope.drawOffscreenPointer(
         }
     }
 
-    val arrowDist = 18.dp.toPx()
-    val arrowLen = 10.dp.toPx()
-    val arrowSpread = 6.dp.toPx()
-    val tip = Offset(edgeX + dirX * arrowDist, edgeY + dirY * arrowDist)
-    val perpX = -dirY
-    val perpY = dirX
-    val baseLeft = Offset(tip.x - dirX * arrowLen + perpX * arrowSpread, tip.y - dirY * arrowLen + perpY * arrowSpread)
-    val baseRight = Offset(tip.x - dirX * arrowLen - perpX * arrowSpread, tip.y - dirY * arrowLen - perpY * arrowSpread)
-    drawLine(color = Casing, start = tip, end = baseLeft, strokeWidth = 3.2.dp.toPx())
-    drawLine(color = Casing, start = tip, end = baseRight, strokeWidth = 3.2.dp.toPx())
-    drawLine(color = accent, start = tip, end = baseLeft, strokeWidth = 2.0.dp.toPx())
-    drawLine(color = accent, start = tip, end = baseRight, strokeWidth = 2.0.dp.toPx())
+    val gap = POINTER_GAP_DP.dp.toPx()
+    // Night Sky's chevron, its back edge the gap away from the body, pointing outwards.
+    val arrowDist = bodyExtent + gap + OffscreenChevron.HALF_LENGTH
+    paints.chevronPaint.color = accent.toArgb()
+    canvas.save()
+    canvas.translate(edgeX + dirX * arrowDist, edgeY + dirY * arrowDist)
+    canvas.rotate(Math.toDegrees(atan2(dirY.toDouble(), dirX.toDouble())).toFloat())
+    canvas.drawPath(paints.chevron, paints.chevronPaint)
+    canvas.restore()
 
     val textW = paints.pointerText.measureText(tag) + 12.dp.toPx()
     val ph = 18.dp.toPx()
     val radius = ph * 0.5f
-    val tagDist = 20.dp.toPx()
+    // The tag's own reach along the direction (half its box projected on it), so a wide tag beside a
+    // sideways pointer keeps the same gap to the body as a narrow one above it.
+    val tagHalfAlong = abs(dirX) * textW * 0.5f + abs(dirY) * ph * 0.5f
+    val tagDist = bodyExtent + gap + tagHalfAlong
     val tagX = edgeX - dirX * tagDist
     val tagY = edgeY - dirY * tagDist
     val left = tagX - textW * 0.5f
     val top = tagY - ph * 0.5f
     paints.rect.set(left, top, left + textW, top + ph)
-    val canvas = drawContext.canvas.nativeCanvas
     canvas.drawRoundRect(paints.rect, radius, radius, paints.pointerBg)
     val border = paints.pointerBorder.color
     if (isMoon) paints.pointerBorder.color = SunArPointerPaints.MOON_BORDER_ARGB
