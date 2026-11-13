@@ -124,7 +124,9 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   screen that works only while the terrain is on. A peak is drawn only when it *is* the ridge at its
   azimuth, so a summit hidden behind a nearer hill gets no label; the names come from OpenStreetMap
   (© OpenStreetMap contributors, ODbL) as 1° tiles that are downloaded with the elevation, stored with the
-  profile, and drawn with no signal. If the names cannot be fetched the skyline is drawn without them.
+  profile, and drawn with no signal. The tiles cover Europe (Iceland to Georgia, without Russia);
+  elsewhere the skyline is drawn without names. If the names cannot be fetched the skyline is drawn
+  without them.
 - **Red Vision Mode**: Astrophotography dark red theme (`#FFFF1744`) preserving night adaptation.
 - **Two-Row Floating HUD**: Row 1 with GPS fix status & location, Row 2 with Compass Azimuth and Lens FOV.
 
