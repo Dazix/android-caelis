@@ -6,7 +6,7 @@ import org.junit.Test
 class StorageMetricsTest {
 
     @Test
-    fun `default metrics are all zeroed with default 512 MB limit`() {
+    fun `default metrics are all zeroed with default 1536 MB limit`() {
         val metrics = StorageMetrics()
         assertEquals(0L, metrics.demCacheSizeBytes)
         assertEquals(DemTileCache.DEFAULT_MAX_BYTES, metrics.demCacheLimitBytes)
@@ -16,7 +16,7 @@ class StorageMetricsTest {
         assertEquals(0, metrics.offlineRegionCount)
 
         assertEquals("0 B", metrics.demCacheFormatted)
-        assertEquals("512 MB", metrics.demCacheLimitFormatted)
+        assertEquals("1536 MB", metrics.demCacheLimitFormatted)
         assertEquals("0 B", metrics.profilesFormatted)
         assertEquals("0 B", metrics.demOfflineFormatted)
     }

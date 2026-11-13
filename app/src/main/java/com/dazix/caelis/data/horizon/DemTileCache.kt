@@ -172,12 +172,14 @@ class DemTileCache(
         const val STALE_PART_MS = 10 * 60 * 1000L
 
         /**
-         * Twenty 1 arcsecond tiles.
+         * About sixty 1 arcsecond tiles (26 MB each).
          *
-         * A 60 km radius spans up to six tiles at mid latitudes, and auto-range can extend further.
-         * 512 MB leaves plenty of room for multiple locations and high-density terrain grids.
+         * A 60 km radius spans up to six tiles at mid latitudes, and auto-range can extend further, so
+         * one place can take 150-250 MB. 512 MB was used up by three places, and every visit to a fourth
+         * evicted one of them and downloaded it again on the way back. Android may still reclaim the
+         * cache under storage pressure; the profiles drawn from it live elsewhere and survive that.
          */
-        const val DEFAULT_MAX_BYTES: Long = 512L * 1024 * 1024
+        const val DEFAULT_MAX_BYTES: Long = 1536L * 1024 * 1024
 
         /** Anything smaller than a 3 arcsecond tile is a truncated transfer, not data. */
         const val MIN_PLAUSIBLE_TILE_BYTES = 1201L * 1201L * 2L / 4
