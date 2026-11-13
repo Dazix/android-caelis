@@ -19,6 +19,7 @@ import com.dazix.caelis.data.horizon.HorizonRepository
 import com.dazix.caelis.data.horizon.HorizonState
 import com.dazix.caelis.data.nightsky.NightSkyCatalog
 import com.dazix.caelis.data.nightsky.Star
+import com.dazix.caelis.domain.arframe.RollEase
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.nightsky.CelestialBodyDetails
 import com.dazix.caelis.domain.nightsky.DetailLink
@@ -193,6 +194,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
     private val publishedManualMatrix = FloatArray(16).apply {
         this[0] = 1f; this[5] = 1f; this[10] = 1f; this[15] = 1f
     }
+
+    /** The phone's roll at a take-over by the manual pose, eased out by [getCurrentRenderMatrix]. */
+    private val manualRollEase = RollEase()
     private val manualOrientationState = MutableStateFlow<DeviceOrientation?>(null)
 
     /** The sensor tracker as a pose source, for the screen's pose rig ([com.dazix.caelis.ar.pose.SkyPoseRig]). */
@@ -217,6 +221,7 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
             return true
         } else {
             System.arraycopy(manualMatrixBuffer, 0, outMatrix, 0, minOf(manualMatrixBuffer.size, outMatrix.size))
+            if (manualRollEase.isActive) manualRollEase.applyTo(outMatrix, System.nanoTime())
             return true
         }
     }
@@ -1108,6 +1113,14 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         manualPanAzimuth = az.toFloat()
         manualPanElevation = el.toFloat()
         updateManualOrientation()
+        // The manual matrix has no roll; the render loop turns the sky there from the phone's own
+        // instead of jumping. Near the zenith or nadir the camera axis's azimuth is arbitrary and the
+        // "roll" against it could be half a turn, so that take-over stays immediate, as it was.
+        if (kotlin.math.abs(el) < ROLL_EASE_MAX_ELEVATION_DEG) {
+            manualRollEase.begin(liveMatrix, manualMatrixBuffer, System.nanoTime())
+        } else {
+            manualRollEase.clear()
+        }
     }
 
     private fun updateManualOrientation() {
@@ -2252,6 +2265,9 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
         /** Steps the alignment control nudges by: coarse enough to see, fine enough to land on. */
         const val COARSE_NUDGE_DEGREES = 0.5f
         const val FINE_NUDGE_DEGREES = 0.1f
+
+        /** Above this elevation a take-over by the manual pose is not eased; see captureLiveOrientationIntoManual. */
+        private const val ROLL_EASE_MAX_ELEVATION_DEG = 80.0
 
         const val MIN_ZOOM = 0.4f
         const val MAX_SAFE_ZOOM = 2500.0f
