@@ -16,7 +16,6 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -41,7 +40,7 @@ import kotlin.coroutines.resume
  *
  * The FOV is measured, not assumed. `SENSOR_INFO_PHYSICAL_SIZE` and the focal length only describe
  * the lens over the whole pixel array; what reaches the screen is a `SCALER_CROP_REGION` inside the
- * active array, at whatever resolution CameraX chose, scaled by `PreviewView` FILL_CENTER. Deriving
+ * active array, at whatever resolution CameraX chose, scaled by a FILL_CENTER fit. Deriving
  * the FOV from the lens alone made the AR overlay 14 % too wide on a Pixel, which squeezes the
  * terrain silhouette towards the centre of the frame — an error no amount of panning can correct.
  *
@@ -54,15 +53,16 @@ import kotlin.coroutines.resume
  *   entirely: an analysis stream that is never read still costs the camera a buffer queue.
  * @param frameClock receives the exposure instant of every preview frame, so the overlay can be
  *   drawn with the pose of the picture it sits on ([PreviewFrameClock]).
- * @param frameSource when given, the `Preview` use case renders into it instead of a `PreviewView`
- *   and this composable shows nothing itself: the owner draws the picture in Filament, in the same
- *   frame as the overlay ([CameraFrameSource]). The composable still fills its layout box, which
- *   must be the same box the sky surface fills, because the FOV is computed for that viewport
- *   exactly as `PreviewView` FILL_CENTER fitted the stream into it. Leaving the composition then
- *   unbinds the use cases, since a camera nobody is drawing is a camera left running for nothing.
- * @param displayRotation `Surface.ROTATION_*` of the display, used only with a [frameSource]:
- *   `PreviewView` kept the preview's target rotation current by itself, and without it the picture
- *   would not turn when the phone is turned between the two landscapes. Negative leaves CameraX's default.
+ * @param frameSource the `Preview` use case renders into it and this composable shows nothing
+ *   itself: the owner draws the picture in Filament, in the same frame as the overlay
+ *   ([CameraFrameSource]). There is no `PreviewView` path any more (CameraX's camera-view artifact
+ *   is not a dependency). The composable still fills its layout box, which must be the same box the
+ *   sky surface fills, because the FOV is computed for that viewport with the FILL_CENTER fit.
+ *   Leaving the composition unbinds the use cases, since a camera nobody is drawing is a camera
+ *   left running for nothing.
+ * @param displayRotation `Surface.ROTATION_*` of the display: without a `PreviewView` to keep the
+ *   preview's target rotation current, the picture would not turn when the phone is turned between
+ *   the two landscapes. Negative leaves CameraX's default.
  * @param cameraEnabled false unbinds the use cases and keeps them unbound. ARCore cannot open a camera
  *   CameraX holds, so the pose rig turns this off to hand the camera over; the layout box and the
  *   viewport view stay, only the camera goes.
@@ -81,33 +81,29 @@ fun CameraPreview(
     analyzeFrames: Boolean = false,
     onFrameGrabber: (FrameGrabber?) -> Unit = {},
     frameClock: PreviewFrameClock? = null,
-    frameSource: CameraFrameSource? = null,
+    frameSource: CameraFrameSource,
     displayRotation: Int = -1,
     cameraEnabled: Boolean = true,
     onCameraReleased: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    // The view whose size is the viewport. A PreviewView when it shows the picture; a plain View
-    // otherwise, which exists only so the FOV keeps being computed from a laid-out size.
-    val viewportView: View = remember(frameSource == null) {
-        if (frameSource == null) PreviewView(context) else View(context)
-    }
+    // The view whose size is the viewport. It draws nothing — the picture goes to [frameSource] —
+    // and exists only so the FOV keeps being computed from a laid-out size.
+    val viewportView: View = remember { View(context) }
     val bound = remember { BoundUseCases() }
     val latestDisplayRotation by rememberUpdatedState(displayRotation)
 
     LaunchedEffect(displayRotation) {
-        if (frameSource != null && displayRotation >= 0) bound.preview?.targetRotation = surfaceRotation(displayRotation)
+        if (displayRotation >= 0) bound.preview?.targetRotation = surfaceRotation(displayRotation)
     }
     DisposableEffect(frameSource) {
         onDispose {
             bound.disposed = true
-            if (frameSource != null) {
-                val provider = bound.provider
-                val preview = bound.preview
-                val analysis = bound.analysis
-                if (provider != null && preview != null) {
-                    if (analysis != null) provider.unbind(preview, analysis) else provider.unbind(preview)
-                }
+            val provider = bound.provider
+            val preview = bound.preview
+            val analysis = bound.analysis
+            if (provider != null && preview != null) {
+                if (analysis != null) provider.unbind(preview, analysis) else provider.unbind(preview)
             }
         }
     }
@@ -146,7 +142,7 @@ fun CameraPreview(
                 var cropHeightPx = 0
 
                 val previewBuilder = Preview.Builder()
-                if (frameSource != null && latestDisplayRotation >= 0) previewBuilder.setTargetRotation(surfaceRotation(latestDisplayRotation))
+                if (latestDisplayRotation >= 0) previewBuilder.setTargetRotation(surfaceRotation(latestDisplayRotation))
                 val previewExtender = Camera2Interop.Extender(previewBuilder)
                 // Explicitly disable optical and digital stabilization to prevent IMU/viewfinder desynchronization
                 previewExtender.setCaptureRequestOption(
@@ -190,7 +186,7 @@ fun CameraPreview(
                 )
 
                 val preview = previewBuilder.build().also {
-                    it.surfaceProvider = frameSource ?: (viewportView as PreviewView).surfaceProvider
+                    it.surfaceProvider = frameSource
                 }
 
                 // Bound with no analyzer attached. One is set only for the single frame the automatic
