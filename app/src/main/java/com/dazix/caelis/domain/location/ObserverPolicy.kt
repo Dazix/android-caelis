@@ -27,6 +27,14 @@ data class Observer(
     val cameraWanted: Boolean,
 ) {
     val isVirtual: Boolean get() = place != null
+
+    /**
+     * What a drag does on Sun AR. Where the phone is, it calibrates the compass against the real
+     * skyline. Under a virtual place there is nothing to calibrate against, and a drag that did
+     * nothing left turning the phone as the only way to look round a place planned from elsewhere,
+     * so it pans the sky instead (sensors held, nothing stored).
+     */
+    val dragPans: Boolean get() = isVirtual
 }
 
 /**

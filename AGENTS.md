@@ -174,7 +174,10 @@ Each of these was found by review or on the device and is now covered by a test.
 - **A drag in Sun AR is a calibration, not a pan.** It moves `calibration*` through
   `nudgeCalibrationBy` and never pauses the sensors: the overlay keeps tracking while the finger
   walks it onto the ridge, and letting go snaps nothing back. The freezing pan stays for Night Sky's
-  manual mode. The *stored* calibration is clamped to ±20° in both axes — a compass is wrong by
+  manual mode, and for Sun AR under a virtual place (`Observer.dragPans`), where there is no ridge to
+  calibrate against and a drag that did nothing left turning the phone as the only way to look round.
+  That pan stores nothing and leaves the calibration alone; the top bar's compass button ends it, and
+  so do changing the place and re-entering the screen (`SunArViewModel.endPan`). The *stored* calibration is clamped to ±20° in both axes — a compass is wrong by
   degrees, and anything larger kept for the next launch would be indistinguishable from a broken
   magnetometer. The drag itself is not bounded in azimuth (next invariant but one).
 - **A compass is judged by what it does, never by `values[4]`.** The rotation vector's heading accuracy
@@ -415,7 +418,8 @@ Each of these was found by review or on the device and is now covered by a test.
   shows this street under that skyline. Sun AR draws `virtual_backdrop.mat` and the place's terrain filled
   below its ridge instead. Automatic alignment, nudges, drag-calibration and the calibration reset are
   disabled in both screens (shown greyed with the reason, not hidden) and refused by the view models; Night
-  Sky's bottom reset button then only ends a pan and keeps the stored correction. There is no real
+  Sky's bottom reset button then only ends a pan and keeps the stored correction, and Sun AR's drag pans
+  instead of calibrating, the same way. There is no real
   skyline or sky to align against, and a correction stored then would be wrong at home. Magnetic
   declination and night vision stay on the GPS position: they belong to the phone and the eyes holding it.
 - **One horizon profile, so the screen in front asks for its own.** `HorizonRepository` holds a single

@@ -397,6 +397,7 @@
     <string name="sun_ar_calib_active">Manuální 3D pohled</string>
     <string name="sun_ar_calib_hint">Tažením prstu libovolným směrem otáčíte 3D pohled</string>
     <string name="sun_ar_calib_reset">Resetovat kalibraci</string>
+    <string name="sun_ar_back_to_live">Zpět na živý pohled</string>
     <string name="ar_align_title">Srovnat podle horizontu</string>
     <string name="ar_align_hint">Posunujte překryv, dokud linie terénu nesedne na skutečný hřeben. Uloží se na příště.</string>
     <string name="ar_align_azimuth">Vlevo / vpravo</string>
