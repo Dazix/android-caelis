@@ -50,6 +50,19 @@ class ObserverPolicyTest {
     }
 
     @Test
+    fun `a drag calibrates where the phone is and pans under a virtual place`() {
+        val withFix = ObserverPolicy.observe(gps, hasGpsFix = true, place = null, deviceZone = prague)
+        val noFix = ObserverPolicy.observe(gps, hasGpsFix = false, place = null, deviceZone = prague)
+        val virtual = ObserverPolicy.observe(gps, hasGpsFix = true, place = chile, deviceZone = prague)
+        assertFalse("GPS with a fix: the drag is the compass calibration", withFix.dragPans)
+        assertFalse("GPS without a fix is still the real sky", noFix.dragPans)
+        assertTrue("a virtual place has nothing to calibrate against", virtual.dragPans)
+        // A pan must never be the only thing allowed where calibrating is: the two are exclusive.
+        assertEquals(withFix.autoAlignAllowed, !withFix.dragPans)
+        assertEquals(virtual.autoAlignAllowed, !virtual.dragPans)
+    }
+
+    @Test
     fun `times of a virtual place are in its own zone, not the phone's`() {
         val o = ObserverPolicy.observe(gps, hasGpsFix = true, place = chile, deviceZone = prague)
         assertEquals(ZoneId.of("America/Santiago"), o.zone)

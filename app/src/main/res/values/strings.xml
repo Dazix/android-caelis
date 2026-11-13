@@ -391,6 +391,7 @@
     <string name="sun_ar_calib_active">Manual 3D view</string>
     <string name="sun_ar_calib_hint">Drag with finger in any direction to rotate 3D view</string>
     <string name="sun_ar_calib_reset">Reset calibration</string>
+    <string name="sun_ar_back_to_live">Back to live view</string>
     <string name="ar_align_title">Align with the horizon</string>
     <string name="ar_align_hint">Nudge the overlay until the terrain line sits on the real ridge. Kept for next time.</string>
     <string name="ar_align_azimuth">Left / right</string>

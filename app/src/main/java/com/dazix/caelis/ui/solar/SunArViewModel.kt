@@ -150,6 +150,8 @@ data class SunArUiState(
     ),
     val keepScreenOn: Boolean = false,
     val isCalibrated: Boolean = false,
+    /** A pan holds the sensors; only under a virtual place, see [Observer.dragPans]. */
+    val isPanned: Boolean = false,
     val cameraFov: FovResult = FovResult(
         horizontalDegrees = CameraFovCalculator.DEFAULT_PORTRAIT_FOV_DEGREES,
         isDynamicStreamCalculated = false,
@@ -306,8 +308,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Whether a standing correction is in force.
      *
-     * No longer "are the sensors paused": on this screen they never are. Dragging calibrates and
-     * keeps tracking, so the only thing that makes the overlay non-default is a non-zero offset.
+     * Not "are the sensors paused": with GPS they never are, dragging calibrates and keeps tracking,
+     * so the only thing that makes the overlay non-default is a non-zero offset. Under a virtual
+     * place a drag pans and holds them; that is [SunArUiState.isPanned], not a calibration.
      */
     val isCalibrated: StateFlow<Boolean> = combine(panAzimuthOffset, panPitchOffset) { az, pitch ->
         az != 0f || pitch != 0f
@@ -404,6 +407,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         observer,
         places,
         placeSyncEnabled,
+        isSensorTrackingPaused,
     ) { args: Array<Any?> ->
         val date = args[0] as LocalDate
         val interval = args[1] as BubbleInterval
@@ -428,6 +432,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         @Suppress("UNCHECKED_CAST")
         val placeList = args[20] as List<SavedPlace>
         val sync = args[21] as Boolean
+        val panned = args[22] as Boolean
 
         SunArUiState(
             selectedDate = date,
@@ -441,6 +446,7 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
             currentMoonPosition = moonPos,
             keepScreenOn = keepOn,
             isCalibrated = calib,
+            isPanned = panned,
             cameraFov = fov,
             horizonSettings = horizonCfg,
             horizonProfile = horizonProf,
@@ -519,6 +525,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                     selectedDateState.value = LocalDate.now(observer.value.zone)
                 }
                 previousZone = observer.value.zone
+                // A pan is a look round the place it was dragged at. Another place, and above all the
+                // real sky (where a drag calibrates and nothing could end the pan), starts live.
+                endPan()
                 if (!observer.value.isVirtual) {
                     finishAutomaticAttempt(accepted = false)
                     autoAlignPolicy.reset()
@@ -556,12 +565,17 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Dragging a finger across the viewfinder walks the overlay onto the real skyline.
      *
-     * It is a calibration, not a pan: the sensors keep running, so letting go snaps nothing back and
-     * turning around still works. The pixels-to-degrees factor and the sign are the ones the pan
-     * gesture used, so the gesture feels exactly as it did.
+     * Where the phone is, it is a calibration, not a pan: the sensors keep running, so letting go
+     * snaps nothing back and turning around still works. Under a virtual place there is no skyline
+     * to walk onto ([Observer.dragPans]): the drag is Night Sky's pan instead, holding the sensors
+     * until [endPan], and nothing is stored. Both use the same pixels-to-degrees factor and sign.
      */
     fun onPanGesture(deltaX: Float, deltaY: Float, viewWidth: Float, fovDeg: Float) {
         val factor = fovDeg / viewWidth.coerceAtLeast(1f)
+        if (observer.value.dragPans) {
+            orientationTracker.onPanGesture(deltaX, deltaY, factor)
+            return
+        }
         nudgeCalibration(
             deltaAzimuthDeg = -deltaX * factor,
             deltaElevationDeg = deltaY * factor,
@@ -886,6 +900,14 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Ends a pan and returns to the live sensors. The standing calibration stays exactly as it was:
+     * the pan never touched it, and it belongs to the real skyline (nothing is stored or cleared).
+     */
+    fun endPan() {
+        if (orientationTracker.isSensorTrackingPaused.value) orientationTracker.resumeSensorTracking()
+    }
+
     fun resetCalibration() {
         // Disabled in the UI under a virtual place; the stored correction belongs to the real skyline.
         if (!observer.value.autoAlignAllowed) return
@@ -896,6 +918,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startSensors() {
+        // Coming back to the screen is a live view again; a pan held from before is dropped.
+        endPan()
         orientationTracker.start()
         locationProvider.startUpdates()
         // A new session is a fresh compass reference (start() unlocks the heading), so it needs

@@ -335,8 +335,10 @@ fun SunArScreen(
             .fillMaxSize()
             // Dragging aligns the overlay with what the camera sees; it is not a pan of a frozen
             // sky. The sensors keep tracking throughout, so the correction the finger applies is the
-            // compass error and nothing else. There is deliberately no zoom here: it would scale the
-            // image and the overlay together and only add a variable to the alignment.
+            // compass error and nothing else. Under a virtual place there is no camera to align
+            // with, and the same drag pans the sky instead (Observer.dragPans), ended by the compass
+            // button in the top bar. There is deliberately no zoom here: it would scale the image and
+            // the overlay together and only add a variable to the alignment.
             .pointerInput(Unit) {
                 val edgeSlop = 28.dp.toPx()
                 val touchSlop = viewConfiguration.touchSlop
@@ -444,6 +446,14 @@ fun SunArScreen(
             cameraFovHorizontal = uiState.cameraFovHorizontal,
             isDynamicStreamCalculated = uiState.isDynamicStreamCalculated,
             isCalibrated = uiState.isCalibrated,
+            isPanned = uiState.isPanned,
+            onEndPan = {
+                toastHostState.showToast(
+                    resId = R.string.calib_reset_toast,
+                    icon = AppIcons.Compass,
+                )
+                viewModel.endPan()
+            },
             horizonState = uiState.horizonState,
             onBack = onBack,
             onToggleInfo = { if (showInfoSheet) closeInfoSheet() else openInfoSheet() },
@@ -674,6 +684,9 @@ internal fun SunArTopBar(
     virtualPlaceLabel: String? = null,
     /** False under a virtual place: the calibration reset is disabled with the rest of the alignment. */
     calibrationEnabled: Boolean = true,
+    /** A pan holds the sensors (virtual place only); the compass button then ends it. */
+    isPanned: Boolean = false,
+    onEndPan: () -> Unit = {},
 ) {
     val containerBg = Color(0xDD1A1A1A)
     val containerBorder = Color(0x33FFFFFF)
@@ -699,7 +712,20 @@ internal fun SunArTopBar(
         },
         end = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isCalibrated) {
+                if (isPanned) {
+                    // Ends the pan only; the stored calibration is untouched (SunArViewModel.endPan).
+                    IconButton(
+                        onClick = onEndPan,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Compass,
+                            contentDescription = stringResource(R.string.sun_ar_back_to_live),
+                            tint = accentColor,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                } else if (isCalibrated) {
                     IconButton(
                         onClick = onResetCalibration,
                         enabled = calibrationEnabled,

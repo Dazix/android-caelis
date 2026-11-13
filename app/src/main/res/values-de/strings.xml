@@ -391,6 +391,7 @@
     <string name="sun_ar_calib_active">Manuelle 3D-Ansicht</string>
     <string name="sun_ar_calib_hint">Mit dem Finger in beliebige Richtung ziehen, um die 3D-Ansicht zu drehen</string>
     <string name="sun_ar_calib_reset">Kalibrierung zurücksetzen</string>
+    <string name="sun_ar_back_to_live">Zurück zur Live-Ansicht</string>
     <string name="ar_align_title">Am Horizont ausrichten</string>
     <string name="ar_align_hint">Verschieben Sie das Overlay, bis die Geländelinie auf dem echten Grat liegt. Wird für das nächste Mal gespeichert.</string>
     <string name="ar_align_azimuth">Links / rechts</string>

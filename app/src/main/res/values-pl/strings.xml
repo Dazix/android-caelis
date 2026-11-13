@@ -397,6 +397,7 @@
     <string name="sun_ar_calib_active">Ręczny widok 3D</string>
     <string name="sun_ar_calib_hint">Przeciągnij palcem w dowolnym kierunku, aby obrócić widok 3D</string>
     <string name="sun_ar_calib_reset">Zresetuj kalibrację</string>
+    <string name="sun_ar_back_to_live">Wróć do widoku na żywo</string>
     <string name="ar_align_title">Wyrównaj z horyzontem</string>
     <string name="ar_align_hint">Przesuwaj nakładkę, aż linia terenu ułoży się na prawdziwym grzbiecie. Zapamiętane na następny raz.</string>
     <string name="ar_align_azimuth">Lewo / prawo</string>
