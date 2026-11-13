@@ -736,6 +736,9 @@ Each of these was found by review or on the device and is now covered by a test.
   test lists what is still missing. The listing (`metadata/android/`) goes live on merge to `main`, not
   with a release, so a new language's listing comes in a PR of its own once the release that speaks it
   is out: the strings PR adds the language to the test's `listingPending`, the listing PR removes it.
+  The system's per-app language picker (Android 13+) lists exactly these languages: AGP generates the
+  locale config from the `values-<language>` directories (`generateLocaleConfig`, with
+  `res/resources.properties` saying `values/` is `en-US`), so a new language needs nothing more there.
 - **Night-sky names live in `res/raw/sky_names.tsv` (English) and `res/raw-<language>/`, never in the
   catalog or the code.** `catalog.bin` carries ids and English only (`Constellation.id`, Messier number,
   shower id, IAU code on a star, English body type; the old `localized_name` slots are deprecated and
