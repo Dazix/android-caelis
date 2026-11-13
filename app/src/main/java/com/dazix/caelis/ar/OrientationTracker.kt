@@ -14,7 +14,9 @@ import com.dazix.caelis.domain.arframe.CompassEvidence
 import com.dazix.caelis.domain.arframe.GameVectorSettle
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
+import com.dazix.caelis.domain.arframe.RollEase
 import com.dazix.caelis.domain.arframe.YawOffset
+import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.solar.GeoLocation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,7 +60,9 @@ data class DeviceOrientation(
  * matrix degeneration, ensuring a guaranteed 100% orthonormal rotation matrix at all times.
  *
  * Implements seamless sensor freezing on drag (Static Manual Mode):
- * - On first touch drag: freezes current live sensor matrix and pauses sensor tracking.
+ * - On first touch drag: pauses sensor tracking and freezes where the camera looks, levelled
+ *   (roll dropped, azimuth and elevation kept; [levelPanMatrix]), as Night Sky's pan does. The
+ *   render matrix turns from the phone's roll to level over [RollEase.DURATION_NS] rather than jumping.
  * - Horizontal swipe: rotates frozen matrix about World Z-axis (Up), keeping horizon perfectly level.
  * - Vertical swipe: rotates about Camera X-axis (Right) with direct-touch mapping (swipe UP -> sky UP).
  * - Dynamic clamping at 85° prevents virtual camera gimbal lock.
@@ -218,6 +222,16 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
     val isSensorTrackingPaused = MutableStateFlow(false)
 
+    /**
+     * The roll the phone had when a pan began, eased out by [getAdjustedMatrix] so the sky turns
+     * level instead of jumping there. Inactive once level, and for every pan not started by
+     * [onPanGesture].
+     */
+    private val panRollEase = RollEase()
+
+    /** The levelling animation's clock; a test sets its own. Created once, called without allocation. */
+    internal var clockNs: () -> Long = { System.nanoTime() }
+
     private val stateFlow = MutableStateFlow<DeviceOrientation?>(null)
     val orientation: StateFlow<DeviceOrientation?> = stateFlow.asStateFlow()
 
@@ -356,6 +370,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
                 tempDeclinationBuffer = tempDeclinationMatrix,
                 outMatrix = tempAdjustedMatrix,
             )
+            if (panRollEase.isActive) panRollEase.applyTo(tempAdjustedMatrix, clockNs())
             return tempAdjustedMatrix
         } else {
             return liveMatrix
@@ -450,6 +465,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         val pitch = calibrationPitchOffsetDeg + panPitchOffsetDeg
         panAzimuthOffsetDeg = 0f
         panPitchOffsetDeg = 0f
+        panRollEase.clear()
         isSensorTrackingPaused.value = false
         if (azimuth != calibrationAzimuthOffsetDeg) lockHeading()
         setAlignment(coarseHeadingOffsetDeg + azimuth, pitch)
@@ -490,6 +506,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     fun resumeSensorTracking() {
         panAzimuthOffsetDeg = 0f
         panPitchOffsetDeg = 0f
+        panRollEase.clear()
         isSensorTrackingPaused.value = false
 
         // Immediately update orientation to live sensor values. The standing calibration survives:
@@ -524,10 +541,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         pixelsToDegreesFactor: Float,
         currentLiveMatrix: FloatArray = liveTrueMatrix,
     ) {
-        // 1. FREEZE SENSORS ON FIRST TOUCH
+        // 1. FREEZE SENSORS ON FIRST TOUCH, levelled: the phone's roll is dropped, where it looks is
+        // kept. The roll is not dropped at once: the render matrix eases it out ([getAdjustedMatrix]).
         if (!isSensorTrackingPaused.value) {
+            levelPanMatrix(currentLiveMatrix, frozenMatrix)
+            panRollEase.begin(currentLiveMatrix, frozenMatrix, clockNs())
             isSensorTrackingPaused.value = true
-            System.arraycopy(currentLiveMatrix, 0, frozenMatrix, 0, minOf(currentLiveMatrix.size, 16))
         }
 
         // 2. EXTRACT PITCH FROM THE FROZEN MATRIX
@@ -869,6 +888,36 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         /** Whether the sample at [timestampNs] should be published, [lastPublishedNs] being the previous one (0 = none yet). */
         internal fun publishDue(timestampNs: Long, lastPublishedNs: Long): Boolean =
             lastPublishedNs == 0L || timestampNs < lastPublishedNs || timestampNs - lastPublishedNs >= PUBLISH_INTERVAL_NS
+
+        /**
+         * Writes into [out] the pose a pan starts from: the camera's azimuth and elevation in [live],
+         * the elevation clamped to ±[MAX_GESTURE_PITCH], and no roll, as Night Sky's pan
+         * (`CelestialMatrixCalculator.computeManualRotationMatrix`). Freezing [live] as it was kept the
+         * phone's roll for the whole pan, and a virtual place's ridge stood tilted until the pan ended.
+         *
+         * Near the zenith or nadir the camera axis has no usable azimuth, so the device's up axis
+         * gives it instead (looking up, up points away from the view direction; looking down, along).
+         */
+        fun levelPanMatrix(live: FloatArray, out: FloatArray) {
+            val fx = -live[2].toDouble()
+            val fy = -live[6].toDouble()
+            val fz = -live[10].toDouble()
+            val elDeg = Math.toDegrees(asin(fz.coerceIn(-1.0, 1.0)))
+            val azRad = if (kotlin.math.abs(elDeg) < NEAR_VERTICAL_DEG) {
+                atan2(fx, fy)
+            } else {
+                val sign = if (fz > 0.0) -1.0 else 1.0
+                atan2(sign * live[1], sign * live[5])
+            }
+            var azDeg = Math.toDegrees(azRad)
+            if (azDeg < 0.0) azDeg += 360.0
+            val clampedEl = elDeg.coerceIn(-MAX_GESTURE_PITCH.toDouble(), MAX_GESTURE_PITCH.toDouble())
+            CelestialMatrixCalculator.computeManualRotationMatrix(azDeg, clampedEl, out)
+        }
+
+        /** Above this elevation the camera axis's own azimuth is too short a vector to trust. */
+        private const val NEAR_VERTICAL_DEG = 80.0
+
 
         /**
          * Extracts camera optical pitch / elevation in degrees [-90.0, +90.0] from a rotation matrix.

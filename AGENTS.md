@@ -176,7 +176,10 @@ Each of these was found by review or on the device and is now covered by a test.
   walks it onto the ridge, and letting go snaps nothing back. The freezing pan stays for Night Sky's
   manual mode, and for Sun AR under a virtual place (`Observer.dragPans`), where there is no ridge to
   calibrate against and a drag that did nothing left turning the phone as the only way to look round.
-  That pan stores nothing and leaves the calibration alone; the top bar's compass button ends it, and
+  That pan starts level, as Night Sky's does (`OrientationTracker.levelPanMatrix`: the phone's roll
+  dropped over 350 ms of ease-out rather than in one frame, where the camera looks kept; `RollEase`,
+  which Night Sky's manual take-over uses too, except within 10° of the zenith or nadir); frozen as it was, a phone held at a slant kept the ridge
+  slanted for the whole pan. It stores nothing and leaves the calibration alone; the top bar's compass button ends it, and
   so do changing the place and re-entering the screen (`SunArViewModel.endPan`). The *stored* calibration is clamped to ±20° in both axes — a compass is wrong by
   degrees, and anything larger kept for the next launch would be indistinguishable from a broken
   magnetometer. The drag itself is not bounded in azimuth (next invariant but one).
