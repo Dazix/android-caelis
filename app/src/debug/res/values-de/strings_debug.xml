@@ -11,5 +11,4 @@
 -->
 <resources>
     <string name="debug_fake_camera_label">Fake-Kamera (Debug)</string>
-    <string name="debug_filament_spike_label">Filament-Himmel-Spike (Debug)</string>
 </resources>

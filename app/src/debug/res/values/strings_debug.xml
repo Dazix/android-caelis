@@ -16,6 +16,5 @@
         type="id" />
 
     <string name="debug_fake_camera_label">Fake Camera (debug)</string>
-    <string name="debug_filament_spike_label">Filament sky spike (debug)</string>
 
 </resources>
