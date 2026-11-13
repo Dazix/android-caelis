@@ -1464,7 +1464,7 @@ class NightSkyRenderer {
         // alone followed it would be the odd one out. Sun AR scales all of its marks, so it passes the real one.
         peakMarks.update(peakNames, frame.languageTag, peakColor, frame.density, 1f)
         ensureMarkAtlas(scene)
-        ensureHighlightAtlas(scene, frame, if (showReticle) selectedBody?.name else null)
+        ensureHighlightAtlas(scene, frame, if (showReticle) selectedBody.name else null)
 
         val density = frame.density
         val c2e = scene.celestialToEnu
@@ -1540,7 +1540,7 @@ class NightSkyRenderer {
         // r2 18 dp, the top arm left open), its name in the opening. Not for a constellation, whose
         // figure is its own highlight.
         if (showReticle) {
-            celestialUnitVector(reticleRa!!, reticleDec!!, reticleCel)
+            celestialUnitVector(reticleRa, reticleDec, reticleCel)
             val x = reticleCel[0]
             val y = reticleCel[1]
             val z = reticleCel[2]

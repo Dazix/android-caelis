@@ -1229,7 +1229,6 @@ private fun HorizonStatusRow(state: HorizonState, onConfirmDownload: () -> Unit)
                 val progress = when (state) {
                     is HorizonState.Downloading -> state.progress
                     is HorizonState.Computing -> state.progress
-                    else -> 0f
                 }
                 CircularProgressIndicator(
                     progress = { progress },
