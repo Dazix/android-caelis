@@ -999,7 +999,8 @@ internal fun SunArSettingsSheet(
 
         // 1. Sun
         LayerGroupCard(
-            title = "☀️ ${stringResource(R.string.sun_ar_section_sun)}",
+            title = stringResource(R.string.sun_ar_section_sun),
+            leadingIcon = AppIcons.SunBody,
             titleColor = groupTitleColor,
             containerColor = cardContainerColor,
             borderColor = cardBorderColor,
@@ -1050,7 +1051,8 @@ internal fun SunArSettingsSheet(
 
         // 2. Moon
         LayerGroupCard(
-            title = "🌙 ${stringResource(R.string.sun_ar_section_moon)} (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${stringResource(lTimes.phase.nameRes())})",
+            title = "${stringResource(R.string.sun_ar_section_moon)} (${lTimes.phaseGlyph} ${lTimes.illuminationPercent}% ${stringResource(lTimes.phase.nameRes())})",
+            leadingIcon = AppIcons.MoonBody,
             titleColor = MoonSilverCyan,
             containerColor = cardContainerColor,
             borderColor = cardBorderColor,
@@ -1090,7 +1092,8 @@ internal fun SunArSettingsSheet(
         // The search radius and the download are shared with Night Sky and live in Settings; the
         // height above terrain is here because it describes where the user is standing right now.
         LayerGroupCard(
-            title = "⛰ ${stringResource(R.string.horizon_section_title)}",
+            title = stringResource(R.string.horizon_section_title),
+            leadingIcon = AppIcons.TerrainHorizon,
             titleColor = NormalTerrain,
             containerColor = cardContainerColor,
             borderColor = cardBorderColor,

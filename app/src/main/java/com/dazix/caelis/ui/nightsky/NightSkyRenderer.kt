@@ -420,20 +420,10 @@ class NightSkyRenderer {
     }
 
     // Zero-allocation directional arrow indicator for off-screen selected celestial objects
-    val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFD700.toInt() // Golden highlight color to match selection
-        style = Paint.Style.FILL
-        setShadowLayer(8f, 0f, 0f, AndroidColor.BLACK)
-    }
+    val arrowPaint = com.dazix.caelis.ui.OffscreenChevron.paint(0xFFFFD700.toInt()) // Golden highlight color to match selection
 
-    // Centered chevron arrow shape pointing to the right (0 degrees)
-    val arrowPath = Path().apply {
-        moveTo(20f, 0f)    // Tip
-        lineTo(-20f, -15f) // Top wing
-        lineTo(-10f, 0f)   // Inner indent
-        lineTo(-20f, 15f)  // Bottom wing
-        close()
-    }
+    // Centered chevron arrow shape pointing to the right (0 degrees); Sun AR's pointers share it.
+    val arrowPath = com.dazix.caelis.ui.OffscreenChevron.path()
 
     private val indicatorBuffer = FloatArray(4)
     private val tempReticleVec = FloatArray(3)
