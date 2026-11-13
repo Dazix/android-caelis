@@ -2,7 +2,7 @@
 """
 Tests for generate_peaks.py against a tiny synthetic POI file in the documented mapsforge schema.
 
-    python3 -I -m unittest data_pipeline/test_generate_peaks.py        (from the repository root)
+    python3 -m unittest data_pipeline/test_generate_peaks.py        (from the repository root)
     python3 data_pipeline/test_generate_peaks.py --write-fixture <dir>
 
 `--write-fixture` writes the `.peaks` file the Kotlin `LandmarkTileCodecTest` reads. The fixture is
@@ -179,6 +179,27 @@ class GenerateTest(unittest.TestCase):
         gp.generate(self.out, [a, b])
         names = [r[3] for r in self.read("N51E017")]
         self.assertEqual(names, ["Sliver Hill"])
+
+    def test_world_threshold_covers_a_tile_with_any_poi(self):
+        # Run on the whole world both sides of a border are in, so Sliver Hill and the stray shop are
+        # enough: the tile is covered and its peak is published instead of dropped.
+        peaks, tiles, _ = gp.generate(self.out, [self.poi], min_pois=1)
+        self.assertEqual([r[3] for r in self.read("N51E017")], ["Sliver Hill"])
+        self.assertEqual(peaks, 6)
+        self.assertEqual(tiles, 4)
+
+    def test_world_threshold_leaves_a_tile_without_pois_uncovered(self):
+        # An ocean, but also an island no extract covers: a 404, never an empty "no peaks here".
+        gp.generate(self.out, [self.poi], min_pois=1)
+        self.assertFalse(os.path.exists(os.path.join(self.out, "tiles", "N47")))
+        self.assertFalse(os.path.exists(os.path.join(self.out, "tiles", "N50", "N50E016.peaks")))
+
+    def test_min_pois_argument(self):
+        self.assertEqual(gp.parse_min_pois("1"), 1)
+        self.assertEqual(gp.parse_min_pois("20"), 20)
+        for bad in ("0", "-3", "x", "", "1.5"):
+            with self.assertRaises(ValueError):
+                gp.parse_min_pois(bad)
 
     def test_second_file_does_not_duplicate_a_border_peak(self):
         other = os.path.join(self.dir.name, "y.poi")
