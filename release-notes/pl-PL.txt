@@ -1,11 +1,11 @@
 # "What's new" on Google Play. See en-US.txt for the rules; the lines here translate it line by line.
 Wirtualne miejsca dla Słońca i nocnego nieba
-Nazwy szczytów stoją na wierzchołku, w dzień na ciemnym tle
-Teraz po słowacku, polsku i niemiecku
+Nazwy szczytów na wierzchołku, w dzień na ciemnym tle
+Teraz po słowacku, polsku i niemiecku, też nazwy szczytów
 Ostrzeżenie przy timelapsie z ręki
 Działa na Androidzie 11 i 12
 Nocne niebo: nazwy bez nakładania, łatwy wybór, asteryzmy w detalach gwiazdy
 Górny pasek omija wycięcie aparatu
-Ostrzeżenie kompasu tylko przy błędzie
+Ostrzeżenie kompasu przy błędzie
 Słońce: obraz z aparatu szybciej
 Pobieranie terenu: łączny rozmiar, limit lub na żądanie; wysokość nad terenem

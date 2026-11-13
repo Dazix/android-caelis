@@ -25,15 +25,22 @@ object HorizonProfileCodec {
     private const val MAGIC = 0x4341485A
 
     /**
-     * 2 added the coverage count. 3 appended the named peaks.
+     * 2 added the coverage count. 3 appended the named peaks. 4 stores each peak's names as a list
+     * of (language, name), as the v2 peak tiles carry them, in place of three fixed slots.
      *
      * A version bump is how a v1 profile — which could be the flat, observer-tile-missing kind —
      * is discarded and recomputed rather than trusted. [read] returns null on any version it does not
-     * know. Version 2 is still read, as a profile whose peaks are not resolved yet: its skyline is
-     * as good as ever and throwing it away would cost a 26 MB download to learn the same ridge.
+     * know. Versions 2 and 3 are still read, as a profile whose peaks are not resolved yet: its
+     * skyline is as good as ever and throwing it away would cost a 26 MB download to learn the same
+     * ridge. A v3 profile keeps its Czech and English names until the peak tiles name it again with
+     * every language.
      */
-    private const val VERSION = 3
+    private const val VERSION = 4
+    private const val VERSION_WITH_TWO_NAMES = 3
     private const val VERSION_WITHOUT_LANDMARKS = 2
+
+    /** Bounds a corrupt count; a tile carries a handful of names per peak. */
+    private const val MAX_NAMES = 0xFF
 
     /** A sanity bound, not a limit anyone reaches: the selector keeps a dozen. */
     private const val MAX_LANDMARKS = 1000
@@ -56,8 +63,13 @@ object HorizonProfileCodec {
             writeInt(profile.landmarks.size)
             for (landmark in profile.landmarks) {
                 writeUTF(landmark.name)
-                writeUTF(landmark.nameCs)
-                writeUTF(landmark.nameEn)
+                val names = landmark.names.entries.sortedBy { it.key }
+                require(names.size <= MAX_NAMES) { "at most $MAX_NAMES other names, got ${names.size}" }
+                writeByte(names.size)
+                for ((key, value) in names) {
+                    writeUTF(key)
+                    writeUTF(value)
+                }
                 writeInt(landmark.elevationMeters)
                 writeDouble(landmark.distanceMeters)
                 writeDouble(landmark.azimuthDegrees)
@@ -78,7 +90,7 @@ object HorizonProfileCodec {
         DataInputStream(input.buffered()).run {
             if (readInt() != MAGIC) return null
             val version = readInt()
-            if (version != VERSION && version != VERSION_WITHOUT_LANDMARKS) return null
+            if (version != VERSION && version != VERSION_WITH_TWO_NAMES && version != VERSION_WITHOUT_LANDMARKS) return null
 
             val latitude = readDouble()
             val longitude = readDouble()
@@ -97,15 +109,18 @@ object HorizonProfileCodec {
 
             var resolved = false
             val landmarks = ArrayList<HorizonLandmark>()
-            if (version == VERSION) {
-                resolved = readBoolean()
+            if (version != VERSION_WITHOUT_LANDMARKS) {
+                // A v3 profile was named from v1 tiles, Czech and English only: shown as it is, and
+                // named again, so a German or Polish reader gets their names without a new skyline.
+                resolved = readBoolean() && version == VERSION
                 val landmarkCount = readInt()
                 if (landmarkCount !in 0..MAX_LANDMARKS) return null
                 repeat(landmarkCount) {
+                    val name = readUTF()
+                    val names = if (version == VERSION) readNames() ?: return null else readTwoNames()
                     landmarks += HorizonLandmark(
-                        name = readUTF(),
-                        nameCs = readUTF(),
-                        nameEn = readUTF(),
+                        name = name,
+                        names = names,
                         elevationMeters = readInt(),
                         distanceMeters = readDouble(),
                         azimuthDegrees = readDouble(),
@@ -133,6 +148,28 @@ object HorizonProfileCodec {
     } catch (e: IllegalArgumentException) {
         // GeoLocation rejects coordinates off the globe, and HorizonProfile a wrong sample count.
         null
+    }
+
+    /** The v4 list of (key, name), or null when it repeats a key or holds an empty entry. */
+    private fun DataInputStream.readNames(): Map<String, String>? {
+        val count = readUnsignedByte()
+        val names = HashMap<String, String>(count * 2)
+        repeat(count) {
+            val key = readUTF()
+            val value = readUTF()
+            if (key.isEmpty() || value.isEmpty() || names.put(key, value) != null) return null
+        }
+        return names
+    }
+
+    /** The v3 Czech and English slots, an empty one left out. */
+    private fun DataInputStream.readTwoNames(): Map<String, String> {
+        val cs = readUTF()
+        val en = readUTF()
+        return buildMap {
+            if (cs.isNotEmpty()) put("cs", cs)
+            if (en.isNotEmpty()) put("en", en)
+        }
     }
 
     /**

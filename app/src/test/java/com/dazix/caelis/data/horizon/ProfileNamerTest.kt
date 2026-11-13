@@ -48,8 +48,7 @@ class ProfileNamerTest {
         longitude = 15.0 + 10_000.0 / (111_194.93 * cos(Math.toRadians(50.0))),
         elevationMeters = 1000,
         name = "Summit",
-        nameCs = "Vrchol",
-        nameEn = "",
+        names = mapOf("cs" to "Vrchol"),
     )
 
     private fun tileBytes(peaks: List<LandmarkPeak>) =
@@ -135,7 +134,7 @@ class ProfileNamerTest {
     }
 
     private val knownLandmark = com.dazix.caelis.domain.horizon.HorizonLandmark(
-        name = "Known", nameCs = "", nameEn = "", elevationMeters = 900,
+        name = "Known", elevationMeters = 900,
         distanceMeters = 8_000.0, azimuthDegrees = 90.0, apparentElevationDegrees = 3.0,
     )
 

@@ -11,19 +11,24 @@ import kotlin.math.roundToInt
  * The `.peaks` tile: every named peak in one 1°×1° cell, as `data_pipeline/generate_peaks.py` writes it.
  *
  * Big-endian, in the style of the profile codec: `CLMK`, a version, a count, then per peak
- * `lat_e6:int lon_e6:int ele_m:short` and three `writeUTF` names (local, Czech, English; empty means
- * missing). The Python writer is the one that produces real files; [write] exists for tests and for
- * anything that needs to put a tile on disk from Kotlin.
+ * `lat_e6:int lon_e6:int ele_m:short`, the local name (`writeUTF`), and an unsigned byte counting
+ * the other names, each a `writeUTF` key (a language, or [LandmarkNames.LATIN]) and a `writeUTF` name.
+ * The Python writer is the one that produces real files; [write] exists for tests and for anything
+ * that needs to put a tile on disk from Kotlin.
  *
  * No Android imports. The app downloads these from a pinned tag of the data repository, so a change
- * of layout is a new [VERSION] here and in the script, not an edit.
+ * of layout is a new [VERSION] here and in the script, not an edit. Version 1 (local, Czech and
+ * English in fixed slots) is refused: a cached v1 tile is then deleted and fetched again as v2.
  */
 object LandmarkTileCodec {
 
     /** `CLMK`. */
     private const val MAGIC = 0x434C4D4B
 
-    private const val VERSION = 1
+    private const val VERSION = 2
+
+    /** Every key a tile may carry today is a few letters; a longer one is not a key. */
+    private const val MAX_KEY_LENGTH = 8
 
     private const val E6 = 1_000_000.0
 
@@ -48,14 +53,22 @@ object LandmarkTileCodec {
                 val lonE6 = readInt()
                 val elevation = readShort().toInt()
                 val name = readUTF()
-                val nameCs = readUTF()
-                val nameEn = readUTF()
+                val others = readUnsignedByte()
+                // A key the app does not use yet (a language added to the data before the app) is
+                // kept like any other: it costs a few bytes and is simply never asked for.
+                val names = HashMap<String, String>(others * 2)
+                repeat(others) {
+                    val key = readUTF()
+                    val value = readUTF()
+                    if (key.isEmpty() || key.length > MAX_KEY_LENGTH || value.isEmpty()) return null
+                    if (names.put(key, value) != null) return null
+                }
 
                 if (latE6 !in -90_000_000..90_000_000) return null
                 if (lonE6 !in -180_000_000..180_000_000) return null
                 if (name.isEmpty()) return null
 
-                peaks += LandmarkPeak(latE6 / E6, lonE6 / E6, elevation, name, nameCs, nameEn)
+                peaks += LandmarkPeak(latE6 / E6, lonE6 / E6, elevation, name, names)
             }
             if (read() != -1) return null
             peaks
@@ -75,8 +88,13 @@ object LandmarkTileCodec {
                 writeInt((peak.longitude * E6).roundToInt())
                 writeShort(peak.elevationMeters)
                 writeUTF(peak.name)
-                writeUTF(peak.nameCs)
-                writeUTF(peak.nameEn)
+                val names = peak.names.entries.sortedBy { it.key }
+                require(names.size <= 0xFF) { "at most 255 other names, got ${names.size}" }
+                writeByte(names.size)
+                for ((key, value) in names) {
+                    writeUTF(key)
+                    writeUTF(value)
+                }
             }
             flush()
         }

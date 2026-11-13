@@ -115,7 +115,7 @@ a session from the shell.
 | `ar/pose/` | `ArCoreSessionController`: the only place a `com.google.ar.core.Session` is constructed, resumed or installed, behind per-call consent. Other pose code may import ARCore types here and nowhere else. The rest of the package is ARCore-free and what the screens use: `PoseSource` (`SensorPoseSource` wraps `OrientationTracker`, `ArCorePoseSource` turns an ARCore frame into the sky's device→ENU), `PoseHandoff` (which of the two draws), `SkyPoseRig` (who owns the camera and the whole per-vsync decision; built by `ui/rememberSkyPoseRig`), `ArCoreHost` + `ArCoreFrameSource` (the live session, behind the `ArFrameSource` seam a test scripts). |
 | `ar/scene/` | The Filament sky renderer both AR screens draw with: `SkySurface` (engine, camera, TextureView or headless swap chain), `NightSkyScene` and `SunArScene`, the camera picture (`CameraBackground`), the line/disc/star/textured batches, the marks (`SpriteAtlas` + `LabelBatch` for pre-rendered names and badges, `GlyphBatch` for distance-field glyphs; the packing is `domain/arframe/AtlasPacker`), `TerrainRing`, `SkyGridMarkers` and the shared palette (`SkyPalette`). Materials live in `app/src/main/materials/` and are compiled by `compileFilamentMaterials`. |
 | `data/` | DataStore settings (`SettingsStore`), advanced settings, the ARCore and Geospatial consent pair (`ArCoreSettings`, both default off, Geospatial never on without ARCore), and the process-wide `SessionRepository` snapshot. |
-| `data/horizon/` | Elevation and peak tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the peak tile cache (`LandmarkTileCache`), the profile codec (v3 carries the named peaks), `LandmarkSource` + `ProfileNamer` (peak tiles -> names on a stored profile), and `HorizonRepository` which orchestrates them. |
+| `data/horizon/` | Elevation and peak tile download (`DemTileDownloader` — **the only file in the app that touches the network**), hand import (`DemTileImporter`), the mmap tile cache (`DemTileCache`), the peak tile cache (`LandmarkTileCache`), the profile codec (v4 carries the named peaks in every language), `LandmarkSource` + `ProfileNamer` (peak tiles -> names on a stored profile), and `HorizonRepository` which orchestrates them. |
 | `data/nightsky/` | FlatBuffers zero-copy binary catalog schemas and generated accessors (`NightSkyCatalog`, `Star`, `Constellation`, `Dso`, `MeteorShower`, `StarMetadata`; the accessors are hand-kept in step with `night_sky.fbs` and `data_pipeline/generate_catalog.py`, there is no `flatc` in the build) and `SkyNamesResource`, which loads `res/raw*/sky_names.tsv` for the current locale. |
 | `data/location/` | `SavedPlaceRepository`, a process singleton like `HorizonRepository`: the saved places and the selection in `filesDir/locations/` (out of the cloud backup), atomic writes, the place each screen shows resolved in the same call that writes. |
 | `service/` | The accessibility service owns the session. `SessionEngine` is the state machine, `ShutterDispatcher` is the only thing that taps, `CameraProfiles` is data, `RunStateStore` is the durable run. |
@@ -444,10 +444,11 @@ Each of these was found by review or on the device and is now covered by a test.
   any other failure to read the latest release fails the run, because guessing would send every line ever
   written.
 - **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
-  `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles/N50/N50E015.peaks` — the public
+  `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v2/tiles/N50/N50E015.peaks` — the public
   data repository (built by `data_pipeline/generate_peaks.py` from mapsforge POI extracts of OpenStreetMap),
   never the private app repository, never a branch. A change of file format is a new tag **and** a new
-  constant in the code. The request carries the tile name and nothing else, behind the same per-call
+  constant in the code. `v1` (Czech and English in fixed slots) is frozen; the codec refuses it, so a v1
+  tile left in the cache is deleted and fetched again from `v2`. The request carries the tile name and nothing else, behind the same per-call
   consent as terrain; it is the same file, so `NetworkIsolationTest` is unchanged. The pipeline writes an
   empty file for every tile of a region it covers, which is why a 404 means "not covered" and not "no
   peaks". OSM data is ODbL: the attribution in Settings (`horizon_attribution_body`) is a licence
@@ -472,7 +473,8 @@ Each of these was found by review or on the device and is now covered by a test.
   DEM. The retry is not only at the first resolve: a repeated `ensureProfile` for the same spot (screen
   entry, a consent change) names a shown unresolved profile again (`HorizonRepository.retryNames`,
   `ProfileNamer.needsNames`: not while a naming job runs, at most every 30 s, because a failed attempt
-  costs a connection timeout). The names live with the profile (`filesDir/horizons/`, codec v3, v2 still
+  costs a connection timeout). The names live with the profile (`filesDir/horizons/`, codec v4; v3, named
+  in Czech and English only, is read as unresolved and named again from the tiles, and v2 is still
   read); the peak tiles in `cacheDir/landmarks/` are cache, like the elevation tiles. An offline region
   prefetches its peak tiles into that cache and names no profile, so names for a region are best effort:
   Android may reclaim the tiles, and the profile is then named from the network when the user is there.
@@ -742,8 +744,11 @@ Each of these was found by review or on the device and is now covered by a test.
   empty); `SkyNames` looks a name up by key and falls back to the English the caller passes, and
   `SkyNamesResource` loads the file Android resolves for the current locale. There is no `isCzech`
   branch anywhere: a language check in code is how Czech once leaked into the English UI. A language
-  split delivers only the user's own file. Peak names (`HorizonLandmark`) are not part of this yet: the
-  peak tiles carry Czech and English only.
+  split delivers only the user's own file. Peak names (`HorizonLandmark`) are data, not resources: the
+  v2 peak tiles carry each app language OSM has (`name:cs/de/en/pl/sk`) and a Latin spelling (`Latn`, from
+  OSM tags only, never transliterated) for a local name in another script; `LandmarkNames.pick` chooses.
+  A new app language goes into `LANGUAGES` in `generate_peaks.py` and the tiles are regenerated under the
+  same tag; the format does not change.
 - **Compose**: read colour, shape, type and motion off the theme (`MaterialTheme.*`, `ExpressiveMotion`,
   `ExpressiveType`). Inside a card use `LocalContentColor` rather than naming a colour role, unless the
   colour carries meaning (an error really is `colorScheme.error`). Icon-only controls always carry a
