@@ -74,7 +74,7 @@ class RiseSetBadgePolicyTest {
         assertEquals(8.0, badge.apparentElevationDegrees, 0.05)
         assertTrue(
             "terrain sunrise ${badge.formattedTime} must be later than the almanac's ${trajectory.sunriseMarker!!.formattedTime}",
-            badge.formattedTime > trajectory.sunriseMarker!!.formattedTime,
+            badge.formattedTime > trajectory.sunriseMarker.formattedTime,
         )
     }
 

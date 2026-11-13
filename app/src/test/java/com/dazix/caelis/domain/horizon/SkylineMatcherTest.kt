@@ -142,7 +142,7 @@ class SkylineMatcherTest {
 
         assertNull("refused with ${fit.refusal}", fit.refusal)
         assertEquals(1.5, fit.match!!.azimuthOffsetDegrees, 0.1)
-        assertEquals(-0.4, fit.match!!.elevationOffsetDegrees, 0.1)
+        assertEquals(-0.4, fit.match.elevationOffsetDegrees, 0.1)
     }
 
     @Test
@@ -221,7 +221,7 @@ class SkylineMatcherTest {
 
         assertNull("refused with ${fit.refusal}", fit.refusal)
         assertEquals(15.0, fit.match!!.azimuthOffsetDegrees, 0.1)
-        assertEquals(-2.5, fit.match!!.elevationOffsetDegrees, 0.1)
+        assertEquals(-2.5, fit.match.elevationOffsetDegrees, 0.1)
     }
 
     @Test
@@ -345,7 +345,7 @@ class SkylineMatcherTest {
 
         assertNull("refused with ${fit.refusal}", fit.refusal)
         assertEquals(2.9, fit.match!!.azimuthOffsetDegrees, 0.1)
-        assertEquals(-1.3, fit.match!!.elevationOffsetDegrees, 0.1)
+        assertEquals(-1.3, fit.match.elevationOffsetDegrees, 0.1)
         assertEquals(1.0, fit.supportingShare, 1e-9)
     }
 

@@ -80,7 +80,7 @@ class SolarLocationProviderTest {
     @Test
     fun `without satellites a wifi position is an approximate fix`() {
         setSatellites(false)
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, networkLocation(40f, ageMs = 3 * 60_000L))
+        shadowOf(locationManager).simulateLocation(LocationManager.NETWORK_PROVIDER, networkLocation(40f, ageMs = 3 * 60_000L))
         val provider = SolarLocationProvider(context)
 
         provider.refreshLocation()
@@ -93,7 +93,7 @@ class SolarLocationProviderTest {
     @Test
     fun `without satellites a cell position kilometres out is still not a fix`() {
         setSatellites(false)
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, networkLocation(3_000f))
+        shadowOf(locationManager).simulateLocation(LocationManager.NETWORK_PROVIDER, networkLocation(3_000f))
         val provider = SolarLocationProvider(context)
 
         provider.refreshLocation()
@@ -192,7 +192,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis() - 120_000L // 2 minutes old (> 60s limit)
             accuracy = 10f
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.GPS_PROVIDER, staleGps)
+        shadowOf(locationManager).simulateLocation(LocationManager.GPS_PROVIDER, staleGps)
 
         provider.refreshLocation()
 
@@ -211,7 +211,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis()
             accuracy = 500f // 500m (> 100m limit)
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.GPS_PROVIDER, inaccurateGps)
+        shadowOf(locationManager).simulateLocation(LocationManager.GPS_PROVIDER, inaccurateGps)
 
         provider.refreshLocation()
 
@@ -229,7 +229,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis() - 5_000L // 5 seconds old
             accuracy = 15f // 15m
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.GPS_PROVIDER, freshGps)
+        shadowOf(locationManager).simulateLocation(LocationManager.GPS_PROVIDER, freshGps)
 
         provider.refreshLocation()
 
@@ -247,7 +247,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis()
             accuracy = 20f
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, netLoc)
+        shadowOf(locationManager).simulateLocation(LocationManager.NETWORK_PROVIDER, netLoc)
 
         provider.refreshLocation()
 
@@ -265,7 +265,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis() - 5_000L
             accuracy = 10f
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.FUSED_PROVIDER, freshFused)
+        shadowOf(locationManager).simulateLocation(LocationManager.FUSED_PROVIDER, freshFused)
 
         provider.refreshLocation()
 
@@ -317,7 +317,7 @@ class SolarLocationProviderTest {
             time = System.currentTimeMillis() - 2_000L
             accuracy = 10f
         }
-        shadowOf(locationManager).setLastKnownLocation(LocationManager.GPS_PROVIDER, freshGps)
+        shadowOf(locationManager).simulateLocation(LocationManager.GPS_PROVIDER, freshGps)
 
         val result = provider.awaitGpsFix(timeoutMs = 1000L, pollIntervalMs = 200L)
         assertTrue(result)
@@ -356,7 +356,7 @@ class SolarLocationProviderTest {
     @Config(sdk = [30])
     fun `android 11 takes a gps fix without the fused provider`() {
         val provider = SolarLocationProvider(context)
-        shadowOf(locationManager).setLastKnownLocation(
+        shadowOf(locationManager).simulateLocation(
             LocationManager.GPS_PROVIDER,
             Location(LocationManager.GPS_PROVIDER).apply {
                 latitude = 50.087

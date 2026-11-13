@@ -88,7 +88,7 @@ class TerrainRing(
      */
     fun setProfile(profile: HorizonProfile?) {
         val usable = profile != null && profile.isUsable
-        val stamp = if (usable) profile!!.generatedAtEpochMillis else Long.MIN_VALUE
+        val stamp = if (usable) profile.generatedAtEpochMillis else Long.MIN_VALUE
         if (usable == hasProfile && stamp == profileStamp) return
         hasProfile = usable
         profileStamp = stamp

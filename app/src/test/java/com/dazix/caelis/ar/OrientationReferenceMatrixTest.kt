@@ -1,6 +1,6 @@
 package com.dazix.caelis.ar
 
-import android.hardware.SensorEvent
+import android.hardware.Sensor
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,7 +9,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowSensorManager
+import org.robolectric.shadows.SensorEventBuilder
+import org.robolectric.shadows.ShadowSensor
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -29,20 +30,17 @@ class OrientationReferenceMatrixTest {
         // The phone turning about Up: 11 rotation-vector samples, 10 ms apart.
         for (i in 0..10) {
             val half = (0.3 + 0.01 * i) / 2.0
-            val event = ShadowSensorManager.createSensorEvent(4)
-            event.values[0] = 0f
-            event.values[1] = 0f
-            event.values[2] = sin(half).toFloat()
-            event.values[3] = cos(half).toFloat()
-            setTimestamp(event, 1_000 * ms + i * 10 * ms)
+            val event = SensorEventBuilder.newBuilder()
+                .setSensor(rotationVector)
+                .setValues(floatArrayOf(0f, 0f, sin(half).toFloat(), cos(half).toFloat()))
+                .setTimestamp(1_000 * ms + i * 10 * ms)
+                .build()
             tracker.onSensorChanged(event)
         }
         return tracker
     }
 
-    private fun setTimestamp(event: SensorEvent, ns: Long) {
-        SensorEvent::class.java.getField("timestamp").setLong(event, ns)
-    }
+    private val rotationVector: Sensor = ShadowSensor.newInstance(Sensor.TYPE_ROTATION_VECTOR)
 
     @Test
     fun `the reference is the synchronized pose with the calibration taken out`() {
