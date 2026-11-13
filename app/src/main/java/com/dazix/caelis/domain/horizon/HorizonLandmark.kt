@@ -83,8 +83,12 @@ object LandmarkNames {
         while (i < text.length) {
             val codePoint = text.codePointAt(i)
             if (Character.isLetter(codePoint)) {
-                if (Character.UnicodeScript.of(codePoint) != Character.UnicodeScript.LATIN) return false
-                letters++
+                when (Character.UnicodeScript.of(codePoint)) {
+                    Character.UnicodeScript.LATIN -> letters++
+                    // A modifier letter such as the Hawaiian ʻokina ("Puʻukaʻala") has no script of its own.
+                    Character.UnicodeScript.COMMON, Character.UnicodeScript.INHERITED -> Unit
+                    else -> return false
+                }
             }
             i += Character.charCount(codePoint)
         }

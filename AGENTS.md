@@ -745,8 +745,9 @@ Each of these was found by review or on the device and is now covered by a test.
   `SkyNamesResource` loads the file Android resolves for the current locale. There is no `isCzech`
   branch anywhere: a language check in code is how Czech once leaked into the English UI. A language
   split delivers only the user's own file. Peak names (`HorizonLandmark`) are data, not resources: the
-  v2 peak tiles carry each app language OSM has (`name:cs/de/en/pl/sk`) and a Latin spelling (`Latn`, from
-  OSM tags only, never transliterated) for a local name in another script; `LandmarkNames.pick` chooses.
+  v2 peak tiles carry each app language OSM has (`name:cs/de/en/pl/sk`) and a Latin spelling (`Latn`: OSM's own
+  tags first, else `data_pipeline/transliterate.py`, never for Japanese kanji, Arabic or Hebrew) for a
+  local name in another script; `LandmarkNames.pick` chooses.
   A new app language goes into `LANGUAGES` in `generate_peaks.py` and the tiles are regenerated under the
   same tag; the format does not change.
 - **Compose**: read colour, shape, type and motion off the theme (`MaterialTheme.*`, `ExpressiveMotion`,

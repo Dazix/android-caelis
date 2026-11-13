@@ -180,8 +180,18 @@ class GenerateTest(unittest.TestCase):
         # A Latin local name gets none, whatever its tags.
         self.assertNotIn("Latn", records["Sněžka"])
 
+    def test_spelled_out_only_when_osm_has_no_latin_name_and_no_english(self):
+        self.assertEqual(gp.other_names({"name": "한라산"}, "한라산", "south-korea"), {"Latn": "Hallasan"})
+        # English is shown before "Latn", so with it there is nothing to spell out.
+        self.assertEqual(gp.other_names({"name:en": "Hallasan"}, "한라산", "south-korea"), {"en": "Hallasan"})
+        # OSM's own Latin spelling wins over a machine one.
+        self.assertEqual(gp.other_names({"int_name": "Halla"}, "한라산", "south-korea"), {"Latn": "Halla"})
+        # Kanji in Japan are not read; the same characters in China are.
+        self.assertEqual(gp.other_names({}, "城山", "japan"), {})
+        self.assertEqual(gp.other_names({}, "城山", "zhejiang"), {"Latn": "Cheng Shan"})
+
     def test_is_latin(self):
-        for text in ("Sněžka", "Śnieżka", "Gerlachovský štít", "K2", "Mont Blanc 4808"):
+        for text in ("Sněžka", "Śnieżka", "Gerlachovský štít", "K2", "Mont Blanc 4808", "Puʻukaʻala"):
             self.assertTrue(gp.is_latin(text), text)
         for text in ("富士山", "Όλυμπος", "Эльбрус", "Mount 富士", "", "1603"):
             self.assertFalse(gp.is_latin(text), text)

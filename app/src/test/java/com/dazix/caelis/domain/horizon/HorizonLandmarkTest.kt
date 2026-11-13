@@ -93,7 +93,7 @@ class HorizonLandmarkTest {
 
     @Test
     fun `latin script is told apart by its letters only`() {
-        for (text in listOf("Sněžka", "Śnieżka", "Gerlachovský štít", "K2", "Mont Blanc 4808")) {
+        for (text in listOf("Sněžka", "Śnieżka", "Gerlachovský štít", "K2", "Mont Blanc 4808", "Puʻukaʻala")) {
             assertTrue(text, LandmarkNames.isLatin(text))
         }
         for (text in listOf("富士山", "Όλυμπος", "Эльбрус", "Mount 富士", "", "1603", "🏔")) {
