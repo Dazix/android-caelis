@@ -813,6 +813,12 @@ fun SettingsScreen(
                             checked = debugPreferences.logCompass,
                             onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(logCompass = it)) },
                         )
+                        SwitchRow(
+                            title = stringResource(R.string.settings_debug_disable_tilt_recovery),
+                            description = stringResource(R.string.settings_debug_disable_tilt_recovery_desc),
+                            checked = debugPreferences.disableTiltRecovery,
+                            onCheckedChange = { onDebugPreferencesChange(debugPreferences.copy(disableTiltRecovery = it)) },
+                        )
                     }
                 }
             }

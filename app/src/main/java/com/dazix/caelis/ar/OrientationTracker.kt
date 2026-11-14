@@ -15,6 +15,7 @@ import com.dazix.caelis.domain.arframe.GameVectorSettle
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
 import com.dazix.caelis.domain.arframe.RollEase
+import com.dazix.caelis.domain.arframe.TiltRecovery
 import com.dazix.caelis.domain.arframe.YawOffset
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.solar.GeoLocation
@@ -139,6 +140,10 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      */
     @Volatile
     var compassLogEnabled: Boolean = false
+
+    /** Debug A/B switch: false draws the rotation vector's tilt without [TiltRecovery]. */
+    @Volatile
+    var tiltRecoveryEnabled: Boolean = true
     private var lastLoggedState: HeadingState? = null
     private var lastLoggedEvidence: CompassEvidence? = null
     private var lastCompassLogMs = 0L
@@ -336,6 +341,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         QuaternionSlerp.slerp(syncQ1, syncQ2, u, syncQInterp)
         QuaternionSlerp.quaternionToRowMajorMatrix(syncQInterp, syncRawMatrix)
+        if (tiltRecoveryEnabled) tiltRecovery.applyTo(syncRawMatrix)
 
         applyCalibration(
             sensorMatrix = syncRawMatrix,
@@ -594,6 +600,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // A new session: the game vector's north restarts and the user has not aligned anything yet.
         headingLock.reset()
         gameSettle.reset()
+        tiltRecovery.reset()
+        hasTiltPose = false
+        latestRateRadS = Double.POSITIVE_INFINITY
         headingOffsetDeg = 0f
         coarseHeadingOffsetDeg = 0f
         headingUncertaintyDeg = Float.NaN
@@ -613,20 +622,40 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         sensorManager.registerListener(this, rotationSensor, SAMPLING_PERIOD_US)
         // The field check needs a few readings a second, not the pose's 200.
         magnetometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
-        if (BuildConfig.DEBUG && debugGyro != null) {
-            sensorManager.registerListener(this, debugGyro, 5_000) // 200 Hz; faster needs HIGH_SAMPLING_RATE_SENSORS
+        // Both only for TiltRecovery: whether the phone is still, and where gravity is. 200 Hz; a
+        // faster rate needs HIGH_SAMPLING_RATE_SENSORS (SENSOR_DELAY_FASTEST crashed the screen).
+        if (gyroscope != null && accelerometer != null) {
+            sensorManager.registerListener(this, gyroscope, SAMPLING_PERIOD_US)
+            sensorManager.registerListener(this, accelerometer, SAMPLING_PERIOD_US)
+        }
+        if (BuildConfig.DEBUG && gyroscope != null) {
             android.util.Log.d(
                 "CaelisHeading",
-                "gyro=${debugGyro.name} range=%.1fdps".format(Math.toDegrees(debugGyro.maximumRange.toDouble())),
+                "gyro=${gyroscope.name} range=%.1fdps".format(Math.toDegrees(gyroscope.maximumRange.toDouble())),
             )
         }
         isListening = true
     }
 
     // Debug-only: raw gyroscope peaks, to tell saturation from a fusion fault (logHeading).
-    private val debugGyro = if (BuildConfig.DEBUG) sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE) else null
     private var gyroPeakDps = 0f
     private var gyroNearRange = 0
+
+    // Gravity, against which the rotation vector's tilt is corrected once the phone is still, and
+    // the gyroscope that says when it is. The rate is not derived from consecutive rotation vectors:
+    // in float their dot product rounds to 1 below ~8 °/s at 200 Hz, so the rate read 0 or 9.5 °/s.
+    private val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val tiltRecovery = TiltRecovery()
+    private val latestRvQuat = FloatArray(4).apply { this[3] = 1f }
+    private val tiltPoseMatrix = FloatArray(16)
+    private var latestRateRadS = Double.POSITIVE_INFINITY
+    private var hasTiltPose = false
+
+    // Debug-only: gravity low-passed over ~0.1 s, the tilt truth while the phone is still, against
+    // which the fused vectors' elevation is compared (logHeading).
+    private val debugGravity = FloatArray(3)
+    private var debugGravityPrimed = false
 
     fun stop() {
         if (!isListening || sensorManager == null) return
@@ -648,13 +677,32 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             return
         }
         if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+            if (event.values.size < 3) return
+            val v = event.values
+            val rate = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+            latestRateRadS = rate.toDouble()
             if (BuildConfig.DEBUG) {
-                val v = event.values
-                val rate = kotlin.math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
                 val dps = Math.toDegrees(rate.toDouble()).toFloat()
                 if (dps > gyroPeakDps) gyroPeakDps = dps
                 val range = event.sensor.maximumRange
                 if (maxOf(kotlin.math.abs(v[0]), kotlin.math.abs(v[1]), kotlin.math.abs(v[2])) >= 0.95f * range) gyroNearRange++
+            }
+            return
+        }
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            if (event.values.size < 3) return
+            if (hasTiltPose) {
+                // The unsmoothed fused pose of the latest rotation sample, at most one period old.
+                SensorManager.getRotationMatrixFromVector(tiltPoseMatrix, latestRvQuat)
+                tiltRecovery.add(
+                    event.timestamp, tiltPoseMatrix,
+                    event.values[0], event.values[1], event.values[2], latestRateRadS,
+                )
+            }
+            if (BuildConfig.DEBUG) {
+                val a = if (debugGravityPrimed) 0.05f else 1f
+                for (i in 0..2) debugGravity[i] += a * (event.values[i] - debugGravity[i])
+                debugGravityPrimed = true
             }
             return
         }
@@ -675,6 +723,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         ringBuffer.push(event.timestamp, qx, qy, qz, qw)
         val previousSampleNs = lastRotationSampleNs
         lastRotationSampleNs = event.timestamp
+        System.arraycopy(sampleQuat, 0, latestRvQuat, 0, 4)
+        hasTiltPose = true
         // Game events have returned above; what is left is the rotation sensor, and only a vector
         // with a magnetometer in it has a heading uncertainty to report.
         if (rotationSensor?.type != Sensor.TYPE_GAME_ROTATION_VECTOR) {
@@ -734,6 +784,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         // Convert unit quaternion to guaranteed 100% orthonormal rotation matrix (sensor ENU)
         SensorManager.getRotationMatrixFromVector(rawMatrix, smoothedQuat)
+        // The fusion's tilt brought back onto gravity once the phone is still (TiltRecovery).
+        if (tiltRecoveryEnabled) tiltRecovery.applyTo(rawMatrix)
 
         // Compute live True North matrix, with the standing calibration folded in. Both are rotations
         // of the world frame, so they compose into the single offset applyCalibration already takes.
@@ -819,6 +871,17 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         lastGameAzDeg = gameAz
         if (timestampNs - lastHeadingLogNs < HEADING_LOG_INTERVAL_NS) return
         lastHeadingLogNs = timestampNs
+        val g = debugGravity
+        val gNorm = sqrt(g[0] * g[0] + g[1] * g[1] + g[2] * g[2])
+        // The camera looks along device -Z; at rest the accelerometer reads +g along world up.
+        val accElev = if (gNorm > 0f) Math.toDegrees(asin((-g[2] / gNorm).coerceIn(-1f, 1f).toDouble())).toFloat() else Float.NaN
+        android.util.Log.d(
+            "CaelisTilt",
+            "t=${timestampNs / 1_000_000} elevRv=%.2f elevGame=%.2f elevDrawn=%.2f elevAcc=%.2f g=%.2f calEl=%.2f tiltCorr=%.2f rate=%.1f".format(
+                cameraElevation(compassMatrix), cameraElevation(gameMatrix), cameraElevation(liveTrueMatrix),
+                accElev, gNorm, calibrationPitchOffsetDeg, tiltRecovery.correctionDegrees, Math.toDegrees(latestRateRadS),
+            ),
+        )
         android.util.Log.d(
             "CaelisHeading",
             "t=${timestampNs / 1_000_000} hold=${headingLock.isHolding} rv=%.2f game=%.2f psi=%.2f corr=%.2f cal=%.2f coarse=%.2f drawn=%.2f acc=%d unc=%.1f peakRate=%.0f gyroPeak=%.0f sat=%d".format(
@@ -832,6 +895,10 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         gyroPeakDps = 0f
         gyroNearRange = 0
     }
+
+    /** Elevation of the back camera's axis for a row-major device-to-ENU matrix, degrees. */
+    private fun cameraElevation(m: FloatArray): Float =
+        Math.toDegrees(asin((-m[10]).coerceIn(-1f, 1f).toDouble())).toFloat()
 
     /** Azimuth of the back camera's axis for a row-major device-to-ENU matrix, degrees 0..360. */
     private fun cameraAzimuth(m: FloatArray): Float {

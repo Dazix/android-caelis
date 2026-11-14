@@ -272,6 +272,15 @@ Each of these was found by review or on the device and is now covered by a test.
   the automatic alignment waits for it, and a lock requested earlier (`HeadingLock.isLocked`) only
   takes hold (`isHolding`) at the first settled sample, staying on the compass the fit was made
   against until then.
+- **After a fast swing the tilt is brought back onto gravity, and only then.** On a Pixel 10 Pro a
+  300-380 °/s swing left the rotation vector's camera elevation 1-2° above the accelerometer's for
+  about 4 s, and the overlay sank below the ridge and crept back (the capture results showed OIS and
+  EIS off, so it was not the picture). `TiltRecovery` follows the gravity error only within 4 s of a
+  swing over 100 °/s, with the phone still (gyroscope, after a 0.25 s hold) and the accelerometer near
+  1 g, fast while it stands 0.3° off and slowly closer in; outside that window it fades out and the
+  accelerometer is not consulted at all. Following gravity at rest, even slowly, put the hand's tremor
+  into the line: a quarter-second version bobbed visibly, a slow one was still visible next to the
+  fusion alone. Debug builds have an A/B switch (`disableTiltRecovery`).
 - **Sensor matrices are row-major.** `SensorManager` writes them row-major; convert a slerped
   quaternion with `QuaternionSlerp.quaternionToRowMajorMatrix`, never the column-major
   `quaternionToRotationMatrix`. Mixing the two transposed the auto-align's synchronized matrix and

@@ -18,6 +18,11 @@ data class DebugPreferences(
      * is not shown in a release, whose log must not carry the position-dependent expected field.
      */
     val logCompass: Boolean = false,
+    /**
+     * Draw the rotation vector's tilt as it is, without bringing it back onto gravity after a swing
+     * (`TiltRecovery`): an A/B switch for telling the correction's own jitter from the hand's.
+     */
+    val disableTiltRecovery: Boolean = false,
 ) {
     /** True if any debug or diagnostic feature is currently turned on. */
     val anyEnabled: Boolean
@@ -25,6 +30,7 @@ data class DebugPreferences(
             showTerrainMetrics ||
             showTapRadiusIndicator ||
             logCompass ||
+            disableTiltRecovery ||
             starTapRadiusDp != DEFAULT_STAR_TAP_RADIUS_DP
 
     companion object {

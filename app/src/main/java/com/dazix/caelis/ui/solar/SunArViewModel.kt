@@ -251,7 +251,10 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch {
-            debugPreferences.collect { orientationTracker.compassLogEnabled = it.logCompass }
+            debugPreferences.collect {
+                orientationTracker.compassLogEnabled = it.logCompass
+                orientationTracker.tiltRecoveryEnabled = !it.disableTiltRecovery
+            }
         }
     }
 

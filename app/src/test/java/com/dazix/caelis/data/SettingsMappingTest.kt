@@ -869,6 +869,19 @@ class SettingsMappingTest {
     }
 
     @Test
+    fun `the tilt recovery switch defaults to on and survives a round trip`() {
+        assertFalse(
+            "the correction is on unless switched off",
+            SettingsMapping.readDebugPreferences(emptyPreferences()).disableTiltRecovery,
+        )
+        val prefs = mutablePreferencesOf()
+        val custom = DebugPreferences(disableTiltRecovery = true)
+        SettingsMapping.writeDebugPreferences(prefs, custom)
+        assertEquals(custom, SettingsMapping.readDebugPreferences(prefs))
+        assertTrue(custom.anyEnabled)
+    }
+
+    @Test
     fun `debug preferences survive round trip when true and false`() {
         val prefs = mutablePreferencesOf()
         val custom = DebugPreferences(

@@ -650,6 +650,8 @@
     <string name="settings_debug_group_compass">Kompas</string>
     <string name="settings_debug_log_compass">Diagnostický log kompasu</string>
     <string name="settings_debug_log_compass_desc">Raz za sekundu zapisuje do logcatu (CaelisCompass), z čoho sa rozhoduje varovanie kompasu</string>
+    <string name="settings_debug_disable_tilt_recovery">Vypnúť zrovnanie náklonu</string>
+    <string name="settings_debug_disable_tilt_recovery_desc">Kreslí náklon zo senzorov tak, ako je, bez stiahnutia ku gravitácii po rýchlom švihu</string>
     <string name="settings_debug_star_tap_radius">Dosah detekcie dotyku</string>
     <string name="settings_debug_star_tap_radius_desc">Polomer hľadania na výber nebeských telies. Telesá v tomto okruhu sa vyhodnocujú podľa vzdialenosti a jasnosti (predvolene 48 dp).</string>
     <string name="settings_debug_show_tap_indicator">Zobraziť dosah dotyku</string>
