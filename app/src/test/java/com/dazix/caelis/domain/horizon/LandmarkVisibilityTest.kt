@@ -53,7 +53,7 @@ class LandmarkVisibilityTest {
         val lat = observer.latitude + distance * cos(radians) / metresPerDegree
         val lon = observer.longitude +
             distance * sin(radians) / (metresPerDegree * cos(Math.toRadians(observer.latitude)))
-        return LandmarkPeak(lat, lon, elevation, name, "", "")
+        return LandmarkPeak(lat, lon, elevation, name)
     }
 
     /** Apparent altitude of a 1000 m summit at 10 km for an eye at 201.6 m, worked by hand (R_eff = 7 323 km). */
@@ -78,7 +78,7 @@ class LandmarkVisibilityTest {
 
     @Test
     fun `all three names travel with the landmark`() {
-        val named = peak(10_000.0, 90.0).copy(name = "Śnieżka", nameCs = "Sněžka", nameEn = "Sniezka")
+        val named = peak(10_000.0, 90.0).copy(name = "Śnieżka", names = mapOf("cs" to "Sněžka", "en" to "Sniezka"))
 
         val landmark = LandmarkVisibility.select(
             listOf(named),
@@ -278,7 +278,7 @@ class LandmarkVisibilityTest {
     }
 
     private fun landmark(azimuth: Double, altitude: Double = 2.0) = HorizonLandmark(
-        name = "P", nameCs = "", nameEn = "", elevationMeters = 1000,
+        name = "P", elevationMeters = 1000,
         distanceMeters = 10_000.0, azimuthDegrees = azimuth, apparentElevationDegrees = altitude,
     )
 

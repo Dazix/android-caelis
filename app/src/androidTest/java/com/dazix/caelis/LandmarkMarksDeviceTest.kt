@@ -42,7 +42,7 @@ class LandmarkMarksDeviceTest {
     private fun alpha(pixels: ByteArray, x: Int, y: Int) = pixels[(y * width + x) * 4 + 3].toInt() and 0xFF
 
     private fun landmark(name: String, az: Double, el: Double) = HorizonLandmark(
-        name = name, nameCs = "", nameEn = "", elevationMeters = 1000,
+        name = name, elevationMeters = 1000,
         distanceMeters = 10_000.0, azimuthDegrees = az, apparentElevationDegrees = el,
     )
 

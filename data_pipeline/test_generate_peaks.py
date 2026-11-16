@@ -22,12 +22,16 @@ import generate_peaks as gp  # noqa: E402
 
 FIXTURE_TILE = "N50E015"
 
-# (lat, lon, tags) - the fixture tile N50E015 holds the first five.
+# (lat, lon, tags) - the fixture tile N50E015 holds the first seven.
 PEAKS = [
-    (50.7361, 15.7399, "name=Sněžka\rname:cs=Sněžka\rname:en=Sniezka\rele=1603.3\rnatural=peak"),
+    (50.7361, 15.7399, "name=Sněžka\rname:cs=Sněžka\rname:en=Sniezka\rname:de=Schneekoppe\r"
+                       "name:pl=Śnieżka\rname:fr=Snezka\rele=1603.3\rnatural=peak"),
     (50.7350, 15.7300, "name=Śnieżka bis\rele=1 602 m"),
     (50.8000, 15.3000, "name:en=Only English\rele=1100"),
     (50.5000, 15.5000, "name=Smoji \U0001F3D4\rname:cs=Smoji\rele=900,5"),
+    (50.6000, 15.6000, "name=富士山\rname:ja-Latn=Fujisan\rint_name=Fuji\rname:en=Mount Fuji\rele=3776"),
+    (50.6100, 15.6100, "name=Όλυμπος\rint_name=Ολυμπος\rname:el-latn=Olympos\rele=2918"),
+    (50.6200, 15.6200, "name=Эльбрус\rint_name=Elbrus\rname:sk=Elbrus\rele=5642"),
     (50.9000, 15.9000, "name=No height"),
     (50.1000, 15.1000, "ele=800"),                         # nameless: dropped
     (49.4502, 18.4524, "name=Lysá hora\rname:cs=Lysá hora\rele=1323"),
@@ -79,19 +83,26 @@ def decode(data):
     for _ in range(count):
         lat, lon, ele = struct.unpack_from(">iih", data, pos)
         pos += 10
+        name, pos = read_utf(data, pos)
+        (n,) = struct.unpack_from(">B", data, pos)
+        pos += 1
         names = []
-        for _ in range(3):
-            (n,) = struct.unpack_from(">H", data, pos)
-            pos += 2
-            raw = data[pos:pos + n]
-            pos += n
-            # Modified UTF-8 writes a supplementary character as two 3-byte surrogates.
-            names.append(
-                raw.decode("utf-8", errors="surrogatepass").encode("utf-16", "surrogatepass").decode("utf-16")
-            )
-        records.append((lat, lon, ele, *names))
+        for _ in range(n):
+            key, pos = read_utf(data, pos)
+            value, pos = read_utf(data, pos)
+            names.append((key, value))
+        assert names == sorted(names), "other names are sorted by key"
+        records.append((lat, lon, ele, name, dict(names)))
     assert pos == len(data)
     return records
+
+
+def read_utf(data, pos):
+    (n,) = struct.unpack_from(">H", data, pos)
+    raw = data[pos + 2:pos + 2 + n]
+    # Modified UTF-8 writes a supplementary character as two 3-byte surrogates.
+    text = raw.decode("utf-8", errors="surrogatepass").encode("utf-16", "surrogatepass").decode("utf-16")
+    return text, pos + 2 + n
 
 
 class ElevationTest(unittest.TestCase):
@@ -137,9 +148,9 @@ class GenerateTest(unittest.TestCase):
 
     def test_counts_and_filters(self):
         peaks, tiles, total = gp.generate(self.out, [self.poi])
-        # Kept: Sněžka, Śnieżka bis, Only English, Smoji, Lysá hora. Dropped: no height, nameless,
-        # duplicate, and Sliver Hill (its tile is not covered).
-        self.assertEqual(peaks, 5)
+        # Kept: the seven of N50E015 and Lysá hora. Dropped: no height, nameless, duplicate, and
+        # Sliver Hill (its tile is not covered).
+        self.assertEqual(peaks, 8)
         # N50E015, N49E018, N48E016 (covered, empty); the stray shop's tile is not covered.
         self.assertEqual(tiles, 3)
         self.assertGreater(total, 0)
@@ -148,13 +159,51 @@ class GenerateTest(unittest.TestCase):
     def test_fixture_tile_content(self):
         gp.generate(self.out, [self.poi])
         records = {r[3]: r for r in self.read(FIXTURE_TILE)}
-        self.assertEqual(len(records), 4)
+        self.assertEqual(len(records), 7)
         sneka = records["Sněžka"]
         self.assertEqual(sneka[:3], (50_736_100, 15_739_900, 1603))
-        self.assertEqual(sneka[4:], ("Sněžka", "Sniezka"))
-        self.assertEqual(records["Śnieżka bis"][4:], ("", ""))
-        self.assertEqual(records["Only English"][5], "Only English")
+        # name:cs equals the local name and is left out; name:fr is not an app language.
+        self.assertEqual(sneka[4], {"de": "Schneekoppe", "en": "Sniezka", "pl": "Śnieżka"})
+        self.assertEqual(records["Śnieżka bis"][4], {})
+        self.assertEqual(records["Only English"][4], {})
         self.assertEqual(records["Only English"][2], 1100)
+        self.assertEqual(records["Smoji \U0001F3D4"][4], {"cs": "Smoji"})
+
+    def test_latin_spelling_only_for_a_name_in_another_script(self):
+        gp.generate(self.out, [self.poi])
+        records = {r[3]: r[4] for r in self.read(FIXTURE_TILE)}
+        # int_name is preferred to name:*-Latn.
+        self.assertEqual(records["富士山"], {"en": "Mount Fuji", "Latn": "Fuji"})
+        # An int_name in the local script is no Latin spelling; name:el-latn (lower case) is.
+        self.assertEqual(records["Όλυμπος"], {"Latn": "Olympos"})
+        self.assertEqual(records["Эльбрус"], {"sk": "Elbrus", "Latn": "Elbrus"})
+        # A Latin local name gets none, whatever its tags.
+        self.assertNotIn("Latn", records["Sněžka"])
+
+    def test_spelled_out_only_when_osm_has_no_latin_name_and_no_english(self):
+        self.assertEqual(gp.other_names({"name": "한라산"}, "한라산", "south-korea"), {"Latn": "Hallasan"})
+        # English is shown before "Latn", so with it there is nothing to spell out.
+        self.assertEqual(gp.other_names({"name:en": "Hallasan"}, "한라산", "south-korea"), {"en": "Hallasan"})
+        # OSM's own Latin spelling wins over a machine one.
+        self.assertEqual(gp.other_names({"int_name": "Halla"}, "한라산", "south-korea"), {"Latn": "Halla"})
+        # Kanji in Japan are not read; the same characters in China are.
+        self.assertEqual(gp.other_names({}, "城山", "japan"), {})
+        self.assertEqual(gp.other_names({}, "城山", "zhejiang"), {"Latn": "Cheng Shan"})
+
+    def test_is_latin(self):
+        for text in ("Sněžka", "Śnieżka", "Gerlachovský štít", "K2", "Mont Blanc 4808", "Puʻukaʻala"):
+            self.assertTrue(gp.is_latin(text), text)
+        for text in ("富士山", "Όλυμπος", "Эльбрус", "Mount 富士", "", "1603"):
+            self.assertFalse(gp.is_latin(text), text)
+
+    def test_duplicate_fills_the_names_the_first_record_lacks(self):
+        dedupe = gp.Deduper()
+        first = {"lat_e6": 1, "lon_e6": 1, "name": "Sněžka", "names": {"en": "Sniezka"}}
+        second = {"lat_e6": 2, "lon_e6": 2, "name": "sněžka", "names": {"en": "Snezka", "de": "Schneekoppe", "pl": "Sněžka"}}
+        self.assertTrue(dedupe.add(first))
+        self.assertFalse(dedupe.add(second))
+        # The first record keeps its own English; a name equal to its local one is not added.
+        self.assertEqual(first["names"], {"en": "Sniezka", "de": "Schneekoppe"})
 
     def test_empty_covered_tile(self):
         gp.generate(self.out, [self.poi])
@@ -185,7 +234,7 @@ class GenerateTest(unittest.TestCase):
         # enough: the tile is covered and its peak is published instead of dropped.
         peaks, tiles, _ = gp.generate(self.out, [self.poi], min_pois=1)
         self.assertEqual([r[3] for r in self.read("N51E017")], ["Sliver Hill"])
-        self.assertEqual(peaks, 6)
+        self.assertEqual(peaks, 9)
         self.assertEqual(tiles, 4)
 
     def test_world_threshold_leaves_a_tile_without_pois_uncovered(self):
@@ -205,7 +254,7 @@ class GenerateTest(unittest.TestCase):
         other = os.path.join(self.dir.name, "y.poi")
         build_synthetic_poi(other)
         peaks, _, _ = gp.generate(self.out, [self.poi, other])
-        self.assertEqual(peaks, 5)
+        self.assertEqual(peaks, 8)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ class LandmarkTileCacheTest {
 
     private val directory get() = File(folder.root, "landmarks")
     private val key = DemTileKey.containing(50.0, 15.0)
-    private val peak = LandmarkPeak(50.7, 15.7, 1603, "Sněžka", "", "")
+    private val peak = LandmarkPeak(50.7, 15.7, 1603, "Sněžka")
 
     private val tile = ByteArrayOutputStream().also { LandmarkTileCodec.write(it, listOf(peak)) }.toByteArray()
 

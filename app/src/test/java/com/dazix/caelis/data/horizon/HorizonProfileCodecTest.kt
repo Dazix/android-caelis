@@ -60,8 +60,7 @@ class HorizonProfileCodecTest {
 
     private val sneka = HorizonLandmark(
         name = "Śnieżka",
-        nameCs = "Sněžka",
-        nameEn = "",
+        names = mapOf("cs" to "Sněžka", "de" to "Schneekoppe"),
         elevationMeters = 1603,
         distanceMeters = 41_250.5,
         azimuthDegrees = 12.75,
@@ -70,7 +69,7 @@ class HorizonProfileCodecTest {
 
     @Test
     fun `named peaks and the resolved flag survive a round trip`() {
-        val named = profile.withLandmarks(listOf(sneka, sneka.copy(name = "Lysá hora", nameCs = "", elevationMeters = 1323)), resolved = true)
+        val named = profile.withLandmarks(listOf(sneka, sneka.copy(name = "Lysá hora", names = emptyMap(), elevationMeters = 1323)), resolved = true)
 
         val restored = roundTrip(named)!!
 
@@ -121,8 +120,67 @@ class HorizonProfileCodecTest {
         assertEquals("the peaks have never been asked for", false, restored.landmarksResolved)
     }
 
+    /** What the app wrote with peak names in three fixed slots (local, Czech, English): version 3. */
+    private fun versionThreeBytes(source: HorizonProfile, resolved: Boolean, peaks: List<Triple<String, String, String>>): ByteArray {
+        val head = versionTwoBytes(source).also { it[7] = 3 }
+        val tail = ByteArrayOutputStream()
+        java.io.DataOutputStream(tail).apply {
+            writeBoolean(resolved)
+            writeInt(peaks.size)
+            for ((name, cs, en) in peaks) {
+                writeUTF(name)
+                writeUTF(cs)
+                writeUTF(en)
+                writeInt(1603)
+                writeDouble(41_250.5)
+                writeDouble(12.75)
+                writeDouble(1.8125)
+            }
+            flush()
+        }
+        return head + tail.toByteArray()
+    }
+
     @Test
-    fun `a version 3 file cut short inside the peaks reads as absent`() {
+    fun `a version 3 profile keeps its names but is named again`() {
+        val bytes = versionThreeBytes(
+            profile,
+            resolved = true,
+            peaks = listOf(Triple("Śnieżka", "Sněžka", ""), Triple("Lysá hora", "", "Lysa Hora")),
+        )
+
+        val restored = HorizonProfileCodec.read(ByteArrayInputStream(bytes))!!
+
+        assertEquals(listOf("Śnieżka", "Lysá hora"), restored.landmarks.map { it.name })
+        assertEquals(mapOf("cs" to "Sněžka"), restored.landmarks[0].names)
+        assertEquals(mapOf("en" to "Lysa Hora"), restored.landmarks[1].names)
+        assertEquals(1603, restored.landmarks[0].elevationMeters)
+        assertEquals(12.75, restored.landmarks[0].azimuthDegrees, 0.0)
+        assertEquals(
+            "named from Czech and English tiles only, so the v2 tiles must name it again",
+            false,
+            restored.landmarksResolved,
+        )
+    }
+
+    @Test
+    fun `a name list that repeats a key reads as absent`() {
+        val bytes = ByteArrayOutputStream().also {
+            HorizonProfileCodec.write(it, profile.withLandmarks(listOf(sneka.copy(names = mapOf("cs" to "A", "de" to "B"))), resolved = true))
+        }.toByteArray()
+        // Keys are written sorted: turn "de" into a second "cs".
+        val de = bytes.indexOfSequence(byteArrayOf(0, 2, 'd'.code.toByte(), 'e'.code.toByte()))
+        bytes[de + 2] = 'c'.code.toByte()
+        bytes[de + 3] = 's'.code.toByte()
+
+        assertNull(HorizonProfileCodec.read(ByteArrayInputStream(bytes)))
+    }
+
+    private fun ByteArray.indexOfSequence(needle: ByteArray): Int =
+        (0..size - needle.size).first { i -> needle.indices.all { this[i + it] == needle[it] } }
+
+    @Test
+    fun `a version 4 file cut short inside the peaks reads as absent`() {
         val bytes = ByteArrayOutputStream().also {
             HorizonProfileCodec.write(it, profile.withLandmarks(listOf(sneka), resolved = true))
         }.toByteArray()

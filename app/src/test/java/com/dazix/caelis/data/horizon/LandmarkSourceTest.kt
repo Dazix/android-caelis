@@ -51,8 +51,7 @@ class LandmarkSourceTest {
         longitude = 15.0 + 10_000.0 / (111_194.93 * cos(Math.toRadians(50.0))),
         elevationMeters = 1000,
         name = "Summit",
-        nameCs = "Vrchol",
-        nameEn = "",
+        names = mapOf("cs" to "Vrchol"),
     )
 
     private fun tileBytes(peaks: List<LandmarkPeak>) =
@@ -99,6 +98,36 @@ class LandmarkSourceTest {
         assertTrue(again.resolved)
         assertEquals(listOf("Summit"), again.landmarks.map { it.name })
         assertEquals(0, offline.calls)
+    }
+
+    @Test
+    fun `a version 1 tile left in the cache is replaced by a download, names and all`() = runBlocking {
+        // What an app that read the v1 tag left behind: local, Czech and English in fixed slots.
+        val v1 = ByteArrayOutputStream().also {
+            java.io.DataOutputStream(it).apply {
+                writeInt(0x434C4D4B)
+                writeInt(1)
+                writeInt(1)
+                writeInt((summit.latitude * 1e6).toInt())
+                writeInt((summit.longitude * 1e6).toInt())
+                writeShort(summit.elevationMeters)
+                writeUTF("Summit")
+                writeUTF("Vrchol")
+                writeUTF("")
+                flush()
+            }
+        }.toByteArray()
+        File(folder.root, "landmarks").mkdirs()
+        File(folder.root, "landmarks/${key.name}.peaks").writeBytes(v1)
+        val withGerman = summit.copy(names = summit.names + ("de" to "Gipfel"))
+        val downloader = FakeDownloader { _, out -> out.write(tileBytes(listOf(withGerman))); true }
+
+        val result = source(downloader).resolve(profile, listOf(key))
+
+        assertTrue(result.resolved)
+        assertEquals(1, downloader.calls)
+        assertEquals(listOf(mapOf("cs" to "Vrchol", "de" to "Gipfel")), result.landmarks.map { it.names })
+        assertTrue(File(folder.root, "landmarks/${key.name}.peaks").readBytes().contentEquals(tileBytes(listOf(withGerman))))
     }
 
     @Test

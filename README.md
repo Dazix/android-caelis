@@ -18,7 +18,7 @@ the names of the peaks on them, for the real-horizon layer in the AR views, and 
 Nothing else in the app opens a connection, there is no analytics of any kind, and all that is ever sent
 is the name of a 1°×1° map square — no coordinates, no identifiers, no request body. Elevation comes from
 the Tilezen tiles on AWS; peak names come from the public
-[`Dazix/caelis-landmarks`](https://github.com/Dazix/caelis-landmarks) repository, pinned to the tag `v1`
+[`Dazix/caelis-landmarks`](https://github.com/Dazix/caelis-landmarks) repository, pinned to the tag `v2`
 so an installed app only ever downloads a format it can read. (The one optional exception is Google's
 ARCore, which is off by default and is not this app's traffic; see the paragraph on it below.)
 
@@ -119,8 +119,9 @@ Built-in augmented reality module for planning solar and lunar time-lapses (suns
   are off while it is shown, and a neutral backdrop with the place's terrain stands in for the picture. The
   two screens choose their place independently unless you switch on syncing. Places stay on the phone and
   out of the Google account backup.
-- **Peak Names**: The peaks that really stand on that skyline are labelled "Sněžka · 1603 m" (in Czech, the
-  Czech name; otherwise the English one, then the local one) in both Sun AR and Night Sky, with a switch per
+- **Peak Names**: The peaks that really stand on that skyline are labelled "Sněžka · 1603 m" (in the app's
+  language when OpenStreetMap has it; otherwise the local name where it is in Latin script, else the
+  English or a Latin spelling, so a summit in Japan is not printed in kanji) in both Sun AR and Night Sky, with a switch per
   screen that works only while the terrain is on. A peak is drawn only when it *is* the ridge at its
   azimuth, so a summit hidden behind a nearer hill gets no label; the names come from OpenStreetMap
   (© OpenStreetMap contributors, ODbL) as 1° tiles that are downloaded with the elevation, stored with the

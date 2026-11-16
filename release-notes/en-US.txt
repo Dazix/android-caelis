@@ -3,12 +3,12 @@
 # release (scripts/release_notes.py). Deleting an old line is fine; editing a released one makes it
 # new again. Every language gets the same lines. At most 500 characters of unreleased notes.
 Virtual places: Sun and night sky from any saved place
-Peak names sit on the summit, on a dark backdrop by day
-Now in Slovak, Polish and German
+Peak names on the summit, on a dark backdrop by day
+Now in Slovak, Polish and German, peak names too
 Warns when a time-lapse is shot handheld
 Runs on Android 11 and 12
 Night sky: names never overlap, easier to tap, asterisms in star details
 Top bar clears the camera cutout
-Compass warning only when it is really off
+Compass warning only when really off
 Sun: camera picture appears sooner
 Terrain downloads: total size, a limit or on demand; height above terrain

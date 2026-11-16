@@ -168,12 +168,12 @@ open class DemTileDownloader(
         /**
          * Named peaks per 1° tile, from OpenStreetMap, in the public `Dazix/caelis-landmarks` repository.
          *
-         * Pinned to the `v1` tag rather than a branch: a change of file layout is a new tag and a new
+         * Pinned to the `v2` tag rather than a branch: a change of file layout is a new tag and a new
          * version in the code, so an installed app never downloads something it cannot read. Not the
          * private app repository, which cannot be fetched anonymously. Attribution (© OpenStreetMap
          * contributors, ODbL) is shown in Settings.
          */
-        const val DEFAULT_LANDMARK_BASE_URL = "https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles"
+        const val DEFAULT_LANDMARK_BASE_URL = "https://raw.githubusercontent.com/Dazix/caelis-landmarks/v2/tiles"
 
         private const val MAX_LANDMARK_BYTES = 4L * 1024 * 1024
 

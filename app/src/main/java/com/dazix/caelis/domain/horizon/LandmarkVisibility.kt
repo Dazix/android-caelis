@@ -99,8 +99,7 @@ object LandmarkVisibility {
             candidates += Ranked(
                 landmark = HorizonLandmark(
                     name = peak.name,
-                    nameCs = peak.nameCs,
-                    nameEn = peak.nameEn,
+                    names = peak.names,
                     elevationMeters = peak.elevationMeters,
                     distanceMeters = distance,
                     azimuthDegrees = azimuth,

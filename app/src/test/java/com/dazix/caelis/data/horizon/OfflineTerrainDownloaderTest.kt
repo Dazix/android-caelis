@@ -76,7 +76,7 @@ class OfflineTerrainDownloaderTest {
                 // already started when the first one failed (it had not, once, on CI). A status error is
                 // each tile's own answer, so every tile is asked on every run.
                 if (landmarkServerDown) throw DemTileDownloader.ServerException(503)
-                LandmarkTileCodec.write(out, listOf(LandmarkPeak(key.latSouth + 0.5, key.lonWest + 0.5, 1000, "Hill", "", "")))
+                LandmarkTileCodec.write(out, listOf(LandmarkPeak(key.latSouth + 0.5, key.lonWest + 0.5, 1000, "Hill")))
                 return true
             }
         }

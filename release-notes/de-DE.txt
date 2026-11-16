@@ -1,11 +1,11 @@
 # "What's new" on Google Play. See en-US.txt for the rules; the lines here translate it line by line.
 Virtuelle Orte für Sonne und Nachthimmel
-Gipfelnamen sitzen auf dem Gipfel, tagsüber dunkel hinterlegt
-Jetzt auf Slowakisch, Polnisch und Deutsch
+Gipfelnamen auf dem Gipfel, tagsüber dunkel hinterlegt
+Jetzt auf Slowakisch, Polnisch und Deutsch, auch Gipfelnamen
 Warnung bei Zeitraffer aus der Hand
 Läuft auf Android 11 und 12
 Nachthimmel: Namen überlappen nicht, leicht antippbar, Asterismen im Sterndetail
 Obere Leiste meidet die Kameraaussparung
-Kompasswarnung nur bei echtem Fehler
+Kompasswarnung nur bei Fehler
 Sonne: Kamerabild kommt schneller
 Geländedaten: Gesamtgröße, Limit oder auf Anfrage; Höhe über Gelände
