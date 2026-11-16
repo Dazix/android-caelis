@@ -38,6 +38,25 @@ class TranslationParityTest {
         assertEquals(setOf("cs", "sk", "pl", "de"), languages())
     }
 
+    /**
+     * Android 13+ shows an app's language picker only when its manifest names a locale config. AGP
+     * writes that config from the `values-<language>` directories, so a new language lands in the
+     * picker by itself; without `resources.properties` it cannot tell what `values/` is and fails.
+     */
+    @Test
+    fun `the system language picker is offered with every language`() {
+        val gradle = listOf(File("build.gradle.kts"), File("app/build.gradle.kts")).first { it.isFile }.readText()
+        assertTrue("androidResources.generateLocaleConfig is off", Regex("""generateLocaleConfig\s*=\s*true""").containsMatchIn(gradle))
+
+        val properties = File(res("main"), "resources.properties")
+        assertTrue("res/resources.properties is missing", properties.isFile)
+        assertEquals(
+            "values/ is English",
+            listOf("unqualifiedResLocale=en-US"),
+            properties.readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") },
+        )
+    }
+
     @Test
     fun `every language has every string and plural of the default, and nothing else`() {
         val english = resources("main", "values")

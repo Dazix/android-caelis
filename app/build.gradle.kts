@@ -91,6 +91,13 @@ android {
         buildConfig = true
     }
 
+    androidResources {
+        // Writes the locale config from the values-<language> directories, so Android 13+ offers the
+        // app's own language picker in its settings (Settings > Apps > Caelis > Language). Without it the
+        // picker is not shown at all. res/resources.properties says what values/ is: English.
+        generateLocaleConfig = true
+    }
+
     testOptions {
         unitTests {
             isReturnDefaultValues = true
