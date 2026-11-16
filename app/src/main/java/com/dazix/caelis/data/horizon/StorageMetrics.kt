@@ -6,7 +6,7 @@ package com.dazix.caelis.data.horizon
 data class StorageMetrics(
     /** Current size of decompressed `.hgt` and `.part` files in `cacheDir/dem/` (in bytes). */
     val demCacheSizeBytes: Long = 0L,
-    /** Configured upper bound for DEM tile cache before LRU trimming (default 512 MB). */
+    /** Configured upper bound for DEM tile cache before LRU trimming (default 1536 MB). */
     val demCacheLimitBytes: Long = DemTileCache.DEFAULT_MAX_BYTES,
     /** Current size of computed `.bin` profiles in `filesDir/horizons/` (in bytes). */
     val profilesSizeBytes: Long = 0L,
