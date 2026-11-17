@@ -2,7 +2,7 @@ name: Launch on Android 11
 
 # minSdk is 30 and no one here owns an Android 11 phone. Lint proves no newer API is called (InlinedApi
 # is an error); this proves the app actually opens there (theme, libraries, manifest), on the oldest
-# image it supports. It costs about seven billed minutes, so it runs only when one of those can have
+# image it supports. It takes about seven minutes, so it runs only when one of those can have
 # changed: the manifests, the dependencies and the build, the theme, and the screens the launch opens.
 # Anything else can be checked by hand with "Run workflow".
 on:

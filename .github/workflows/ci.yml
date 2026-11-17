@@ -1,7 +1,8 @@
 name: CI
 
-# GitHub bills every job rounded up to a whole minute and the repository is private, so this workflow
-# does only what a pull request needs every time. The Android 11 launch has its own workflow
+# The repository is public, so Actions minutes on standard runners cost nothing; what a pull request
+# pays is waiting for the checks. This workflow does only what every code change needs: the build takes
+# about ten minutes and the emulator launch seven more. The Android 11 launch has its own workflow
 # (api30-launch.yml) that runs only when something it can catch changed, and the release notes and
 # portability checks (checks.yml) run on every pull request, Markdown-only ones included.
 on:

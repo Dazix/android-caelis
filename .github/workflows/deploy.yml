@@ -38,8 +38,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # A step here rather than a job of its own: it takes seconds, and every job is billed as at
-      # least a whole minute.
+      # A step here rather than a job of its own: it takes seconds, less than a separate runner takes
+      # to start and check out.
       - name: Check repository portability
         run: ./scripts/check_portability.sh
 

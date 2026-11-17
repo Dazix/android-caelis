@@ -1,7 +1,7 @@
 name: Checks
 
-# The quick checks every pull request gets, whatever it touches. One job, not two: each job is billed
-# as at least a whole minute, and together these take under thirty seconds.
+# The quick checks every pull request gets, whatever it touches. One job, not two: together they take
+# under thirty seconds, less than a second runner takes to start and check out.
 on:
   pull_request:
     branches: [main]
