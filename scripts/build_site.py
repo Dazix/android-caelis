@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
-"""Build the GitHub Pages presentation site from site/template.html and site/strings.json.
+"""Build the presentation site from site/ into site/dist/ (untracked; .github/workflows/pages.yml
+builds it on every push to main and deploys it to GitHub Pages).
 
 One static page per language (English at the root, the others under /<lang>/), so search engines
 index every language with its own URL, title and description, linked together by hreflang.
-Also writes sitemap.xml, robots.txt, site.webmanifest and .nojekyll into docs/.
+Also writes sitemap.xml, robots.txt and site.webmanifest, and copies site/assets/.
+The custom domain is set in the repository's Pages settings: a deploy from Actions ignores CNAME.
 
-    python3 scripts/build_site.py                 # base URL https://dazix.github.io/android-caelis/
+    python3 scripts/build_site.py                 # base URL https://caelis-app.com/
     CAELIS_SITE_URL=https://example.org/ python3 scripts/build_site.py
+    python3 -m http.server -d site/dist           # preview
 """
 import html
 import json
 import os
 import re
+import shutil
 from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "site"
-OUT = ROOT / "docs"
+OUT = SRC / "dist"
 
-BASE = os.environ.get("CAELIS_SITE_URL", "https://dazix.github.io/android-caelis/").rstrip("/") + "/"
+BASE = os.environ.get("CAELIS_SITE_URL", "https://caelis-app.com/").rstrip("/") + "/"
 PLAY = "https://play.google.com/store/apps/details?id=com.dazix.caelis"
 REPO = "https://github.com/Dazix/android-caelis"
 LANGS = ["en", "cs", "sk", "pl", "de"]
@@ -143,6 +147,9 @@ def manifest() -> str:
 def main() -> None:
     template = (SRC / "template.html").read_text(encoding="utf-8")
     strings = json.loads((SRC / "strings.json").read_text(encoding="utf-8"))
+    # Start clean, so a file dropped from site/ never lingers on the published site.
+    shutil.rmtree(OUT, ignore_errors=True)
+    shutil.copytree(SRC / "assets", OUT / "assets")
     for lang in LANGS:
         target = OUT / ("index.html" if lang == DEFAULT else f"{lang}/index.html")
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -151,8 +158,7 @@ def main() -> None:
     (OUT / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
     (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {BASE}sitemap.xml\n", encoding="utf-8")
     (OUT / "site.webmanifest").write_text(manifest(), encoding="utf-8")
-    (OUT / ".nojekyll").write_text("", encoding="utf-8")
-    print("docs/sitemap.xml, docs/robots.txt, docs/site.webmanifest, docs/.nojekyll")
+    print("site/dist/sitemap.xml, robots.txt, site.webmanifest, assets/")
 
 
 if __name__ == "__main__":

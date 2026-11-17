@@ -43,3 +43,6 @@ scripts/capture_all_screens.py
 __pycache__/
 *.py[cod]
 data_pipeline/cache/
+
+# Presentation site output: built by scripts/build_site.py, deployed by pages.yml
+/site/dist/
