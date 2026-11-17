@@ -2,6 +2,7 @@ package com.dazix.caelis.ui.solar
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dazix.caelis.BuildConfig
@@ -23,6 +24,7 @@ import com.dazix.caelis.data.horizon.HorizonRepository
 import com.dazix.caelis.data.horizon.HorizonState
 import com.dazix.caelis.domain.arframe.LatestRequestGate
 import com.dazix.caelis.domain.horizon.AutoAlignPolicy
+import com.dazix.caelis.domain.horizon.HeadingRefinePolicy
 import com.dazix.caelis.domain.horizon.HorizonProfile
 import com.dazix.caelis.domain.horizon.StillnessDetector
 import com.dazix.caelis.domain.horizon.SkylineRefusal
@@ -597,6 +599,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         if (!observer.value.autoAlignAllowed) return
         // A hand alignment outranks an automatic one for the rest of the session.
         autoAlignPolicy.onManualAlignment()
+        // Only the azimuth is what the skyline check keeps the heading at; a height nudge leaves it.
+        if (deltaAzimuthDeg != 0f) {
+            abandonHeadingCheck()
+            refinePolicy.onManualAlignment(orientationTracker.swingCount)
+        }
         orientationTracker.nudgeCalibrationBy(deltaAzimuthDeg, deltaElevationDeg)
         panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
         panPitchOffset.value = orientationTracker.calibrationPitchOffsetDeg
@@ -648,6 +655,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
     private fun startAutoAlignLoop() {
         autoAlignLoop?.cancel()
         autoAlignPolicy.reset()
+        abandonHeadingCheck()
+        refinePolicy.reset()
         stillness.reset()
         autoAlignLoop = viewModelScope.launch {
             while (isActive) {
@@ -668,9 +677,133 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                 autoAligningState.value = ready && !autoAlignPolicy.isSettled
                 if (autoAlignPolicy.decide(now, ready, still) == AutoAlignPolicy.Decision.ATTEMPT) {
                     autoAlign(autoViewportWidth, autoViewportHeight, autoDisplayRotation, automatic = true)
+                    continue
+                }
+                // Asked on every poll, ready or not: it has to see every swing.
+                when (
+                    refinePolicy.decide(
+                        nowMs = now,
+                        ready = ready && autoAlignPolicy.isSettled,
+                        still = still,
+                        swingCount = orientationTracker.swingCount,
+                        headingHeld = orientationTracker.isHeadingHeld,
+                    )
+                ) {
+                    HeadingRefinePolicy.Decision.MEASURE_BASELINE -> checkHeadingAgainstSkyline(baseline = true)
+                    HeadingRefinePolicy.Decision.REFINE -> checkHeadingAgainstSkyline(baseline = false)
+                    HeadingRefinePolicy.Decision.WAIT -> Unit
                 }
             }
         }
+    }
+
+    private val refinePolicy = HeadingRefinePolicy()
+    private val refineGate = LatestRequestGate()
+    private var refineTimeout: Job? = null
+    private var refineEase: Job? = null
+
+    /**
+     * Fits the skyline again with the session already aligned, and turns the heading by what moved
+     * since ([HeadingRefinePolicy]): the game vector's yaw comes back off after a fast swing. Sensor
+     * path only, silent (nothing is shown either way), and never counted as an alignment.
+     *
+     * @param baseline the first fit after a hand alignment, which only measures where the fit puts
+     *   the ridge against where the hand did.
+     */
+    private fun checkHeadingAgainstSkyline(baseline: Boolean) {
+        val grabber = frameGrabber ?: return
+        val profile = horizonProfile.value ?: return
+        val viewportWidth = autoViewportWidth
+        val viewportHeight = autoViewportHeight
+        val displayRotation = autoDisplayRotation
+        refineTimeout?.cancel()
+        refinePolicy.onAttemptStarted()
+        val request = refineGate.begin()
+        refineTimeout = viewModelScope.launch {
+            delay(AUTO_ALIGN_FRAME_TIMEOUT_MS)
+            if (refineGate.finish(request)) refinePolicy.onAttemptAbandoned(android.os.SystemClock.elapsedRealtime())
+        }
+        grabber.grabNext { frame ->
+            viewModelScope.launch {
+                if (!refineGate.isCurrent(request)) return@launch
+                refineTimeout?.cancel()
+                // Against the pose without the calibration, as the automatic alignment: the answer is
+                // the whole calibration, compared below with the one standing now.
+                val referenceMatrix = FloatArray(16)
+                if (frame.pose != null || !orientationTracker.getReferenceMatrix(frame.timestampNs, referenceMatrix)) {
+                    if (refineGate.finish(request)) refinePolicy.onAttemptAbandoned(android.os.SystemClock.elapsedRealtime())
+                    return@launch
+                }
+                val geometry = CameraFrameGeometry.fillCenter(
+                    frameWidth = frame.width,
+                    frameHeight = frame.height,
+                    viewportWidth = viewportWidth,
+                    viewportHeight = viewportHeight,
+                    rotationMatrix = referenceMatrix,
+                    displayRotation = displayRotation,
+                    fovHorizontalDegrees = cameraFovHorizontal.value,
+                )
+                val fit = withContext(Dispatchers.Default) {
+                    SkylineAligner.fit(frame = frame, geometry = geometry, profile = profile)
+                }
+                if (!refineGate.finish(request)) return@launch
+                val now = android.os.SystemClock.elapsedRealtime()
+                // A flat skyline pins the height only, and the height is not what is checked here.
+                val fitAzimuth = fit.match?.takeIf { it.azimuthDetermined }?.azimuthOffsetDegrees
+                val calibration = orientationTracker.calibrationAzimuthOffsetDeg.toDouble()
+                val step = if (baseline) {
+                    refinePolicy.onBaseline(now, fitAzimuth, calibration)
+                    null
+                } else {
+                    refinePolicy.onRefine(now, fitAzimuth, calibration)
+                }
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "CaelisAlign",
+                        "headingCheck baseline=$baseline fit=%s cal=%.2f base=%.2f step=%s refusal=%s".format(
+                            fitAzimuth?.let { "%.2f".format(it) } ?: "-",
+                            calibration,
+                            refinePolicy.baselineDegrees,
+                            step?.let { "%.2f".format(it) } ?: "-",
+                            fit.refusal ?: "-",
+                        ),
+                    )
+                }
+                if (step != null && step != 0.0) easeHeadingBy(step.toFloat())
+            }
+        }
+    }
+
+    /**
+     * Turns the heading by [stepDeg] over [HEADING_EASE_MS] rather than at once: a degree's jump of
+     * the whole overlay reads as a glitch, a quick glide onto the ridge as a correction.
+     */
+    private fun easeHeadingBy(stepDeg: Float) {
+        refineEase?.cancel()
+        refineEase = viewModelScope.launch {
+            val start = android.os.SystemClock.elapsedRealtime()
+            var applied = 0f
+            try {
+                while (true) {
+                    val t = ((android.os.SystemClock.elapsedRealtime() - start) / HEADING_EASE_MS.toFloat()).coerceIn(0f, 1f)
+                    val target = stepDeg * (1f - (1f - t) * (1f - t))
+                    orientationTracker.shiftHeadingBy(target - applied)
+                    applied = target
+                    if (t >= 1f) break
+                    delay(HEADING_EASE_FRAME_MS)
+                }
+            } finally {
+                panAzimuthOffset.value = orientationTracker.calibrationAzimuthOffsetDeg
+            }
+        }
+    }
+
+    /** Drops a skyline check in flight and an unfinished glide: something else now decides the heading. */
+    private fun abandonHeadingCheck() {
+        refineTimeout?.cancel()
+        refineGate.invalidate()
+        refineEase?.cancel()
+        refinePolicy.onAttemptAbandoned(android.os.SystemClock.elapsedRealtime())
     }
 
     /** Replaces the standing calibration with a measured one (the automatic alignment). */
@@ -718,6 +851,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         autoAlignTimeout?.cancel()
         autoAlignGate.invalidate()
         finishAutomaticAttempt(accepted = false)
+        // The camera hands one frame to one caller: a skyline check waiting for it has lost it.
+        abandonHeadingCheck()
         if (automatic) {
             automaticAttemptInFlight = true
             autoAlignPolicy.onAttemptStarted()
@@ -857,7 +992,11 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
                     pitchDeg = targetPitch,
                 )
                 // A determined fit is a measured heading even when its correction rounds to zero.
-                if (match.azimuthDetermined) orientationTracker.lockHeading()
+                if (match.azimuthDetermined) {
+                    orientationTracker.lockHeading()
+                    // The overlay is where the fit put it: that is the skyline check's baseline.
+                    refinePolicy.onFitAccepted(android.os.SystemClock.elapsedRealtime(), orientationTracker.swingCount)
+                }
                 if (automatic && !match.azimuthDetermined) {
                     // The height is in, the compass is not: keep looking for a ridge that pins it,
                     // without announcing a half result on every retry.
@@ -918,6 +1057,8 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
         // A reset says "the alignment is wrong": look for the skyline again.
         finishAutomaticAttempt(accepted = false)
         autoAlignPolicy.reset()
+        abandonHeadingCheck()
+        refinePolicy.reset()
     }
 
     fun startSensors() {
@@ -1103,5 +1244,9 @@ class SunArViewModel(application: Application) : AndroidViewModel(application) {
 
         /** How often the automatic alignment checks whether it can try. */
         const val AUTO_ALIGN_POLL_MS = 200L
+
+        /** How long a skyline check's heading step takes to glide in. */
+        const val HEADING_EASE_MS = 250L
+        private const val HEADING_EASE_FRAME_MS = 16L
     }
 }

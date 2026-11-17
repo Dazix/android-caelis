@@ -281,6 +281,19 @@ Each of these was found by review or on the device and is now covered by a test.
   accelerometer is not consulted at all. Following gravity at rest, even slowly, put the hand's tremor
   into the line: a quarter-second version bobbed visibly, a slow one was still visible next to the
   fusion alone. Debug builds have an A/B switch (`disableTiltRecovery`).
+- **An aligned heading is checked against the skyline again, and moved only by what changed since.**
+  On a Pixel 10 Pro the gyro-held heading came back 0.6-1.8° beside the ridge after 300-380 °/s
+  swings, and nothing on the phone can tell whether the game vector or the compass moved (on a
+  later run the compass jumped 3.1° over three swings while the skyline said 0.28°). Once a session
+  is aligned and the gyro holds the heading, Sun AR fits the skyline again 1.5 s after a swing over
+  100 °/s (`OrientationTracker.swingCount`) and every 20 s at rest (`HeadingRefinePolicy`), and turns
+  the heading (`shiftHeadingBy`, which is not an alignment: no lock, no stop of anything) by the fit
+  minus a baseline, gliding over 250 ms. The baseline is zero after an accepted fit; after a hand
+  alignment it is measured once, before the next swing, as where the fit puts the ridge against where
+  the hand did, so the hand's choice is kept — the hand still outranks the fit ("Sun AR aligns
+  itself at every start" above). A step under 0.2° is noise and is left alone, one over 3° is refused, a frame from before
+  a later swing is dropped, and a flat skyline answers nothing. Sensor path only, silent; debug builds
+  log it as `CaelisAlign headingCheck`.
 - **Sensor matrices are row-major.** `SensorManager` writes them row-major; convert a slerped
   quaternion with `QuaternionSlerp.quaternionToRowMajorMatrix`, never the column-major
   `quaternionToRotationMatrix`. Mixing the two transposed the auto-align's synchronized matrix and

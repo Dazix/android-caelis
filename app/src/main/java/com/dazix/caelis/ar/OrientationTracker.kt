@@ -99,6 +99,19 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      */
     val isGameVectorSettled: Boolean get() = !dualMode || gameSettle.isSettled
 
+    /** The gyro holds the heading the user (or a fit) aligned; the compass no longer moves it. */
+    val isHeadingHeld: Boolean get() = dualMode && headingLock.isHolding
+
+    /**
+     * How many fast swings (over [SWING_RATE_DEG_S]) the phone has made since the tracker was built.
+     * Only its changes mean anything: after one the game vector's yaw may have jumped
+     * ([com.dazix.caelis.domain.horizon.HeadingRefinePolicy]).
+     */
+    @Volatile
+    var swingCount: Int = 0
+        private set
+    private var inSwing = false
+
     /** [HeadingLock.correctionDegrees], folded into the world-Z term next to the declination. */
     @Volatile
     private var headingOffsetDeg = 0f
@@ -455,6 +468,18 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
     }
 
     /**
+     * Turns the aligned heading by [deltaAzimuthDeg] without it counting as an alignment: the skyline
+     * check found the gyro-held heading moved since ([com.dazix.caelis.domain.horizon.HeadingRefinePolicy]).
+     * The lock stays as it is and the pitch is untouched.
+     */
+    fun shiftHeadingBy(deltaAzimuthDeg: Float) {
+        setAlignment(
+            totalAzimuthDeg = coarseHeadingOffsetDeg + calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
+            pitchDeg = calibrationPitchOffsetDeg,
+        )
+    }
+
+    /**
      * Applies a hand alignment of [totalAzimuthDeg] in all: the calibration takes what its bound
      * allows and the coarse correction ([CoarseHeading]) takes the rest.
      */
@@ -681,6 +706,14 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             val v = event.values
             val rate = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
             latestRateRadS = rate.toDouble()
+            // One count per swing, not per sample: it ends only well below the threshold.
+            val rateDps = Math.toDegrees(rate.toDouble())
+            if (!inSwing && rateDps > SWING_RATE_DEG_S) {
+                inSwing = true
+                swingCount++
+            } else if (inSwing && rateDps < SWING_RATE_DEG_S * 0.5) {
+                inSwing = false
+            }
             if (BuildConfig.DEBUG) {
                 val dps = Math.toDegrees(rate.toDouble()).toFloat()
                 if (dps > gyroPeakDps) gyroPeakDps = dps
@@ -994,6 +1027,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         /** The same bound for the compass correction. See [MAX_CALIBRATION_PITCH]. */
         const val MAX_CALIBRATION_AZIMUTH = 20f
+
+        /**
+         * A swing fast enough to have left the game vector's yaw off (300-380 °/s did, on a Pixel 10
+         * Pro); a hand's twitch or a slow pan turns at 5-25 °/s. Same as [TiltRecovery.SWING_RATE_RAD_S].
+         */
+        const val SWING_RATE_DEG_S = 100.0
 
         private const val COMPASS_LOG_TAG = "CaelisCompass"
         private const val COMPASS_LOG_EVERY_MS = 1_000L
