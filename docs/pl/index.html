@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="pl" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAELIS – timelapse w Twoim aparacie, Słońce i gwiazdy w AR na Androida</title>
+  <meta name="description" content="Intervalometr i planer nieba na Androida: timelapse nagrywany w Twojej własnej aplikacji aparatu, Słońce, Księżyc i nocne niebo w AR nad prawdziwym horyzontem. Za darmo, bez reklam, open source.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="theme-color" content="#0E1433">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://dazix.github.io/android-caelis/pl/">
+  <link rel="alternate" hreflang="en" href="https://dazix.github.io/android-caelis/">
+  <link rel="alternate" hreflang="cs" href="https://dazix.github.io/android-caelis/cs/">
+  <link rel="alternate" hreflang="sk" href="https://dazix.github.io/android-caelis/sk/">
+  <link rel="alternate" hreflang="pl" href="https://dazix.github.io/android-caelis/pl/">
+  <link rel="alternate" hreflang="de" href="https://dazix.github.io/android-caelis/de/">
+  <link rel="alternate" hreflang="x-default" href="https://dazix.github.io/android-caelis/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CAELIS">
+  <meta property="og:url" content="https://dazix.github.io/android-caelis/pl/">
+  <meta property="og:title" content="CAELIS – timelapse w Twoim aparacie, Słońce i gwiazdy w AR na Androida">
+  <meta property="og:description" content="Intervalometr i planer nieba na Androida: timelapse nagrywany w Twojej własnej aplikacji aparatu, Słońce, Księżyc i nocne niebo w AR nad prawdziwym horyzontem. Za darmo, bez reklam, open source.">
+  <meta property="og:image" content="https://dazix.github.io/android-caelis/assets/img/og-image-pl.png">
+  <meta property="og:image:width" content="1024">
+  <meta property="og:image:height" content="500">
+  <meta property="og:image:alt" content="CAELIS">
+  <meta property="og:locale" content="pl_PL">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:locale:alternate" content="cs_CZ">
+  <meta property="og:locale:alternate" content="sk_SK">
+  <meta property="og:locale:alternate" content="de_DE">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CAELIS – timelapse w Twoim aparacie, Słońce i gwiazdy w AR na Androida">
+  <meta name="twitter:description" content="Intervalometr i planer nieba na Androida: timelapse nagrywany w Twojej własnej aplikacji aparatu, Słońce, Księżyc i nocne niebo w AR nad prawdziwym horyzontem. Za darmo, bez reklam, open source.">
+  <meta name="twitter:image" content="https://dazix.github.io/android-caelis/assets/img/og-image-pl.png">
+
+  <link rel="icon" href="../assets/img/favicon.ico" sizes="48x48">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="../site.webmanifest">
+  <link rel="preload" as="image" href="../assets/img/horizon-peaks-pl-540.webp" imagesrcset="../assets/img/horizon-peaks-pl-540.webp 540w, ../assets/img/horizon-peaks-pl-1080.webp 1080w" imagesizes="(max-width: 520px) 70vw, 330px" fetchpriority="high">
+
+  <script>document.documentElement.classList.replace('no-js', 'js');</script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script src="../assets/js/main.js" defer></script>
+  <script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "MobileApplication",
+  "name": "CAELIS",
+  "alternateName": "CAELIS – Timelapse i AR niebo",
+  "description": "Intervalometr i planer nieba na Androida: timelapse nagrywany w Twojej własnej aplikacji aparatu, Słońce, Księżyc i nocne niebo w AR nad prawdziwym horyzontem. Za darmo, bez reklam, open source.",
+  "url": "https://dazix.github.io/android-caelis/pl/",
+  "inLanguage": "pl",
+  "operatingSystem": "Android 11+",
+  "applicationCategory": "PhotographyApplication",
+  "applicationSubCategory": "Astronomy",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR"
+  },
+  "installUrl": "https://play.google.com/store/apps/details?id=com.dazix.caelis",
+  "downloadUrl": "https://play.google.com/store/apps/details?id=com.dazix.caelis",
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "image": "https://dazix.github.io/android-caelis/assets/img/icon-512.png",
+  "screenshot": [
+    "https://dazix.github.io/android-caelis/assets/img/night-sky-pl-1080.webp",
+    "https://dazix.github.io/android-caelis/assets/img/horizon-peaks-pl-1080.webp",
+    "https://dazix.github.io/android-caelis/assets/img/sun-path-pl-1080.webp",
+    "https://dazix.github.io/android-caelis/assets/img/time-lapse-pl-1080.webp",
+    "https://dazix.github.io/android-caelis/assets/img/ramping-pl-1080.webp",
+    "https://dazix.github.io/android-caelis/assets/img/setup-pl-1080.webp"
+  ],
+  "sameAs": [
+    "https://play.google.com/store/apps/details?id=com.dazix.caelis",
+    "https://github.com/Dazix/android-caelis"
+  ]
+}</script>
+</head>
+<body data-lang="pl">
+  <a class="skip-link" href="#main">Przejdź do treści</a>
+
+  <header class="site-header" id="top">
+    <div class="container header-inner">
+      <a class="brand" href="../" aria-label="CAELIS – strona główna">
+        <img src="../assets/img/caelis-lockup-horizontal-dark.svg" alt="CAELIS" width="150" height="35">
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Menu</span>
+      </button>
+
+      <nav class="site-nav" id="site-nav" aria-label="Nawigacja główna">
+        <ul class="nav-links">
+          <li><a href="#features">Funkcje</a></li>
+          <li><a href="#timelapse">Timelapse</a></li>
+          <li><a href="#sky">Niebo w AR</a></li>
+          <li><a href="#privacy">Prywatność</a></li>
+        </ul>
+        <details class="lang-picker">
+          <summary>
+            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-2.9a15.7 15.7 0 0 0-1.4-3.6A8 8 0 0 1 18.9 8ZM12 4a14 14 0 0 1 1.9 4h-3.8A14 14 0 0 1 12 4ZM4.3 14a8.2 8.2 0 0 1 0-4h3.4a16.5 16.5 0 0 0 0 4H4.3Zm.8 2h2.9a15.7 15.7 0 0 0 1.4 3.6A8 8 0 0 1 5.1 16ZM8 8H5.1a8 8 0 0 1 4.3-3.6A15.7 15.7 0 0 0 8 8Zm4 12a14 14 0 0 1-1.9-4h3.8A14 14 0 0 1 12 20Zm2.3-6H9.7a14.7 14.7 0 0 1 0-4h4.6a14.7 14.7 0 0 1 0 4Zm.3 5.6a15.7 15.7 0 0 0 1.4-3.6h2.9a8 8 0 0 1-4.3 3.6Zm1.7-5.6a16.5 16.5 0 0 0 0-4h3.4a8.2 8.2 0 0 1 0 4h-3.4Z"/></svg>
+            <span class="visually-hidden">Język: </span><span>Polski</span>
+          </summary>
+          <ul class="lang-menu">
+            <li><a href="../" hreflang="en" lang="en" data-lang="en">English</a></li>
+            <li><a href="../cs/" hreflang="cs" lang="cs" data-lang="cs">Čeština</a></li>
+            <li><a href="../sk/" hreflang="sk" lang="sk" data-lang="sk">Slovenčina</a></li>
+            <li><a href="../pl/" hreflang="pl" lang="pl" data-lang="pl" aria-current="page">Polski</a></li>
+            <li><a href="../de/" hreflang="de" lang="de" data-lang="de">Deutsch</a></li>
+          </ul>
+        </details>
+        <a class="btn btn-small btn-primary" href="https://play.google.com/store/apps/details?id=com.dazix.caelis">Pobierz</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="sky sky-day" aria-hidden="true"></div>
+      <div class="sky sky-warm" aria-hidden="true"></div>
+      <canvas class="starfield" aria-hidden="true"></canvas>
+      <svg class="sun-arc" aria-hidden="true" focusable="false" overflow="visible" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="arc-grad" x1="0" x2="1">
+            <stop offset="0" stop-color="#FFB547" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#FFB547" stop-opacity=".75"/>
+            <stop offset="1" stop-color="#FF7A45" stop-opacity="0"/>
+          </linearGradient>
+          <!-- Sun high in the sky: white-gold. -->
+          <radialGradient id="sun-corona">
+            <stop offset="0" stop-color="#FFF3D6" stop-opacity=".5"/>
+            <stop offset=".22" stop-color="#FFC560" stop-opacity=".22"/>
+            <stop offset="1" stop-color="#FFB547" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="sun-disc" cx=".42" cy=".4" r=".62">
+            <stop offset="0" stop-color="#FFFFFB"/>
+            <stop offset=".55" stop-color="#FFEDB8"/>
+            <stop offset="1" stop-color="#FFC24F"/>
+          </radialGradient>
+          <!-- Sun at the horizon: deeper, redder, through more air. -->
+          <radialGradient id="sun-corona-low">
+            <stop offset="0" stop-color="#FFB27A" stop-opacity=".55"/>
+            <stop offset=".25" stop-color="#FF7A45" stop-opacity=".25"/>
+            <stop offset="1" stop-color="#FF5A28" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="sun-disc-low" cx=".45" cy=".42" r=".62">
+            <stop offset="0" stop-color="#FFE7C2"/>
+            <stop offset=".5" stop-color="#FFA35C"/>
+            <stop offset="1" stop-color="#F0602E"/>
+          </radialGradient>
+          <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter>
+          <filter id="soft-rays" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>
+
+          <radialGradient id="moon-halo">
+            <stop offset="0" stop-color="#DCE4FF" stop-opacity=".28"/>
+            <stop offset=".35" stop-color="#DCE4FF" stop-opacity=".1"/>
+            <stop offset="1" stop-color="#DCE4FF" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="moon-surface" cx=".38" cy=".38" r=".7">
+            <stop offset="0" stop-color="#FFFDF6"/>
+            <stop offset=".7" stop-color="#ECE7D9"/>
+            <stop offset="1" stop-color="#CFC9B8"/>
+          </radialGradient>
+          <!-- A waxing crescent with a soft terminator; the dark side keeps a faint earthshine. -->
+          <mask id="moon-lit" x="-30" y="-30" width="60" height="60" maskUnits="userSpaceOnUse">
+            <circle r="18" fill="#fff"/>
+            <circle cx="11" cy="-4" r="18.5" fill="#000" filter="url(#soft)"/>
+          </mask>
+        </defs>
+        <path class="sun-arc-path" d="M90 560 C 330 30, 870 30, 1110 560"/>
+        <g class="sky-body sky-sun">
+          <g class="sun-scale">
+            <circle r="150" fill="url(#sun-corona)"/>
+            <circle class="sun-low" r="150" fill="url(#sun-corona-low)"/>
+            <g class="sun-rays" fill="#FFE9C0" filter="url(#soft-rays)">
+              <path d="M-2 -30 L0 -64 L2 -30 Z"/><path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(45)"/>
+              <path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(90)"/><path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(135)"/>
+              <path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(180)"/><path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(225)"/>
+              <path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(270)"/><path d="M-2 -30 L0 -64 L2 -30 Z" transform="rotate(315)"/>
+              <path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(22.5)"/><path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(67.5)"/>
+              <path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(112.5)"/><path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(157.5)"/>
+              <path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(202.5)"/><path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(247.5)"/>
+              <path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(292.5)"/><path d="M-1.4 -28 L0 -46 L1.4 -28 Z" transform="rotate(337.5)"/>
+            </g>
+            <circle r="24" fill="#FFF6DC" opacity=".35" filter="url(#soft)"/>
+            <circle r="20" fill="url(#sun-disc)"/>
+            <circle class="sun-low" r="20" fill="url(#sun-disc-low)"/>
+          </g>
+        </g>
+        <g class="sky-body sky-moon">
+          <g transform="rotate(-25) scale(1.35)">
+            <circle r="110" fill="url(#moon-halo)"/>
+            <circle r="18" fill="#3A4472" opacity=".55"/>
+            <g mask="url(#moon-lit)">
+              <circle r="18" fill="url(#moon-surface)"/>
+              <circle cx="-6" cy="-5" r="4.2" fill="#CDC6B2" opacity=".55"/>
+              <circle cx="-9" cy="5" r="3" fill="#CDC6B2" opacity=".45"/>
+              <circle cx="-2" cy="9" r="2.4" fill="#CDC6B2" opacity=".4"/>
+              <circle cx="-12" cy="-2" r="1.6" fill="#BFB8A3" opacity=".5"/>
+            </g>
+          </g>
+        </g>
+        <path class="ridge-back" d="M0 600 L0 470 L90 452 L170 470 L260 430 L330 446 L420 400 L500 438 L590 418 L680 452 L760 420 L850 440 L930 405 L1010 432 L1100 418 L1200 446 L1200 600 Z"/>
+        <path class="ridge-front" d="M0 600 L0 512 L120 494 L210 520 L300 488 L400 514 L520 482 L640 520 L720 500 L820 526 L940 492 L1060 518 L1200 496 L1200 600 Z"/>
+      </svg>
+
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow reveal">Intervalometr i planer nieba na Androida</p>
+          <h1 id="hero-title" class="hero-title reveal">Zachód słońca, który <em>naprawdę</em> zobaczysz. Gwiazdy dokładnie tam, gdzie świecą.</h1>
+          <p class="hero-lede reveal">Timelapse nagrywany przez Twój własny aparat, ze wszystkim, co potrafi – i Słońce, Księżyc oraz gwiazdy narysowane nad prawdziwym krajobrazem.</p>
+          <div class="hero-actions reveal">
+            <a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.dazix.caelis">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M22.018 13.298l-3.919 2.218-3.515-3.493 3.543-3.521 3.891 2.202a1.49 1.49 0 0 1 0 2.594zM1.337.924a1.486 1.486 0 0 0-.112.568v21.017c0 .217.045.419.124.6l11.155-11.087L1.337.924zm12.207 10.065l3.258-3.238L3.45.195a1.466 1.466 0 0 0-.946-.179l11.04 10.973zm0 2.067l-11 10.933c.298.036.612-.016.906-.183l13.324-7.54-3.23-3.21z"/></svg>
+              <span>Pobierz z Google Play</span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/Dazix/android-caelis">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+              <span>Kod źródłowy na GitHubie</span>
+            </a>
+          </div>
+          <p class="hero-note reveal">Za darmo · Bez reklam · Android 11+</p>
+        </div>
+
+        <div class="hero-visual reveal">
+          <div class="phone phone-hero">
+            <img src="../assets/img/horizon-peaks-pl-540.webp" srcset="../assets/img/horizon-peaks-pl-540.webp 540w, ../assets/img/horizon-peaks-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" fetchpriority="high" alt="Nocne niebo w AR: rysunki gwiazdozbiorów nad prawdziwym horyzontem z nazwami szczytów na linii horyzontu">
+          </div>
+          <div class="float-chip chip-a" aria-hidden="true"><span class="chip-dot chip-dot-amber"></span><span>Zachód za grzbietem · 18:42</span></div>
+          <div class="float-chip chip-b" aria-hidden="true"><span class="chip-dot chip-dot-cyan"></span><span>Zdjęcie 24 ze 120</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="CAELIS w liczbach">
+      <div class="container">
+        <ul class="stats-list">
+          <li class="reveal"><span class="stat-num" data-count="88">88</span><span class="stat-label">ilustrowanych gwiazdozbiorów</span></li>
+          <li class="reveal"><span class="stat-num" data-count="110">110</span><span class="stat-label">obiektów Messiera ze zdjęciami</span></li>
+          <li class="reveal"><span class="stat-num" data-count="5">5</span><span class="stat-label">języków</span></li>
+          <li class="reveal"><span class="stat-num">0</span><span class="stat-label">reklam, śledzenia i kont</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section pillars" id="features" aria-labelledby="pillars-title">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker">Trzy narzędzia, jedna aplikacja</p>
+          <h2 id="pillars-title">Zaplanuj ujęcie. Resztę zrobi telefon.</h2>
+        </header>
+        <div class="cards">
+          <article class="card reveal">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg></div>
+            <h3>Timelapse bez kompromisów</h3>
+            <p>CAELIS naciska spust w aplikacji aparatu, której już używasz, więc każda klatka zachowuje HDR+, Night Sight i tryby astro Twojego telefonu.</p>
+            <a class="card-link" href="#timelapse" aria-label="Timelapse bez kompromisów"><span>Więcej</span> <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="card reveal">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="3.5"/><path d="M3 19h18M12 4.5v2M5.5 7.5l1.4 1.4M18.5 7.5l-1.4 1.4M3 13h2M19 13h2"/></svg></div>
+            <h3>Słońce i Księżyc w AR</h3>
+            <p>Ich trasy na żywym obrazie z kamery, ze znacznikami czasu, złotą godziną i zmierzchami – względem prawdziwego horyzontu z modelu terenu.</p>
+            <a class="card-link" href="#sun" aria-label="Słońce i Księżyc w AR"><span>Więcej</span> <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="card reveal">
+            <div class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 13.6 9l5.4 1.6-5.4 1.6L12 17.6l-1.6-5.4L5 10.6 10.4 9 12 3.5Z"/><path d="M18.5 16.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6.6-1.9Z"/></svg></div>
+            <h3>Nocne niebo w AR</h3>
+            <p>Gwiazdy, planety, Księżyc i Droga Mleczna nad prawdziwym krajobrazem, ze wschodami i zachodami liczonymi względem prawdziwych wzgórz.</p>
+            <a class="card-link" href="#sky" aria-label="Nocne niebo w AR"><span>Więcej</span> <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section feature" id="timelapse" aria-labelledby="tl-title">
+      <div class="container feature-grid">
+        <div class="feature-copy reveal">
+          <p class="kicker">Timelapse</p>
+          <h2 id="tl-title">Twoja aplikacja aparatu. Harmonogram, który się nie rozjeżdża.</h2>
+          <ul class="check-list">
+            <li>Spust w Twojej aplikacji aparatu – Google Camera lub dowolnej innej</li>
+            <li>Harmonogram bez dryfu – spóźniona klatka nie przesuwa całej serii</li>
+            <li>Rampa interwału, liniowa lub wykładnicza – stworzona do zachodów słońca</li>
+            <li>Automatyczne zatrzymanie według liczby zdjęć, czasu, baterii lub wolnego miejsca</li>
+            <li>Pływający panel z odliczaniem, pauzą i stopem, który nigdy nie zakrywa spustu</li>
+            <li>Opcjonalna kontrola, czy zdjęcie naprawdę powstało – a jeśli nie, ponowna próba</li>
+          </ul>
+        </div>
+        <div class="feature-visual duo reveal">
+          <div class="phone phone-back">
+            <img src="../assets/img/ramping-pl-540.webp" srcset="../assets/img/ramping-pl-540.webp 540w, ../assets/img/ramping-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" loading="lazy" decoding="async" alt="Rampa interwału: interwał płynnie wydłuża się w trakcie serii">
+          </div>
+          <div class="phone phone-front">
+            <img src="../assets/img/time-lapse-pl-540.webp" srcset="../assets/img/time-lapse-pl-540.webp 540w, ../assets/img/time-lapse-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" loading="lazy" decoding="async" alt="Trwający timelapse: odliczanie do następnego zdjęcia i liczba wykonanych zdjęć">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section feature feature-alt" id="sun" aria-labelledby="sun-title">
+      <div class="container feature-grid">
+        <div class="feature-visual reveal">
+          <div class="phone">
+            <img src="../assets/img/sun-path-pl-540.webp" srcset="../assets/img/sun-path-pl-540.webp 540w, ../assets/img/sun-path-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" loading="lazy" decoding="async" alt="Słońce w AR: trasa Słońca ze znacznikami godzin na obrazie z kamery i linia terenu">
+          </div>
+        </div>
+        <div class="feature-copy reveal">
+          <p class="kicker kicker-amber">Słońce i Księżyc w AR</p>
+          <h2 id="sun-title">Słońce znika za grzbietem o 18:42 – a nie o 19:07 z tabel.</h2>
+          <ul class="check-list">
+            <li>Trasy Słońca i Księżyca na żywym obrazie z kamery, ze znacznikami czasu, złotą godziną i zmierzchami</li>
+            <li>Prawdziwy horyzont z modelu wysokości terenu</li>
+            <li>Nazwy szczytów na linii horyzontu – tylko tych, które naprawdę widać</li>
+            <li>Automatyczne wyrównanie do horyzontu na podstawie obrazu z kamery</li>
+            <li>Teren pobierasz raz, potem wszystko działa bez zasięgu</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section feature" id="sky" aria-labelledby="sky-title">
+      <div class="container feature-grid">
+        <div class="feature-copy reveal">
+          <p class="kicker">Nocne niebo w AR</p>
+          <h2 id="sky-title">Kiedy Jowisz wyłoni się zza grzbietu?</h2>
+          <ul class="check-list">
+            <li>Gwiazdy, planety, Księżyc i Droga Mleczna nad prawdziwym krajobrazem</li>
+            <li>88 ilustrowanych gwiazdozbiorów, 110 obiektów Messiera ze zdjęciami, roje meteorów</li>
+            <li>Wschód, górowanie i zachód względem prawdziwych wzgórz</li>
+            <li>Suwak czasu ±12 godz. i dowolna data do planowania z wyprzedzeniem</li>
+            <li>Wyszukiwanie, tryb planetarium i czerwony tryb nocny, który chroni adaptację wzroku</li>
+          </ul>
+        </div>
+        <div class="feature-visual reveal">
+          <div class="phone phone-glow">
+            <img src="../assets/img/night-sky-pl-540.webp" srcset="../assets/img/night-sky-pl-540.webp 540w, ../assets/img/night-sky-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" loading="lazy" decoding="async" alt="Nocne niebo w AR: gwiazdozbiory narysowane na niebie z nazwami gwiazd">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section how" aria-labelledby="how-title">
+      <div class="container">
+        <header class="section-head reveal">
+          <p class="kicker">Jak to działa</p>
+          <h2 id="how-title">Trzy kroki do pierwszej serii</h2>
+        </header>
+        <div class="how-grid">
+          <ol class="steps">
+            <li class="step reveal"><h3>Wybierz aplikację aparatu</h3><p>Google Camera lub dowolną inną. CAELIS otworzy ją sam na początku serii.</p></li>
+            <li class="step reveal"><h3>Pokaż, gdzie jest spust</h3><p>Jednym stuknięciem zaznaczasz przycisk spustu. Pozycja zostaje zapamiętana dla tej aplikacji.</p></li>
+            <li class="step reveal"><h3>Ustaw serię i zacznij</h3><p>Interwał, liczba zdjęć, rampa i warunki zatrzymania – a potem telefon na statyw.</p></li>
+          </ol>
+          <div class="feature-visual reveal">
+            <div class="phone phone-small">
+              <img src="../assets/img/setup-pl-540.webp" srcset="../assets/img/setup-pl-540.webp 540w, ../assets/img/setup-pl-1080.webp 1080w" sizes="(max-width: 520px) 70vw, 330px" width="540" height="980" loading="lazy" decoding="async" alt="Ustawienia serii: interwał, liczba zdjęć i warunki zatrzymania">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy" id="privacy" aria-labelledby="privacy-title">
+      <div class="container">
+        <div class="privacy-panel reveal">
+          <div class="privacy-head">
+            <div class="shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2.5 4 5.5v6c0 5 3.4 8.9 8 10 4.6-1.1 8-5 8-10v-6l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></div>
+            <div>
+              <p class="kicker">Prywatność przede wszystkim</p>
+              <h2 id="privacy-title">Bez reklam. Bez analityki. Bez konta.</h2>
+            </div>
+          </div>
+          <ul class="privacy-list">
+            <li class="reveal"><h3>Teren tylko za Twoją zgodą</h3><p>Internet służy tylko do pobrania terenu i nazw szczytów. Wysyłana jest wyłącznie nazwa kwadratu mapy 1° × 1° – nigdy współrzędne.</p></li>
+            <li class="reveal"><h3>ARCore jest domyślnie wyłączony</h3><p>Opcjonalny Google ARCore sprawia, że AR jest stabilniejsze. Zanim go włączysz, aplikacja powie Ci, co otrzymuje Google.</p></li>
+            <li class="reveal"><h3>Dlaczego usługa dostępności</h3><p>Tylko po to, by otworzyć wybraną aplikację aparatu i nacisnąć w niej spust lub stuknąć w punkt, który ustawisz. Nic z tego, co widzi, nie jest zapisywane ani wysyłane. Moduły AR jej nie potrzebują.</p></li>
+            <li class="reveal"><h3>Otwarte oprogramowanie</h3><p>Cała aplikacja jest opublikowana na licencji GPL-3.0. Przeczytaj, zbuduj, sprawdź.</p></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section gallery" aria-labelledby="gallery-title">
+      <div class="container">
+        <header class="section-head section-head-center reveal">
+          <p class="kicker">Zrzuty ekranu</p>
+          <h2 id="gallery-title">Przyjrzyj się bliżej</h2>
+        </header>
+      </div>
+      <div class="carousel reveal" data-dot-label="Zrzut ekranu {n} z {total}">
+        <ul class="gallery-track" id="gallery-track" tabindex="0" aria-labelledby="gallery-title">
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/night-sky-pl-540.webp" srcset="../assets/img/night-sky-pl-540.webp 540w, ../assets/img/night-sky-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Nocne niebo w AR: gwiazdozbiory narysowane na niebie z nazwami gwiazd"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">01</span>Gwiazdozbiory na prawdziwym niebie</figcaption>
+            </figure>
+          </li>
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/horizon-peaks-pl-540.webp" srcset="../assets/img/horizon-peaks-pl-540.webp 540w, ../assets/img/horizon-peaks-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Nocne niebo w AR: rysunki gwiazdozbiorów nad prawdziwym horyzontem z nazwami szczytów na linii horyzontu"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">02</span>Prawdziwy horyzont z nazwami szczytów</figcaption>
+            </figure>
+          </li>
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/sun-path-pl-540.webp" srcset="../assets/img/sun-path-pl-540.webp 540w, ../assets/img/sun-path-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Słońce w AR: trasa Słońca ze znacznikami godzin na obrazie z kamery i linia terenu"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">03</span>Trasa Słońca godzina po godzinie</figcaption>
+            </figure>
+          </li>
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/time-lapse-pl-540.webp" srcset="../assets/img/time-lapse-pl-540.webp 540w, ../assets/img/time-lapse-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Trwający timelapse: odliczanie do następnego zdjęcia i liczba wykonanych zdjęć"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">04</span>Trwająca seria</figcaption>
+            </figure>
+          </li>
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/ramping-pl-540.webp" srcset="../assets/img/ramping-pl-540.webp 540w, ../assets/img/ramping-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Rampa interwału: interwał płynnie wydłuża się w trakcie serii"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">05</span>Rampa interwału na zachód słońca</figcaption>
+            </figure>
+          </li>
+          <li class="slide">
+            <figure>
+              <div class="phone phone-slide"><img src="../assets/img/setup-pl-540.webp" srcset="../assets/img/setup-pl-540.webp 540w, ../assets/img/setup-pl-1080.webp 1080w" sizes="(max-width: 520px) 62vw, 280px" width="540" height="980" loading="lazy" decoding="async" alt="Ustawienia serii: interwał, liczba zdjęć i warunki zatrzymania"></div>
+              <figcaption><span class="slide-num" aria-hidden="true">06</span>Ustawienia serii</figcaption>
+            </figure>
+          </li>
+        </ul>
+        <div class="carousel-nav">
+          <button class="round-btn" type="button" data-gallery="prev" aria-controls="gallery-track" aria-label="Poprzedni zrzut ekranu"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></svg></button>
+          <div class="carousel-dots" role="group" aria-label="Przyjrzyj się bliżej"></div>
+          <button class="round-btn" type="button" data-gallery="next" aria-controls="gallery-track" aria-label="Następny zrzut ekranu"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section final-cta" aria-labelledby="cta-title">
+      <div class="container">
+        <div class="cta-panel reveal">
+          <img class="cta-icon" src="../assets/img/icon-192.png" width="96" height="96" loading="lazy" alt="">
+          <h2 id="cta-title">Gotowy na następną złotą godzinę?</h2>
+          <p>Za darmo w Google Play. Wymaga Androida 11 lub nowszego.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://play.google.com/store/apps/details?id=com.dazix.caelis">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M22.018 13.298l-3.919 2.218-3.515-3.493 3.543-3.521 3.891 2.202a1.49 1.49 0 0 1 0 2.594zM1.337.924a1.486 1.486 0 0 0-.112.568v21.017c0 .217.045.419.124.6l11.155-11.087L1.337.924zm12.207 10.065l3.258-3.238L3.45.195a1.466 1.466 0 0 0-.946-.179l11.04 10.973zm0 2.067l-11 10.933c.298.036.612-.016.906-.183l13.324-7.54-3.23-3.21z"/></svg>
+              <span>Pobierz z Google Play</span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/Dazix/android-caelis"><span>Kod źródłowy na GitHubie</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <img src="../assets/img/caelis-symbol-dark.svg" width="40" height="40" loading="lazy" alt="">
+      <p>Otwarte oprogramowanie na licencji GPL-3.0. Nazwy szczytów © współtwórcy OpenStreetMap (ODbL).</p>
+      <ul class="footer-links">
+        <li><a href="https://github.com/Dazix/android-caelis">Kod źródłowy</a></li>
+        <li><a href="https://github.com/Dazix/android-caelis/issues">Zgłoś problem</a></li>
+        <li><a href="https://www.openstreetmap.org/copyright" hreflang="en">OpenStreetMap</a></li>
+      </ul>
+    </div>
+  </footer>
+</body>
+</html>

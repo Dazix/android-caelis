@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dazix.github.io/android-caelis/sitemap.xml
