@@ -1,6 +1,6 @@
 # Working in this repository
 
-Private Android intervalometer. It presses the shutter inside another app through an
+Android intervalometer. It presses the shutter inside another app through an
 AccessibilityService. Read `README.md` first for what the app is; this file is how to work on it
 without breaking it.
 
@@ -439,15 +439,23 @@ Each of these was found by review or on the device and is now covered by a test.
   `releases/latest`, which skips pre-releases); production promotes beta's notes and the release body is
   not sent. A job that commits would need `contents: write` next to the Play key, letting a compromised
   build dependency push to `main` or move a tag, and its commit would land after the tag it describes.
-  The repository is private on GitHub Free, so `main` has no branch protection and the `release notes`
-  check cannot be made required: a red check does not block a merge, the deploy stops before the upload
-  instead. Only a 404 means "no release yet":
+  The `release notes` check is not a required status check (the owner merges past the ruleset, below),
+  so a red check does not block a merge; the deploy stops before the upload instead. Only a 404 means
+  "no release yet":
   any other failure to read the latest release fails the run, because guessing would send every line ever
   written.
+- **`main` and `internal` change only through a pull request the owner merges.** The repository is
+  public; the ruleset "protect main and internal" forbids deleting either branch, force pushes and
+  direct pushes, and asks for one approving review. GitHub does not let an author approve their own pull
+  request and every pull request here is opened from the owner's account, so the owner (admin role) may
+  bypass the review, in pull requests only: merging is the approval, and a direct push, an agent's
+  included, is refused. `internal` is advanced by a pull request from `main`, no longer by a push. Workflow
+  runs from a fork wait for the owner's approval (all external contributors), and forks never see a
+  secret: the deploy runs only on push and release.
 - **Peak names have their own source, and it is pinned.** `DemTileDownloader.downloadLandmarks` fetches
   `https://raw.githubusercontent.com/Dazix/caelis-landmarks/v1/tiles/N50/N50E015.peaks` — the public
   data repository (built by `data_pipeline/generate_peaks.py` from mapsforge POI extracts of OpenStreetMap),
-  never the private app repository, never a branch. A change of file format is a new tag **and** a new
+  never the app repository, never a branch. A change of file format is a new tag **and** a new
   constant in the code. The request carries the tile name and nothing else, behind the same per-call
   consent as terrain; it is the same file, so `NetworkIsolationTest` is unchanged. The pipeline writes an
   empty file for every tile of a region it covers, which is why a 404 means "not covered" and not "no
@@ -680,7 +688,10 @@ Each of these was found by review or on the device and is now covered by a test.
   hidden there), partial photo access exists from 14, the fused location provider from 12 and dynamic
   colour from 12 (Android 11 gets `FallbackColorSchemes`). Lint has `InlinedApi` as an error so a
   newer constant cannot slip in, `PermissionsPlatformLevelTest` pins both sides of each level, and the
-  CI job `api30-launch` opens the app on an API 30 emulator (`scripts/ci_launch_smoke.sh`).
+  CI job `api30-launch` opens the app on an API 30 emulator (`scripts/ci_launch_smoke.sh`). That job
+  has its own workflow (`api30-launch.yml`) and runs only when a pull request touches the manifests,
+  the build and dependencies, the theme or the top-level `ui/` files the launch opens; a change
+  elsewhere that could break Android 11 at runtime is checked with "Run workflow" by hand.
 - **AR projections scale immediately on zoom without waiting for camera metadata.** CameraX capture
   results and crop regions lag behind `setZoomRatio` by tens of milliseconds. Decoupling the AR geometry
   scaling via `zoomFactor` computed directly from the requested zoom ensures instant 60/120 Hz response

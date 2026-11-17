@@ -1,8 +1,23 @@
 name: CI
 
+# The repository is public, so Actions minutes on standard runners cost nothing; what a pull request
+# pays is waiting for the checks. This workflow does only what every code change needs: the build takes
+# about ten minutes and the emulator launch seven more. The Android 11 launch has its own workflow
+# (api30-launch.yml) that runs only when something it can catch changed, and the release notes and
+# portability checks (checks.yml) run on every pull request, Markdown-only ones included.
 on:
   pull_request:
     branches: [main]
+    # Nothing in the build or the tests reads these: Markdown is documentation only (no test opens a
+    # .md file), release-notes/ is checked by checks.yml and the presentation site (site/ and its
+    # generator) by pages.yml. A pull request touching nothing else skips the ten-minute build.
+    # pages.yml itself is deliberately not listed: WorkflowHardeningTest has to check a changed workflow.
+    paths-ignore:
+      - '**/*.md'
+      - 'release-notes/**'
+      - 'LICENSE'
+      - 'site/**'
+      - 'scripts/build_site.py'
   workflow_dispatch:
 
 # A second push to the same branch makes the first run's answer worthless, so cancel it.
@@ -48,62 +63,3 @@ jobs:
             app/build/test-results/testDebugUnitTest/
             app/build/reports/
           if-no-files-found: warn
-
-  # minSdk is 30 and no one here owns an Android 11 phone. Lint proves no newer API is called; this
-  # proves the app actually opens there (theme, libraries, manifest), on the oldest image it supports.
-  api30-launch:
-    name: launch on Android 11
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Android build environment
-        uses: ./.github/actions/setup-android-env
-
-      - name: Assemble debug APK
-        run: ./gradlew --no-daemon :app:assembleDebug
-
-      # Hardware acceleration for the emulator; without it an API 30 boot takes most of the job.
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Launch on an API 30 emulator
-        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 30
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          script: ./scripts/ci_launch_smoke.sh app/build/outputs/apk/debug/app-debug.apk
-
-  portability:
-    name: portability
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Check repository portability
-        run: ./scripts/check_portability.sh
-
-  # The notes this pull request would put on Play once merged to main: every line added since the last
-  # release, in every listing language, within Play's 500 characters. Caught here, not in the deploy.
-  release-notes:
-    name: release notes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Test the release notes script
-        run: python3 -m unittest discover -s scripts -p 'test_release_notes.py'
-
-      - name: Check the notes against the last release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        run: python3 scripts/release_notes.py check --base-latest-release "$REPOSITORY"
-

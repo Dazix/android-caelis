@@ -1,0 +1,42 @@
+name: Checks
+
+# The quick checks every pull request gets, whatever it touches. One job, not two: together they take
+# under thirty seconds, less than a second runner takes to start and check out.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: release notes & portability
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The release notes are the lines added since the last release's tag, so its history is needed.
+          fetch-depth: 0
+
+      - name: Check repository portability
+        run: ./scripts/check_portability.sh
+
+      # The notes this pull request would put on Play once merged to main: every line added since the
+      # last release, in every listing language, within Play's 500 characters. Caught here, not in the
+      # deploy.
+      - name: Test the release notes script
+        if: success() || failure()
+        run: python3 -m unittest discover -s scripts -p 'test_release_notes.py'
+
+      - name: Check the notes against the last release
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: python3 scripts/release_notes.py check --base-latest-release "$REPOSITORY"
