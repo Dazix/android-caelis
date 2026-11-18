@@ -34,6 +34,7 @@
 
   <script>document.documentElement.classList.replace('no-js', 'js');</script>
   <link rel="stylesheet" href="{{root}}assets/css/style.css">
+  <script src="{{root}}assets/js/sky-gl.js" defer></script>
   <script src="{{root}}assets/js/main.js" defer></script>
   <script type="application/ld+json">{{jsonld}}</script>
 </head>
@@ -74,6 +75,7 @@
 
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
+      <canvas class="sky sky-gl" aria-hidden="true" data-moon="{{root}}assets/img/moon-map.webp"></canvas>
       <div class="sky sky-day" aria-hidden="true"></div>
       <div class="sky sky-warm" aria-hidden="true"></div>
       <canvas class="starfield" aria-hidden="true"></canvas>
@@ -123,6 +125,11 @@
           <mask id="moon-lit" x="-30" y="-30" width="60" height="60" maskUnits="userSpaceOnUse">
             <circle r="18" fill="#fff"/>
             <circle cx="11" cy="-4" r="18.5" fill="#000" filter="url(#soft)"/>
+          </mask>
+          <!-- With the rendered sky the bodies are drawn under this SVG; the arc parts around them. -->
+          <mask id="arc-gap" maskUnits="userSpaceOnUse" x="-600" y="-600" width="2400" height="1800">
+            <rect x="-600" y="-600" width="2400" height="1800" fill="#fff"/>
+            <circle class="arc-gap" r="0" fill="#000" filter="url(#soft)"/>
           </mask>
         </defs>
         <path class="sun-arc-path" d="M90 560 C 330 30, 870 30, 1110 560"/>
