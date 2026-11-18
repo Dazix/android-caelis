@@ -7,5 +7,5 @@ Funguje aj na Androide 11 a 12
 Nočná obloha: názvy sa neprekrývajú, ľahšie sa vyberajú, asterizmy v detaile hviezdy
 Horná lišta mimo výrezu kamery
 Varovanie kompasu, len keď naozaj uteká
-Slnko: obraz kamery naskočí rýchlejšie
+Slnko: rýchlejšia kamera, pevný horizont
 Sťahovanie terénu: celková veľkosť, limit či na požiadanie; výška nad terénom

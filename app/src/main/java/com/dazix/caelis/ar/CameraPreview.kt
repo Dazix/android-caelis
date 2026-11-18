@@ -171,7 +171,6 @@ fun CameraPreview(
                             result: TotalCaptureResult,
                         ) {
                             frameClock?.onCaptureCompleted(result)
-                            if (com.dazix.caelis.BuildConfig.DEBUG) logStabilization(result)
                             val crop = result.get(CaptureResult.SCALER_CROP_REGION) ?: return
                             val w = crop.width()
                             val h = crop.height()
@@ -421,30 +420,4 @@ private fun frameGrabberFor(analysis: ImageAnalysis, context: android.content.Co
             analysis.clearAnalyzer()
         }
     }
-}
-
-// Debug-only: what the camera reports it actually applied, for the overlay that sank below the ridge
-// after a fast swing and crept back (Pixel 10 Pro) while the fused tilt matched gravity. This device
-// offers no OIS lens-shift samples, so the reported modes and the physical lens are what can be seen.
-private var lastStabilizationLogNs = 0L
-private var lastStabilizationKey = ""
-
-private fun logStabilization(result: TotalCaptureResult) {
-    val ois = result.get(CaptureResult.LENS_OPTICAL_STABILIZATION_MODE)
-    val eis = result.get(CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE)
-    val physical = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-        result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID)
-    } else {
-        null
-    }
-    val key = "ois=$ois eis=$eis physical=$physical"
-    val now = android.os.SystemClock.elapsedRealtimeNanos()
-    if (key == lastStabilizationKey && now - lastStabilizationLogNs < 1_000_000_000L) return
-    lastStabilizationKey = key
-    lastStabilizationLogNs = now
-    android.util.Log.d(
-        "CaelisCamStab",
-        "$key focus=${result.get(CaptureResult.LENS_FOCUS_DISTANCE)} lensState=${result.get(CaptureResult.LENS_STATE)} " +
-            "frameTs=${result.get(CaptureResult.SENSOR_TIMESTAMP)?.div(1_000_000)}",
-    )
 }

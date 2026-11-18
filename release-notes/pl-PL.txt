@@ -7,5 +7,5 @@ Działa na Androidzie 11 i 12
 Nocne niebo: nazwy bez nakładania, łatwy wybór, asteryzmy w detalach gwiazdy
 Górny pasek omija wycięcie aparatu
 Ostrzeżenie kompasu tylko przy błędzie
-Słońce: obraz z aparatu szybciej
+Słońce: szybszy aparat, stabilny horyzont
 Pobieranie terenu: łączny rozmiar, limit lub na żądanie; wysokość nad terenem

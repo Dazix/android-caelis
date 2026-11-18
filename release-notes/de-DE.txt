@@ -7,5 +7,5 @@ Läuft auf Android 11 und 12
 Nachthimmel: Namen überlappen nicht, leicht antippbar, Asterismen im Sterndetail
 Obere Leiste meidet die Kameraaussparung
 Kompasswarnung nur bei echtem Fehler
-Sonne: Kamerabild kommt schneller
+Sonne: Kamera schneller, Horizont stabil
 Geländedaten: Gesamtgröße, Limit oder auf Anfrage; Höhe über Gelände
