@@ -2,7 +2,7 @@
 
 # CAELIS
 
-[![CI](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml/badge.svg)](https://github.com/Dazix/android-caelis/actions/workflows/ci.yml)
+[![CI](https://github.com/Dazix/caelis-app-android/actions/workflows/ci.yml/badge.svg)](https://github.com/Dazix/caelis-app-android/actions/workflows/ci.yml)
 
 An Android intervalometer that presses the shutter **inside the camera app you already use**, on a
 drift-free schedule, so every frame of a time-lapse keeps that app's full image pipeline — HDR+, Night

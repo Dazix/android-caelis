@@ -25,7 +25,7 @@ OUT = SRC / "dist"
 
 BASE = os.environ.get("CAELIS_SITE_URL", "https://caelis-app.com/").rstrip("/") + "/"
 PLAY = "https://play.google.com/store/apps/details?id=com.dazix.caelis"
-REPO = "https://github.com/Dazix/android-caelis"
+REPO = "https://github.com/Dazix/caelis-app-android"
 LANGS = ["en", "cs", "sk", "pl", "de"]
 DEFAULT = "en"
 # Markup a string may carry into the page; everything else is escaped.
