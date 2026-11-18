@@ -206,8 +206,13 @@ p { margin: 0; text-wrap: pretty; }
 .js .sun-rays { animation: sun-spin 90s linear infinite, sun-breathe 6s ease-in-out infinite; }
 @keyframes sun-spin { to { transform: rotate(360deg); } }
 @keyframes sun-breathe { 50% { opacity: 0.2; } }
-.ridge-back { fill: #121a42; }
-.ridge-front { fill: #0a0f28; }
+.ridge-back { fill: var(--ridge-back, #121a42); }
+.ridge-front { fill: var(--ridge-front, #0a0f28); }
+/* With WebGL the atmosphere, the Sun and the Moon are rendered (sky-gl.js); the CSS sky and the SVG
+   bodies stay as the fallback and are only hidden. */
+.sky-gl { display: none; width: 100%; height: 100%; }
+.has-skygl .sky-gl { display: block; }
+.has-skygl .sky-day, .has-skygl .sky-warm, .has-skygl .sky-sun, .has-skygl .sky-moon { display: none; }
 
 .hero-inner { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: clamp(32px, 6vw, 80px); align-items: center; }
 .eyebrow {
