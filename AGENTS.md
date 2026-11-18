@@ -1,7 +1,7 @@
 # Working in this repository
 
 Android intervalometer. It presses the shutter inside another app through an
-AccessibilityService. Read `README.md` first for what the app is; this file is how to work on it
+AccessibilityService. Read `README.md` first for what the app is (and `docs/DEVELOPMENT.md` for the build, release and architecture detail); this file is how to work on it
 without breaking it.
 
 ## Non-negotiables
