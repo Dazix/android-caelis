@@ -438,6 +438,7 @@ internal object SettingsMapping {
     private val DEBUG_STAR_TAP_RADIUS = intPreferencesKey("debug_star_tap_radius")
     private val DEBUG_SHOW_TAP_RADIUS_INDICATOR = booleanPreferencesKey("debug_show_tap_radius_indicator")
     private val DEBUG_LOG_COMPASS = booleanPreferencesKey("debug_log_compass")
+    private val DEBUG_DISABLE_TILT_RECOVERY = booleanPreferencesKey("debug_disable_tilt_recovery")
 
     private val ARCORE_CONSENT = booleanPreferencesKey("arcore_consent")
     private val GEOSPATIAL_CONSENT = booleanPreferencesKey("geospatial_consent")
@@ -909,6 +910,7 @@ internal object SettingsMapping {
             starTapRadiusDp = prefs[DEBUG_STAR_TAP_RADIUS] ?: DebugPreferences.DEFAULT_STAR_TAP_RADIUS_DP,
             showTapRadiusIndicator = prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] ?: false,
             logCompass = prefs[DEBUG_LOG_COMPASS] ?: false,
+            disableTiltRecovery = prefs[DEBUG_DISABLE_TILT_RECOVERY] ?: false,
         )
     }
 
@@ -918,6 +920,7 @@ internal object SettingsMapping {
         prefs[DEBUG_STAR_TAP_RADIUS] = preferences.starTapRadiusDp
         prefs[DEBUG_SHOW_TAP_RADIUS_INDICATOR] = preferences.showTapRadiusIndicator
         prefs[DEBUG_LOG_COMPASS] = preferences.logCompass
+        prefs[DEBUG_DISABLE_TILT_RECOVERY] = preferences.disableTiltRecovery
     }
 
     /**

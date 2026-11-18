@@ -620,7 +620,10 @@ class NightSkyArViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         viewModelScope.launch {
-            debugPreferences.collect { orientationTracker.compassLogEnabled = it.logCompass }
+            debugPreferences.collect {
+                orientationTracker.compassLogEnabled = it.logCompass
+                orientationTracker.tiltRecoveryEnabled = !it.disableTiltRecovery
+            }
         }
     }
     val isDebugOptionsEnabled: StateFlow<Boolean> = settingsStore.debugPreferences

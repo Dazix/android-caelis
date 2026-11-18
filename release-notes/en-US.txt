@@ -10,5 +10,5 @@ Runs on Android 11 and 12
 Night sky: names never overlap, easier to tap, asterisms in star details
 Top bar clears the camera cutout
 Compass warning only when it is really off
-Sun: camera picture appears sooner
+Sun: faster camera, steadier horizon
 Terrain downloads: total size, a limit or on demand; height above terrain

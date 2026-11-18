@@ -89,7 +89,7 @@ scripts/e2e_pixel_camera.sh
 ```
 
 Read the totals from `app/build/test-results/testDebugUnitTest/*.xml` (`tests` / `failures` / `errors` /
-`skipped`), not from the console. Current baseline: **1365 JVM tests (377 intervalometer, 775 solar, horizon & pose, 476 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
+`skipped`), not from the console. Current baseline: **1420 JVM tests (379 intervalometer, 828 solar, horizon & pose, 495 night sky — `solar` and `nightsky` overlap on `domain.arframe`, `ar.scene` and the virtual places (`domain.location`, `data.location`), which is why the three do not add up — plus 31 in `docs`, which no scoped suite runs), 53
 instrumented tests, 0 failures, 0 skips, lint 0 errors.** Anything less is a regression.
 
 `run_tests.sh` filters by package, and a new `domain/` package is picked up by **no** suite until it is added
@@ -272,6 +272,28 @@ Each of these was found by review or on the device and is now covered by a test.
   the automatic alignment waits for it, and a lock requested earlier (`HeadingLock.isLocked`) only
   takes hold (`isHolding`) at the first settled sample, staying on the compass the fit was made
   against until then.
+- **After a fast swing the tilt is brought back onto gravity, and only then.** On a Pixel 10 Pro a
+  300-380 °/s swing left the rotation vector's camera elevation 1-2° above the accelerometer's for
+  about 4 s, and the overlay sank below the ridge and crept back (the capture results showed OIS and
+  EIS off, so it was not the picture). `TiltRecovery` follows the gravity error only within 4 s of a
+  swing over 100 °/s, with the phone still (gyroscope, after a 0.25 s hold) and the accelerometer near
+  1 g, fast while it stands 0.3° off and slowly closer in; outside that window it fades out and the
+  accelerometer is not consulted at all. Following gravity at rest, even slowly, put the hand's tremor
+  into the line: a quarter-second version bobbed visibly, a slow one was still visible next to the
+  fusion alone. Debug builds have an A/B switch (`disableTiltRecovery`).
+- **An aligned heading is checked against the skyline again, and moved only by what changed since.**
+  On a Pixel 10 Pro the gyro-held heading came back 0.6-1.8° beside the ridge after 300-380 °/s
+  swings, and nothing on the phone can tell whether the game vector or the compass moved (on a
+  later run the compass jumped 3.1° over three swings while the skyline said 0.28°). Once a session
+  is aligned and the gyro holds the heading, Sun AR fits the skyline again 1.5 s after a swing over
+  100 °/s (`OrientationTracker.swingCount`) and every 20 s at rest (`HeadingRefinePolicy`), and turns
+  the heading (`shiftHeadingBy`, which is not an alignment: no lock, no stop of anything) by the fit
+  minus a baseline, gliding over 250 ms. The baseline is zero after an accepted fit; after a hand
+  alignment it is measured once, before the next swing, as where the fit puts the ridge against where
+  the hand did, so the hand's choice is kept — the hand still outranks the fit ("Sun AR aligns
+  itself at every start" above). A step under 0.2° is noise and is left alone, one over 3° is refused, a frame from before
+  a later swing is dropped, and a flat skyline answers nothing. Sensor path only, silent; debug builds
+  log it as `CaelisAlign headingCheck`.
 - **Sensor matrices are row-major.** `SensorManager` writes them row-major; convert a slerped
   quaternion with `QuaternionSlerp.quaternionToRowMajorMatrix`, never the column-major
   `quaternionToRotationMatrix`. Mixing the two transposed the auto-align's synchronized matrix and

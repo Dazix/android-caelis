@@ -636,6 +636,8 @@
     <string name="settings_debug_group_compass">Kompass</string>
     <string name="settings_debug_log_compass">Kompass-Diagnoseprotokoll</string>
     <string name="settings_debug_log_compass_desc">Schreibt jede Sekunde in Logcat (CaelisCompass), woraus die Kompasswarnung entschieden wird</string>
+    <string name="settings_debug_disable_tilt_recovery">Neigungskorrektur aus</string>
+    <string name="settings_debug_disable_tilt_recovery_desc">Zeichnet die Sensorneigung unverändert, ohne sie nach einem schnellen Schwenk zur Schwerkraft zurückzuholen</string>
     <string name="settings_debug_star_tap_radius">Treffertest-Radius der Berührung</string>
     <string name="settings_debug_star_tap_radius_desc">Suchradius zur Auswahl von Himmelskörpern. Objekte innerhalb dieses Radius werden nach Entfernung und Helligkeit bewertet (Standard 48 dp).</string>
     <string name="settings_debug_show_tap_indicator">Tipp-Suchradius zeigen</string>

@@ -15,6 +15,7 @@ import com.dazix.caelis.domain.arframe.GameVectorSettle
 import com.dazix.caelis.domain.arframe.HeadingLock
 import com.dazix.caelis.domain.arframe.HeadingState
 import com.dazix.caelis.domain.arframe.RollEase
+import com.dazix.caelis.domain.arframe.TiltRecovery
 import com.dazix.caelis.domain.arframe.YawOffset
 import com.dazix.caelis.domain.nightsky.CelestialMatrixCalculator
 import com.dazix.caelis.domain.solar.GeoLocation
@@ -98,6 +99,19 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      */
     val isGameVectorSettled: Boolean get() = !dualMode || gameSettle.isSettled
 
+    /** The gyro holds the heading the user (or a fit) aligned; the compass no longer moves it. */
+    val isHeadingHeld: Boolean get() = dualMode && headingLock.isHolding
+
+    /**
+     * How many fast swings (over [SWING_RATE_DEG_S]) the phone has made since the tracker was built.
+     * Only its changes mean anything: after one the game vector's yaw may have jumped
+     * ([com.dazix.caelis.domain.horizon.HeadingRefinePolicy]).
+     */
+    @Volatile
+    var swingCount: Int = 0
+        private set
+    private var inSwing = false
+
     /** [HeadingLock.correctionDegrees], folded into the world-Z term next to the declination. */
     @Volatile
     private var headingOffsetDeg = 0f
@@ -139,6 +153,10 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
      */
     @Volatile
     var compassLogEnabled: Boolean = false
+
+    /** Debug A/B switch: false draws the rotation vector's tilt without [TiltRecovery]. */
+    @Volatile
+    var tiltRecoveryEnabled: Boolean = true
     private var lastLoggedState: HeadingState? = null
     private var lastLoggedEvidence: CompassEvidence? = null
     private var lastCompassLogMs = 0L
@@ -330,6 +348,7 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         QuaternionSlerp.slerp(syncQ1, syncQ2, u, syncQInterp)
         QuaternionSlerp.quaternionToRowMajorMatrix(syncQInterp, syncRawMatrix)
+        if (tiltRecoveryEnabled) tiltRecovery.applyTo(syncRawMatrix)
 
         applyCalibration(
             sensorMatrix = syncRawMatrix,
@@ -439,6 +458,18 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         setAlignment(
             totalAzimuthDeg = coarseHeadingOffsetDeg + calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
             pitchDeg = calibrationPitchOffsetDeg + deltaPitchDeg,
+        )
+    }
+
+    /**
+     * Turns the aligned heading by [deltaAzimuthDeg] without it counting as an alignment: the skyline
+     * check found the gyro-held heading moved since ([com.dazix.caelis.domain.horizon.HeadingRefinePolicy]).
+     * The lock stays as it is and the pitch is untouched.
+     */
+    fun shiftHeadingBy(deltaAzimuthDeg: Float) {
+        setAlignment(
+            totalAzimuthDeg = coarseHeadingOffsetDeg + calibrationAzimuthOffsetDeg + deltaAzimuthDeg,
+            pitchDeg = calibrationPitchOffsetDeg,
         )
     }
 
@@ -588,6 +619,9 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         // A new session: the game vector's north restarts and the user has not aligned anything yet.
         headingLock.reset()
         gameSettle.reset()
+        tiltRecovery.reset()
+        hasTiltPose = false
+        latestRateRadS = Double.POSITIVE_INFINITY
         headingOffsetDeg = 0f
         coarseHeadingOffsetDeg = 0f
         headingUncertaintyDeg = Float.NaN
@@ -607,8 +641,25 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         sensorManager.registerListener(this, rotationSensor, SAMPLING_PERIOD_US)
         // The field check needs a few readings a second, not the pose's 200.
         magnetometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+        // Both only for TiltRecovery: whether the phone is still, and where gravity is. 200 Hz; a
+        // faster rate needs HIGH_SAMPLING_RATE_SENSORS (SENSOR_DELAY_FASTEST crashed the screen).
+        if (gyroscope != null && accelerometer != null) {
+            sensorManager.registerListener(this, gyroscope, SAMPLING_PERIOD_US)
+            sensorManager.registerListener(this, accelerometer, SAMPLING_PERIOD_US)
+        }
         isListening = true
     }
+
+    // Gravity, against which the rotation vector's tilt is corrected once the phone is still, and
+    // the gyroscope that says when it is. The rate is not derived from consecutive rotation vectors:
+    // in float their dot product rounds to 1 below ~8 °/s at 200 Hz, so the rate read 0 or 9.5 °/s.
+    private val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscope = sensorManager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    private val tiltRecovery = TiltRecovery()
+    private val latestRvQuat = FloatArray(4).apply { this[3] = 1f }
+    private val tiltPoseMatrix = FloatArray(16)
+    private var latestRateRadS = Double.POSITIVE_INFINITY
+    private var hasTiltPose = false
 
     fun stop() {
         if (!isListening || sensorManager == null) return
@@ -629,6 +680,33 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
             publishHeadingState()
             return
         }
+        if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+            if (event.values.size < 3) return
+            val v = event.values
+            val rate = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+            latestRateRadS = rate.toDouble()
+            // One count per swing, not per sample: it ends only well below the threshold.
+            val rateDps = Math.toDegrees(rate.toDouble())
+            if (!inSwing && rateDps > SWING_RATE_DEG_S) {
+                inSwing = true
+                swingCount++
+            } else if (inSwing && rateDps < SWING_RATE_DEG_S * 0.5) {
+                inSwing = false
+            }
+            return
+        }
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            if (event.values.size < 3) return
+            if (hasTiltPose) {
+                // The unsmoothed fused pose of the latest rotation sample, at most one period old.
+                SensorManager.getRotationMatrixFromVector(tiltPoseMatrix, latestRvQuat)
+                tiltRecovery.add(
+                    event.timestamp, tiltPoseMatrix,
+                    event.values[0], event.values[1], event.values[2], latestRateRadS,
+                )
+            }
+            return
+        }
         if (dualMode && event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
             readQuaternion(event.values, latestGameQuat)
             latestGameTimestampNs = event.timestamp
@@ -646,6 +724,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
         ringBuffer.push(event.timestamp, qx, qy, qz, qw)
         val previousSampleNs = lastRotationSampleNs
         lastRotationSampleNs = event.timestamp
+        System.arraycopy(sampleQuat, 0, latestRvQuat, 0, 4)
+        hasTiltPose = true
         // Game events have returned above; what is left is the rotation sensor, and only a vector
         // with a magnetometer in it has a heading uncertainty to report.
         if (rotationSensor?.type != Sensor.TYPE_GAME_ROTATION_VECTOR) {
@@ -705,6 +785,8 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         // Convert unit quaternion to guaranteed 100% orthonormal rotation matrix (sensor ENU)
         SensorManager.getRotationMatrixFromVector(rawMatrix, smoothedQuat)
+        // The fusion's tilt brought back onto gravity once the phone is still (TiltRecovery).
+        if (tiltRecoveryEnabled) tiltRecovery.applyTo(rawMatrix)
 
         // Compute live True North matrix, with the standing calibration folded in. Both are rotations
         // of the world frame, so they compose into the single offset applyCalibration already takes.
@@ -854,6 +936,12 @@ class OrientationTracker(private val context: Context) : SensorEventListener {
 
         /** The same bound for the compass correction. See [MAX_CALIBRATION_PITCH]. */
         const val MAX_CALIBRATION_AZIMUTH = 20f
+
+        /**
+         * A swing fast enough to have left the game vector's yaw off (300-380 °/s did, on a Pixel 10
+         * Pro); a hand's twitch or a slow pan turns at 5-25 °/s. Same as [TiltRecovery.SWING_RATE_RAD_S].
+         */
+        const val SWING_RATE_DEG_S = 100.0
 
         private const val COMPASS_LOG_TAG = "CaelisCompass"
         private const val COMPASS_LOG_EVERY_MS = 1_000L

@@ -650,6 +650,8 @@
     <string name="settings_debug_group_compass">Kompas</string>
     <string name="settings_debug_log_compass">Dziennik diagnostyczny kompasu</string>
     <string name="settings_debug_log_compass_desc">Co sekundę zapisuje w logcat (CaelisCompass), na podstawie czego pojawia się ostrzeżenie kompasu</string>
+    <string name="settings_debug_disable_tilt_recovery">Wyłącz korekcję pochylenia</string>
+    <string name="settings_debug_disable_tilt_recovery_desc">Rysuje pochylenie z czujników bez przyciągania do grawitacji po szybkim ruchu</string>
     <string name="settings_debug_star_tap_radius">Promień wykrywania dotyku</string>
     <string name="settings_debug_star_tap_radius_desc">Promień wyszukiwania przy wybieraniu ciał niebieskich. Obiekty w tym promieniu są oceniane według odległości i jasności (domyślnie 48 dp).</string>
     <string name="settings_debug_show_tap_indicator">Pokaż promień wyszukiwania stuknięcia</string>

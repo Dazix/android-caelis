@@ -8,6 +8,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import com.dazix.caelis.domain.solar.GeoLocation
 import com.dazix.caelis.domain.solar.LocationFixPolicy
 import com.dazix.caelis.ui.Permissions
@@ -39,6 +40,10 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
 
     private var isUpdating = false
 
+    /** Whether the position in [location] qualified as a fix, and when it was taken; see [hold]. */
+    private var heldQualifies = false
+    private var heldAtElapsedMs = 0L
+
     fun refreshLocation() {
         val hasFine = Permissions.granted(context, Manifest.permission.ACCESS_FINE_LOCATION)
         val hasCoarse = Permissions.granted(context, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -62,9 +67,7 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
             val fix = known.filter { qualifiesAsFix(it, satellites) }.maxByOrNull { it.time }
             val best = fix ?: known.maxByOrNull { it.time }
 
-            if (best != null) {
-                locationState.value = GeoLocation(best.latitude, best.longitude, best.altitude)
-            }
+            if (best != null) hold(best, qualifies = fix != null, satellites = satellites)
             hasGpsFixState.value = fix != null
             approximateState.value = fix != null && !satellites
         } catch (_: SecurityException) {
@@ -138,14 +141,27 @@ class SolarLocationProvider(private val context: Context) : LocationListener {
 
     fun setManualLocation(geoLocation: GeoLocation) {
         locationState.value = geoLocation
+        heldQualifies = false
         hasGpsFixState.value = false
         approximateState.value = false
     }
 
-    override fun onLocationChanged(loc: Location) {
+    /**
+     * Takes [loc] as the position unless it is a coarse one that would displace a fresh fix
+     * ([LocationFixPolicy.replacesHeld]): GPS, fused and network all report every second.
+     */
+    private fun hold(loc: Location, qualifies: Boolean, satellites: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        if (!LocationFixPolicy.replacesHeld(qualifies, heldQualifies, now - heldAtElapsedMs, satellites)) return
         locationState.value = GeoLocation(loc.latitude, loc.longitude, loc.altitude)
+        heldQualifies = qualifies
+        heldAtElapsedMs = now
+    }
+
+    override fun onLocationChanged(loc: Location) {
         // A callback is a live position, whatever its timestamp says.
         val satellites = satellitesAvailable()
+        hold(loc, qualifies = qualifiesAsFix(loc, satellites, ageMs = 0L), satellites = satellites)
         if (qualifiesAsFix(loc, satellites, ageMs = 0L)) {
             approximateState.value = !satellites
             hasGpsFixState.value = true
