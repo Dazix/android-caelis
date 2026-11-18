@@ -8,8 +8,8 @@
   <p>
     <a href="https://caelis-app.com/"><img src="https://img.shields.io/badge/website-caelis--app.com-0E1433?logo=googlechrome&logoColor=white" alt="Website: caelis-app.com"/></a>
     <a href="https://play.google.com/store/apps/details?id=com.dazix.caelis"><img src="https://img.shields.io/badge/Google_Play-download-0E1433?logo=googleplay&logoColor=white" alt="Google Play: download"/></a>
-    <a href="https://github.com/Dazix/caelis-app-android/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Dazix/caelis-app-android/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI" alt="CI"/></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-0E1433?logo=gnu&logoColor=white" alt="Licence: GPL-3.0"/></a>
+    <a href="https://github.com/Dazix/caelis-app-android/actions/workflows/ci.yml"><img src="https://github.com/Dazix/caelis-app-android/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"/></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-0E1433" alt="Licence: GPL-3.0"/></a>
     <img src="https://img.shields.io/badge/Android-11%2B-0E1433?logo=android&logoColor=white" alt="Android 11+"/>
   </p>
 
