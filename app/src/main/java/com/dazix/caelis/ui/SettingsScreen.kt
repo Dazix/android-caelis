@@ -67,6 +67,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -876,6 +877,37 @@ fun SettingsScreen(
                     text = BuildConfig.VERSION_CODE.toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 2.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+
+            // Google Play requires the privacy policy to be reachable from inside the app, not only
+            // from the store listing. The address is shown as text too: a phone without a browser
+            // cannot open it (openUri throws then), and the user can still read where it lives.
+            // The browser fetches it, not the app, so DemTileDownloader stays the only network caller.
+            val privacyUrl = stringResource(R.string.settings_privacy_policy_url)
+            val uriHandler = LocalUriHandler.current
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button) { runCatching { uriHandler.openUri(privacyUrl) } }
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_privacy_policy),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = privacyUrl,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }

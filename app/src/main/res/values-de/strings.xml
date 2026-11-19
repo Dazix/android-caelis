@@ -712,6 +712,8 @@
     <string name="settings_section_version">Version</string>
     <string name="settings_version_name_label">Versionsname</string>
     <string name="settings_version_code_label">Versionscode</string>
+    <string name="settings_privacy_policy">Datenschutzerklärung</string>
+    <string name="settings_privacy_policy_url">https://caelis-app.com/de/privacy/</string>
 
     <!-- Virtuelle Orte -->
     <string name="places_title">Orte</string>
