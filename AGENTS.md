@@ -705,15 +705,26 @@ Each of these was found by review or on the device and is now covered by a test.
   regardless of whether they accepted or declined.
 - **Below Android 13 the newer permission names do not exist, and checking one answers "denied"
   forever.** `minSdk` is 30. Photos are `Permissions.photos()` (`READ_EXTERNAL_STORAGE`, capped at
-  `maxSdkVersion="32"`, below 13), notifications below 13 are `areNotificationsEnabled()` and their
-  button opens the app's notification settings, exact alarms need no grant on Android 11 (the row is
-  hidden there), partial photo access exists from 14, the fused location provider from 12 and dynamic
-  colour from 12 (Android 11 gets `FallbackColorSchemes`). Lint has `InlinedApi` as an error so a
+  `maxSdkVersion="32"`, below 13 only; from 13 there is no photos permission, next invariant),
+  notifications below 13 are `areNotificationsEnabled()` and their button opens the app's
+  notification settings, exact alarms need no grant on Android 11 (the row is hidden there), the
+  fused location provider from 12 and dynamic colour from 12 (Android 11 gets `FallbackColorSchemes`). Lint has `InlinedApi` as an error so a
   newer constant cannot slip in, `PermissionsPlatformLevelTest` pins both sides of each level, and the
   CI job `api30-launch` opens the app on an API 30 emulator (`scripts/ci_launch_smoke.sh`). That job
   has its own workflow (`api30-launch.yml`) and runs only when a pull request touches the manifests,
   the build and dependencies, the theme or the top-level `ui/` files the launch opens; a change
   elsewhere that could break Android 11 at runtime is checked with "Run workflow" by hand.
+- **No READ_MEDIA_IMAGES: from Android 13 capture verification counts MediaStore inserts.** Google Play
+  allows the permission only to apps built around the photo library and flagged it for a check the
+  photo picker cannot do (the frame does not exist yet). `CaptureVerifier` registers a
+  `ContentObserver` on the images collection for the session and counts INSERT notifications
+  (`ImageInsertLog`; the camera's follow-up UPDATEs do not count); MediaStore delivers them without the
+  permission, the rows stay unreadable. Measured on a Pixel 10 Pro with Google Camera: one INSERT per
+  frame within a second of `DATE_ADDED` — but only while the process is not cached, which the bound
+  accessibility service guarantees during a session; a cached process got them late and merged. It
+  cannot tell whose photo it was, so a screenshot during a shot passes as the frame: the accepted
+  price. Android 11 and 12 keep the row rule (`CameraImageRule`). `NetworkIsolationTest` pins the
+  permission set.
 - **AR projections scale immediately on zoom without waiting for camera metadata.** CameraX capture
   results and crop regions lag behind `setZoomRatio` by tens of milliseconds. Decoupling the AR geometry
   scaling via `zoomFactor` computed directly from the requested zoom ensures instant 60/120 Hz response

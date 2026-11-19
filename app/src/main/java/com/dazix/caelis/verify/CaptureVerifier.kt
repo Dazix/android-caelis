@@ -3,34 +3,48 @@ package com.dazix.caelis.verify
 import android.content.ContentResolver
 import android.content.Context
 import android.content.pm.PackageManager
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import com.dazix.caelis.ui.Permissions
+import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Answers one question: did the *camera app* save a new frame since the baseline taken just before the
- * tap? Used only when [com.dazix.caelis.domain.SessionConfig.verifyCaptures] is on.
+ * Answers one question: did the camera app save a new frame since the baseline taken just before the
+ * tap? Used only when [com.dazix.caelis.domain.SessionConfig.verifyCaptures] is on. The engine sees
+ * three calls — [available], [newestToken] before the tap, [hasNewImageSince] after it — and two ways
+ * of answering them hide behind those calls, chosen by the platform level.
  *
- * ### What counts as proof
+ * ### Android 13 and newer: insert notifications, no permission
+ * Google Play allows READ_MEDIA_IMAGES only to apps whose core purpose is the photo library, and
+ * refused it for a check that the photo picker cannot do (the frame does not exist yet when anything
+ * could be picked). So from Android 13 the app declares no photos permission at all and registers a
+ * [ContentObserver] on the images collection instead: MediaStore delivers its insert notifications
+ * to an app that cannot read the row (on a Pixel 10 Pro with Google Camera every frame's INSERT
+ * arrived within a second of `DATE_ADDED`, its rows unreadable). Any image INSERT after the baseline
+ * counts ([ImageInsertLog]). That is weaker than the rule below — whose row it was cannot be asked
+ * without the permission, so a screenshot taken during the shot passes as the frame — which is the
+ * trade the user accepted for keeping the check at all. Android defers and merges notifications for a
+ * cached process; a session never is one, because the bound accessibility service keeps it up.
+ *
+ * ### Android 11 and 12: the MediaStore rows
  * "The newest row in MediaStore changed" is not proof — a screenshot, a photo arriving in a chat, or
  * anything else that writes an image row would satisfy it and report a shot that never happened. A row
  * counts only when it passes [CameraImageRule]: it has to live where a camera app puts its captures
  * (or be owned by the camera app itself) *and* have been added inside this shot's window. The window
- * start travels inside the baseline token, so the existing three-call shape — [available],
- * [newestToken] before the tap, [hasNewImageSince] after it — did not have to change.
+ * start travels inside the baseline token. This needs READ_EXTERNAL_STORAGE ([Permissions.photos]),
+ * which the manifest caps at API 32.
  *
  * ### Degrading
- * Every path degrades silently. Without the photos permission (`READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`
- * below Android 13, see [Permissions.photos]) or on any provider error [available] is
- * false and [newestToken] returns `null`; the engine then skips verification entirely rather than
- * warning about a photo it simply cannot see. Verification never aborts a session — at worst the engine
- * re-taps once and carries on with a warning. What it must never do is invent a success, so anything
- * unreadable reads as "cannot confirm" ([hasNewImageSince] returns false), never as a capture.
- *
- * Partial media access (`READ_MEDIA_VISUAL_USER_SELECTED` granted, `READ_MEDIA_IMAGES` not) is
- * deliberately treated as unavailable: the user-selected subset cannot contain a photo that does not
- * exist yet, so verification would fail every shot and re-tap the whole session.
+ * Every path degrades silently. Without the photos permission below Android 13 [available] is false
+ * and the engine skips verification rather than warning about a photo it simply cannot see. A
+ * provider error or an observer that could not be registered makes [newestToken] return `null`, which
+ * leaves that shot unverified. Verification never aborts a session — at worst the engine re-taps once
+ * and carries on with a warning. What it must never do is invent a success, so anything unreadable
+ * reads as "cannot confirm" ([hasNewImageSince] returns false), never as a capture.
  *
  * @param expectedPackage the camera app being driven, when it is known. Rows it owns are accepted
  *   wherever they were saved, and rows owned by some *other* app are rejected outright. Leave it null
@@ -49,19 +63,32 @@ class CaptureVerifier(context: Context, expectedPackage: String? = null) {
     @Volatile
     var expectedPackage: String? = expectedPackage
 
-    /** True when MediaStore images can actually be read right now. */
-    fun available(): Boolean =
-        context.checkSelfPermission(Permissions.photos()) ==
-            PackageManager.PERMISSION_GRANTED
+    private val usesInsertNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+    private val inserts = ImageInsertLog()
+
+    /** Registered by the first verified shot of a session, dropped by [close]. */
+    private var observer: ContentObserver? = null
 
     /**
-     * Opaque baseline for the shot about to be fired: the moment the window opens, plus the identity of
-     * the newest camera row that already existed. `null` only when MediaStore cannot be read at all —
-     * an empty camera folder still produces a usable token, because the window alone is enough to tell
-     * a new capture from every photo that came before it.
+     * True when a new capture can be seen at all: always from Android 13 (no permission is involved),
+     * below it only with the photos permission granted.
+     */
+    fun available(): Boolean =
+        usesInsertNotifications ||
+            context.checkSelfPermission(Permissions.photos()) == PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Opaque baseline for the shot about to be fired. From Android 13 it is the insert count so far;
+     * below it, the moment the window opens plus the identity of the newest camera row that already
+     * existed. `null` only when nothing can be watched — an empty camera folder still produces a usable
+     * token, because the window alone is enough to tell a new capture from every photo before it.
      */
     fun newestToken(): String? {
         if (!available()) return null
+        if (usesInsertNotifications) {
+            return if (startWatching()) CaptureToken.encodeInserts(inserts.mark()) else null
+        }
         val nowSec = wallClockSeconds()
         val rows = queryRows(minDateAddedSec = null, limit = BASELINE_SCAN_LIMIT) ?: return null
         val newest = rows.firstOrNull {
@@ -79,6 +106,10 @@ class CaptureVerifier(context: Context, expectedPackage: String? = null) {
      */
     fun hasNewImageSince(baseline: String?): Boolean {
         if (!available()) return false
+        if (usesInsertNotifications) {
+            val mark = CaptureToken.insertMarkOf(baseline) ?: return false
+            return inserts.hasInsertAfter(mark)
+        }
         val windowStartSec = CaptureToken.windowStartOf(baseline) ?: return false
         val baselineIdentity = CaptureToken.identityOf(baseline)
         val nowSec = wallClockSeconds()
@@ -146,6 +177,39 @@ class CaptureVerifier(context: Context, expectedPackage: String? = null) {
         }.onFailure {
             Log.i(TAG, "MediaStore unreadable, verification skipped: ${it.javaClass.simpleName}")
         }.getOrNull()
+    }
+
+    /** Stops watching for inserts. The next verified shot registers the observer again. */
+    @Synchronized
+    fun close() {
+        observer?.let { registered ->
+            runCatching { context.contentResolver.unregisterContentObserver(registered) }
+        }
+        observer = null
+    }
+
+    /**
+     * Registers the insert observer once per session. No handler: the callback runs on a binder
+     * thread and only bumps [inserts], which is atomic, so the main thread never waits for it.
+     */
+    @Synchronized
+    private fun startWatching(): Boolean {
+        if (observer != null) return true
+        val created = object : ContentObserver(null) {
+            override fun onChange(selfChange: Boolean, uris: Collection<Uri>, flags: Int) {
+                inserts.record(flags)
+            }
+        }
+        return runCatching {
+            context.contentResolver.registerContentObserver(
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
+                true,
+                created,
+            )
+            observer = created
+        }.onFailure {
+            Log.i(TAG, "MediaStore not observable, verification skipped: ${it.javaClass.simpleName}")
+        }.isSuccess
     }
 
     /** Wall clock, because `DATE_ADDED` is wall-clock seconds; never used to measure a duration. */
@@ -284,6 +348,27 @@ internal object CameraImageRule {
 }
 
 /**
+ * Counts the image inserts MediaStore announced, for the Android 13+ path. A notification is all there
+ * is: the row behind it cannot be read without the photos permission, so whose photo it was is not
+ * known. Only INSERT counts — the camera's own follow-up UPDATEs (the pending row finished) and any
+ * delete would otherwise make one frame look like several, or a deleted photo like a new one.
+ */
+internal class ImageInsertLog {
+
+    private val count = AtomicLong(0L)
+
+    /** Called with the flags of every change notification on the images collection. */
+    fun record(flags: Int) {
+        if (flags and ContentResolver.NOTIFY_INSERT != 0) count.incrementAndGet()
+    }
+
+    /** The baseline for a shot: how many inserts had arrived before its tap. */
+    fun mark(): Long = count.get()
+
+    fun hasInsertAfter(mark: Long): Boolean = count.get() > mark
+}
+
+/**
  * The baseline handed to [CaptureVerifier.hasNewImageSince]. Opaque to the engine, which only ever
  * stores it and hands it back, so it can carry both halves of the answer: when this shot's window
  * opened, and which camera row was already the newest at that instant.
@@ -291,8 +376,19 @@ internal object CameraImageRule {
 internal object CaptureToken {
 
     private const val PREFIX = "v2"
+    private const val INSERTS_PREFIX = "i1"
     private const val NONE = "-"
     private const val SEP = '|'
+
+    /** The Android 13+ baseline: the [ImageInsertLog.mark] taken before the tap. */
+    fun encodeInserts(mark: Long): String = "$INSERTS_PREFIX$SEP$mark"
+
+    /** The insert mark of an Android 13+ token, or `null` for any other or a missing one. */
+    fun insertMarkOf(token: String?): Long? {
+        val parts = (token ?: return null).split(SEP)
+        if (parts.size != 2 || parts[0] != INSERTS_PREFIX) return null
+        return parts[1].toLongOrNull()
+    }
 
     fun encode(windowStartSec: Long, id: Long?, dateAddedSec: Long?): String =
         listOf(

@@ -126,7 +126,6 @@ for "this key was unset", and teardown answers it with `settings delete`.
 | `ORIG_APPOP_SYSTEM_ALERT_WINDOW` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.caelis SYSTEM_ALERT_WINDOW` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.caelis SYSTEM_ALERT_WINDOW <mode>` |
 | `ORIG_APPOP_ACCESS_RESTRICTED_SETTINGS` | `cmd appops get --user "$ANDROID_USER_ID" com.dazix.caelis ACCESS_RESTRICTED_SETTINGS` (`default` when no explicit entry) | `cmd appops set --user "$ANDROID_USER_ID" com.dazix.caelis ACCESS_RESTRICTED_SETTINGS <mode>` |
 | `ORIG_PERM_POST_NOTIFICATIONS` | `dumpsys package com.dazix.caelis`, the `POST_NOTIFICATIONS: granted=` line inside the `User <id>:` block (`granted` / `revoked` / `unknown` when the package is not installed) | `pm grant --user "$ANDROID_USER_ID" ...` when it was `granted`, otherwise `pm revoke --user "$ANDROID_USER_ID" ...`; skipped when the package is gone |
-| `ORIG_PERM_READ_MEDIA_IMAGES` | same line for `READ_MEDIA_IMAGES` (granted so `CaptureVerifier` can actually see the camera's output instead of degrading to a silent no-op) | as above |
 
 Some adb calls in these scripts carry no `--user` flag, because the commands have none:
 `am get-current-user` (it is the thing being asserted), `exec-out screencap` (it renders the

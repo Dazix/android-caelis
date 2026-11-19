@@ -136,9 +136,9 @@
     <string name="setup_min_battery_value">%1$d %%</string>
     <string name="setup_min_free_space">Zastavit pod volným místem</string>
     <string name="setup_verify_captures">Kontrolovat uložené snímky</string>
-    <string name="setup_verify_captures_desc">Po každém snímku aplikace zkontroluje, že skutečně vznikla nová fotka, a upozorní vás, když fotoaplikace přestala ukládat. Kvůli tomu musí číst vaši galerii, a proto si Android při zapnutí této volby řekne o oprávnění k fotkám. Když volbu necháte vypnutou, o přístup k fotkám se vůbec nežádá.</string>
+    <string name="setup_verify_captures_desc">Po každém snímku aplikace zkontroluje, že skutečně vznikla nová fotka, a upozorní vás, když fotoaplikace přestala ukládat. Android aplikaci jen oznámí, že se fotka uložila: samotnou fotku nevidí a nepotřebuje žádné oprávnění k fotkám. Počítá se cokoli uloženého během snímku, i snímek obrazovky.</string>
+    <string name="setup_verify_captures_desc_storage">Po každém snímku aplikace zkontroluje, že skutečně vznikla nová fotka, a upozorní vás, když fotoaplikace přestala ukládat. Kvůli tomu musí číst vaši galerii, a proto si Android při zapnutí této volby řekne o oprávnění k fotkám. Když volbu necháte vypnutou, o přístup k fotkám se vůbec nežádá.</string>
     <string name="setup_verify_permission_needed">Kontrola potřebuje přístup ke všem fotkám a zatím ho nemá. Série normálně poběží a bude fotit – jen vám neřekne, když fotoaplikace přestane ukládat.</string>
-    <string name="setup_verify_permission_partial">Aplikace vidí jen fotky, které jste vybrali, takže na snímky z této série nedosáhne. Otevřete nastavení aplikace a u Fotky a videa zvolte Povolit vše.</string>
     <string name="setup_verify_open_settings">Otevřít nastavení aplikace</string>
     <string name="setup_verify_permission_granted">Oprávnění k fotkám je udělené.</string>
     <string name="setup_tap_area">Místo dotyku</string>

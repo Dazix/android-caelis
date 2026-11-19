@@ -136,9 +136,9 @@
     <string name="setup_min_battery_value">%1$d %%</string>
     <string name="setup_min_free_space">Zatrzymaj poniżej wolnego miejsca</string>
     <string name="setup_verify_captures">Weryfikuj zdjęcia</string>
-    <string name="setup_verify_captures_desc">Po każdym zdjęciu aplikacja sprawdza, czy naprawdę pojawiła się nowa fotografia, i ostrzega, gdy aplikacja aparatu przestanie zapisywać. Aby to zrobić, musi czytać Twoją bibliotekę zdjęć, dlatego Android prosi o uprawnienie do zdjęć po włączeniu tej opcji. Zostaw ją wyłączoną, a dostęp do zdjęć w ogóle nie będzie wymagany.</string>
+    <string name="setup_verify_captures_desc">Po każdym zdjęciu aplikacja sprawdza, czy naprawdę pojawiła się nowa fotografia, i ostrzega, gdy aplikacja aparatu przestanie zapisywać. Android tylko informuje aplikację, że zapisano zdjęcie: samego zdjęcia nie widzi i nie potrzebuje uprawnienia do zdjęć. Liczy się wszystko zapisane w trakcie zdjęcia, także zrzut ekranu.</string>
+    <string name="setup_verify_captures_desc_storage">Po każdym zdjęciu aplikacja sprawdza, czy naprawdę pojawiła się nowa fotografia, i ostrzega, gdy aplikacja aparatu przestanie zapisywać. Aby to zrobić, musi czytać Twoją bibliotekę zdjęć, dlatego Android prosi o uprawnienie do zdjęć po włączeniu tej opcji. Zostaw ją wyłączoną, a dostęp do zdjęć w ogóle nie będzie wymagany.</string>
     <string name="setup_verify_permission_needed">Weryfikacja wymaga dostępu do wszystkich zdjęć, którego jeszcze nie ma. Sesja nadal działa i robi zdjęcia – po prostu nie powie Ci, gdy aplikacja aparatu przestanie zapisywać.</string>
-    <string name="setup_verify_permission_partial">Aplikacji udostępniono tylko wybrane zdjęcia, więc nie widzi klatek, które ta sesja zaraz zrobi. Otwórz ustawienia aplikacji i ustaw Zdjęcia i filmy na Zezwalaj na wszystkie.</string>
     <string name="setup_verify_open_settings">Otwórz ustawienia aplikacji</string>
     <string name="setup_verify_permission_granted">Przyznano uprawnienie do zdjęć.</string>
     <string name="setup_tap_area">Cel stuknięcia</string>

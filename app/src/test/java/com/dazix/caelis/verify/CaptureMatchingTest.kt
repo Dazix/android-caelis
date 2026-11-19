@@ -210,6 +210,47 @@ class CaptureMatchingTest {
         assertNull(CaptureToken.windowStartOf("v2|not-a-number|2|3"))
     }
 
+    // ---- Android 13+: insert notifications -------------------------------------------------------
+
+    /**
+     * Without READ_MEDIA_IMAGES the row behind a notification is unreadable, so the count of INSERTs
+     * is all the proof there is. The camera's own follow-up UPDATEs (the pending row finished) and a
+     * delete must not count, or one frame reads as several and a deleted photo as a new one.
+     */
+    @Test
+    fun `only an insert after the baseline counts`() {
+        val log = ImageInsertLog()
+        log.record(android.content.ContentResolver.NOTIFY_INSERT)
+        val baseline = log.mark()
+        assertFalse("an insert before the tap is not this shot's frame", log.hasInsertAfter(baseline))
+
+        log.record(android.content.ContentResolver.NOTIFY_UPDATE)
+        log.record(android.content.ContentResolver.NOTIFY_DELETE)
+        log.record(0)
+        assertFalse(log.hasInsertAfter(baseline))
+
+        log.record(
+            android.content.ContentResolver.NOTIFY_INSERT or
+                android.content.ContentResolver.NOTIFY_SYNC_TO_NETWORK,
+        )
+        assertTrue(log.hasInsertAfter(baseline))
+    }
+
+    @Test
+    fun `the insert token round-trips and is never read as the other format`() {
+        assertEquals(7L, CaptureToken.insertMarkOf(CaptureToken.encodeInserts(7L)))
+        assertNull(CaptureToken.insertMarkOf(null))
+        assertNull(CaptureToken.insertMarkOf("i1|x"))
+        assertNull(
+            "a row token must not pass as an insert mark",
+            CaptureToken.insertMarkOf(CaptureToken.encode(WINDOW_START, 1L, 2L)),
+        )
+        assertNull(
+            "an insert mark must not pass as a window",
+            CaptureToken.windowStartOf(CaptureToken.encodeInserts(7L)),
+        )
+    }
+
     // ---- fixtures --------------------------------------------------------------------------------
 
     private fun cameraRow(

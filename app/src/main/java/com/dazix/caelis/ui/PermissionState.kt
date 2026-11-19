@@ -30,12 +30,11 @@ data class PermissionState(
      * but on an inexact alarm that Doze may deliver minutes late (see SessionEngine.scheduleAlarm).
      */
     val exactAlarmsAllowed: Boolean = false,
-    val readMediaImagesGranted: Boolean = false,
     /**
-     * The user answered the photos dialog with "Select photos": only the pictures they picked are
-     * readable, so capture verification cannot see the frames the camera app writes from now on.
+     * Capture verification can see new photos: always from Android 13 (it needs no permission there,
+     * see CaptureVerifier), below it once the photos permission is granted.
      */
-    val readMediaPartialGranted: Boolean = false,
+    val captureVerificationReady: Boolean = false,
     /** Installed outside a store, so Android hides the accessibility switch until unblocked. */
     val installedFromOutsideStore: Boolean = false,
 ) {
@@ -62,22 +61,19 @@ object Permissions {
         notificationsGranted = notificationsGranted(context),
         ignoringBatteryOptimizations = ignoringBatteryOptimizations(context),
         exactAlarmsAllowed = exactAlarmsAllowed(context),
-        readMediaImagesGranted = granted(context, photos()),
-        readMediaPartialGranted = partialPhotoAccess(context),
+        captureVerificationReady = !photosNeedRuntimeGrant() || granted(context, photos()),
         installedFromOutsideStore = installedFromOutsideStore(context),
     )
 
     /**
-     * The permission that reads the camera's MediaStore rows. Below Android 13 READ_MEDIA_IMAGES does
-     * not exist, and checking it there answers "denied" forever, which would hide capture verification
-     * from every Android 11 and 12 user however often they granted the dialog.
+     * The permission capture verification reads the camera's MediaStore rows with, on Android 11 and
+     * 12 only. From Android 13 the app declares no photos permission at all: Google Play refused
+     * READ_MEDIA_IMAGES for this check, and CaptureVerifier watches insert notifications instead.
      */
-    fun photos(): String =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
+    fun photos(): String = Manifest.permission.READ_EXTERNAL_STORAGE
+
+    /** Whether capture verification asks for [photos] at all (below Android 13). */
+    fun photosNeedRuntimeGrant(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
 
     /** Whether the notification permission is a runtime dialog at all (Android 13+). */
     fun notificationsNeedRuntimeGrant(): Boolean =
@@ -94,15 +90,6 @@ object Permissions {
         } else {
             NotificationManagerCompat.from(context).areNotificationsEnabled()
         }
-
-    /**
-     * True while the app has *only* the selected-photos grant. Full access implies it, so the full
-     * grant wins. Partial access exists from Android 14; below it there is nothing to ask.
-     */
-    private fun partialPhotoAccess(context: Context): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            !granted(context, Manifest.permission.READ_MEDIA_IMAGES) &&
-            granted(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
 
     fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

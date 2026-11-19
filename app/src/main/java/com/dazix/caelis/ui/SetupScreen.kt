@@ -18,7 +18,6 @@ fun SetupScreen(
     state: SetupUiState,
     floorMs: Long,
     mediaPermissionGranted: Boolean,
-    mediaPermissionPartial: Boolean,
     onChange: (SetupUiState) -> Unit,
     onJitterChange: (Boolean) -> Unit,
     onRequestMediaPermission: () -> Unit,
@@ -179,34 +178,38 @@ fun SetupScreen(
         }
 
         SectionCard(title = stringResource(R.string.setup_verify_captures)) {
+            val photosNeedGrant = Permissions.photosNeedRuntimeGrant()
             SwitchRow(
                 title = stringResource(R.string.setup_verify_captures),
-                description = stringResource(R.string.setup_verify_captures_desc),
+                description = stringResource(
+                    if (photosNeedGrant) {
+                        R.string.setup_verify_captures_desc_storage
+                    } else {
+                        R.string.setup_verify_captures_desc
+                    }
+                ),
                 checked = state.verifyCaptures,
                 onCheckedChange = { checked ->
                     onChange(state.copy(verifyCaptures = checked))
-                    // Switching it on is the only moment photo access is asked for.
-                    if (checked && !mediaPermissionGranted) onRequestMediaPermission()
+                    // Switching it on is the only moment photo access is asked for (Android 11
+                    // and 12; from 13 there is nothing to ask).
+                    if (checked && photosNeedGrant && !mediaPermissionGranted) {
+                        onRequestMediaPermission()
+                    }
                 },
             )
-            if (state.verifyCaptures) {
+            if (state.verifyCaptures && photosNeedGrant) {
                 if (mediaPermissionGranted) {
                     StatusChip(
                         text = stringResource(R.string.setup_verify_permission_granted),
                         granted = true,
                     )
                 } else {
-                    // The toggle deliberately stays on: "Select photos" leaves the images
-                    // permission denied, and turning verification off behind the user's back would
-                    // undo the choice they just made instead of telling them what is missing.
+                    // The toggle deliberately stays on: turning verification off behind the user's
+                    // back would undo the choice they just made instead of telling them what is
+                    // missing.
                     Text(
-                        text = stringResource(
-                            if (mediaPermissionPartial) {
-                                R.string.setup_verify_permission_partial
-                            } else {
-                                R.string.setup_verify_permission_needed
-                            }
-                        ),
+                        text = stringResource(R.string.setup_verify_permission_needed),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.fillMaxWidth(),

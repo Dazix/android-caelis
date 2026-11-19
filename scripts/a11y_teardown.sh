@@ -6,8 +6,7 @@
 #     DELETED when the snapshot says the key was unset (__NULL__),
 #   * the SYSTEM_ALERT_WINDOW / ACCESS_RESTRICTED_SETTINGS appop modes go back to their recorded
 #     modes ('default' means "no explicit entry", which is what `appops set ... default` restores),
-#   * POST_NOTIFICATIONS and READ_MEDIA_IMAGES are re-revoked unless the snapshot recorded them as
-#     already granted.
+#   * POST_NOTIFICATIONS is re-revoked unless the snapshot recorded it as already granted.
 #
 # The secure settings are restored FIRST and the per-package state after it, because the package can
 # legitimately be gone by the time we run: `:app:connectedDebugAndroidTest` uninstalls the app when
@@ -77,7 +76,6 @@ ORIG_ENABLED=$(read_key ORIG_SECURE_ACCESSIBILITY_ENABLED)
 ORIG_APPOP_SAW=$(read_key ORIG_APPOP_SYSTEM_ALERT_WINDOW)
 ORIG_APPOP_ARS=$(read_key ORIG_APPOP_ACCESS_RESTRICTED_SETTINGS)
 ORIG_PERM_POST=$(read_key ORIG_PERM_POST_NOTIFICATIONS)
-ORIG_PERM_MEDIA=$(read_key ORIG_PERM_READ_MEDIA_IMAGES)
 
 restore_secure() {
     key=$1
@@ -142,7 +140,6 @@ if "$ADB" shell pm list packages --user "$USER_ID" "$PKG" | grep -q "package:${P
     restore_appop SYSTEM_ALERT_WINDOW "$ORIG_APPOP_SAW"
     restore_appop ACCESS_RESTRICTED_SETTINGS "$ORIG_APPOP_ARS"
     restore_permission android.permission.POST_NOTIFICATIONS "$ORIG_PERM_POST"
-    restore_permission android.permission.READ_MEDIA_IMAGES "$ORIG_PERM_MEDIA"
 else
     info "${PKG} is not installed for user ${USER_ID} any more (the connected test task uninstalls it); its app ops and runtime grants went with it, nothing to restore"
 fi
