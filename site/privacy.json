@@ -47,6 +47,9 @@
         "The developer does not sell, rent or share your data, and does not receive it in the first place. Data stored by the app stays on your phone until you delete it in the app, clear the app's data or uninstall the app.",
         "If you write to the developer by e-mail, your message and address are used only to answer you and are deleted when no longer needed."
       ]},
+      {"h": "How your data is protected", "p": [
+        "Everything the app stores (settings, saved places, terrain horizons) is kept in the app's private storage on your phone, which Android does not let other apps read. Nothing is synchronised to a server of the developer, because there is none. The app's logs do not record your location. Downloads use encrypted HTTPS connections, and a downloaded file is checked before it is used."
+      ]},
       {"h": "Children", "p": [
         "The app collects no personal data from anyone, including children."
       ]},
@@ -104,6 +107,9 @@
       {"h": "Sdílení, prodej a uchovávání", "p": [
         "Vývojář vaše údaje neprodává, nepronajímá ani nesdílí a vůbec je nedostává. Údaje uložené aplikací zůstávají v telefonu, dokud je v aplikaci nesmažete, nevymažete data aplikace nebo aplikaci neodinstalujete.",
         "Pokud vývojáři napíšete e-mail, vaši zprávu a adresu použije jen k odpovědi a smaže je, jakmile nebudou potřeba."
+      ]},
+      {"h": "Jak jsou vaše údaje chráněny", "p": [
+        "Vše, co aplikace ukládá (nastavení, uložená místa, terénní horizonty), je v soukromém úložišti aplikace ve vašem telefonu, které Android jiným aplikacím nedovolí číst. Nic se nesynchronizuje na server vývojáře, protože žádný není. Záznamy (logy) aplikace vaši polohu neobsahují. Stahování probíhá přes šifrované spojení HTTPS a stažený soubor se před použitím kontroluje."
       ]},
       {"h": "Děti", "p": [
         "Aplikace neshromažďuje žádné osobní údaje od nikoho, ani od dětí."
@@ -163,6 +169,9 @@
         "Vývojár vaše údaje nepredáva, neprenajíma ani nezdieľa a vôbec ich nedostáva. Údaje uložené aplikáciou zostávajú v telefóne, kým ich v aplikácii nezmažete, nevymažete dáta aplikácie alebo aplikáciu neodinštalujete.",
         "Ak vývojárovi napíšete e-mail, vašu správu a adresu použije len na odpoveď a vymaže ich, keď už nebudú potrebné."
       ]},
+      {"h": "Ako sú vaše údaje chránené", "p": [
+        "Všetko, čo aplikácia ukladá (nastavenia, uložené miesta, terénne horizonty), je v súkromnom úložisku aplikácie vo vašom telefóne, ktoré Android iným aplikáciám nedovolí čítať. Nič sa nesynchronizuje na server vývojára, pretože žiadny nie je. Záznamy (logy) aplikácie vašu polohu neobsahujú. Sťahovanie prebieha cez šifrované spojenie HTTPS a stiahnutý súbor sa pred použitím kontroluje."
+      ]},
       {"h": "Deti", "p": [
         "Aplikácia nezhromažďuje žiadne osobné údaje od nikoho, ani od detí."
       ]},
@@ -221,6 +230,9 @@
         "Deweloper nie sprzedaje, nie wynajmuje ani nie udostępnia Twoich danych, a w ogóle ich nie otrzymuje. Dane zapisane przez aplikację pozostają na telefonie, dopóki nie usuniesz ich w aplikacji, nie wyczyścisz danych aplikacji lub jej nie odinstalujesz.",
         "Jeśli napiszesz do dewelopera e-mail, Twoja wiadomość i adres zostaną użyte tylko do odpowiedzi i usunięte, gdy nie będą już potrzebne."
       ]},
+      {"h": "Jak chronione są Twoje dane", "p": [
+        "Wszystko, co aplikacja zapisuje (ustawienia, zapisane miejsca, horyzonty terenu), znajduje się w prywatnej pamięci aplikacji na Twoim telefonie, do której Android nie pozwala innym aplikacjom zaglądać. Nic nie jest synchronizowane z serwerem dewelopera, bo takiego nie ma. Logi aplikacji nie zawierają Twojej lokalizacji. Pobieranie odbywa się przez szyfrowane połączenia HTTPS, a pobrany plik jest sprawdzany przed użyciem."
+      ]},
       {"h": "Dzieci", "p": [
         "Aplikacja nie zbiera żadnych danych osobowych od nikogo, w tym od dzieci."
       ]},
@@ -278,6 +290,9 @@
       {"h": "Weitergabe, Verkauf und Speicherdauer", "p": [
         "Der Entwickler verkauft, vermietet oder teilt Ihre Daten nicht und erhält sie gar nicht erst. Von der App gespeicherte Daten bleiben auf dem Telefon, bis Sie sie in der App löschen, die App-Daten löschen oder die App deinstallieren.",
         "Wenn Sie dem Entwickler eine E-Mail schreiben, werden Nachricht und Adresse nur zur Antwort verwendet und gelöscht, sobald sie nicht mehr gebraucht werden."
+      ]},
+      {"h": "Wie Ihre Daten geschützt sind", "p": [
+        "Alles, was die App speichert (Einstellungen, gespeicherte Orte, Geländehorizonte), liegt im privaten Speicher der App auf Ihrem Telefon, den Android anderen Apps nicht zu lesen erlaubt. Nichts wird mit einem Server des Entwicklers synchronisiert, denn es gibt keinen. Die Protokolle der App enthalten Ihren Standort nicht. Downloads laufen über verschlüsselte HTTPS-Verbindungen, und eine heruntergeladene Datei wird vor der Verwendung geprüft."
       ]},
       {"h": "Kinder", "p": [
         "Die App erhebt von niemandem personenbezogene Daten, auch nicht von Kindern."
