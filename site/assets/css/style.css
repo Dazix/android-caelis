@@ -384,6 +384,9 @@ p { margin: 0; text-wrap: pretty; }
 }
 .shield svg { width: 38px; height: 38px; fill: none; stroke: var(--cyan); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .privacy-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px 40px; }
+.privacy-actions { margin-top: 40px; }
+.privacy-actions .btn { max-width: 100%; white-space: normal; text-align: center; }
+@media (max-width: 520px) { .privacy-actions .btn { width: 100%; justify-content: center; } }
 .privacy-list h3 { font-size: 1.15rem; margin-bottom: 8px; }
 .privacy-list p { color: var(--ivory-dim); }
 
@@ -475,6 +478,26 @@ p { margin: 0; text-wrap: pretty; }
 .footer-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .footer-links a { display: inline-block; padding: 10px 0; text-decoration-color: rgba(242, 239, 230, 0.3); text-underline-offset: 4px; }
 .footer-links a:hover { color: var(--ivory); text-decoration-color: var(--amber); }
+
+/* ---------- Privacy policy (privacy.html): a plain reading page, no script ---------- */
+.legal-header { position: static; border-bottom: 1px solid var(--border); }
+.legal-header .lang-picker { align-self: center; }
+.legal-header .lang-menu { left: auto; right: 0; }
+.legal { max-width: 760px; padding: 56px 0 72px; }
+.legal h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); margin-bottom: 12px; }
+.legal-updated { color: var(--ivory-dim); margin-bottom: 32px; }
+.legal-toc { padding: 20px 24px; margin-bottom: 40px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.legal-toc ol { margin: 0; padding-left: 1.4em; }
+.legal-toc a { color: var(--ivory-dim); text-underline-offset: 4px; }
+.legal-toc a:hover { color: var(--ivory); }
+.legal section { margin-bottom: 36px; scroll-margin-top: 24px; }
+.legal h2 { font-size: 1.4rem; margin-bottom: 14px; }
+.legal p + p, .legal p + ul { margin-top: 12px; }
+.legal ul { margin: 0; padding-left: 1.3em; }
+.legal li + li { margin-top: 10px; }
+.legal section a, .legal-back a { color: var(--cyan); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.legal-back { margin-top: 48px; }
+.legal-page .site-footer a { color: var(--ivory-dim); }
 
 /* ---------- Reveal on scroll ---------- */
 .js .reveal {

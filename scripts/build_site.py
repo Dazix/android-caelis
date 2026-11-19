@@ -30,14 +30,52 @@ LANGS = ["en", "cs", "sk", "pl", "de"]
 DEFAULT = "en"
 # Markup a string may carry into the page; everything else is escaped.
 ALLOWED_TAGS = re.compile(r"&lt;(/?(?:em|strong|br))&gt;")
+# [label](https://…) or [label](mailto:…) in the privacy policy; matched after escaping, so the URL
+# arrives with & as &amp;, which is what an href wants.
+LINK = re.compile(r"\[([^\]]+)\]\(((?:https://|mailto:)[^)\s\"<>]+)\)")
+# The privacy policy, linked from the Play listing. Google checks that it names the app and the
+# developer exactly as the listing does.
+PRIVACY = "privacy/"
 
 
-def url_for(lang: str) -> str:
-    return BASE if lang == DEFAULT else f"{BASE}{lang}/"
+def url_for(lang: str, page: str = "") -> str:
+    return (BASE if lang == DEFAULT else f"{BASE}{lang}/") + page
 
 
 def text(value: str) -> str:
     return ALLOWED_TAGS.sub(r"<\1>", html.escape(value, quote=False))
+
+
+def rich(value: str) -> str:
+    return LINK.sub(lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', text(value))
+
+
+def alternates_for(page: str) -> str:
+    return "\n".join(
+        [f'  <link rel="alternate" hreflang="{l}" href="{url_for(l, page)}">' for l in LANGS]
+        + [f'  <link rel="alternate" hreflang="x-default" href="{url_for(DEFAULT, page)}">'])
+
+
+def lang_links_for(lang: str, strings: dict, root: str, page: str) -> str:
+    return "\n".join(
+        f'            <li><a href="{root}{"" if l == DEFAULT else l + "/"}{page}" hreflang="{l}" lang="{l}" data-lang="{l}"'
+        + (' aria-current="page"' if l == lang else "")
+        + f'>{text(strings[l]["lang.name"])}</a></li>'
+        for l in LANGS)
+
+
+def fill(template: str, values: dict, s: dict) -> str:
+    def substitute(match: re.Match) -> str:
+        key = match.group(1)
+        if key.startswith("a:"):
+            return attr(s[key[2:]])
+        if key in values:
+            return values[key]
+        if key in s:
+            return text(s[key])
+        raise SystemExit(f"unknown placeholder {{{{{key}}}}}")
+
+    return re.sub(r"\{\{([\w.:]+)\}\}", substitute, template)
 
 
 def attr(value: str) -> str:
@@ -77,16 +115,10 @@ def render(template: str, lang: str, strings: dict) -> str:
         raise SystemExit(f"{lang}: missing strings {sorted(missing)}")
 
     root = "" if lang == DEFAULT else "../"
-    alternates = "\n".join(
-        [f'  <link rel="alternate" hreflang="{l}" href="{url_for(l)}">' for l in LANGS]
-        + [f'  <link rel="alternate" hreflang="x-default" href="{url_for(DEFAULT)}">'])
+    alternates = alternates_for("")
     og_alternates = "\n".join(
         f'  <meta property="og:locale:alternate" content="{strings[l]["og.locale"]}">' for l in LANGS if l != lang)
-    lang_links = "\n".join(
-        f'            <li><a href="{root}{"" if l == DEFAULT else l + "/"}" hreflang="{l}" lang="{l}" data-lang="{l}"'
-        + (' aria-current="page"' if l == lang else "")
-        + f'>{text(strings[l]["lang.name"])}</a></li>'
-        for l in LANGS)
+    lang_links = lang_links_for(lang, strings, root, "")
 
     values = {
         "lang": lang,
@@ -103,26 +135,55 @@ def render(template: str, lang: str, strings: dict) -> str:
         "repo": REPO,
         "jsonld": json_ld(lang, s),
     }
+    return fill(template, values, s)
 
-    def substitute(match: re.Match) -> str:
-        key = match.group(1)
-        if key.startswith("a:"):
-            return attr(s[key[2:]])
-        if key in values:
-            return values[key]
-        if key in s:
-            return text(s[key])
-        raise SystemExit(f"unknown placeholder {{{{{key}}}}}")
 
-    return re.sub(r"\{\{([\w.:]+)\}\}", substitute, template)
+def render_privacy(template: str, lang: str, strings: dict, policy: dict) -> str:
+    p = policy[lang]
+    missing = set(policy[DEFAULT]) - set(p)
+    if missing:
+        raise SystemExit(f"privacy {lang}: missing strings {sorted(missing)}")
+    shape = [(len(x.get("p", [])), len(x.get("ul", []))) for x in p["sections"]]
+    if shape != [(len(x.get("p", [])), len(x.get("ul", []))) for x in policy[DEFAULT]["sections"]]:
+        raise SystemExit(f"privacy {lang}: sections differ from {DEFAULT}")
+
+    root = "../" if lang == DEFAULT else "../../"
+    toc = []
+    sections = []
+    for i, section in enumerate(p["sections"], 1):
+        toc.append(f'        <li><a href="#s{i}">{text(section["h"])}</a></li>')
+        body = [f'    <section id="s{i}" aria-labelledby="s{i}-h">', f'      <h2 id="s{i}-h">{text(section["h"])}</h2>']
+        body += [f"      <p>{rich(para)}</p>" for para in section.get("p", [])]
+        if section.get("ul"):
+            body.append("      <ul>")
+            body += [f"        <li>{rich(item)}</li>" for item in section["ul"]]
+            body.append("      </ul>")
+        body.append("    </section>")
+        sections.append("\n".join(body))
+
+    values = {
+        "lang": lang,
+        "root": root,
+        "home": root,
+        "canonical": url_for(lang, PRIVACY),
+        "alternates": alternates_for(PRIVACY),
+        "lang_links": lang_links_for(lang, strings, root, PRIVACY),
+        "lang_name": text(strings[lang]["lang.name"]),
+        "toc_items": "\n".join(toc),
+        "sections": "\n".join(sections),
+    }
+    return fill(template, values, {k: v for k, v in p.items() if isinstance(v, str)})
 
 
 def sitemap() -> str:
     today = date.today().isoformat()
-    links = "\n".join(f'    <xhtml:link rel="alternate" hreflang="{l}" href="{url_for(l)}"/>' for l in LANGS)
-    links += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{url_for(DEFAULT)}"/>'
-    urls = "\n".join(
-        f"  <url>\n    <loc>{url_for(l)}</loc>\n    <lastmod>{today}</lastmod>\n{links}\n  </url>" for l in LANGS)
+    urls = []
+    for page in ("", PRIVACY):
+        links = "\n".join(f'    <xhtml:link rel="alternate" hreflang="{l}" href="{url_for(l, page)}"/>' for l in LANGS)
+        links += f'\n    <xhtml:link rel="alternate" hreflang="x-default" href="{url_for(DEFAULT, page)}"/>'
+        urls += [f"  <url>\n    <loc>{url_for(l, page)}</loc>\n    <lastmod>{today}</lastmod>\n{links}\n  </url>"
+                 for l in LANGS]
+    urls = "\n".join(urls)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
             'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
@@ -154,6 +215,13 @@ def main() -> None:
         target = OUT / ("index.html" if lang == DEFAULT else f"{lang}/index.html")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(render(template, lang, strings), encoding="utf-8")
+        print(target.relative_to(ROOT))
+    privacy_template = (SRC / "privacy.html").read_text(encoding="utf-8")
+    policy = json.loads((SRC / "privacy.json").read_text(encoding="utf-8"))
+    for lang in LANGS:
+        target = OUT / ("" if lang == DEFAULT else lang) / PRIVACY / "index.html"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(render_privacy(privacy_template, lang, strings, policy), encoding="utf-8")
         print(target.relative_to(ROOT))
     (OUT / "sitemap.xml").write_text(sitemap(), encoding="utf-8")
     (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {BASE}sitemap.xml\n", encoding="utf-8")
