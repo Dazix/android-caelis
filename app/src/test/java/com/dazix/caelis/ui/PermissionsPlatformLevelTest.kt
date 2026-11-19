@@ -3,6 +3,10 @@ package com.dazix.caelis.ui
 import android.Manifest
 import android.app.Application
 import android.app.NotificationManager
+import android.content.ContentResolver
+import android.content.ContentUris
+import android.net.Uri
+import android.provider.MediaStore
 import android.provider.Settings
 import androidx.test.core.app.ApplicationProvider
 import com.dazix.caelis.verify.CaptureVerifier
@@ -18,9 +22,10 @@ import org.robolectric.annotation.Config
 
 /**
  * `minSdk` is 30, and three of the permissions the app reads changed shape after Android 11: the photos
- * permission (READ_MEDIA_IMAGES from 13), the notification dialog (POST_NOTIFICATIONS from 13) and the
- * exact-alarm grant (from 12). Checking the newer name on an older platform compiles, runs and answers
- * "denied" forever, so each one is pinned here on both sides of the level it changed at.
+ * permission (none at all from 13, where capture verification watches insert notifications), the
+ * notification dialog (POST_NOTIFICATIONS from 13) and the exact-alarm grant (from 12). Checking a
+ * newer name on an older platform compiles, runs and answers "denied" forever, so each one is pinned
+ * here on both sides of the level it changed at.
  */
 @RunWith(RobolectricTestRunner::class)
 class PermissionsPlatformLevelTest {
@@ -36,34 +41,66 @@ class PermissionsPlatformLevelTest {
     @Config(sdk = [30])
     fun `android 11 reads photos through READ_EXTERNAL_STORAGE`() {
         assertEquals(Manifest.permission.READ_EXTERNAL_STORAGE, Permissions.photos())
-        assertFalse(Permissions.read(context).readMediaImagesGranted)
+        assertFalse(Permissions.read(context).captureVerificationReady)
         assertFalse(CaptureVerifier(context).available())
 
         shadowOf(context).grantPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
 
-        assertTrue(Permissions.read(context).readMediaImagesGranted)
+        assertTrue(Permissions.photosNeedRuntimeGrant())
+
+        shadowOf(context).grantPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
+
+        assertTrue(Permissions.read(context).captureVerificationReady)
         assertTrue(CaptureVerifier(context).available())
+    }
+
+    /**
+     * Google Play refused READ_MEDIA_IMAGES for capture verification, so from Android 13 it must work
+     * with no photos permission granted at all, from MediaStore's insert notifications.
+     */
+    @Test
+    @Config(sdk = [33])
+    fun `android 13 verifies captures without any photos permission`() {
+        assertFalse(Permissions.photosNeedRuntimeGrant())
+        assertTrue(Permissions.read(context).captureVerificationReady)
+
+        val verifier = CaptureVerifier(context)
+        assertTrue(verifier.available())
+        val baseline = verifier.newestToken()
+        assertTrue("the insert observer could not be registered", baseline != null)
+        assertFalse(verifier.hasNewImageSince(baseline))
+
+        val images = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val row = ContentUris.withAppendedId(images, 42L)
+        notify(images, row, ContentResolver.NOTIFY_UPDATE)
+        assertFalse("an UPDATE is not a new photo", verifier.hasNewImageSince(baseline))
+
+        notify(images, row, ContentResolver.NOTIFY_INSERT)
+        assertTrue(verifier.hasNewImageSince(baseline))
         assertFalse(
-            "partial photo access does not exist before Android 14",
-            Permissions.read(context).readMediaPartialGranted,
+            "the next shot's baseline must not see the previous shot's photo",
+            verifier.hasNewImageSince(verifier.newestToken()),
+        )
+
+        verifier.close()
+        val afterClose = verifier.newestToken()
+        notify(images, row, ContentResolver.NOTIFY_INSERT)
+        assertTrue("a new session must watch again", verifier.hasNewImageSince(afterClose))
+        verifier.close()
+        assertTrue(
+            "close() must unregister the observer",
+            shadowOf(context.contentResolver).getContentObservers(images).isEmpty(),
         )
     }
 
-    @Test
-    @Config(sdk = [33])
-    fun `android 13 reads photos through READ_MEDIA_IMAGES only`() {
-        assertEquals(Manifest.permission.READ_MEDIA_IMAGES, Permissions.photos())
-
-        shadowOf(context).grantPermissions(Manifest.permission.READ_EXTERNAL_STORAGE)
-        assertFalse(
-            "READ_EXTERNAL_STORAGE is capped at API 32 and must not count on 13",
-            Permissions.read(context).readMediaImagesGranted,
-        )
-        assertFalse(CaptureVerifier(context).available())
-
-        shadowOf(context).grantPermissions(Manifest.permission.READ_MEDIA_IMAGES)
-        assertTrue(Permissions.read(context).readMediaImagesGranted)
-        assertTrue(CaptureVerifier(context).available())
+    /**
+     * Delivers a change the way MediaStore does, with its flags: Robolectric's notifyChange calls the
+     * flag-less onChange, which would never reach the verifier's observer.
+     */
+    private fun notify(collection: Uri, row: Uri, flags: Int) {
+        val observers = shadowOf(context.contentResolver).getContentObservers(collection)
+        assertEquals("exactly one observer on the images collection", 1, observers.size)
+        observers.forEach { it.onChange(false, listOf(row), flags) }
     }
 
     @Test

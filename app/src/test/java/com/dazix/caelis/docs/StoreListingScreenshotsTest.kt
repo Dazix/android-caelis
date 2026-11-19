@@ -148,7 +148,6 @@ class StoreListingScreenshotsTest(private val language: String) {
                     ),
                     floorMs = 1000L,
                     mediaPermissionGranted = true,
-                    mediaPermissionPartial = false,
                     onChange = {},
                     onJitterChange = {},
                     onRequestMediaPermission = {},

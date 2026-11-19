@@ -132,9 +132,9 @@
     <string name="setup_min_battery_value">%1$d %%</string>
     <string name="setup_min_free_space">Stop below free space</string>
     <string name="setup_verify_captures">Verify captures</string>
-    <string name="setup_verify_captures_desc">After each shot the app checks that a new photo really appeared, and warns you if the camera app stopped saving. To do that it has to read your photo library, which is why Android asks for the photos permission when you switch this on. Leave it off and no photo access is requested at all.</string>
+    <string name="setup_verify_captures_desc">After each shot the app checks that a new photo really appeared, and warns you if the camera app stopped saving. Android only tells the app that a photo was saved: the app does not see the photo and needs no photo permission. Anything saved during the shot counts, a screenshot too.</string>
+    <string name="setup_verify_captures_desc_storage">After each shot the app checks that a new photo really appeared, and warns you if the camera app stopped saving. To do that it has to read your photo library, which is why Android asks for the photos permission when you switch this on. Leave it off and no photo access is requested at all.</string>
     <string name="setup_verify_permission_needed">Verification needs access to all photos and does not have it yet. The session still runs and still takes photos — it just cannot tell you when the camera app stops saving.</string>
-    <string name="setup_verify_permission_partial">Only the photos you picked are shared with the app, so it cannot see the frames this session is about to take. Open app settings and set Photos and videos to Allow all.</string>
     <string name="setup_verify_open_settings">Open app settings</string>
     <string name="setup_verify_permission_granted">Photos permission granted.</string>
     <string name="setup_tap_area">Tap target</string>

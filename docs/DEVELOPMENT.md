@@ -36,9 +36,11 @@ what touches the network, how to build, test and release it, and how it is put t
   (keep the screen on, dim the panel). It is placed so it can never sit on a pixel a shutter tap will
   land on, it hides itself over the app's own screens, and it drops its touches around each shot.
 - **Ongoing notification** with the same live countdown and pause/stop actions.
-- **Optional capture verification**: after each shot the app checks MediaStore for a new photo that the
-  camera app itself wrote, retries the shutter once if none appeared, and flags the session instead of
-  silently shooting nothing. Off by default; the photo permission is only requested when you turn it on.
+- **Optional capture verification**: after each shot the app checks that a new photo appeared (from
+  Android 13 through MediaStore insert notifications, with no photos permission; on 11 and 12 by
+  reading the rows the camera app wrote), retries the shutter once if none appeared, and flags the
+  session instead of silently shooting nothing. Off by default; on Android 11 and 12 the photo
+  permission is only requested when you turn it on.
 
 **Sun & Moon AR (Augmented Reality Solar & Lunar Planning)**
 

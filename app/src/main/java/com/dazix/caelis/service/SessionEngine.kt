@@ -442,6 +442,7 @@ class SessionEngine(
         cancelTimers()
         handler.removeCallbacksAndMessages(guardToken)
         releaseWakeLock()
+        verifier.close()
         if (reason == StopReason.SERVICE_LOST) runState.markServiceLost() else runState.markStopped()
         Log.i(TAG, "session stop reason=$reason shots=$shotsTaken")
         SessionRepository.update {
@@ -526,6 +527,7 @@ class SessionEngine(
         cancelTimers()
         handler.removeCallbacksAndMessages(guardToken)
         releaseWakeLock()
+        verifier.close()
         motionWatching = false
         motion.stop()
         scope.cancel()
@@ -943,8 +945,8 @@ class SessionEngine(
      * engine owed was silently skipped — with `maxShots = 1` the retry never happened at all.
      *
      * ==== INTEGRATION POINT ===================================================================
-     * The only three calls the engine makes into [CaptureVerifier], all of them here and in
-     * [fireShutter]:
+     * The only three calls the engine makes into [CaptureVerifier] during a shot, all of them here
+     * and in [fireShutter] (plus `verifier.close()` when the session stops or the service goes):
      *   verifier.available() / verifier.newestToken() / verifier.hasNewImageSince(baseline)
      * The verifier owns the question of *whose* row counts — a photo written by some other app must
      * never be accepted as proof that our tap took a picture, and the engine deliberately holds no
@@ -1499,9 +1501,9 @@ internal object SessionTiming {
     /**
      * Whether this shot's capture is going to be verified at all, decided *before* the tap.
      *
-     * [baseline] is the token the verifier handed back, and a null one is the case that matters: with
-     * `READ_MEDIA_IMAGES` granted, [CaptureVerifier.available] stays true even when the MediaStore
-     * query itself fails, and `hasNewImageSince(null)` is false by contract. Arming verification on a
+     * [baseline] is the token the verifier handed back, and a null one is the case that matters:
+     * [CaptureVerifier.available] stays true even when the MediaStore query or the observer
+     * registration itself fails, and `hasNewImageSince(null)` is false by contract. Arming verification on a
      * baseline that could not be taken therefore walked every shot through
      * KEEP_POLLING -> RETRY -> GIVE_UP — two taps per frame and a "no new photo" warning on a camera
      * that is working. A baseline that could not be taken means *this shot is not verified*, which is

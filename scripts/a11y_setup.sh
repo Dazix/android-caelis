@@ -114,12 +114,10 @@ if [ "$PKG_PRESENT" = 1 ]; then
     APPOP_SAW=$(get_appop SYSTEM_ALERT_WINDOW)
     APPOP_ARS=$(get_appop ACCESS_RESTRICTED_SETTINGS)
     PERM_POST_NOTIFICATIONS=$(get_runtime_permission android.permission.POST_NOTIFICATIONS)
-    PERM_READ_MEDIA_IMAGES=$(get_runtime_permission android.permission.READ_MEDIA_IMAGES)
 else
     APPOP_SAW=default
     APPOP_ARS=default
     PERM_POST_NOTIFICATIONS=unknown
-    PERM_READ_MEDIA_IMAGES=unknown
 fi
 
 # ----------------------------------------------------------------- snapshot
@@ -137,7 +135,6 @@ else
         printf 'ORIG_APPOP_SYSTEM_ALERT_WINDOW=%s\n' "$APPOP_SAW"
         printf 'ORIG_APPOP_ACCESS_RESTRICTED_SETTINGS=%s\n' "$APPOP_ARS"
         printf 'ORIG_PERM_POST_NOTIFICATIONS=%s\n' "$PERM_POST_NOTIFICATIONS"
-        printf 'ORIG_PERM_READ_MEDIA_IMAGES=%s\n' "$PERM_READ_MEDIA_IMAGES"
     } >"$SNAPSHOT"
     info "snapshotted original state to ${SNAPSHOT}"
     sed 's/^/a11y_setup:   /' "$SNAPSHOT"
@@ -155,11 +152,6 @@ if [ "$PKG_PRESENT" = 1 ]; then
     # scripted run can never observe the countdown a real user would see.
     "$ADB" shell pm grant --user "$USER_ID" "$PKG" android.permission.POST_NOTIFICATIONS
     info "granted POST_NOTIFICATIONS (was ${PERM_POST_NOTIFICATIONS})"
-
-    # CaptureVerifier degrades to a silent no-op without it, so a session asked to verify its
-    # captures would report success without ever having looked.
-    "$ADB" shell pm grant --user "$USER_ID" "$PKG" android.permission.READ_MEDIA_IMAGES
-    info "granted READ_MEDIA_IMAGES (was ${PERM_READ_MEDIA_IMAGES})"
 fi
 
 # --------------------------------------------------- cycle the service off / on

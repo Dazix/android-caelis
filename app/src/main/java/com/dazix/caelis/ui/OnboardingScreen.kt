@@ -105,13 +105,16 @@ fun OnboardingScreen(
             )
         }
 
-        SectionCard(title = stringResource(R.string.onboarding_media_title)) {
-            Text(
-                text = stringResource(R.string.onboarding_media_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalContentColor.current.copy(alpha = 0.75f),
-            )
-            StatusLabel(granted = permissions.readMediaImagesGranted, optional = true)
+        // From Android 13 capture verification needs no photos permission, so there is no row to show.
+        if (Permissions.photosNeedRuntimeGrant()) {
+            SectionCard(title = stringResource(R.string.onboarding_media_title)) {
+                Text(
+                    text = stringResource(R.string.onboarding_media_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LocalContentColor.current.copy(alpha = 0.75f),
+                )
+                StatusLabel(granted = permissions.captureVerificationReady, optional = true)
+            }
         }
     }
 }

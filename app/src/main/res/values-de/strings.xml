@@ -132,9 +132,9 @@
     <string name="setup_min_battery_value">%1$d %%</string>
     <string name="setup_min_free_space">Stopp unter freiem Speicher</string>
     <string name="setup_verify_captures">Aufnahmen überprüfen</string>
-    <string name="setup_verify_captures_desc">Nach jeder Aufnahme prüft die App, ob wirklich ein neues Foto entstanden ist, und warnt Sie, wenn die Kamera-App nicht mehr speichert. Dafür muss sie Ihre Fotomediathek lesen, weshalb Android beim Einschalten nach der Fotoberechtigung fragt. Bleibt die Option aus, wird gar kein Fotozugriff angefordert.</string>
+    <string name="setup_verify_captures_desc">Nach jeder Aufnahme prüft die App, ob wirklich ein neues Foto entstanden ist, und warnt Sie, wenn die Kamera-App nicht mehr speichert. Android meldet der App nur, dass ein Foto gespeichert wurde: Das Foto selbst sieht sie nicht und braucht keine Fotoberechtigung. Es zählt alles, was während der Aufnahme gespeichert wird, auch ein Screenshot.</string>
+    <string name="setup_verify_captures_desc_storage">Nach jeder Aufnahme prüft die App, ob wirklich ein neues Foto entstanden ist, und warnt Sie, wenn die Kamera-App nicht mehr speichert. Dafür muss sie Ihre Fotomediathek lesen, weshalb Android beim Einschalten nach der Fotoberechtigung fragt. Bleibt die Option aus, wird gar kein Fotozugriff angefordert.</string>
     <string name="setup_verify_permission_needed">Die Überprüfung braucht Zugriff auf alle Fotos, der noch fehlt. Die Sitzung läuft trotzdem weiter und nimmt Fotos auf – sie kann Ihnen nur nicht melden, wenn die Kamera-App nicht mehr speichert.</string>
-    <string name="setup_verify_permission_partial">Nur die von Ihnen ausgewählten Fotos sind für die App freigegeben, daher sieht sie die Aufnahmen dieser Sitzung nicht. Öffnen Sie die App-Einstellungen und stellen Sie „Fotos und Videos“ auf „Alle zulassen“.</string>
     <string name="setup_verify_open_settings">App-Einstellungen öffnen</string>
     <string name="setup_verify_permission_granted">Fotoberechtigung erteilt.</string>
     <string name="setup_tap_area">Tippziel</string>

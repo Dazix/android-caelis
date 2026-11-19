@@ -144,10 +144,9 @@ private fun CaelisApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
-    // The answer is only re-read, never acted on: on this target SDK the dialog always offers
-    // "Select photos", which grants partial access and leaves READ_MEDIA_IMAGES denied. Switching
-    // the toggle off here would silently undo the choice the user just made, so the toggle stays on
-    // and session setup explains what full photo access is still needed for.
+    // Android 11 and 12 only (Permissions.photosNeedRuntimeGrant). The answer is only re-read, never
+    // acted on: switching the toggle off here would silently undo the choice the user just made, so
+    // the toggle stays on and session setup explains what photo access is still needed for.
     val mediaLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.refreshSystemState() }
@@ -371,8 +370,7 @@ private fun CaelisScreen(
         Screen.SETUP -> SetupScreen(
             state = setup,
             floorMs = floorMs,
-            mediaPermissionGranted = permissions.readMediaImagesGranted,
-            mediaPermissionPartial = permissions.readMediaPartialGranted,
+            mediaPermissionGranted = permissions.captureVerificationReady,
             onChange = { updated -> viewModel.updateSetup { updated } },
             onJitterChange = viewModel::setTargetJitter,
             onRequestMediaPermission = onRequestMediaPermission,

@@ -45,11 +45,12 @@ class CaptureVerificationTest {
     fun setUp() {
         SessionHarness.requireServiceBound()
         SessionHarness.reset()
-        // Granted by scripts/a11y_setup.sh and restored by a11y_teardown.sh. Without it the engine
-        // skips verification altogether and both tests below would pass without testing anything.
+        // From Android 13 verification needs no permission (insert notifications); on 11 and 12 it
+        // needs READ_EXTERNAL_STORAGE. Without it the engine skips verification altogether and both
+        // tests below would pass without testing anything.
         assertTrue(
-            "READ_MEDIA_IMAGES is not granted, so nothing here would exercise verifyCaptures; " +
-                "run this through scripts/run_instrumented.sh",
+            "capture verification is unavailable (READ_EXTERNAL_STORAGE not granted on Android " +
+                "11/12), so nothing here would exercise verifyCaptures",
             CaptureVerifier(SessionHarness.context).available(),
         )
         deleteOwnRows()

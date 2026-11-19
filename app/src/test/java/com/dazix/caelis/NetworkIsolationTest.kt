@@ -267,8 +267,8 @@ class NetworkIsolationTest {
                 // Never USE_EXACT_ALARM: Play reserves it for alarm clocks and calendars.
                 "android.permission.SCHEDULE_EXACT_ALARM",
                 "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-                "android.permission.READ_MEDIA_IMAGES",
-                // READ_MEDIA_IMAGES below Android 13 (minSdk 30); capped, see the test below.
+                // Capture verification on Android 11 and 12 only; capped, see the tests below.
+                // Never READ_MEDIA_IMAGES: Play refused it for a check the photo picker cannot do.
                 "android.permission.READ_EXTERNAL_STORAGE",
                 "android.permission.CAMERA",
                 "android.permission.ACCESS_FINE_LOCATION",
@@ -281,8 +281,8 @@ class NetworkIsolationTest {
     }
 
     /**
-     * READ_EXTERNAL_STORAGE is only the Android 11 and 12 spelling of the photos permission. Uncapped,
-     * Play lists it as a broad storage permission on every newer phone, where it grants nothing anyway.
+     * READ_EXTERNAL_STORAGE is only for capture verification on Android 11 and 12. Uncapped, Play
+     * lists it as a broad storage permission on every newer phone, where it grants nothing anyway.
      */
     @Test
     fun `the old storage permission stops at Android 12`() {
