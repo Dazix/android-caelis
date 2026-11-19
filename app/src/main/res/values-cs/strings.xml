@@ -731,6 +731,8 @@
     <string name="settings_section_version">Verze</string>
     <string name="settings_version_name_label">Version Name</string>
     <string name="settings_version_code_label">Version Code</string>
+    <string name="settings_privacy_policy">Zásady ochrany soukromí</string>
+    <string name="settings_privacy_policy_url">https://caelis-app.com/cs/privacy/</string>
 
     <!-- Virtuální místa -->
     <string name="places_title">Místa</string>

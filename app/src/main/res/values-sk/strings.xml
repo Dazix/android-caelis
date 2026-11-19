@@ -730,6 +730,8 @@
     <string name="settings_section_version">Verzia</string>
     <string name="settings_version_name_label">Názov verzie</string>
     <string name="settings_version_code_label">Kód verzie</string>
+    <string name="settings_privacy_policy">Zásady ochrany súkromia</string>
+    <string name="settings_privacy_policy_url">https://caelis-app.com/sk/privacy/</string>
 
     <!-- Virtuálne miesta -->
     <string name="places_title">Miesta</string>
