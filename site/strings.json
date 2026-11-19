@@ -99,7 +99,9 @@
     "foot.license": "Open source under GPL-3.0.",
     "foot.osm": "Peak names © OpenStreetMap contributors (ODbL).",
     "foot.source": "Source code",
-    "foot.issues": "Report a problem"
+    "foot.issues": "Report a problem",
+    "foot.privacy": "Privacy policy",
+    "priv.policy": "Read the full privacy policy"
   },
   "cs": {
     "lang.name": "Čeština",
@@ -201,7 +203,9 @@
     "foot.license": "Otevřený zdrojový kód pod licencí GPL-3.0.",
     "foot.osm": "Názvy vrcholů © přispěvatelé OpenStreetMap (ODbL).",
     "foot.source": "Zdrojový kód",
-    "foot.issues": "Nahlásit problém"
+    "foot.issues": "Nahlásit problém",
+    "foot.privacy": "Zásady ochrany soukromí",
+    "priv.policy": "Celé zásady ochrany soukromí"
   },
   "sk": {
     "lang.name": "Slovenčina",
@@ -303,7 +307,9 @@
     "foot.license": "Otvorený zdrojový kód pod licenciou GPL-3.0.",
     "foot.osm": "Názvy vrcholov © prispievatelia OpenStreetMap (ODbL).",
     "foot.source": "Zdrojový kód",
-    "foot.issues": "Nahlásiť problém"
+    "foot.issues": "Nahlásiť problém",
+    "foot.privacy": "Zásady ochrany súkromia",
+    "priv.policy": "Celé zásady ochrany súkromia"
   },
   "pl": {
     "lang.name": "Polski",
@@ -405,7 +411,9 @@
     "foot.license": "Otwarte oprogramowanie na licencji GPL-3.0.",
     "foot.osm": "Nazwy szczytów © współtwórcy OpenStreetMap (ODbL).",
     "foot.source": "Kod źródłowy",
-    "foot.issues": "Zgłoś problem"
+    "foot.issues": "Zgłoś problem",
+    "foot.privacy": "Polityka prywatności",
+    "priv.policy": "Pełna polityka prywatności"
   },
   "de": {
     "lang.name": "Deutsch",
@@ -507,6 +515,8 @@
     "foot.license": "Open Source unter GPL-3.0.",
     "foot.osm": "Gipfelnamen © OpenStreetMap-Mitwirkende (ODbL).",
     "foot.source": "Quellcode",
-    "foot.issues": "Problem melden"
+    "foot.issues": "Problem melden",
+    "foot.privacy": "Datenschutzerklärung",
+    "priv.policy": "Vollständige Datenschutzerklärung"
   }
 }

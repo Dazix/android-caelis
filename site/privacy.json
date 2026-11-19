@@ -1,0 +1,293 @@
+{
+  "_comment": "The privacy policy at <base>/privacy/ and <base>/<lang>/privacy/, rendered by scripts/build_site.py through site/privacy.html. Google Play checks that it names the app and the developer exactly as the store listing does (app title in metadata/android/*/title.txt, developer name in Play Console). Keep every language saying the same thing, and keep it true to the app: AGENTS.md (network, ARCore, backup) is the source. Text may carry <strong>, <em>, <br> and [label](https://… or mailto:…) links; sections need the same count in every language.",
+  "en": {
+    "meta.title": "Privacy Policy – CAELIS – Time-lapse & Sky AR",
+    "meta.desc": "How the Android app CAELIS – Time-lapse & Sky AR by David Šanda handles your data.",
+    "kicker": "Privacy Policy",
+    "title": "CAELIS – Time-lapse & Sky AR",
+    "updated": "Effective from 19 November 2026",
+    "back": "Back to CAELIS",
+    "toc": "Contents",
+    "sections": [
+      {"h": "Who is responsible", "p": [
+        "This privacy policy applies to the Android app <strong>CAELIS – Time-lapse & Sky AR</strong> (package name com.dazix.caelis), published on [Google Play](https://play.google.com/store/apps/details?id=com.dazix.caelis).",
+        "The app is developed and published by <strong>David Šanda</strong>, an individual developer in the Czech Republic, who is the controller of any personal data described here.",
+        "Contact: [dazix.development@gmail.com](mailto:dazix.development@gmail.com)"
+      ]},
+      {"h": "In short", "ul": [
+        "The app has no account, no advertising, no analytics and no tracking.",
+        "The developer does not receive any of your personal data from the app.",
+        "Your location, camera picture and photos are processed only on your phone.",
+        "The only thing the app downloads is terrain elevation and peak names, and only after you agree.",
+        "Google ARCore is optional and off by default."
+      ]},
+      {"h": "Data processed only on your phone", "p": [
+        "The following data is used inside the app on your phone. It is not sent to the developer or to anyone else by the app."
+      ], "ul": [
+        "<strong>Location (precise and approximate).</strong> Used to compute the position of the Sun, the Moon, planets and stars and the terrain horizon for where you stand. Terrain horizons computed for a place, and places you save yourself, are stored in the app's private storage.",
+        "<strong>Camera.</strong> The camera picture is shown behind the sky overlay and is used to align the horizon automatically. Frames are processed in memory and are neither saved nor sent.",
+        "<strong>Photos.</strong> If you turn on shot verification, the app reads the date, folder and source app of new photos to confirm that a shot was taken. It does not open, copy or upload the pictures.",
+        "<strong>Accessibility service.</strong> The app needs the accessibility permission to press the shutter of your camera app at the intervals you set. It reads which app is in the foreground and the buttons on its screen, only to find and tap the shutter. It does not record, store or send what is on the screen and uses the permission for nothing else.",
+        "<strong>Settings.</strong> Your intervalometer settings, calibrations and choices (including your consents) are stored on the phone."
+      ]},
+      {"h": "What is sent over the internet", "p": [
+        "The only network requests the app itself makes are downloads of terrain elevation tiles and peak names. They are made only after you allow terrain downloads in the app, and can be switched off at any time in Settings.",
+        "Each request asks for one map square of 1° × 1° by its name (for example N50E015). This reveals the approximate area (roughly 70 × 110 km) you are in or chose, but not your position, and the app sends no identifiers. The files come from Amazon Web Services (public elevation tiles, s3.amazonaws.com) and from GitHub (peak names, raw.githubusercontent.com). As with any internet connection, these providers see your IP address and the request, under their own privacy policies: [AWS](https://aws.amazon.com/privacy/) and [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).",
+        "All connections use HTTPS. Without your consent to terrain downloads the app makes no network requests at all."
+      ]},
+      {"h": "Google ARCore (optional)", "p": [
+        "The app can use Google Play Services for AR (ARCore), a separate component made and operated by Google, to track the phone more steadily. It is off by default and starts only if you turn it on in Settings and only while an AR screen is open.",
+        "While it runs, Google's component may send Google device identifiers, usage data and diagnostics. If you also turn on the Geospatial API, it sends camera-derived visual data and your location to Google's Visual Positioning Service. The app cannot see or limit what Google's component sends; this is governed by the [Google Privacy Policy](https://policies.google.com/privacy). You can turn it off again at any time."
+      ]},
+      {"h": "Google Play and backups", "p": [
+        "The app is distributed through Google Play, which processes data about installs and updates under the [Google Privacy Policy](https://policies.google.com/privacy). Through Google Play Console the developer sees only aggregated, anonymous statistics and crash reports that Google provides; these do not identify you.",
+        "If Android backup is turned on, Android may back up the app's settings to your Google account. Saved places, terrain horizons and downloaded terrain are excluded from the cloud backup because they reveal where you have been."
+      ]},
+      {"h": "Sharing, sale and retention", "p": [
+        "The developer does not sell, rent or share your data, and does not receive it in the first place. Data stored by the app stays on your phone until you delete it in the app, clear the app's data or uninstall the app.",
+        "If you write to the developer by e-mail, your message and address are used only to answer you and are deleted when no longer needed."
+      ]},
+      {"h": "Children", "p": [
+        "The app collects no personal data from anyone, including children."
+      ]},
+      {"h": "Your rights", "p": [
+        "Under the GDPR you have the right to access, correct and delete your personal data, to restrict or object to its processing, and to data portability. Because the app keeps your data only on your phone, you exercise most of these rights directly in the app or by uninstalling it. For anything else, contact the developer at the address above. You also have the right to lodge a complaint with a supervisory authority; in the Czech Republic it is the [Office for Personal Data Protection](https://uoou.gov.cz/en)."
+      ]},
+      {"h": "Changes to this policy", "p": [
+        "If the app's handling of data changes, this policy will be updated at this address and the effective date above will change."
+      ]}
+    ]
+  },
+  "cs": {
+    "meta.title": "Zásady ochrany soukromí – CAELIS – časosběr a AR obloha",
+    "meta.desc": "Jak aplikace pro Android CAELIS – časosběr a AR obloha od Davida Šandy zachází s vašimi údaji.",
+    "kicker": "Zásady ochrany soukromí",
+    "title": "CAELIS – časosběr a AR obloha",
+    "updated": "Účinné od 19. listopadu 2026",
+    "back": "Zpět na CAELIS",
+    "toc": "Obsah",
+    "sections": [
+      {"h": "Kdo odpovídá", "p": [
+        "Tyto zásady se vztahují na aplikaci pro Android <strong>CAELIS – časosběr a AR obloha</strong> (anglicky CAELIS – Time-lapse & Sky AR, název balíčku com.dazix.caelis), zveřejněnou na [Google Play](https://play.google.com/store/apps/details?id=com.dazix.caelis).",
+        "Aplikaci vyvíjí a vydává <strong>David Šanda</strong>, vývojář a fyzická osoba z České republiky, který je správcem osobních údajů popsaných níže.",
+        "Kontakt: [dazix.development@gmail.com](mailto:dazix.development@gmail.com)"
+      ]},
+      {"h": "Stručně", "ul": [
+        "Aplikace nemá účet, reklamy, analytiku ani sledování.",
+        "Vývojář od aplikace nedostává žádné vaše osobní údaje.",
+        "Poloha, obraz z fotoaparátu a fotky se zpracovávají jen ve vašem telefonu.",
+        "Jediné, co aplikace stahuje, jsou výšková data terénu a názvy vrcholů, a to jen s vaším souhlasem.",
+        "Google ARCore je volitelné a ve výchozím stavu vypnuté."
+      ]},
+      {"h": "Údaje zpracovávané jen ve vašem telefonu", "p": [
+        "Následující údaje aplikace používá ve vašem telefonu. Neposílá je vývojáři ani nikomu jinému."
+      ], "ul": [
+        "<strong>Poloha (přesná i přibližná).</strong> Slouží k výpočtu polohy Slunce, Měsíce, planet a hvězd a terénního horizontu tam, kde stojíte. Horizonty spočítané pro dané místo a místa, která si sami uložíte, se ukládají do soukromého úložiště aplikace.",
+        "<strong>Fotoaparát.</strong> Obraz z fotoaparátu se zobrazuje pod oblohou a slouží k automatickému zarovnání horizontu. Snímky se zpracují v paměti, neukládají se a nikam se neposílají.",
+        "<strong>Fotky.</strong> Pokud zapnete ověřování snímků, aplikace čte datum, složku a zdrojovou aplikaci nových fotek, aby potvrdila, že snímek vznikl. Fotky samotné neotevírá, nekopíruje ani nenahrává.",
+        "<strong>Služba usnadnění.</strong> Oprávnění usnadnění aplikace potřebuje k mačkání spouště vaší fotoaplikace v nastavených intervalech. Čte, která aplikace je v popředí a jaká tlačítka má na obrazovce, jen aby našla spoušť a stiskla ji. Obsah obrazovky nezaznamenává, neukládá ani neodesílá a k ničemu jinému oprávnění nepoužívá.",
+        "<strong>Nastavení.</strong> Nastavení intervalometru, kalibrace a vaše volby (včetně souhlasů) se ukládají v telefonu."
+      ]},
+      {"h": "Co se posílá přes internet", "p": [
+        "Jediné síťové požadavky, které aplikace sama dělá, jsou stahování výškových dlaždic terénu a názvů vrcholů. Proběhnou jen poté, co stahování terénu v aplikaci povolíte, a v Nastavení je můžete kdykoli vypnout.",
+        "Každý požadavek žádá o jeden mapový čtverec 1° × 1° podle jeho názvu (například N50E015). Ten prozradí přibližnou oblast (zhruba 70 × 110 km), ve které jste nebo kterou jste vybrali, ne však vaši polohu, a aplikace neposílá žádné identifikátory. Soubory pocházejí z Amazon Web Services (veřejné výškové dlaždice, s3.amazonaws.com) a z GitHubu (názvy vrcholů, raw.githubusercontent.com). Jako u každého připojení k internetu tito poskytovatelé vidí vaši IP adresu a požadavek, podle svých vlastních zásad: [AWS](https://aws.amazon.com/privacy/) a [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).",
+        "Všechna spojení používají HTTPS. Bez souhlasu se stahováním terénu aplikace nedělá žádné síťové požadavky."
+      ]},
+      {"h": "Google ARCore (volitelné)", "p": [
+        "Aplikace může pro stabilnější sledování telefonu použít Služby Google Play pro AR (ARCore), samostatnou součást, kterou vyrábí a provozuje Google. Ve výchozím stavu je vypnutá a spustí se jen tehdy, když ji zapnete v Nastavení, a jen během otevřené AR obrazovky.",
+        "Během běhu může komponenta Googlu posílat Googlu identifikátory zařízení, údaje o používání a diagnostiku. Pokud zapnete i Geospatial API, posílá do služby Visual Positioning Service od Googlu vizuální data odvozená z fotoaparátu a vaši polohu. Aplikace nevidí ani neomezuje, co komponenta Googlu posílá; řídí se to [zásadami ochrany soukromí Google](https://policies.google.com/privacy?hl=cs). Kdykoli ji můžete zase vypnout."
+      ]},
+      {"h": "Google Play a zálohy", "p": [
+        "Aplikace se distribuuje přes Google Play, který zpracovává údaje o instalacích a aktualizacích podle [zásad ochrany soukromí Google](https://policies.google.com/privacy?hl=cs). V Google Play Console vidí vývojář jen souhrnné anonymní statistiky a hlášení o pádech, které poskytuje Google; ty vás neidentifikují.",
+        "Pokud máte zapnutou zálohu Androidu, může Android zálohovat nastavení aplikace do vašeho účtu Google. Uložená místa, terénní horizonty a stažený terén jsou ze zálohy do cloudu vyloučeny, protože prozrazují, kde jste byli."
+      ]},
+      {"h": "Sdílení, prodej a uchovávání", "p": [
+        "Vývojář vaše údaje neprodává, nepronajímá ani nesdílí a vůbec je nedostává. Údaje uložené aplikací zůstávají v telefonu, dokud je v aplikaci nesmažete, nevymažete data aplikace nebo aplikaci neodinstalujete.",
+        "Pokud vývojáři napíšete e-mail, vaši zprávu a adresu použije jen k odpovědi a smaže je, jakmile nebudou potřeba."
+      ]},
+      {"h": "Děti", "p": [
+        "Aplikace neshromažďuje žádné osobní údaje od nikoho, ani od dětí."
+      ]},
+      {"h": "Vaše práva", "p": [
+        "Podle GDPR máte právo na přístup ke svým osobním údajům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a přenositelnost údajů. Protože aplikace uchovává vaše údaje jen ve vašem telefonu, většinu těchto práv uplatníte přímo v aplikaci nebo jejím odinstalováním. Se vším ostatním se obraťte na vývojáře na adrese výše. Máte také právo podat stížnost u dozorového úřadu, v České republice u [Úřadu pro ochranu osobních údajů](https://uoou.gov.cz/)."
+      ]},
+      {"h": "Změny těchto zásad", "p": [
+        "Pokud se způsob, jakým aplikace zachází s údaji, změní, zásady se na této adrese aktualizují a změní se i datum účinnosti výše."
+      ]}
+    ]
+  },
+  "sk": {
+    "meta.title": "Zásady ochrany súkromia – CAELIS – časozber a AR obloha",
+    "meta.desc": "Ako aplikácia pre Android CAELIS – časozber a AR obloha od Davida Šandu narába s vašimi údajmi.",
+    "kicker": "Zásady ochrany súkromia",
+    "title": "CAELIS – časozber a AR obloha",
+    "updated": "Účinné od 19. novembra 2026",
+    "back": "Späť na CAELIS",
+    "toc": "Obsah",
+    "sections": [
+      {"h": "Kto zodpovedá", "p": [
+        "Tieto zásady sa vzťahujú na aplikáciu pre Android <strong>CAELIS – časozber a AR obloha</strong> (anglicky CAELIS – Time-lapse & Sky AR, názov balíka com.dazix.caelis), zverejnenú na [Google Play](https://play.google.com/store/apps/details?id=com.dazix.caelis).",
+        "Aplikáciu vyvíja a vydáva <strong>David Šanda</strong>, vývojár a fyzická osoba z Českej republiky, ktorý je prevádzkovateľom osobných údajov opísaných nižšie.",
+        "Kontakt: [dazix.development@gmail.com](mailto:dazix.development@gmail.com)"
+      ]},
+      {"h": "Stručne", "ul": [
+        "Aplikácia nemá účet, reklamy, analytiku ani sledovanie.",
+        "Vývojár od aplikácie nedostáva žiadne vaše osobné údaje.",
+        "Poloha, obraz z fotoaparátu a fotky sa spracúvajú len vo vašom telefóne.",
+        "Jediné, čo aplikácia sťahuje, sú výškové dáta terénu a názvy vrchov, a to len s vaším súhlasom.",
+        "Google ARCore je voliteľné a predvolene vypnuté."
+      ]},
+      {"h": "Údaje spracúvané len vo vašom telefóne", "p": [
+        "Nasledujúce údaje aplikácia používa vo vašom telefóne. Neposiela ich vývojárovi ani nikomu inému."
+      ], "ul": [
+        "<strong>Poloha (presná aj približná).</strong> Slúži na výpočet polohy Slnka, Mesiaca, planét a hviezd a terénneho horizontu tam, kde stojíte. Horizonty vypočítané pre dané miesto a miesta, ktoré si sami uložíte, sa ukladajú do súkromného úložiska aplikácie.",
+        "<strong>Fotoaparát.</strong> Obraz z fotoaparátu sa zobrazuje pod oblohou a slúži na automatické zarovnanie horizontu. Snímky sa spracujú v pamäti, neukladajú sa a nikam sa neposielajú.",
+        "<strong>Fotky.</strong> Ak zapnete overovanie snímok, aplikácia číta dátum, priečinok a zdrojovú aplikáciu nových fotiek, aby potvrdila, že snímka vznikla. Fotky samotné neotvára, nekopíruje ani nenahráva.",
+        "<strong>Služba dostupnosti.</strong> Povolenie dostupnosti aplikácia potrebuje na stláčanie spúšte vašej fotoaplikácie v nastavených intervaloch. Číta, ktorá aplikácia je v popredí a aké tlačidlá má na obrazovke, len aby našla spúšť a stlačila ju. Obsah obrazovky nezaznamenáva, neukladá ani neodosiela a na nič iné povolenie nepoužíva.",
+        "<strong>Nastavenia.</strong> Nastavenia intervalometra, kalibrácie a vaše voľby (vrátane súhlasov) sa ukladajú v telefóne."
+      ]},
+      {"h": "Čo sa posiela cez internet", "p": [
+        "Jediné sieťové požiadavky, ktoré aplikácia sama robí, sú sťahovanie výškových dlaždíc terénu a názvov vrchov. Prebehnú len potom, čo sťahovanie terénu v aplikácii povolíte, a v Nastaveniach ich môžete kedykoľvek vypnúť.",
+        "Každá požiadavka žiada o jeden mapový štvorec 1° × 1° podľa jeho názvu (napríklad N50E015). Ten prezradí približnú oblasť (zhruba 70 × 110 km), v ktorej ste alebo ktorú ste vybrali, nie však vašu polohu, a aplikácia neposiela žiadne identifikátory. Súbory pochádzajú z Amazon Web Services (verejné výškové dlaždice, s3.amazonaws.com) a z GitHubu (názvy vrchov, raw.githubusercontent.com). Ako pri každom pripojení na internet títo poskytovatelia vidia vašu IP adresu a požiadavku, podľa svojich vlastných zásad: [AWS](https://aws.amazon.com/privacy/) a [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).",
+        "Všetky spojenia používajú HTTPS. Bez súhlasu so sťahovaním terénu aplikácia nerobí žiadne sieťové požiadavky."
+      ]},
+      {"h": "Google ARCore (voliteľné)", "p": [
+        "Aplikácia môže na stabilnejšie sledovanie telefónu použiť Služby Google Play pre AR (ARCore), samostatný komponent, ktorý vyrába a prevádzkuje Google. Predvolene je vypnutý a spustí sa len vtedy, keď ho zapnete v Nastaveniach, a len počas otvorenej AR obrazovky.",
+        "Počas behu môže komponent Googlu posielať Googlu identifikátory zariadenia, údaje o používaní a diagnostiku. Ak zapnete aj Geospatial API, posiela do služby Visual Positioning Service od Googlu vizuálne dáta odvodené z fotoaparátu a vašu polohu. Aplikácia nevidí ani neobmedzuje, čo komponent Googlu posiela; riadi sa to [zásadami ochrany súkromia Google](https://policies.google.com/privacy?hl=sk). Kedykoľvek ho môžete znova vypnúť."
+      ]},
+      {"h": "Google Play a zálohy", "p": [
+        "Aplikácia sa distribuuje cez Google Play, ktorý spracúva údaje o inštaláciách a aktualizáciách podľa [zásad ochrany súkromia Google](https://policies.google.com/privacy?hl=sk). V Google Play Console vidí vývojár len súhrnné anonymné štatistiky a hlásenia o pádoch, ktoré poskytuje Google; tie vás neidentifikujú.",
+        "Ak máte zapnutú zálohu Androidu, Android môže zálohovať nastavenia aplikácie do vášho účtu Google. Uložené miesta, terénne horizonty a stiahnutý terén sú zo zálohy do cloudu vylúčené, pretože prezrádzajú, kde ste boli."
+      ]},
+      {"h": "Zdieľanie, predaj a uchovávanie", "p": [
+        "Vývojár vaše údaje nepredáva, neprenajíma ani nezdieľa a vôbec ich nedostáva. Údaje uložené aplikáciou zostávajú v telefóne, kým ich v aplikácii nezmažete, nevymažete dáta aplikácie alebo aplikáciu neodinštalujete.",
+        "Ak vývojárovi napíšete e-mail, vašu správu a adresu použije len na odpoveď a vymaže ich, keď už nebudú potrebné."
+      ]},
+      {"h": "Deti", "p": [
+        "Aplikácia nezhromažďuje žiadne osobné údaje od nikoho, ani od detí."
+      ]},
+      {"h": "Vaše práva", "p": [
+        "Podľa GDPR máte právo na prístup k svojim osobným údajom, ich opravu a vymazanie, na obmedzenie spracúvania, namietanie a prenosnosť údajov. Keďže aplikácia uchováva vaše údaje len vo vašom telefóne, väčšinu týchto práv uplatníte priamo v aplikácii alebo jej odinštalovaním. So všetkým ostatným sa obráťte na vývojára na adrese vyššie. Máte tiež právo podať sťažnosť dozornému orgánu; na Slovensku je to [Úrad na ochranu osobných údajov SR](https://dataprotection.gov.sk/), v Českej republike [Úřad pro ochranu osobních údajů](https://uoou.gov.cz/)."
+      ]},
+      {"h": "Zmeny týchto zásad", "p": [
+        "Ak sa spôsob, akým aplikácia narába s údajmi, zmení, zásady sa na tejto adrese aktualizujú a zmení sa aj dátum účinnosti vyššie."
+      ]}
+    ]
+  },
+  "pl": {
+    "meta.title": "Polityka prywatności – CAELIS – Timelapse i AR niebo",
+    "meta.desc": "Jak aplikacja na Androida CAELIS – Timelapse i AR niebo autorstwa Davida Šandy postępuje z Twoimi danymi.",
+    "kicker": "Polityka prywatności",
+    "title": "CAELIS – Timelapse i AR niebo",
+    "updated": "Obowiązuje od 19 listopada 2026",
+    "back": "Powrót do CAELIS",
+    "toc": "Spis treści",
+    "sections": [
+      {"h": "Kto odpowiada", "p": [
+        "Niniejsza polityka dotyczy aplikacji na Androida <strong>CAELIS – Timelapse i AR niebo</strong> (po angielsku CAELIS – Time-lapse & Sky AR, nazwa pakietu com.dazix.caelis), opublikowanej w [Google Play](https://play.google.com/store/apps/details?id=com.dazix.caelis).",
+        "Aplikację tworzy i wydaje <strong>David Šanda</strong>, deweloper będący osobą fizyczną z Czech, który jest administratorem opisanych tu danych osobowych.",
+        "Kontakt: [dazix.development@gmail.com](mailto:dazix.development@gmail.com)"
+      ]},
+      {"h": "W skrócie", "ul": [
+        "Aplikacja nie ma konta, reklam, analityki ani śledzenia.",
+        "Deweloper nie otrzymuje z aplikacji żadnych Twoich danych osobowych.",
+        "Lokalizacja, obraz z aparatu i zdjęcia są przetwarzane wyłącznie na Twoim telefonie.",
+        "Jedyne, co aplikacja pobiera, to dane wysokościowe terenu i nazwy szczytów, i to tylko za Twoją zgodą.",
+        "Google ARCore jest opcjonalne i domyślnie wyłączone."
+      ]},
+      {"h": "Dane przetwarzane tylko na Twoim telefonie", "p": [
+        "Poniższe dane aplikacja wykorzystuje na Twoim telefonie. Nie wysyła ich deweloperowi ani nikomu innemu."
+      ], "ul": [
+        "<strong>Lokalizacja (dokładna i przybliżona).</strong> Służy do obliczania położenia Słońca, Księżyca, planet i gwiazd oraz horyzontu terenu tam, gdzie stoisz. Horyzonty obliczone dla danego miejsca oraz miejsca zapisane przez Ciebie są przechowywane w prywatnej pamięci aplikacji.",
+        "<strong>Aparat.</strong> Obraz z aparatu jest wyświetlany pod niebem i służy do automatycznego wyrównania horyzontu. Klatki są przetwarzane w pamięci, nie są zapisywane ani wysyłane.",
+        "<strong>Zdjęcia.</strong> Jeśli włączysz weryfikację zdjęć, aplikacja odczytuje datę, folder i aplikację źródłową nowych zdjęć, aby potwierdzić, że zdjęcie zostało zrobione. Samych zdjęć nie otwiera, nie kopiuje ani nie przesyła.",
+        "<strong>Usługa ułatwień dostępu.</strong> Uprawnienie ułatwień dostępu jest potrzebne, aby naciskać spust migawki w Twojej aplikacji aparatu w ustawionych odstępach. Aplikacja odczytuje, która aplikacja jest na pierwszym planie i jakie przyciski ma na ekranie, tylko po to, by znaleźć i nacisnąć spust. Nie rejestruje, nie zapisuje ani nie wysyła zawartości ekranu i nie używa uprawnienia do niczego innego.",
+        "<strong>Ustawienia.</strong> Ustawienia interwałometru, kalibracje i Twoje wybory (w tym zgody) są przechowywane na telefonie."
+      ]},
+      {"h": "Co jest wysyłane przez internet", "p": [
+        "Jedyne żądania sieciowe, które wykonuje sama aplikacja, to pobieranie kafelków wysokościowych terenu i nazw szczytów. Odbywają się dopiero po zezwoleniu w aplikacji na pobieranie terenu i w Ustawieniach można je w każdej chwili wyłączyć.",
+        "Każde żądanie dotyczy jednego kwadratu mapy 1° × 1° wskazanego nazwą (na przykład N50E015). Ujawnia ona przybliżony obszar (około 70 × 110 km), w którym jesteś lub który wybrałeś, ale nie Twoją pozycję, a aplikacja nie wysyła żadnych identyfikatorów. Pliki pochodzą z Amazon Web Services (publiczne kafelki wysokościowe, s3.amazonaws.com) i z GitHuba (nazwy szczytów, raw.githubusercontent.com). Jak przy każdym połączeniu z internetem ci dostawcy widzą Twój adres IP i żądanie, zgodnie z własnymi zasadami: [AWS](https://aws.amazon.com/privacy/) i [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).",
+        "Wszystkie połączenia używają HTTPS. Bez zgody na pobieranie terenu aplikacja nie wykonuje żadnych żądań sieciowych."
+      ]},
+      {"h": "Google ARCore (opcjonalnie)", "p": [
+        "Aplikacja może używać Usług Google Play dla AR (ARCore), oddzielnego komponentu tworzonego i obsługiwanego przez Google, aby stabilniej śledzić telefon. Domyślnie jest wyłączony i uruchamia się tylko wtedy, gdy włączysz go w Ustawieniach, i tylko gdy otwarty jest ekran AR.",
+        "Podczas działania komponent Google może wysyłać do Google identyfikatory urządzenia, dane o użytkowaniu i diagnostykę. Jeśli włączysz też Geospatial API, wysyła on do usługi Visual Positioning Service Google dane wizualne pochodzące z aparatu oraz Twoją lokalizację. Aplikacja nie widzi ani nie ogranicza tego, co wysyła komponent Google; reguluje to [Polityka prywatności Google](https://policies.google.com/privacy?hl=pl). W każdej chwili możesz go ponownie wyłączyć."
+      ]},
+      {"h": "Google Play i kopie zapasowe", "p": [
+        "Aplikacja jest dystrybuowana przez Google Play, który przetwarza dane o instalacjach i aktualizacjach zgodnie z [Polityką prywatności Google](https://policies.google.com/privacy?hl=pl). W Google Play Console deweloper widzi tylko zbiorcze, anonimowe statystyki i raporty o awariach dostarczane przez Google; nie identyfikują one Ciebie.",
+        "Jeśli kopia zapasowa Androida jest włączona, Android może zapisywać ustawienia aplikacji na Twoim koncie Google. Zapisane miejsca, horyzonty terenu i pobrany teren są wyłączone z kopii w chmurze, ponieważ zdradzają, gdzie byłeś."
+      ]},
+      {"h": "Udostępnianie, sprzedaż i przechowywanie", "p": [
+        "Deweloper nie sprzedaje, nie wynajmuje ani nie udostępnia Twoich danych, a w ogóle ich nie otrzymuje. Dane zapisane przez aplikację pozostają na telefonie, dopóki nie usuniesz ich w aplikacji, nie wyczyścisz danych aplikacji lub jej nie odinstalujesz.",
+        "Jeśli napiszesz do dewelopera e-mail, Twoja wiadomość i adres zostaną użyte tylko do odpowiedzi i usunięte, gdy nie będą już potrzebne."
+      ]},
+      {"h": "Dzieci", "p": [
+        "Aplikacja nie zbiera żadnych danych osobowych od nikogo, w tym od dzieci."
+      ]},
+      {"h": "Twoje prawa", "p": [
+        "Zgodnie z RODO masz prawo dostępu do swoich danych osobowych, ich sprostowania i usunięcia, ograniczenia przetwarzania, sprzeciwu oraz przenoszenia danych. Ponieważ aplikacja przechowuje Twoje dane tylko na Twoim telefonie, większość tych praw realizujesz bezpośrednio w aplikacji lub przez jej odinstalowanie. W pozostałych sprawach skontaktuj się z deweloperem pod adresem podanym wyżej. Masz też prawo wnieść skargę do organu nadzorczego; w Polsce jest to [Prezes Urzędu Ochrony Danych Osobowych](https://uodo.gov.pl/), w Czechach [Úřad pro ochranu osobních údajů](https://uoou.gov.cz/en)."
+      ]},
+      {"h": "Zmiany tej polityki", "p": [
+        "Jeśli sposób postępowania aplikacji z danymi się zmieni, polityka zostanie zaktualizowana pod tym adresem, a data obowiązywania powyżej się zmieni."
+      ]}
+    ]
+  },
+  "de": {
+    "meta.title": "Datenschutzerklärung – CAELIS – Zeitraffer & Sky-AR",
+    "meta.desc": "Wie die Android-App CAELIS – Zeitraffer & Sky-AR von David Šanda mit Ihren Daten umgeht.",
+    "kicker": "Datenschutzerklärung",
+    "title": "CAELIS – Zeitraffer & Sky-AR",
+    "updated": "Gültig ab 19. November 2026",
+    "back": "Zurück zu CAELIS",
+    "toc": "Inhalt",
+    "sections": [
+      {"h": "Verantwortlicher", "p": [
+        "Diese Datenschutzerklärung gilt für die Android-App <strong>CAELIS – Zeitraffer & Sky-AR</strong> (englisch CAELIS – Time-lapse & Sky AR, Paketname com.dazix.caelis), veröffentlicht bei [Google Play](https://play.google.com/store/apps/details?id=com.dazix.caelis).",
+        "Die App wird von <strong>David Šanda</strong> entwickelt und veröffentlicht, einem Einzelentwickler aus Tschechien, der Verantwortlicher für die hier beschriebenen personenbezogenen Daten ist.",
+        "Kontakt: [dazix.development@gmail.com](mailto:dazix.development@gmail.com)"
+      ]},
+      {"h": "Kurz gesagt", "ul": [
+        "Die App hat kein Konto, keine Werbung, keine Analyse und kein Tracking.",
+        "Der Entwickler erhält von der App keine Ihrer personenbezogenen Daten.",
+        "Standort, Kamerabild und Fotos werden nur auf Ihrem Telefon verarbeitet.",
+        "Die App lädt nur Höhendaten des Geländes und Gipfelnamen herunter, und nur mit Ihrer Zustimmung.",
+        "Google ARCore ist optional und standardmäßig aus."
+      ]},
+      {"h": "Daten, die nur auf Ihrem Telefon verarbeitet werden", "p": [
+        "Die folgenden Daten verwendet die App auf Ihrem Telefon. Sie sendet sie weder an den Entwickler noch an andere."
+      ], "ul": [
+        "<strong>Standort (genau und ungefähr).</strong> Dient zur Berechnung der Position von Sonne, Mond, Planeten und Sternen sowie des Geländehorizonts dort, wo Sie stehen. Für einen Ort berechnete Horizonte und Orte, die Sie selbst speichern, werden im privaten Speicher der App abgelegt.",
+        "<strong>Kamera.</strong> Das Kamerabild wird unter dem Himmel angezeigt und dient zur automatischen Ausrichtung des Horizonts. Die Bilder werden im Arbeitsspeicher verarbeitet, weder gespeichert noch gesendet.",
+        "<strong>Fotos.</strong> Wenn Sie die Aufnahmeprüfung einschalten, liest die App Datum, Ordner und Quell-App neuer Fotos, um zu bestätigen, dass eine Aufnahme entstanden ist. Die Fotos selbst öffnet, kopiert oder lädt sie nicht hoch.",
+        "<strong>Bedienungshilfe.</strong> Die App braucht die Berechtigung für Bedienungshilfen, um den Auslöser Ihrer Kamera-App in den eingestellten Abständen zu drücken. Sie liest, welche App im Vordergrund ist und welche Schaltflächen sie zeigt, nur um den Auslöser zu finden und zu tippen. Sie zeichnet den Bildschirminhalt nicht auf, speichert oder sendet ihn nicht und nutzt die Berechtigung für nichts anderes.",
+        "<strong>Einstellungen.</strong> Intervallometer-Einstellungen, Kalibrierungen und Ihre Auswahl (einschließlich Zustimmungen) werden auf dem Telefon gespeichert."
+      ]},
+      {"h": "Was über das Internet gesendet wird", "p": [
+        "Die einzigen Netzwerkanfragen, die die App selbst stellt, sind Downloads von Höhenkacheln des Geländes und von Gipfelnamen. Sie erfolgen erst, nachdem Sie Gelände-Downloads in der App erlaubt haben, und lassen sich in den Einstellungen jederzeit abschalten.",
+        "Jede Anfrage fordert ein Kartenquadrat von 1° × 1° über seinen Namen an (zum Beispiel N50E015). Dieser verrät das ungefähre Gebiet (etwa 70 × 110 km), in dem Sie sind oder das Sie gewählt haben, nicht aber Ihre Position, und die App sendet keine Kennungen. Die Dateien stammen von Amazon Web Services (öffentliche Höhenkacheln, s3.amazonaws.com) und von GitHub (Gipfelnamen, raw.githubusercontent.com). Wie bei jeder Internetverbindung sehen diese Anbieter Ihre IP-Adresse und die Anfrage, nach ihren eigenen Datenschutzbestimmungen: [AWS](https://aws.amazon.com/privacy/) und [GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).",
+        "Alle Verbindungen nutzen HTTPS. Ohne Zustimmung zu Gelände-Downloads stellt die App überhaupt keine Netzwerkanfragen."
+      ]},
+      {"h": "Google ARCore (optional)", "p": [
+        "Die App kann die Google Play-Dienste für AR (ARCore) nutzen, eine eigenständige Komponente, die Google herstellt und betreibt, um das Telefon stabiler zu verfolgen. Sie ist standardmäßig aus und startet nur, wenn Sie sie in den Einstellungen einschalten, und nur solange ein AR-Bildschirm geöffnet ist.",
+        "Während sie läuft, kann Googles Komponente Gerätekennungen, Nutzungsdaten und Diagnosedaten an Google senden. Wenn Sie zusätzlich die Geospatial API einschalten, sendet sie aus dem Kamerabild abgeleitete visuelle Daten und Ihren Standort an Googles Visual Positioning Service. Die App kann nicht sehen oder begrenzen, was Googles Komponente sendet; dafür gilt die [Datenschutzerklärung von Google](https://policies.google.com/privacy?hl=de). Sie können sie jederzeit wieder ausschalten."
+      ]},
+      {"h": "Google Play und Sicherungen", "p": [
+        "Die App wird über Google Play vertrieben, das Daten zu Installationen und Updates nach der [Datenschutzerklärung von Google](https://policies.google.com/privacy?hl=de) verarbeitet. In der Google Play Console sieht der Entwickler nur zusammengefasste, anonyme Statistiken und Absturzberichte, die Google bereitstellt; diese identifizieren Sie nicht.",
+        "Ist die Android-Sicherung eingeschaltet, kann Android die Einstellungen der App in Ihrem Google-Konto sichern. Gespeicherte Orte, Geländehorizonte und heruntergeladenes Gelände sind von der Cloud-Sicherung ausgenommen, weil sie verraten, wo Sie waren."
+      ]},
+      {"h": "Weitergabe, Verkauf und Speicherdauer", "p": [
+        "Der Entwickler verkauft, vermietet oder teilt Ihre Daten nicht und erhält sie gar nicht erst. Von der App gespeicherte Daten bleiben auf dem Telefon, bis Sie sie in der App löschen, die App-Daten löschen oder die App deinstallieren.",
+        "Wenn Sie dem Entwickler eine E-Mail schreiben, werden Nachricht und Adresse nur zur Antwort verwendet und gelöscht, sobald sie nicht mehr gebraucht werden."
+      ]},
+      {"h": "Kinder", "p": [
+        "Die App erhebt von niemandem personenbezogene Daten, auch nicht von Kindern."
+      ]},
+      {"h": "Ihre Rechte", "p": [
+        "Nach der DSGVO haben Sie das Recht auf Auskunft, Berichtigung und Löschung Ihrer personenbezogenen Daten, auf Einschränkung der Verarbeitung, Widerspruch und Datenübertragbarkeit. Da die App Ihre Daten nur auf Ihrem Telefon aufbewahrt, üben Sie die meisten dieser Rechte direkt in der App oder durch Deinstallation aus. Für alles andere wenden Sie sich an den Entwickler unter der obigen Adresse. Sie haben außerdem das Recht, sich bei einer Aufsichtsbehörde zu beschweren, etwa bei der Datenschutzbehörde Ihres Landes oder in Tschechien beim [Amt für den Schutz personenbezogener Daten](https://uoou.gov.cz/en)."
+      ]},
+      {"h": "Änderungen dieser Erklärung", "p": [
+        "Ändert sich der Umgang der App mit Daten, wird diese Erklärung unter dieser Adresse aktualisiert und das obige Gültigkeitsdatum geändert."
+      ]}
+    ]
+  }
+}
