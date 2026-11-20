@@ -124,6 +124,7 @@
     <string name="setup_interval">Interwał</string>
     <string name="setup_interval_desc">Czas między dwoma zdjęciami.</string>
     <string name="setup_interval_floor">Ta aplikacja aparatu potrzebuje co najmniej %1$s między zdjęciami.</string>
+    <string name="setup_interval_night_hint">Zdjęcia nocne i astro mogą wymagać dłuższego odstępu: aparat przetwarza każde zdjęcie.</string>
     <string name="setup_shots">Liczba zdjęć</string>
     <string name="setup_shots_unlimited">Fotografuj, aż zatrzymam</string>
     <string name="setup_shots_count">Zdjęcia</string>
@@ -203,8 +204,8 @@
     <string name="advanced_launch_mode_astro">Astrofotografia</string>
     <string name="advanced_launch_mode_unavailable">Profil dla %1$s nie zna przycisków trybów tej aplikacji, więc nie ma trybu, na który można przełączyć.</string>
     <string name="advanced_launch_mode_unsupported">%1$s nie jest trybem, na który profil dla %2$s potrafi przełączyć, więc nic nie zostanie przełączone. Wybierz jeden z trybów poniżej.</string>
-    <string name="advanced_adaptive_wait">Adaptacyjne oczekiwanie na długi czas naświetlania</string>
-    <string name="advanced_adaptive_wait_desc">Czeka na zakończenie długiego naświetlania zamiast stukać ponownie po stałym czasie.</string>
+    <string name="advanced_interval_after_capture">Odstęp od zakończenia zdjęcia</string>
+    <string name="advanced_interval_after_capture_desc">Kolejne zdjęcie powstaje dopiero po upływie odstępu od zakończenia poprzedniego, nigdy w jego trakcie. Do trybu nocnego i astro, które trwają minuty. Koniec rozpoznaje w galerii, jeśli dostęp do zdjęć jest dozwolony, a w przeciwnym razie po spuście aparatu.</string>
     <string name="advanced_self_timer">Upewnij się, że samowyzwalacz jest wyłączony</string>
     <string name="advanced_self_timer_desc">Przed startem sprawdza ustawienie samowyzwalacza w aplikacji aparatu, ponieważ samowyzwalacz przesunąłby każdą klatkę.</string>
     <string name="advanced_dismiss_post_capture">Zamykaj ekrany po zdjęciu</string>

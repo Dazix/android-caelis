@@ -73,27 +73,27 @@ fun AdvancedScreen(
                 title = stringResource(R.string.advanced_launch_mode_none),
                 selected = chosenMode == null,
                 enabled = modeSupported,
-                onSelect = { onChange(settings.copy(launchCameraMode = null)) },
+                onSelect = { onChange(LaunchModeOptions.choose(settings, null)) },
             )
             modeKeys.forEach { key ->
                 ChoiceRow(
                     title = modeLabel(key),
                     selected = chosenMode == key,
                     enabled = modeSupported,
-                    onSelect = { onChange(settings.copy(launchCameraMode = key)) },
+                    onSelect = { onChange(LaunchModeOptions.choose(settings, key)) },
                 )
             }
         }
 
         SectionCard {
-            val adaptiveSupported = hasApp && profile.longExposureBusyPatterns.isNotEmpty()
+            // Works for any camera app (MediaStore and a disabled shutter), so only an app is needed.
             SwitchRow(
-                title = stringResource(R.string.advanced_adaptive_wait),
-                description = stringResource(R.string.advanced_adaptive_wait_desc),
-                checked = settings.adaptiveLongExposureWait && adaptiveSupported,
-                enabled = adaptiveSupported,
-                disabledReason = reason(),
-                onCheckedChange = { onChange(settings.copy(adaptiveLongExposureWait = it)) },
+                title = stringResource(R.string.advanced_interval_after_capture),
+                description = stringResource(R.string.advanced_interval_after_capture_desc),
+                checked = settings.intervalAfterCapture && hasApp,
+                enabled = hasApp,
+                disabledReason = noAppReason,
+                onCheckedChange = { onChange(settings.copy(intervalAfterCapture = it)) },
             )
 
             val timerSupported = hasApp &&

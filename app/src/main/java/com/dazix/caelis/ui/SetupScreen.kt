@@ -63,6 +63,7 @@ fun SetupScreen(
                 checked = target?.jitter == true,
                 enabled = target?.isRect == true,
                 disabledReason = stringResource(R.string.setup_tap_jitter_needs_area),
+                disabledReasonAsInfo = true,
                 onCheckedChange = onJitterChange,
             )
         }
@@ -89,6 +90,9 @@ fun SetupScreen(
                     LocalContentColor.current.copy(alpha = 0.75f)
                 },
             )
+            // Night Sight and Astro keep the camera busy for seconds to minutes per photo, so a
+            // cadence that suits daylight cannot be delivered there.
+            InfoNote(text = stringResource(R.string.setup_interval_night_hint))
         }
 
         SectionCard(title = stringResource(R.string.setup_shots)) {
@@ -180,7 +184,8 @@ fun SetupScreen(
 
         SectionCard(title = stringResource(R.string.setup_verify_captures)) {
             SwitchRow(
-                title = stringResource(R.string.setup_verify_captures),
+                // The card's title already says it; repeating it on the switch read as a second heading.
+                title = null,
                 description = stringResource(R.string.setup_verify_captures_desc),
                 checked = state.verifyCaptures,
                 onCheckedChange = { checked ->
