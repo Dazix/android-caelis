@@ -302,7 +302,7 @@ class DocumentationScreenshotsTest {
                 AdvancedScreen(
                     settings = AdvancedSettings(
                         launchCameraMode = "NIGHT_SIGHT",
-                        adaptiveLongExposureWait = true,
+                        intervalAfterCapture = true,
                         keepScreenOn = true,
                         dimOverlay = false,
                     ),

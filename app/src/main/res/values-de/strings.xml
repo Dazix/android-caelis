@@ -120,6 +120,7 @@
     <string name="setup_interval">Intervall</string>
     <string name="setup_interval_desc">Zeit zwischen zwei Aufnahmen.</string>
     <string name="setup_interval_floor">Diese Kamera-App braucht mindestens %1$s zwischen zwei Aufnahmen.</string>
+    <string name="setup_interval_night_hint">Nacht- und Astrofotos brauchen evtl. ein längeres Intervall: die Kamera verarbeitet jedes Foto.</string>
     <string name="setup_shots">Anzahl der Aufnahmen</string>
     <string name="setup_shots_unlimited">Bis ich stoppe</string>
     <string name="setup_shots_count">Aufnahmen</string>
@@ -197,8 +198,8 @@
     <string name="advanced_launch_mode_astro">Astrofotografie</string>
     <string name="advanced_launch_mode_unavailable">Das Profil für %1$s kennt die Modus-Schaltflächen dieser App nicht, daher gibt es keinen Modus zum Umschalten.</string>
     <string name="advanced_launch_mode_unsupported">%1$s ist kein Modus, in den das Profil für %2$s umschalten kann, daher wird nichts umgeschaltet. Wählen Sie einen der Modi unten.</string>
-    <string name="advanced_adaptive_wait">Adaptives Warten bei Langzeitbelichtung</string>
-    <string name="advanced_adaptive_wait_desc">Wartet, bis eine Langzeitbelichtung fertig ist, statt nach fester Zeit erneut zu tippen.</string>
+    <string name="advanced_interval_after_capture">Intervall ab fertigem Foto</string>
+    <string name="advanced_interval_after_capture_desc">Das nächste Foto folgt erst ein Intervall nach dem Ende des vorherigen, nie währenddessen. Für Nachtsicht und Astro, die Minuten dauern. Das Ende erkennt die App in der Galerie, wenn der Fotozugriff erlaubt ist, sonst am Auslöser der Kamera-App.</string>
     <string name="advanced_self_timer">Selbstauslöser ausgeschaltet sicherstellen</string>
     <string name="advanced_self_timer_desc">Prüft vor dem Start die Timer-Einstellung der Kamera-App, denn ein Selbstauslöser würde jede Aufnahme verschieben.</string>
     <string name="advanced_dismiss_post_capture">Bildschirme nach Aufnahme schließen</string>

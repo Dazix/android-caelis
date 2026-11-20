@@ -124,6 +124,7 @@
     <string name="setup_interval">Interval</string>
     <string name="setup_interval_desc">Čas medzi dvoma snímkami.</string>
     <string name="setup_interval_floor">Táto fotoaplikácia potrebuje medzi snímkami aspoň %1$s.</string>
+    <string name="setup_interval_night_hint">Pri nočných a astro fotkách môže byť potrebný dlhší interval, fotoaparát každú fotku spracúva.</string>
     <string name="setup_shots">Počet snímok</string>
     <string name="setup_shots_unlimited">Fotiť, kým sériu nezastavím</string>
     <string name="setup_shots_count">Snímky</string>
@@ -203,8 +204,8 @@
     <string name="advanced_launch_mode_astro">Astrofotografia</string>
     <string name="advanced_launch_mode_unavailable">Profil pre aplikáciu %1$s nepozná jej tlačidlá režimov, takže nie je do čoho prepnúť.</string>
     <string name="advanced_launch_mode_unsupported">Režim %1$s profil pre aplikáciu %2$s prepnúť nevie, takže sa nič neprepne. Vyberte niektorý z režimov nižšie.</string>
-    <string name="advanced_adaptive_wait">Prispôsobiť čakanie dlhej expozícii</string>
-    <string name="advanced_adaptive_wait_desc">Počká na dokončenie dlhej expozície namiesto klepnutia po pevne danom čase.</string>
+    <string name="advanced_interval_after_capture">Interval až po dokončení snímky</string>
+    <string name="advanced_interval_after_capture_desc">Ďalšia snímka sa nasníma až interval po dokončení predchádzajúcej, nikdy počas nej. Pre nočný režim a astro, ktoré trvajú minúty. Koniec spozná v galérii, ak je povolený prístup k fotkám, inak na spúšti fotoaparátu.</string>
     <string name="advanced_self_timer">Skontrolovať vypnutú samospúšť</string>
     <string name="advanced_self_timer_desc">Pred spustením overí nastavenie samospúšte vo fotoaplikácii, pretože samospúšť by posunula každú snímku.</string>
     <string name="advanced_dismiss_post_capture">Zatvárať obrazovky po snímke</string>

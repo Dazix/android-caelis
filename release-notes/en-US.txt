@@ -12,3 +12,5 @@ Top bar clears the camera cutout
 Compass warning only when it is really off
 Sun: faster camera, steadier horizon
 Terrain downloads: total size, a limit or on demand; height above terrain
+Night and Astro: next shot one interval after the photo is done; mode set at start
+Pixel Camera: night mode no longer opens its settings
