@@ -11,3 +11,4 @@ Slunce: rychlejší kamera, pevný horizont
 Stahování terénu: celková velikost, limit či na vyžádání; výška nad terénem
 Noční a astro: další snímek až interval po dokončení; režim hned po startu
 Pixel Camera: noční režim už neotevírá nastavení
+Vlastní režimy fotoaparátu: nahrajte klepnutí a tažení pro jakoukoli aplikaci

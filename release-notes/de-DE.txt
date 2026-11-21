@@ -11,3 +11,4 @@ Sonne: Kamera schneller, Horizont stabil
 Geländedaten: Gesamtgröße, Limit oder auf Anfrage; Höhe über Gelände
 Nacht und Astro: nächstes Foto ein Intervall nach dem fertigen; Modus gleich beim Start
 Pixel Camera: Nachtmodus öffnet keine Einstellungen mehr
+Eigene Kameramodi: Tipp- und Wischschritte für jede Kamera-App aufnehmen

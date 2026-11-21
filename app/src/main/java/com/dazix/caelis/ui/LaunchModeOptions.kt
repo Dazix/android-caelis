@@ -1,6 +1,8 @@
 package com.dazix.caelis.ui
 
 import com.dazix.caelis.data.AdvancedSettings
+import com.dazix.caelis.domain.cameramode.CustomCameraMode
+import com.dazix.caelis.domain.cameramode.CustomModeKey
 import com.dazix.caelis.service.CameraProfile
 
 /**
@@ -33,11 +35,26 @@ internal object LaunchModeOptions {
     /**
      * The stored mode, but only while this profile can actually switch into it. A key kept from a
      * previously chosen app leaves the setting off — the same rule every other advanced extra
-     * follows — and the screen says why instead of pretending the mode is armed.
+     * follows — and the screen says why instead of pretending the mode is armed. A recorded mode is
+     * selected only while it is in [custom], the chosen app's own recorded modes.
      */
-    fun selected(settings: AdvancedSettings, profile: CameraProfile, hasApp: Boolean): String? {
+    fun selected(
+        settings: AdvancedSettings,
+        profile: CameraProfile,
+        hasApp: Boolean,
+        custom: List<CustomCameraMode> = emptyList(),
+    ): String? {
         val stored = settings.launchCameraMode?.takeIf { it.isNotBlank() } ?: return null
-        if (!hasApp || keysFor(profile, hasApp).isEmpty()) return null
+        if (!hasApp) return null
+        CustomModeKey.idOf(stored)?.let { id -> return stored.takeIf { custom.any { it.id == id } } }
+        if (keysFor(profile, hasApp).isEmpty()) return null
         return stored.takeIf { profile.supportsMode(it) }
     }
+
+    /**
+     * The recorded modes offered for the chosen app: only its own. A mode recorded in another camera
+     * app taps that app's screen and means nothing here.
+     */
+    fun customFor(modes: List<CustomCameraMode>, packageName: String?): List<CustomCameraMode> =
+        if (packageName == null) emptyList() else modes.filter { it.packageName == packageName }
 }

@@ -1,6 +1,8 @@
 package com.dazix.caelis.ui
 
 import com.dazix.caelis.data.AdvancedSettings
+import com.dazix.caelis.domain.cameramode.CustomCameraMode
+import com.dazix.caelis.domain.cameramode.RecordedStep
 import com.dazix.caelis.service.CameraProfile
 import com.dazix.caelis.service.CameraProfiles
 import org.junit.Assert.assertEquals
@@ -59,6 +61,36 @@ class LaunchModeOptionsTest {
         val settings = AdvancedSettings(launchCameraMode = CameraProfile.MODE_ASTRO)
 
         assertNull(LaunchModeOptions.selected(settings, generic, hasApp = true))
+    }
+
+    private val tap = RecordedStep.Tap(0.5f, 0.8f, null, 300L)
+    private val pixelNight = CustomCameraMode("a1", "Noc", "com.google.android.GoogleCamera", "Camera", listOf(tap))
+    private val otherNight = CustomCameraMode("b2", "Night", "net.sourceforge.opencamera", "Open Camera", listOf(tap))
+
+    @Test
+    fun `a recorded mode of the chosen app stays selected, even where the profile knows no modes`() {
+        val settings = AdvancedSettings(launchCameraMode = pixelNight.key)
+        val offered = LaunchModeOptions.customFor(listOf(pixelNight, otherNight), "com.google.android.GoogleCamera")
+
+        assertEquals(listOf(pixelNight), offered)
+        assertEquals(pixelNight.key, LaunchModeOptions.selected(settings, pixel, hasApp = true, custom = offered))
+        assertEquals(pixelNight.key, LaunchModeOptions.selected(settings, generic, hasApp = true, custom = offered))
+    }
+
+    @Test
+    fun `a recorded mode of another app, or a deleted one, is off`() {
+        val settings = AdvancedSettings(launchCameraMode = otherNight.key)
+        val offered = LaunchModeOptions.customFor(listOf(pixelNight, otherNight), "com.google.android.GoogleCamera")
+
+        assertNull(LaunchModeOptions.selected(settings, pixel, hasApp = true, custom = offered))
+        assertNull(LaunchModeOptions.selected(settings, pixel, hasApp = true, custom = emptyList()))
+        assertTrue(LaunchModeOptions.customFor(listOf(pixelNight), null).isEmpty())
+    }
+
+    @Test
+    fun `choosing a recorded mode leaves the interval setting as the user had it`() {
+        assertEquals(false, LaunchModeOptions.choose(AdvancedSettings(), pixelNight.key).intervalAfterCapture)
+        assertEquals(pixelNight.key, LaunchModeOptions.choose(AdvancedSettings(), pixelNight.key).launchCameraMode)
     }
 
     @Test

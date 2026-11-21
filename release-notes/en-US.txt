@@ -14,3 +14,4 @@ Sun: faster camera, steadier horizon
 Terrain downloads: total size, a limit or on demand; height above terrain
 Night and Astro: next shot one interval after the photo is done; mode set at start
 Pixel Camera: night mode no longer opens its settings
+Your own camera modes: record the taps and swipes for any camera app
