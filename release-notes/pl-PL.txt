@@ -11,3 +11,4 @@ Słońce: szybszy aparat, stabilny horyzont
 Pobieranie terenu: łączny rozmiar, limit lub na żądanie; wysokość nad terenem
 Tryb nocny i astro: kolejne zdjęcie odstęp po zakończeniu; tryb od razu po starcie
 Pixel Camera: tryb nocny nie otwiera już ustawień
+Własne tryby aparatu: nagraj stuknięcia i przesunięcia dla dowolnej aplikacji
